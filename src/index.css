@@ -1,0 +1,939 @@
+@import "tailwindcss";
+
+/* Single source of truth for colour/type/motion tokens. */
+@import "../tokens.css";
+
+/*
+  Map the design tokens onto Tailwind's theme namespaces so we get utilities like
+  bg-surface / text-ink-2 / border-line / rounded-card / font-num.
+  Names deliberately avoid clashing with the raw token names in tokens.css
+  (e.g. `--font-num` instead of `--font-display`) so nothing self-references.
+*/
+@theme {
+  --color-base: var(--bg-base);
+  --color-surface: var(--bg-surface);
+  --color-elevated: var(--bg-elevated);
+  --color-line: var(--border-subtle);
+
+  --color-ink: var(--text-primary);
+  --color-ink-2: var(--text-secondary);
+  --color-ink-3: var(--text-muted);
+
+  --color-volt: var(--volt);
+  --color-live: var(--live);
+  --color-gold: var(--gold);
+  --color-danger: var(--danger);
+  --color-pitch: var(--pitch);
+
+  --font-ui: var(--font-body);
+  --font-num: var(--font-display);
+
+  --radius-card: 14px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-variant-numeric: tabular-nums;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  /* Telegram webview + mobile browser chrome: keep the app inside the viewport. */
+  #root {
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--volt);
+    outline-offset: 2px;
+  }
+
+  /* Latin numerals get tight tracking; Persian text must never (breaks joining). */
+  html[lang="en"] .num-display {
+    letter-spacing: -0.02em;
+  }
+
+  /* Persian: letter-spacing opens gaps in the joined script, and uppercase labels
+     are a Latin idiom — every micro-label reads as a plain label instead.
+     Vazirmatn at 11px is also below the Persian reading floor, so the one rule
+     that flips the case lifts the size too. */
+  html[lang="fa"] .label {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 12px;
+  }
+  /* Section headings keep their Latin size: the floor is about micro-copy
+     legibility, not about flattening the hierarchy between the two locales. */
+  html[lang="fa"] .label-lg {
+    font-size: 13px;
+  }
+
+  /* Persian floor: Vazirmatn at 9-11px is unreadable, so every micro-size
+     utility is lifted to 12px in fa while Latin keeps the designed scale. */
+  html[lang="fa"] .text-\[9px\],
+  html[lang="fa"] .text-\[10px\],
+  html[lang="fa"] .text-\[11px\] {
+    font-size: 12px;
+  }
+
+  /* "Floodlit Night": a teal wash from the top, amber from the bottom, so the
+     canvas reads as a pitch under stadium lights rather than flat dark mode. */
+  .floodlight {
+    background:
+      radial-gradient(90% 40% at 50% 0%, color-mix(in srgb, var(--volt) 8%, transparent), transparent 70%),
+      radial-gradient(80% 30% at 50% 100%, color-mix(in srgb, var(--gold) 6%, transparent), transparent 70%),
+      var(--bg-base);
+  }
+}
+
+@layer components {
+  /* One micro-label: the panel heading, card meta and table subhead all share
+     this instead of hand-rolling 10px/11px + uppercase + tracking at each site.
+     Colour stays a utility so the muted/strong distinction is explicit. */
+  .label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .label-lg {
+    font-size: 13px;
+  }
+
+  /* Safe-area padding helpers — Telegram headers, iPhone home indicator, etc. */
+  .pad-safe-top {
+    padding-top: max(env(safe-area-inset-top), 8px);
+  }
+  .pad-safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 8px);
+  }
+
+  /* "night match under floodlights" texture: pitch lines at 4% opacity. */
+  .pitch-watermark {
+    position: relative;
+    isolation: isolate;
+  }
+  .pitch-watermark::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0.04;
+    background-image:
+      linear-gradient(to right, var(--pitch) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--pitch) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+
+  /* Signature animation 5: live dot — 1.6s double-ring cyan pulse. */
+  .live-dot {
+    position: relative;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--live);
+    flex: none;
+  }
+  .live-dot::before,
+  .live-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 1px solid var(--live);
+    animation: live-ring 1.6s var(--ease-out) infinite;
+  }
+  .live-dot::after {
+    animation-delay: 0.8s;
+  }
+
+  @keyframes live-ring {
+    0% {
+      transform: scale(1);
+      opacity: 0.9;
+    }
+    100% {
+      transform: scale(2.6);
+      opacity: 0;
+    }
+  }
+
+  /* Signature animation 8: skeleton shimmer — 1.4s gradient sweep. */
+  .shimmer {
+    background: linear-gradient(90deg, var(--bg-surface) 0%, var(--bg-elevated) 50%, var(--bg-surface) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+  @keyframes shimmer {
+    to {
+      background-position: -200% 0;
+    }
+  }
+
+  /* Signature animation 1: goal flash — volt sweep across a match card. */
+  .goal-flash::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(
+      105deg,
+      transparent 30%,
+      color-mix(in srgb, var(--volt) 35%, transparent) 50%,
+      transparent 70%
+    );
+    animation: goal-sweep var(--t-slow) var(--ease-out) forwards;
+  }
+  @keyframes goal-sweep {
+    from {
+      transform: translateX(-100%);
+      opacity: 1;
+    }
+    to {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+  }
+
+  /* Login entrance: hero, then card, then the legal line. CSS runs it once on
+     mount with `both` fill, so the resting state is fully visible content. */
+  .rise-in {
+    animation: rise-in 380ms var(--ease-out) both;
+  }
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    /* The global reduce rule keeps the 1ms duration but not the stagger. */
+    .rise-in {
+      animation-delay: 0ms;
+    }
+  }
+
+  /* Onboarding intro: slide content rises once; the glyph pops with an
+     overshoot (transform/opacity only, collapsed by the global reduce rule). */
+  .intro-in {
+    animation: rise-in var(--t-std) var(--ease-out) both;
+  }
+  .intro-in:nth-child(2) {
+    animation-delay: 60ms;
+  }
+  .intro-glyph {
+    animation: intro-glyph 480ms var(--ease-pop) both;
+  }
+  @keyframes intro-glyph {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .intro-in,
+    .intro-glyph {
+      animation-delay: 0ms;
+    }
+  }
+
+  /* Signature animation 3: timeline entrance, staggered 40ms. */
+  .timeline-in {
+    animation: timeline-in var(--t-std) var(--ease-out) both;
+  }
+  @keyframes timeline-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* --- Shot Plotter ------------------------------------------------------ */
+
+  /* The grid is tinted from --pitch but stays quiet: it must read as a pitch,
+     never as a coloured panel competing with the volt pins. */
+  .plot-cell {
+    border: 1px solid color-mix(in srgb, var(--pitch) 45%, transparent);
+    background: color-mix(in srgb, var(--pitch) 7%, transparent);
+    transition:
+      background-color var(--t-fast) var(--ease-out),
+      border-color var(--t-fast) var(--ease-out);
+  }
+  .plot-cell:hover {
+    background: color-mix(in srgb, var(--volt) 12%, transparent);
+    border-color: color-mix(in srgb, var(--volt) 45%, transparent);
+  }
+  .plot-cell[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--volt) 16%, transparent);
+    border-color: color-mix(in srgb, var(--volt) 60%, transparent);
+  }
+  /* Distinct from :disabled so taps still fire the "locked" notice + haptic. */
+  .plot-cell-locked {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+  .plot-cell-locked:hover {
+    background: color-mix(in srgb, var(--pitch) 7%, transparent);
+    border-color: color-mix(in srgb, var(--pitch) 45%, transparent);
+  }
+
+  /* Signature animation 4: pin drop — fall with an overshoot bounce. */
+  .pin-drop {
+    animation: pin-drop 600ms var(--ease-out) both;
+  }
+  @keyframes pin-drop {
+    0% {
+      transform: translateY(-46px) scale(0.85);
+      opacity: 0;
+    }
+    55% {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+    74% {
+      transform: translateY(-9px) scale(1.08);
+    }
+    100% {
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* ...plus the expanding ripple ring, same 600ms. */
+  .pin-ripple {
+    animation: pin-ripple 600ms var(--ease-out) forwards;
+  }
+  @keyframes pin-ripple {
+    0% {
+      transform: scale(0.4);
+      opacity: 0.9;
+    }
+    100% {
+      transform: scale(2.6);
+      opacity: 0;
+    }
+  }
+
+  /* --- Live goal arrival ------------------------------------------------ */
+
+  /* The zone a goal just came from lights up while it sweeps. Paired with
+     .goal-flash, which paints a volt sweep across the element. */
+  .goal-cell {
+    background: color-mix(in srgb, var(--volt) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--volt) 55%, transparent);
+  }
+
+  /* A pin sitting in the zone that just scored gets a ring + a bounce. */
+  .pin-hit {
+    animation: pin-hit 900ms var(--ease-pop);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--volt) 40%, transparent),
+      0 0 18px color-mix(in srgb, var(--volt) 55%, transparent);
+  }
+  @keyframes pin-hit {
+    0% {
+      transform: scale(1);
+    }
+    35% {
+      transform: scale(1.4);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  /* Live goal banner. */
+  .goal-alert {
+    animation: goal-alert var(--t-std) var(--ease-out) both;
+  }
+  @keyframes goal-alert {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Resolved goal positions appear once the match is adjudicated. */
+  .marker-pop {
+    animation: marker-pop var(--t-std) var(--ease-pop) both;
+  }
+  @keyframes marker-pop {
+    from {
+      transform: scale(0.3);
+      opacity: 0;
+    }
+    to {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* --- Shell motion ------------------------------------------------------ */
+
+  .backdrop-fade {
+    animation: backdrop-fade var(--t-std) var(--ease-out) both;
+  }
+  @keyframes backdrop-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .sheet-in {
+    animation: sheet-in var(--t-std) var(--ease-out) both;
+  }
+  @keyframes sheet-in {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .toast-in {
+    animation: toast-in var(--t-std) var(--ease-pop) both;
+  }
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(-14px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Signature animation 7 (tail): one pulse per second in the last ten seconds. */
+  .tick-panic {
+    animation: tick-panic 1s var(--ease-out) infinite;
+  }
+  @keyframes tick-panic {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    12% {
+      opacity: 0.55;
+      transform: scale(1.045);
+    }
+  }
+
+  /* Signature animation 3 (tail): live timeline events get a cyan edge flash. */
+  .live-edge {
+    animation: live-edge 700ms var(--ease-out) both;
+  }
+  @keyframes live-edge {
+    from {
+      box-shadow:
+        inset 3px 0 0 0 var(--live),
+        0 0 18px color-mix(in srgb, var(--live) 30%, transparent);
+      border-color: color-mix(in srgb, var(--live) 55%, transparent);
+    }
+    to {
+      box-shadow:
+        inset 3px 0 0 0 transparent,
+        0 0 0 0 transparent;
+      border-color: var(--border-subtle);
+    }
+  }
+
+  /* Generic panel reveal for expanding sections. */
+  .panel-in {
+    animation: panel-in var(--t-std) var(--ease-out) both;
+  }
+  @keyframes panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Page transition: every top-level route renders inside this keyed wrapper so
+     tab switches get a ~180ms fade+rise instead of an abrupt swap. Transform +
+     opacity only; collapses to a hard cut under prefers-reduced-motion via the
+     global 1ms rule. */
+  .page-in {
+    animation: page-in 180ms var(--ease-out) both;
+  }
+  @keyframes page-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Signature animation 6: rating snap — 10px scale pulse on the number. */
+  .rating-pulse {
+    animation: rating-pulse var(--t-fast) var(--ease-pop);
+  }
+  @keyframes rating-pulse {
+    50% {
+      transform: scale(1.1);
+    }
+  }
+
+  /* Replay scrubber: a native range input rebuilt to the 44px touch floor —
+     the track is the visible 4px bar, the thumb is a 22px volt knob, and the
+     whole control stays 44px tall so dragging never fights a finger. */
+  .range-scrub {
+    appearance: none;
+    width: 100%;
+    height: 44px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range-scrub::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+  }
+  .range-scrub::-webkit-slider-thumb {
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    margin-top: -9px; /* (44 - 4) / 2 - 22/2 → centres the thumb on the track */
+    border-radius: 999px;
+    background: var(--volt);
+    border: none;
+  }
+  .range-scrub::-moz-range-track {
+    height: 4px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+  }
+  .range-scrub::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: var(--volt);
+    border: none;
+  }
+  .range-scrub:focus-visible {
+    outline: 2px solid var(--volt);
+    outline-offset: 2px;
+  }
+
+  /* A pin that scored gets one celebratory pulse when the result lands. */
+  .pin-scored {
+    animation: rating-pulse var(--t-slow) var(--ease-pop);
+  }
+
+  /* Signature animation 2: score odometer — old digit up, new digit in. */
+  .score-tick {
+    animation: score-tick var(--t-std) var(--ease-out);
+  }
+  @keyframes score-tick {
+    from {
+      opacity: 0;
+      transform: translateY(-70%);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* One volt wash from the top, nothing from below: an element wears one accent
+     (PRODUCT.md rule 2), and amber stays reserved for evaluation. */
+  .score-hero {
+    background:
+      radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--volt) 9%, transparent), transparent 55%),
+      var(--bg-surface);
+  }
+
+  /* --- Live tactical view (flat 2D, horizontal) --------------------------- */
+
+  /* The horizontal surface: pitch length runs left to right. The SVG paints the
+     static art once; the moving players and ball are composited DOM layers on
+     top and only ever have their `transform` rewritten every frame. */
+  .tac-surface {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 340 / 180;
+    border-radius: 10px;
+    border: 1px solid var(--border-subtle);
+    box-shadow:
+      inset 0 12px 26px rgba(0, 0, 0, 0.4),
+      inset 0 -7px 20px rgba(0, 0, 0, 0.35);
+  }
+  .tac-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Moving layers: they live in the pitch's own 340x180 coordinate space and
+     are scaled to the surface (width ratio, set from a ResizeObserver in
+     TacticalView) so markers track the stretched SVG art exactly — otherwise
+     discs drift toward the top-left and clip outside the touchlines whenever
+     the card is narrower or wider than 340px. */
+  .tac-layers {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform-origin: 0 0;
+    pointer-events: none;
+  }
+
+  /* Player anchors: zero-size, translate3d'd to their turf spot. */
+  .tac-p {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    will-change: transform;
+    contain: layout style;
+  }
+
+  /* The marker: a flat disc in the team colour, crisp edges, no inner shading.
+     The hairline rim and the GK ring are the only extra paint. */
+  .tac-c {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    color: #04100b;
+    font-family: var(--font-display);
+    font-weight: 800;
+    /* Discs are 15–17px in pitch space; the jersey number has to fit inside. */
+    font-size: 9px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+  }
+  .tac-gkring {
+    box-shadow: 0 0 0 1.5px rgba(237, 247, 243, 0.6);
+  }
+
+  /* The ball: a classic white-and-black football. The black patches are
+     layered radial gradients — a centre panel plus rim wedges clipped by the
+     circle — so it reads as a real ball at 10px. No glow, to stay crisp. */
+  .tac-ball {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    border-radius: 999px;
+    background:
+      radial-gradient(circle at 50% 50%, #0b100e 0 1.7px, transparent 1.9px),
+      radial-gradient(circle at 2% 30%, #0b100e 0 2.4px, transparent 2.6px),
+      radial-gradient(circle at 98% 70%, #0b100e 0 2.4px, transparent 2.6px),
+      radial-gradient(circle at 72% 2%, #0b100e 0 2.1px, transparent 2.3px),
+      radial-gradient(circle at 30% 98%, #0b100e 0 2.1px, transparent 2.3px), #f2f6f4;
+    border: 1px solid rgba(10, 20, 16, 0.5);
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  /* The ball travels between tracked spots rather than teleporting. Its
+     position is a compositor-only transform, never left/top, which would
+     re-layout the whole layer on every frame of the glide. The two views cover
+     very different ground per step, so the duration comes in as `--glide`
+     (live 1.6s, replay 0.9s per match-minute). Reduced motion drops the glide
+     entirely — the ball jumps, which is honest, not jarring. */
+  .tac-ball-glide {
+    transition: transform var(--glide, 900ms) var(--ease-out);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tac-ball-glide {
+      transition: none;
+    }
+  }
+
+  /* Live pitch: the ball breathes so "this is happening now" is visible at a
+     glance; static (replay) balls stay still. */
+  .lp-pulse {
+    animation: lp-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes lp-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(242, 246, 244, 0.32);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(242, 246, 244, 0.07);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lp-pulse {
+      animation: none;
+    }
+  }
+
+  /* Inspecting a tape moment: the ball holds still with a calm ring, no
+     pulse — it's a replay, not a live feed. */
+  .lp-inspect {
+    box-shadow: 0 0 0 2px rgba(242, 246, 244, 0.4);
+  }
+  .lp-inspect-ring {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border-radius: 999px;
+    border: 1.5px solid;
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  /* The match rhythm tape: one tick per tracked event, oldest → newest. A
+     horizontal scroll strip that reads like an audio waveform of the game. */
+  .lp-tape {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    overflow-x: auto;
+    padding: 6px 4px 2px;
+    scrollbar-width: none;
+  }
+  .lp-tape::-webkit-scrollbar {
+    display: none;
+  }
+  .lp-tick-wrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 2px 1px;
+    flex: none;
+  }
+  .lp-tick {
+    display: grid;
+    place-items: center;
+    width: 14px;
+    height: 10px;
+    border-radius: 3px;
+    border: 1px solid var(--border-subtle);
+    background: color-mix(in srgb, var(--text-muted) 16%, transparent);
+    color: var(--text-muted);
+    font-size: 7px;
+    line-height: 1;
+    transition:
+      transform var(--t-fast) var(--ease-out),
+      border-color var(--t-fast) var(--ease-out);
+  }
+  .lp-tick-big {
+    width: 14px;
+    height: 16px;
+    color: #04100b;
+    border-color: transparent;
+  }
+  .lp-tick-on {
+    transform: translateY(-2px) scale(1.15);
+    border-color: var(--volt);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--volt) 45%, transparent);
+  }
+  .lp-tick-flag {
+    width: 0;
+    height: 0;
+    border-inline-start: 4px solid;
+    border-block: 2.5px solid transparent;
+  }
+  .lp-tick-minute {
+    position: absolute;
+    top: -4px;
+    transform: translateY(-100%);
+    white-space: nowrap;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--volt);
+    pointer-events: none;
+  }
+  .lp-tape-ht {
+    align-self: center;
+    width: 1px;
+    height: 18px;
+    background: var(--border-subtle);
+    margin-inline-end: 8px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lp-tick {
+      transition: none;
+    }
+  }
+
+  /* Action ping: one expanding ring where the latest tracked action landed,
+     in the acting side's colour. Re-keyed per action so it replays. */
+  .lp-action-ping {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    border-radius: 999px;
+    border: 1.5px solid;
+    pointer-events: none;
+    animation: lp-action-ping 2.8s var(--ease-out) forwards;
+  }
+  @keyframes lp-action-ping {
+    0% {
+      transform: scale(0.4);
+      opacity: 0.85;
+    }
+    55% {
+      opacity: 0.35;
+    }
+    100% {
+      transform: scale(1.9);
+      opacity: 0;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lp-action-ping {
+      animation: none;
+      opacity: 0.4;
+      transform: scale(1);
+    }
+  }
+
+  /* Goal moment: two expanding rings in the scorer's colour (the second is
+     delayed for a double-beat), the ball glowing underneath, and the score
+     chip flashing. All pure CSS transforms — no layout, no JS timers. */
+  .lp-goal-ring {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    margin: -15px 0 0 -15px;
+    border-radius: 999px;
+    border: 2.5px solid;
+    pointer-events: none;
+    box-shadow: 0 0 16px color-mix(in srgb, var(--goal-color, var(--volt)) 65%, transparent);
+    animation: lp-goal-ring 1100ms var(--ease-out) forwards;
+  }
+  .lp-goal-ring-late {
+    animation-delay: 260ms;
+  }
+  @keyframes lp-goal-ring {
+    0% {
+      transform: scale(0.3);
+      opacity: 0.95;
+    }
+    70% {
+      opacity: 0.55;
+    }
+    100% {
+      transform: scale(4.4);
+      opacity: 0;
+    }
+  }
+  .lp-goal-glow {
+    animation: lp-goal-glow 1300ms ease-in-out;
+  }
+  @keyframes lp-goal-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+    25%,
+    65% {
+      box-shadow: 0 0 14px 4px color-mix(in srgb, var(--goal-color, var(--volt)) 55%, transparent);
+    }
+  }
+  .lp-score-flash {
+    border-color: color-mix(in srgb, var(--goal-color, var(--volt)) 70%, transparent);
+    animation: lp-score-flash 1400ms ease-out;
+  }
+  @keyframes lp-score-flash {
+    0% {
+      transform: scale(1.12);
+    }
+    35% {
+      transform: scale(1.02);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lp-goal-ring {
+      animation-duration: 1ms;
+    }
+    .lp-goal-glow,
+    .lp-score-flash {
+      animation: none;
+    }
+  }
+
+  /* Goal arrival: one expanding ring, GPU-animated by CSS. */
+  .tac-ripple {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    margin: -12px 0 0 -12px;
+    border-radius: 999px;
+    border: 2px solid;
+    pointer-events: none;
+    animation: tac-ripple 950ms var(--ease-out) forwards;
+  }
+  @keyframes tac-ripple {
+    0% {
+      transform: scale(0.35);
+      opacity: 0.95;
+      box-shadow: 0 0 18px color-mix(in srgb, var(--volt) 70%, transparent);
+    }
+    100% {
+      transform: scale(2.6);
+      opacity: 0;
+      box-shadow: 0 0 0 0 transparent;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tac-ripple {
+      animation-duration: 1ms;
+    }
+  }
+}

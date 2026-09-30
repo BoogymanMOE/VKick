@@ -1,0 +1,56 @@
+/* Verdikick design tokens — v2 "Floodlit Night"
+   Teal = broadcast / live / action. Amber = evaluative (points, ratings).
+   They never mix on the same element. Red is locked to danger. */
+:root {
+  /* Dark native chrome: select dropdowns, scrollbars and form controls render
+     with the dark UI instead of light browser defaults in webviews. */
+  color-scheme: dark;
+  scrollbar-color: var(--border-subtle) transparent;
+
+  /* surfaces — green-black pitch under floodlights */
+  --bg-base: #081613;
+  --bg-surface: #0b1d19;
+  --bg-elevated: #122c25;
+  --border-subtle: #1e3b34;
+  --text-primary: #edf7f3;
+  --text-secondary: #93aea6;
+  /* #7B958C clears 4.5:1 on --bg-elevated as well as --bg-surface; the old
+     #6E8880 failed AA there and this token carries every 10-11px hint. */
+  --text-muted: #7b958c;
+
+  /* accents — strict semantics */
+  --volt: #1fbfa0; /* primary actions, your predictions, goal flash (broadcast teal) */
+  --live: #35e0bc; /* LIVE state only — dot, pulse, live timeline (brighter teal) */
+  --gold: #f2b705; /* crowd ratings, points, bonus — evaluative amber */
+  --danger: #ff4d5e; /* errors, wrong, red cards */
+  --pitch: #23a066; /* turf: positive chips, shot plotter grid (tinted, never dominant) */
+
+  /* type */
+  --font-display: "Archivo", "Vazirmatn", sans-serif;
+  --font-body: "Vazirmatn", "Archivo", sans-serif;
+
+  /* motion */
+  --t-fast: 150ms;
+  --t-std: 250ms;
+  --t-slow: 450ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+.num-display {
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

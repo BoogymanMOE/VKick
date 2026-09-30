@@ -1,0 +1,131 @@
+export const TEAM_SLUGS: Record<string, string> = {
+  // La Liga
+  ATH: "Athletic_Club",
+  BAR: "Barcelona",
+  ATM: "Atletico_Madrid",
+  RMA: "Real_Madrid",
+  VIL: "Villarreal",
+  BET: "Real_Betis",
+  SEV: "Sevilla",
+  SOC: "Real_Sociedad",
+  CEL: "Celta_Vigo",
+  OSA: "Osasuna",
+  RAY: "Rayo_Vallecano",
+  MLL: "Mallorca",
+  GET: "Getafe",
+  VAL: "Valencia",
+  ALA: "Alaves",
+  GIR: "Girona",
+  LPA: "Las_Palmas",
+  ESP: "Espanyol",
+
+  // Premier League
+  MCI: "Manchester_City",
+  ARS: "Arsenal",
+  LIV_E: "Liverpool",
+  CHE: "Chelsea",
+  MUN: "Manchester_United",
+  TOT: "Tottenham",
+  NEW: "Newcastle",
+  BHA: "Brighton",
+  AVL: "Aston_Villa",
+  WHU: "West_Ham",
+  EVE: "Everton",
+  FUL: "Fulham",
+  WOL: "Wolves",
+  CRY: "Crystal_Palace",
+  BRE: "Brentford",
+  NOT: "Nottingham_Forest",
+  BUR: "Burnley",
+  LUT: "Luton",
+  SHE: "Sheffield_United",
+  IPS: "Ipswich",
+  SOU: "Southampton",
+  LEI: "Leicester",
+
+  // Serie A
+  INT: "Inter",
+  MIL: "AC_Milan",
+  JUV: "Juventus",
+  NAP: "Napoli",
+  ROM: "Roma",
+  LAZ: "Lazio",
+  ATA: "Atalanta",
+  FIO: "Fiorentina",
+  TOR: "Torino",
+  BOL: "Bologna",
+  MZA: "Monza",
+  GEN: "Genoa",
+  SAS: "Sassuolo",
+  EMP: "Empoli",
+  UDI: "Udinese",
+  VER: "Verona",
+  CAG: "Cagliari",
+  LEC: "Lecce",
+  SAL: "Salernitana",
+  PAR: "Parma",
+  VEN: "Venezia",
+
+  // Bundesliga
+  BAY: "Bayern_Munich",
+  DOR: "Borussia_Dortmund",
+  RBL: "RB_Leipzig",
+  LEV: "Bayer_Leverkusen",
+  MGL: "Borussia_Monchengladbach",
+  WOB: "Wolfsburg",
+  FRA: "Eintracht_Frankfurt",
+  FRE: "Freiburg",
+  M05: "Mainz",
+  HOF: "Hoffenheim",
+  FCK: "FC_Koln",
+  WER: "Werder_Bremen",
+  S04: "Schalke",
+  AUG: "Augsburg",
+  STU: "Stuttgart",
+  BOCH: "Bochum",
+  HEE: "Heidenheim",
+  KIE: "Holstein_Kiel",
+  STP: "St_Pauli",
+
+  // Ligue 1
+  PSG: "Paris_SG",
+  ASM: "Monaco",
+  MAR: "Marseille",
+  LYO: "Lyon",
+  LIL: "Lille",
+  REN: "Rennes",
+  NIC: "Nice",
+  LOR: "Lorient",
+  REI: "Reims",
+  MTP: "Montpellier",
+  STR: "Strasbourg",
+  TOU: "Toulouse",
+  BRS: "Brest",
+  NAN: "Nantes",
+  AUX: "Auxerre",
+  ANG: "Angers",
+  LEH: "Le_Havre",
+  MET: "Metz",
+  CLA: "Clermont",
+};
+
+export const LEAGUE_SLUGS: Record<string, string> = {
+  "eng.1": "EPL",
+  "esp.1": "La_liga",
+  "ita.1": "Serie_A",
+  "ger.1": "Bundesliga",
+  "fra.1": "Ligue_1",
+};
+
+/**
+ * The inverse of TEAM_SLUGS: an Understat team key -> ESPN abbreviation.
+ *
+ * A league payload keys its table by Understat's own title ("Manchester_City"),
+ * while everything we store is keyed by our ESPN id, so a league-wide walk
+ * (expected points) has to cross back through the abbreviation. Built from the
+ * one table above rather than a second hand-maintained list, so the two can't
+ * drift apart.
+ */
+export const ABBR_BY_SLUG: Record<string, string> = Object.fromEntries(
+  Object.entries(TEAM_SLUGS).map(([abbr, slug]) => [slug, abbr]),
+);
