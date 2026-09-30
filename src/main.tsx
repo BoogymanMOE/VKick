@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/Toast";
@@ -46,15 +46,15 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         white screen. */}
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        {/* HashRouter: works unchanged inside Telegram's webview and on static hosts
-            without needing a server-side rewrite rule. */}
-        <HashRouter>
+        {/* BrowserRouter: the server's SPA fallback (express.static + sendFile)
+            serves index.html for non-API GET routes, so deep links work. */}
+        <BrowserRouter>
           <I18nProvider>
             <ToastProvider>
               <App />
             </ToastProvider>
           </I18nProvider>
-        </HashRouter>
+        </BrowserRouter>
       </QueryClientProvider>
     </ErrorBoundary>
   </React.StrictMode>,
