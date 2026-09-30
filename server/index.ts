@@ -1,5 +1,10 @@
 import express, { type Request, type Response, type NextFunction } from "express";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { getDb, all, get, run, tx, type BindValue } from "./db/index.js";
 import { verifyInitData, verifyDevToken, type TelegramUser } from "./telegram/verify.js";
 import { startSyncLoop, syncScoreboards, syncScoreboardWindow } from "./sync/service.js";
@@ -1743,6 +1748,25 @@ app.post("/api/admin/notify", requireUser, (req, res) => {
 // mechanic is the user-chosen pair living in the prediction payload
 // (prediction-mechanics.md), and a parallel curated path was dead weight.
 // The versus_pairs table is dropped by the schema migration on the next boot.
+
+/* ------------------------------------------------------------ static frontend */
+
+// Serve the built Vite frontend (dist/) so the React app loads in production.
+app.use(express.static(path.join(__dirname, "..", "dist")));
+
+// SPA fallback: any GET that didn't match an API route or a static file
+// falls through to index.html so React Router owns client-side routing.
+app.use((req, res, next) => {
+  if (req.method === "GET" && !req.path.startsWith("/api")) {
+    return res.sendFile(
+      path.join(__dirname, "..", "dist", "index.html"),
+      (err) => {
+        if (err) next(err);
+      },
+    );
+  }
+  next();
+});
 
 /* ------------------------------------------------------------ errors */
 
