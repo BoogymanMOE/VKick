@@ -4,6 +4,7 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
+    "start": "tsx server/index.ts",
     "dev": "vite --host",
     "server": "tsx watch server/index.ts",
     "dev:all": "start cmd /k npm run server && start cmd /k npm run dev",
