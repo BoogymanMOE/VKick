@@ -2,17 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { api, serverErrorKey, type ApiMatch, type ApiTeam } from "../lib/api";
 import { TEAM_FALLBACK } from "../lib/colors";
-import { INTERNATIONAL_GROUP } from "../lib/pickerGroups";
+import { INTERNATIONAL_GROUP, buildLeagueTabs, type LeagueTab } from "../lib/pickerGroups";
 import { useToast } from "../components/Toast";
 import { useI18n } from "../i18n/I18nProvider";
 import type { StringKey } from "../i18n/strings";
 import { haptic } from "../lib/telegram";
 import type { LeagueId, Match, Team } from "../types";
-import { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE } from "../lib/leagues";
+import { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE, slugForLeague } from "../lib/leagues";
 
 // Public surface preserved: the maps now live in a pure module so non-React
 // code (and the node test runner) can use them without this file's imports.
-export { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE };
+export { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE, slugForLeague };
 
 /**
  * Single source for every screen that tabs over the synced domestic leagues
@@ -365,6 +365,24 @@ export function useFollowedLeagues() {
 function currentTeamFromCache(teamId: string): Team | undefined {
   const t = api.teamsCache.get(teamId);
   return t ? teamFromApi(t) : undefined;
+}
+
+/* ------------------------------------------------------------ league tabs */
+
+/**
+ * Tabs for the league-scoped screens (Table, PlayerStats, Leaderboards):
+ * the big five always, plus every FOLLOWED non-cup league beyond them. The
+ * tab list grows with the follow list — following Eredivisie adds its table,
+ * stat boards and leaderboard tab with no other change (server catalog
+ * decides what's a table-league; see buildLeagueTabs in lib/pickerGroups).
+ */
+export function useLeagueTabs(): LeagueTab[] {
+  const { t, localize } = useI18n();
+  const followed = useFollowedLeagues();
+  return useMemo(
+    () => buildLeagueTabs(followed.leagues, t, localize),
+    [followed.leagues, t, localize],
+  );
 }
 
 /* ------------------------------------------------------------ notification prefs */

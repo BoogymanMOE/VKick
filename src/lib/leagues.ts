@@ -24,3 +24,14 @@ export const SLUG_BY_LEAGUE: Record<LeagueId, string> = {
   BL: "ger.1",
   L1: "fra.1",
 };
+
+/**
+ * Whatever league-scoped identifier a value is — big-five alias ("PL") or an
+ * ESPN slug ("ned.1") — return the slug to query the server with. Aliases
+ * translate; slugs (and anything else) pass through unchanged. The league
+ * tabs mix both values by design, so every screen that consumes them needs
+ * exactly this coercion.
+ */
+export function slugForLeague(idOrSlug: string): string {
+  return SLUG_BY_LEAGUE[idOrSlug as LeagueId] ?? idOrSlug;
+}

@@ -4,8 +4,9 @@ import { RowSkeleton } from "../components/Skeletons";
 import { EmptyState, ErrorState } from "../components/ui";
 import { Card, Chip, Num, SectionHeading, Segmented, TeamBadge, cx } from "../components/ui";
 import {
-  SLUG_BY_LEAGUE,
+  slugForLeague,
   useLeaguePlayers,
+  useLeagueTabs,
   useLeagueTeamStats,
   type LeaderPlayerRow,
   type LeaderSort,
@@ -15,15 +16,6 @@ import { useI18n } from "../i18n/I18nProvider";
 import { Link } from "react-router-dom";
 import { haptic } from "../lib/telegram";
 import type { StringKey } from "../i18n/strings";
-import type { LeagueId } from "../types";
-
-/**
- * Leagues with synced season standings/stats. Hardcoded to the big five for
- * now (the standings sync covers exactly these), but typed and consumed
- * through SLUG_BY_LEAGUE so adding a league to the sync is a one-line change
- * here, not a refactor.
- */
-const STAT_LEAGUES: LeagueId[] = ["PL", "LL", "SA", "BL", "L1"];
 
 /** Leaderboard columns: i18n key + the server sort field. */
 const SORTS: Array<{ key: LeaderSort; labelKey: StringKey }> = [
@@ -49,11 +41,13 @@ const SORTS: Array<{ key: LeaderSort; labelKey: StringKey }> = [
  */
 export default function PlayerStats() {
   const { t } = useI18n();
-  const [league, setLeague] = useState<LeagueId>("PL");
+  const tabs = useLeagueTabs();
+  const [league, setLeague] = useState<string>("PL");
   const [view, setView] = useState<"players" | "teams">("players");
   const [sort, setSort] = useState<LeaderSort>("goals");
 
-  const slug = SLUG_BY_LEAGUE[league];
+  // Tab values are big-five aliases; anything else is already a slug.
+  const slug = slugForLeague(league);
 
   return (
     <>
@@ -74,7 +68,7 @@ export default function PlayerStats() {
         <Segmented
           value={league}
           onChange={setLeague}
-          options={STAT_LEAGUES.map((id) => ({ value: id, label: t(`league.${id}`) }))}
+          options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
         />
       </div>
 

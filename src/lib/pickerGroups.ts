@@ -79,3 +79,43 @@ export function buildPickerGroups(
 export function teamsInGroup(teams: Team[], group: string): Team[] {
   return teams.filter((team) => team.groupKey === group);
 }
+
+/** A tab on the league-scoped screens (Table, PlayerStats, Leaderboards). */
+export interface LeagueTab {
+  /** Alias ("PL") for the big five, slug ("ned.1") beyond them. */
+  value: string;
+  label: string;
+}
+
+/** A followed-league row as /api/me/leagues serves it. */
+export interface FollowedLeagueRow {
+  league: string;
+  name: string | null;
+  kind: "league" | "cup" | "tournament" | null;
+}
+
+/**
+ * Tabs for the league-scoped screens: the big five always (translated
+ * aliases), then every FOLLOWED non-cup league beyond them in catalog order.
+ * Cups and internationals never get a tab — they have no table to show. A
+ * user who follows Eredivisie sees it here and in the picker automatically;
+ * a user who follows nobody beyond the big five sees exactly the old five.
+ */
+export function buildLeagueTabs(
+  followed: FollowedLeagueRow[],
+  t: (key: StringKey) => string,
+  localize: (name: string) => string,
+): LeagueTab[] {
+  const bigFive = PICKER_GROUPS.filter((g) => g.key !== OTHER_GROUP && g.key !== INTERNATIONAL_GROUP);
+  const aliasBySlug = new Map(Object.entries(SLUG_BY_LEAGUE).map(([slug, alias]) => [slug, alias]));
+  const extras = followed.filter(
+    (row) => row.kind === "league" && !aliasBySlug.has(row.league),
+  );
+  const seen = new Set<string>();
+  return [
+    ...bigFive.map((g) => ({ value: g.key, label: t(g.label) })),
+    ...extras
+      .filter((row) => (seen.has(row.league) ? false : (seen.add(row.league), true)))
+      .map((row) => ({ value: row.league, label: localize(row.name ?? row.league) })),
+  ];
+}

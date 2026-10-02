@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { fetchScoreboard, fetchSummary, fetchTeamRoster } from "../espn/client.js";
-import { LEAGUES_ALL, LEAGUES, pollWindow, type LeagueSlug } from "../espn/types.js";
+import { LEAGUES_ALL, ALL_DOMESTIC, pollWindow, type LeagueSlug } from "../espn/types.js";
 import { getDb, all, get } from "../db/index.js";
 import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
 import { onMatchFinished } from "../predictions/resolver.js";
@@ -179,9 +179,12 @@ export async function syncRosters(): Promise<void> {
   );
 }
 
-/** Season standings for the big five domestic leagues (cups have no table). */
+/**
+ * Season standings for every domestic league in the catalog (big five + the
+ * wider domestic set) — cups and internationals correctly have no table.
+ */
 export async function syncStandings(): Promise<void> {
-  for (const league of LEAGUES) {
+  for (const league of ALL_DOMESTIC) {
     try {
       const json = await fetchSummary(league, await firstEventId(league));
       applyStandings(db, json, league, currentSeason());

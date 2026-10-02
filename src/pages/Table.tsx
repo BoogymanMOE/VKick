@@ -5,12 +5,11 @@ import { RowSkeleton } from "../components/Skeletons";
 import { EmptyState, ErrorState } from "../components/ui";
 import { Chip, Num, SectionHeading, Segmented, TeamBadge, cx } from "../components/ui";
 import { StarFilledIcon } from "../components/icons";
-import { LEAGUE_TABS, SLUG_BY_LEAGUE, useStandings, type StandingRow } from "../hooks/useApi";
+import { slugForLeague, useLeagueTabs, useStandings, type StandingRow } from "../hooks/useApi";
 
 type TableView = "actual" | "expected";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/I18nProvider";
-import type { LeagueId } from "../types";
 
 /**
  * League tables for the synced domestic leagues — straight from the standings.
@@ -20,12 +19,18 @@ import type { LeagueId } from "../types";
 export default function Table() {
   const { t, localize } = useI18n();
   const { teams: clubs, isFavorite } = useFavorites();
-  const [league, setLeague] = useState<LeagueId | null>(null);
+  const tabs = useLeagueTabs();
+  const [league, setLeague] = useState<string | null>(null);
   const [view, setView] = useState<TableView>("actual");
 
   // Default to the league one of your clubs plays in, else the Premier League.
+  // `clubs[].league` is a big-five alias (teamFromApi parks every other side
+  // in "PL"), so the default always lands on a tab that exists.
   const active = league ?? clubs[0]?.league ?? "PL";
-  const slug = SLUG_BY_LEAGUE[active];
+  const slug = slugForLeague(active);
+  // Tab labels carry the translation: aliases come pre-translated, followed
+  // extras read their catalog name — `league.<slug>` i18n keys don't exist.
+  const tabLabel = (value: string) => tabs.find((tab) => tab.value === value)?.label ?? value;
   const standingsQuery = useStandings(slug);
   const rows = standingsQuery.data ?? [];
 
@@ -45,7 +50,7 @@ export default function Table() {
         <Segmented
           value={active}
           onChange={setLeague}
-          options={LEAGUE_TABS.map((id) => ({ value: id, label: t(`league.${id}`) }))}
+          options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
         />
       </div>
 
@@ -96,7 +101,7 @@ export default function Table() {
 
       <section className="mt-4">
         <SectionHeading
-          title={t(`league.${active}`)}
+          title={tabLabel(active)}
           action={
             standingsQuery.data?.length ? (
               <span className="text-[11px] text-ink-3">{standingsQuery.data[0]?.played ?? 0} GW</span>

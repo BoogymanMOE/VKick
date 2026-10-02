@@ -5,6 +5,13 @@ export type LeagueSlug =
   | "ita.1"
   | "ger.1"
   | "fra.1"
+  // Domestic leagues beyond the big five (see DOMESTIC_EXTRAS)
+  | "ned.1"
+  | "por.1"
+  | "tur.1"
+  | "sco.1"
+  | "gre.1"
+  | "bel.1"
   // UEFA club competitions
   | "uefa.champions"
   | "uefa.europa"
@@ -32,6 +39,20 @@ export type LeagueSlug =
 
 /** The big five domestic leagues — the ones the favorites rule is built on. */
 export const LEAGUES: LeagueSlug[] = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
+
+/**
+ * Domestic leagues beyond the big five that the catalog carries — real league
+ * tables, full fixture sync, predictable matches. Every slug here was verified
+ * against ESPN's standings endpoint (they also appear in the crest collection's
+ * league folder map). Widening this list is the whole mechanism behind
+ * "tables for a followed league outside the big five": the standings sync,
+ * the isCup classification, the picker tabs and the stat boards all read the
+ * catalog, so an entry here lights up everywhere at once.
+ */
+export const DOMESTIC_EXTRAS: LeagueSlug[] = ["ned.1", "por.1", "tur.1", "sco.1", "gre.1", "bel.1"];
+
+/** Every competition that owns a league table. */
+export const ALL_DOMESTIC: LeagueSlug[] = [...LEAGUES, ...DOMESTIC_EXTRAS];
 
 /**
  * Club cup competitions synced alongside the leagues (all confirmed on ESPN).
@@ -73,8 +94,8 @@ export const INTERNATIONALS: LeagueSlug[] = [
   "concacaf.gold",
 ];
 
-/** Big five + cups + internationals — everything the sync polls. */
-export const LEAGUES_ALL: LeagueSlug[] = [...LEAGUES, ...CUPS, ...INTERNATIONALS];
+/** All domestic leagues + cups + internationals — everything the sync polls. */
+export const LEAGUES_ALL: LeagueSlug[] = [...ALL_DOMESTIC, ...CUPS, ...INTERNATIONALS];
 
 /**
  * Competitions polled on the narrow sweep window instead of the wide one.
@@ -106,7 +127,7 @@ export function pollWindow(league: string): { back: number; forward: number } {
  * uefa.champions as its own league.
  */
 export function isCup(league: string): boolean {
-  return !LEAGUES.includes(league as LeagueSlug);
+  return !ALL_DOMESTIC.includes(league as LeagueSlug);
 }
 
 /** Seeded competition labels — the display names users browse by. */
@@ -120,6 +141,13 @@ export const COMPETITIONS: Array<{
   { slug: "ita.1", name: "Serie A", kind: "league" },
   { slug: "ger.1", name: "Bundesliga", kind: "league" },
   { slug: "fra.1", name: "Ligue 1", kind: "league" },
+  // Domestic leagues beyond the big five — full tables, same pipeline.
+  { slug: "ned.1", name: "Eredivisie", kind: "league" },
+  { slug: "por.1", name: "Liga Portugal", kind: "league" },
+  { slug: "tur.1", name: "Türkiye Süper Lig", kind: "league" },
+  { slug: "sco.1", name: "Scottish Premiership", kind: "league" },
+  { slug: "gre.1", name: "Super League Greece", kind: "league" },
+  { slug: "bel.1", name: "Belgian Pro League", kind: "league" },
   { slug: "uefa.champions", name: "UEFA Champions League", kind: "cup" },
   { slug: "uefa.europa", name: "UEFA Europa League", kind: "cup" },
   { slug: "uefa.europa.conf", name: "UEFA Conference League", kind: "cup" },

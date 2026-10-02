@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { TopBar } from "../components/TopBar";
 import { Avatar, Chip, EmptyState, ErrorState, Num, SectionHeading, Segmented, cx } from "../components/ui";
-import { LEAGUE_TABS, SLUG_BY_LEAGUE, useLeaderboard, type LeaderboardScope } from "../hooks/useApi";
+import { slugForLeague, useLeaderboard, useLeagueTabs, type LeaderboardScope } from "../hooks/useApi";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/I18nProvider";
 
@@ -194,12 +194,17 @@ function BoardRow({
 /* ------------------------------------------------------------ league picker */
 
 function LeaguePicker({ value, onChange }: { value: string; onChange: (slug: string) => void }) {
-  const { t } = useI18n();
+  const tabs = useLeagueTabs();
+  // Board state is a slug end-to-end; tab values are big-five aliases, so
+  // aliases translate back through SLUG_BY_LEAGUE and extras pass through.
   return (
     <Segmented
       value={value}
       onChange={onChange}
-      options={LEAGUE_TABS.map((id) => ({ value: SLUG_BY_LEAGUE[id], label: t(`league.${id}`) }))}
+      options={tabs.map((tab) => ({
+        value: slugForLeague(tab.value),
+        label: tab.label,
+      }))}
     />
   );
 }
