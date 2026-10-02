@@ -203,6 +203,25 @@ function testShotPredict() {
     counts: { shots: 2, shotsOnTarget: 0 },
   });
   assert.equal(offTargetInZone.points, 5, "exact zone, off-target shot = zone points only");
+
+  // Lenient SoT ALONE pays exactly +2 (scoring-rules.md §3: no located shots
+  // at all, but the stat sheet shows ≥1 on target — "the pick scores exactly
+  // +2"). No zone or goal points can stack on top of the pure tally path.
+  const tallyOnly = scoreShotPredict("inside_center", {
+    locatedShots: [],
+    counts: { shots: 2, shotsOnTarget: 1 },
+  });
+  assert.equal(tallyOnly.points, 2, "lenient SoT with no located shots = exactly +2");
+  assert.equal(tallyOnly.status, "partial");
+  assert.equal(tallyOnly.breakdown.lenientSoT, 1, "the breakdown flags the pure-tally path");
+
+  // Adjacent zone with a zero SoT tally = exactly the zone points, nothing else.
+  const adjacentOnly = scoreShotPredict("inside_center", {
+    locatedShots: [{ kind: "on_target", fieldPositionX: 60, fieldPositionY: 50 }], // outside_center: adjacent
+    counts: { shots: 1, shotsOnTarget: 0 },
+  });
+  assert.equal(adjacentOnly.points, POINTS.shotZoneAdjacent, "adjacent zone, no tally = exactly +2");
+  assert.equal(adjacentOnly.breakdown.lenientSoT, 0);
 }
 
 /* ------------------------------------------------------------ watch */

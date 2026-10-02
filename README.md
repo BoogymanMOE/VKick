@@ -106,7 +106,6 @@ Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by mi
 - Referral mechanics (Phase 4)
 - Full bracket tree for cups — round groupings exist (`matches.round` from ESPN notes, grouped on the Cups screen), but not a connected knockout tree
 - League tables for a followed league outside the big five — the tabs (`LEAGUE_TABS`) and `syncStandings()` are big-five only
-- Season boundary driven by the last tracked league finishing, rather than the calendar year, and a test for it
 
 (Ads: the inline **Adsgram Task card is live** on Matchday and Match detail — Telegram-only, and off entirely unless `VITE_ADSGRAM_TASK_BLOCK_ID` is set (`src/lib/ads.ts`). Rewarded/interstitial formats are deliberately unused.)
 

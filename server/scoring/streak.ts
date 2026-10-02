@@ -20,7 +20,8 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 import { get, run, tx } from "../db/index.js";
-import { award, rollSeasonIfNeeded, currentSeasonLabel } from "./ledger.js";
+import { award, rollSeasonIfNeeded } from "./ledger.js";
+import { activeSeason } from "./season.js";
 import { POINTS, updateStreak, type StreakState } from "./predictionScore.js";
 
 interface StreakRow {
@@ -201,7 +202,7 @@ function evaluateStreakSync(
       JSON.stringify(update.state.thresholdsPaid),
       update.state.lastMatchId,
       update.state.active,
-      currentSeasonLabel(),
+      activeSeason(db),
       new Date().toISOString(),
     ],
   );

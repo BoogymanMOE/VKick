@@ -110,7 +110,12 @@ One player, one zone on the 6-zone pitch grid. Zones are left/center/right × in
 - The scored shot a goal: **+5**
 - Max **12** (exact + on target + goal). Player recorded no shots: 0.
 
-**Data caveats (for the agent):** ESPN publishes shot coordinates almost exclusively on *goal* events (and only in some leagues). Therefore: (a) zone points need a *located* shot — goals always qualify; (b) the +2 on-target bonus is awarded **leniently from the stat sheet** whenever the picked player recorded ≥1 shot on target (`match_player_stats.shots_on_target`) even if no located shot exists — in that case the pick scores exactly +2. Shot attribution to the picked player uses event participants; if none match (older sync data), the match's located shots are used as a lenient fallback rather than voiding picks.
+**Leniency rules (locked):** ESPN publishes shot coordinates almost exclusively on *goal* events (and only in some leagues), so two leniency rules are part of the final formula, both flagged in the `breakdown` so the "why did I get X" panel shows when they fired:
+
+- `lenientSoT` — the +2 on-target bonus is awarded **from the stat sheet** whenever the picked player recorded ≥1 shot on target (`match_player_stats.shots_on_target`), independent of zone outcomes. With no located shot at all, the pick scores **exactly +2** — no zone or goal points can stack on the pure-tally path.
+- `zoneFromFallback` — shot attribution uses event participants; if none match (older sync data), the match's located shots are used as a lenient fallback rather than voiding picks. The flag records that the score came from a teammate's located shot, not the picked player's own.
+
+Neither flag adds points by itself; they exist so adjudication is transparent and revisitable.
 
 ### 4. Player to Watch
 
@@ -165,7 +170,7 @@ Every award appends one immutable `point_ledger` row (source = `prediction` or `
 
 **Tiebreaker:** level totals rank by whoever reached that total first. Each totals row stores `reached_total_at` — the ledger timestamp of the award that pushed the user to that exact total, written at award time and never recomputed.
 
-**Season boundary:** opens when the first tracked league starts, closes when the last finishes; all three views (and streak state) reset together. Implemented via the season label on every totals/streak row (e.g. `2026-27`).
+**Season boundary:** opens when the first tracked league kicks off, closes when the last one finishes — implemented **data-driven**, not by a calendar date: the active label is the Aug–May label of the most recent tracked-league match whose kickoff has passed (`activeSeason()` in `server/scoring/season.ts`). A summer gap therefore keeps the finished season's boards readable (summer internationals score into them), and the label flips exactly at the new season's first tracked kickoff — future-dated fixtures never flip it early. Fresh databases fall back to the calendar label. All three views (and streak state) reset together via the season label on every totals/streak row (e.g. `2026-27`); `rollSeasonIfNeeded` does the streak reset lazily. Pinned by `tests/season.test.ts` against a synthetic boundary.
 
 **The ratings firewall:** the 3-card rating system and comments are cosmetic/social only. No code path from `crowd_ratings` or `timeline_comments` reaches the ledger — only prediction resolutions and streak bonuses append to it. The Player to Watch crowd *gate* reads rating averages but never writes points from them. A test (`tests/predictionScore.test.ts`) pins that ratings produce no ledger rows.
 

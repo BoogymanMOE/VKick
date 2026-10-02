@@ -52,7 +52,7 @@ Concept: `concept.md`. Mechanics: `prediction-mechanics.md`. Scoring: `scoring-r
 - [x] Tiebreaker: `reached_total_at` recorded at award time; rank level totals by who got there first.
 - [x] Public, browsable board screens (`src/pages/Leaderboards.tsx`) over three no-auth endpoints (global / league / club). Identity is the unique `@username` (display name only as fallback, since names collide on a public board); the caller's own row is flagged `is_you` and highlighted.
 - [x] Season **scoping**: every ledger and totals row carries `scope_season` and reads filter on `currentSeasonLabel()`, and `rollSeasonIfNeeded()` resets a user's streak when their row carries the previous label — so the three views move together.
-- [ ] **Season boundary exactly as specified** — "closes when the last tracked league finishes". What exists is a calendar rule (Aug–May European year), not a rule driven by the final tracked league's last fixture, and it has no test. See Phase 4.
+- [x] **Season boundary exactly as specified** — "closes when the last tracked league finishes". `activeSeason()` (`server/scoring/season.ts`) derives the label from the most recent tracked-league kickoff: the summer gap keeps the finished season's boards open, and the label flips at the new season's first tracked kickoff, not on a calendar date. Ledger stamps, board reads and streak rows all use it; covered by `tests/season.test.ts` (summer-gap disagreement with the calendar, first-kickoff flip, award stamps, synthetic-boundary streak roll).
 - [x] Transparent "why did I get X" breakdown panel: `src/pages/Predictions.tsx` over `GET /api/me/predictions`, rendering the resolver's own stored `breakdown` line items (`src/lib/breakdown.ts`), including the Shot Predictor's `zoneFromFallback` and `lenientSoT` leniency flags.
 
 **Exit criteria met:** predictions resolve correctly after a real matchday and the three boards update; a user can find themselves on all three.
@@ -89,7 +89,7 @@ Concept: `concept.md`. Mechanics: `prediction-mechanics.md`. Scoring: `scoring-r
 - [ ] Ad integration (Tapsell) at natural break points — post-pick onboarding, league tables, post-match reveal — never mid-match.
 - [ ] Referral/invite mechanic: share your club/league picks or a leaderboard link (likely the primary growth channel).
 - [ ] Bug bash / stability pass across the full loop (onboard → predict → live match → rate → check rank). `npm test` covers the pure logic (scoring, grid, formations, normalization, migrations, password) but nothing exercises the live loop end to end.
-- [ ] Leaderboard season-reset tested against a synthetic boundary. Nothing in `tests/` covers the season rollover today.
+- [x] Leaderboard season-reset tested against a synthetic boundary — `tests/season.test.ts` inserts the finished season's last fixture and the new season's opener and drives `rollSeasonIfNeeded` across the flip; the Shot Predictor's leniency rules (`lenientSoT` exact-+2 cap, adjacency-only) are pinned in `tests/predictionScore.test.ts`.
 
 **Exit criteria:** a stranger could sign up via a shared Telegram link and understand what to do within a minute or two, unassisted.
 

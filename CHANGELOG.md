@@ -61,6 +61,22 @@
   instead of the removed My Teams screen; the not-started list reflects that
   the inline Adsgram Task card is live (Tapsell was the old plan); the API
   surface section names both bearer-token families and the favorites caps.
+- **Season boundary is data-driven (scoring-rules.md §8).** New
+  `activeSeason()` (`server/scoring/season.ts`): the active label follows the
+  most recent tracked-league kickoff, so the season closes when the last
+  tracked league finishes and opens at the next one's first kickoff — not on
+  Aug 1. Summer internationals keep scoring into the finished season's boards;
+  future fixtures never flip the label early. Ledger stamps, leaderboard
+  reads and streak rows all use it; `tests/season.test.ts` pins the
+  summer-gap case where the data rule and the calendar disagree, the flip,
+  award stamps, and the synthetic-boundary streak roll.
+- **Shot Predictor formula finalized with pinned leniency tests.** The
+  formula was locked (exact 5 / adjacent 2 / +2 SoT / +5 goal, best single
+  shot pays); the two leniency rules are now pinned as executable spec —
+  `lenientSoT` scores **exactly +2** when no located shot exists, and the
+  adjacency-only path pays exactly the zone points — and `scoring-rules.md`
+  §3 documents both flags (`lenientSoT`, `zoneFromFallback`) as locked
+  behavior rather than agent caveats.
 
 ### Tooling & performance
 

@@ -19,12 +19,16 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 import { all, get, run, tx } from "../db/index.js";
+import { activeSeason, seasonLabelForDate } from "./season.js";
 
-/** Season label mirroring sync/service.ts's currentSeason() (Aug–May European year). */
+/**
+ * Calendar label (Aug–May European year) — the FALLBACK the data-driven
+ * boundary (activeSeason, server/scoring/season.ts) rests on: fresh databases
+ * and stat-table displays with no season rows yet. Scoring stamps and board
+ * reads use activeSeason; keep this exported for those cosmetic fallbacks.
+ */
 export function currentSeasonLabel(now: Date = new Date()): string {
-  const y = now.getUTCFullYear();
-  const startYear = now.getUTCMonth() >= 7 ? y : y - 1;
-  return `${startYear}-${String(startYear + 1).slice(2)}`;
+  return seasonLabelForDate(now);
 }
 
 export type LedgerSource = "prediction" | "streak_bonus";
@@ -74,7 +78,10 @@ export function award(db: DatabaseSync, input: AwardInput): number | null {
     // would lie about when the user reached their current total.
     return null;
   }
-  const season = input.season ?? currentSeasonLabel();
+  // Season stamp: the DATA-driven boundary (scoring-rules.md §8 — the season
+  // closes when the last tracked league finishes and opens at the next one's
+  // first kickoff), not a calendar date. An explicit input.season wins.
+  const season = input.season ?? activeSeason(db);
   const awardedAt = new Date().toISOString();
 
   try {
@@ -149,7 +156,7 @@ function bumpTotal(
  * their favorite club plays. Call this when a favorite-club match resolves.
  */
 export function rollSeasonIfNeeded(db: DatabaseSync, userId: number): string {
-  const season = currentSeasonLabel();
+  const season = activeSeason(db);
   const row = get<{ scope_season: string }>(db, "SELECT scope_season FROM user_streaks WHERE user_id = ?", [
     userId,
   ]);

@@ -11,7 +11,8 @@
  */
 import express, { type Request } from "express";
 import { getDb, get } from "../db/index.js";
-import { readLeaderboard, readViewerRank, currentSeasonLabel } from "../scoring/ledger.js";
+import { readLeaderboard, readViewerRank } from "../scoring/ledger.js";
+import { activeSeason } from "../scoring/season.js";
 import { verifyInitData, verifyDevToken } from "../telegram/verify.js";
 import { botToken, devSecret } from "./shared.js";
 
@@ -56,7 +57,10 @@ function optionalViewerId(req: Request): number | undefined {
 
 function boardPayload(scope: string, req: Request) {
   const viewerId = optionalViewerId(req);
-  const season = currentSeasonLabel();
+  // Data-driven season (scoring-rules.md §8): the label follows the most
+  // recent tracked-league kickoff, so boards close when the last league
+  // finishes and open at the next one's first kickoff — not on a calendar date.
+  const season = activeSeason(db);
   return {
     board: readLeaderboard(db, scope, season, LEADERBOARD_LIMIT, viewerId).map((r) => ({
       rank: r.rank,
