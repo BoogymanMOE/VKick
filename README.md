@@ -56,6 +56,7 @@ If ESPN changes a response shape, the fix goes in `server/espn/normalize.ts` and
 | Path | What |
 |---|---|
 | `server/db/schema.ts` | All tables (mirrors `data-model.md` + `prediction-mechanics.md`) |
+| `server/routes/*.ts` | Route modules mounted by `server/index.ts`: `auth` (login/guest/register + guest merge), `me` (profile, favorites, leagues, streak, prefs), `football` (matches, replay, teams, squads, standings), `predictions`, `ratings` (+ comments), `leaderboards`, `admin` |
 | `server/espn/normalize.ts` | The ONLY file that knows ESPN's JSON shapes |
 | `server/sync/service.ts` | Cron loops: live 1m, scoreboards 10m, standings daily |
 | `server/sync/upserts.ts` | Normalized data → SQLite, goal-alert detection |
@@ -70,7 +71,7 @@ If ESPN changes a response shape, the fix goes in `server/espn/normalize.ts` and
 
 Public (no auth): `GET /api/matches`, `GET /api/matches/:id`, `/lineups`, `/timeline`, `/players` (per-match stat table), `GET /api/teams` (+ `/:id` season line), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`
 
-Auth (Bearer = Telegram initData): `POST /api/auth/login`, `GET /api/me`, `GET/POST/DELETE /api/me/favorites` (max 5 clubs, one flagged `is_favorite` — errors are machine-readable codes), `GET/POST /api/matches/:id/ratings` (1 vote per player per match, 1–10), `GET/POST /api/matches/:id/predictions` (lock enforcement per mechanic), `GET /api/me/predictions`, `GET /api/me/streak` (favorite-club streak + next threshold bonus)
+Auth (Bearer = Telegram initData, or an `mg_` session token from the username path): `POST /api/auth/login`, `GET /api/me`, `GET/POST/DELETE /api/me/favorites` (max 5 clubs plus up to 5 national teams, one flagged `is_favorite` — errors are machine-readable codes), `GET/POST /api/matches/:id/ratings` (3-card cap, 1 vote per player per match, 1–10), `GET/POST /api/matches/:id/predictions` (lock enforcement per mechanic), `GET /api/me/predictions`, `GET /api/me/streak` (favorite-club streak + next threshold bonus)
 
 Admin (`ADMIN_TELEGRAM_IDS`): `POST /api/admin/sync`, `POST /api/admin/notify`
 
@@ -102,16 +103,18 @@ Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by mi
 
 **Not started:**
 
-- Tapsell ads, referral mechanics (Phase 4)
+- Referral mechanics (Phase 4)
 - Full bracket tree for cups — round groupings exist (`matches.round` from ESPN notes, grouped on the Cups screen), but not a connected knockout tree
 - League tables for a followed league outside the big five — the tabs (`LEAGUE_TABS`) and `syncStandings()` are big-five only
 - Season boundary driven by the last tracked league finishing, rather than the calendar year, and a test for it
+
+(Ads: the inline **Adsgram Task card is live** on Matchday and Match detail — Telegram-only, and off entirely unless `VITE_ADSGRAM_TASK_BLOCK_ID` is set (`src/lib/ads.ts`). Rewarded/interstitial formats are deliberately unused.)
 
 ## Screens
 
 - **Matches** (`#/matches`) — matchday list, live/upcoming/finished, your clubs first, "my teams only" filter
 - **Match detail** (`#/match/:id`) — timeline, stats, lineups, ratings tabs
-- **My Teams** (`#/my-teams`) — club picker (five slots, one anchored favorite) with a tab per catalog league plus cup-only clubs and national teams
+- **Onboarding** (`#/onboarding`) — the club & league picker: one anchored favorite, up to four more clubs, up to five national teams on their own shelf, and up to five leagues. Old `/my-teams` deep links redirect here; Profile re-opens it for edits.
 - **Ratings** (`#/ratings`) — crowd ratings beside the stat score, the "eye test" view
 - **Tables** (`#/table`) — league standings with your clubs highlighted
 - **Cups / Browse / Player Stats / Team pages** — knockout fixtures grouped by round (first round → final) when ESPN labels them, league browsing, season stat leaderboards

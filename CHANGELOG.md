@@ -36,6 +36,32 @@
 
 ## Unreleased (infra — kept out of WHATS_NEW, players can't see any of this)
 
+### Code health
+
+- **`server/index.ts` split into route modules.** One module per domain under
+  `server/routes/` (`auth`, `me`, `football`, `predictions`, `ratings`,
+  `leaderboards`, `admin`) with shared plumbing in `server/routes/shared.ts`;
+  the app shell keeps middleware, `/health`, static serving, retention sweeps
+  and boot. No endpoint path or behavior changed — typecheck, the full test
+  run and a live boot + guest-entry smoke test all stayed green.
+- **Auth hardening.** initData digest comparison is constant-time and
+  `auth_date` is required (≤24h); the server refuses to boot with
+  `DEV_AUTH_SECRET` set under `NODE_ENV=production`; ratings/comment writes
+  are rate-limited; `trust proxy` is pinned to one hop. A temporary probe on
+  `/api/auth/guest` logs verification verdict + identity mode (no secrets)
+  while real-Telegram-client behavior is being observed.
+- **UX truth fixes.** The RateSheet histogram is the server's real per-rating
+  GROUP BY (was a single-bucket client approximation); leaderboards surface a
+  server-computed "your rank" row when it sits below the top-100 page;
+  prediction summaries show localized player names instead of raw ESPN ids;
+  the ErrorBoundary and the bot's `/start` + `/myteams` replies are localized
+  (EN/FA); rating rows carry the match's real competition instead of a
+  hardcoded PL.
+- **Docs de-staled.** The Screens list shows Onboarding (the live picker)
+  instead of the removed My Teams screen; the not-started list reflects that
+  the inline Adsgram Task card is live (Tapsell was the old plan); the API
+  surface section names both bearer-token families and the favorites caps.
+
 ### Tooling & performance
 
 - **All `react-hooks/exhaustive-deps` warnings cleared.** `Cups` and
