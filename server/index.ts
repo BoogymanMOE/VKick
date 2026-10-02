@@ -45,8 +45,13 @@ const db = getDb();
 // by running more of it.
 const apiLog = new RotatingLogger(path.join(ROOT_DIR, "logs", "api.log"), logCapKb());
 
-// Behind the vite dev proxy / a reverse proxy, so req.ip is the client.
-app.set("trust proxy", true);
+// Exactly ONE trusted reverse-proxy hop sits in front of the API in every
+// documented deployment: the vite dev proxy locally, Render's router in
+// production. "1" makes req.ip the real client address from X-Forwarded-For
+// while refusing to trust a client-supplied proxy chain (the old `true`
+// trusted anything, so a direct connection could spoof its IP past the
+// rate limiter's IP keys).
+app.set("trust proxy", 1);
 // 64KB body cap: far above any legit prediction/comment payload, well below
 // abuse size. (default was 100KB; explicit + smaller now that payloads are validated)
 app.use(express.json({ limit: "64kb" }));
@@ -334,9 +339,23 @@ app.post("/api/auth/guest", authLimiter, (req, res) => {
   const initData = String(req.body?.initData ?? "");
   const verified = initData && botToken() ? verifyInitData(initData, botToken()) : null;
 
+  // TEMP AUTH PROBE — remove once a real Telegram client has been observed.
+  // Never logs the initData, tokens, or any payload bytes: only the verdict,
+  // the verification reason on failure, and the resulting identity mode.
+  if (!initData) {
+    console.log("[auth:guest] TEMP no initData sent (plain web guest)");
+  } else if (verified?.ok) {
+    console.log("[auth:guest] TEMP initData verified: true");
+  } else {
+    const reason =
+      verified && !verified.ok ? verified.reason : botToken() ? "verify returned no verdict" : "no bot token configured";
+    console.log(`[auth:guest] TEMP initData verified: false reason="${reason}"`);
+  }
+
   // Telegram identity wins over the guest id, so reopening in the Mini App
   // merges straight into the Telegram account instead of a second profile.
   if (verified?.ok) {
+    console.log("[auth:guest] TEMP entry mode=telegram (initData verified)");
     const user = upsertUser(
       String(verified.user.id),
       [verified.user.first_name, verified.user.last_name].filter(Boolean).join(" ") ||
@@ -358,6 +377,14 @@ app.post("/api/auth/guest", authLimiter, (req, res) => {
   );
   const user = existing ?? upsertUser(syntheticId, `Guest ${deviceId.slice(0, 4)}`);
   const token = issueSession(user.id);
+  if (initData) {
+    // TEMP AUTH PROBE — the interesting case: the client DID send initData
+    // but it did not verify, so a Telegram user is about to become a guest.
+    console.log(
+      `[auth:guest] TEMP entry mode=session (guest) — initData was sent but NOT verified` +
+        (verified && !verified.ok ? ` reason="${verified.reason}"` : ""),
+    );
+  }
   res.json({ ok: true, mode: "session", token, user: publicUser(user) });
 });
 
@@ -1284,7 +1311,7 @@ app.get("/api/matches/:id/ratings", requireUser, (req, res) => {
   });
 });
 
-app.post("/api/matches/:id/ratings", requireUser, (req, res) => {
+app.post("/api/matches/:id/ratings", requireUser, writeLimiter, (req, res) => {
   const matchId = String(req.params.id);
   const { playerId, rating, comment } = req.body ?? {};
   const r = Number(rating);
@@ -1357,7 +1384,7 @@ app.get("/api/matches/:id/comments", requireUser, (req, res) => {
   res.json({ comments: rows });
 });
 
-app.post("/api/matches/:id/comments", requireUser, (req, res) => {
+app.post("/api/matches/:id/comments", requireUser, writeLimiter, (req, res) => {
   const matchId = String(String(req.params.id));
   const { text, eventId, minuteDisplay, mediaLink } = req.body ?? {};
   const t = String(text ?? "").trim();
@@ -1799,6 +1826,17 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 const PORT = parseInt(process.env.PORT ?? "8787", 10);
+
+// Production hard stop: DEV_AUTH_SECRET turns `dev:<any-id>` into ANY user's
+// identity, so shipping it live is a full auth bypass. Refuse to boot rather
+// than warn-and-continue — a warning scrolls away, an outage doesn't.
+if (process.env.NODE_ENV === "production" && devSecret()) {
+  console.error(
+    "[api] refusing to start: DEV_AUTH_SECRET is set with NODE_ENV=production — " +
+      "dev tokens would let anyone impersonate any user id. Unset DEV_AUTH_SECRET.",
+  );
+  process.exit(1);
+}
 
 const server = app.listen(PORT, () => {
   // Print what was actually bound, not what we asked for: an unbound or
