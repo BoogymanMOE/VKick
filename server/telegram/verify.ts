@@ -16,17 +16,23 @@ export interface TelegramUser {
 const MAX_AGE_SECONDS = 86_400;
 
 /**
- * Verify Telegram WebApp initData (official algorithm):
+ * Verify Telegram WebApp initData (official algorithm, Bot API 8.0+):
  * secret = HMAC_SHA256(key="WebAppData", message=botToken)
  * hash   = HMAC_SHA256(key=secret,  message=dataCheckString)
- * where dataCheckString is all fields except `hash`, sorted, "k=v" joined by \n.
+ * where dataCheckString is all fields except `hash` and `signature`, sorted,
+ * "k=v" joined by \n.
  *
- * Every other field — including Bot API 8.0's `signature` — is a regular
- * member of the check string (TEMP audit note: if live-client logging shows
- * real Telegram payloads carrying `signature` failing here, the field needs
- * excluding from the check string; don't change this speculatively).
+ * `signature` (an Ed25519 signature for third-party verification, added in
+ * Bot API 8.0) is NOT part of the bot-token HMAC check string. Current
+ * Telegram clients attach it to every payload; folding it in makes every
+ * authentic login fail. Excluding it is strictly safe: payloads without the
+ * field hash identically either way. (Spec: core.telegram.org/bots/webapps
+ * "Validating data received via the Mini App"; empirically confirmed against
+ * a live bot token — validators that exclude only `hash` reject authentic
+ * signature-carrying payloads, which is exactly the failure the TEMP probe
+ * was watching for.)
  *
- * `auth_date` is REQUIRED: its absence is now a rejection, not a skip, and the
+ * `auth_date` is REQUIRED: its absence is a rejection, not a skip, and the
  * comparison is constant-time so a probe can't binary-search the digest.
  */
 export function verifyInitData(
@@ -37,6 +43,7 @@ export function verifyInitData(
   const hash = params.get("hash");
   if (!hash) return { ok: false, reason: "missing hash" };
   params.delete("hash");
+  params.delete("signature");
 
   const dataCheckString = [...params.entries()]
     .map(([k, v]) => `${k}=${v}`)

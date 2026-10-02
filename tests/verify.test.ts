@@ -5,9 +5,10 @@
  *
  * Pins: valid payload passes, tampering fails, wrong token fails, auth_date
  * is required and enforced, non-hex digests fail closed (timing-safe path),
- * and `signature` is treated as a regular check-string field (current spec —
- * flip this test together with verify.ts if live-client logging ever shows
- * real Telegram payloads must exclude it).
+ * and Bot API 8.0's `signature` field is EXCLUDED from the check string —
+ * payloads signed per the documented algorithm (signature left out of the
+ * hashed fields) verify, while payloads that folded signature in fail, which
+ * is exactly what old validators did to every current Telegram client.
  */
 import { strict as assert } from "node:assert";
 import crypto from "node:crypto";
@@ -15,10 +16,19 @@ import { verifyDevToken, verifyInitData } from "../server/telegram/verify.js";
 
 const BOT_TOKEN = "7000000000:TEST-token-for-the-verify-suite";
 
-/** Sign a query-string of key=value pairs exactly like Telegram documents it. */
-function sign(fields: Record<string, string>, botToken: string = BOT_TOKEN): string {
+/**
+ * Sign a query-string of key=value pairs exactly like Telegram documents it.
+ * `includeSignatureInCheck` reproduces the old-validator mistake (folding the
+ * signature field into the hashed string) to pin its rejection.
+ */
+function sign(
+  fields: Record<string, string>,
+  botToken: string = BOT_TOKEN,
+  includeSignatureInCheck = false,
+): string {
   const secret = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
-  const dataCheckString = Object.entries(fields)
+  const checkFields = includeSignatureInCheck ? fields : Object.fromEntries(Object.entries(fields).filter(([k]) => k !== "signature"));
+  const dataCheckString = Object.entries(checkFields)
     .map(([k, v]) => `${k}=${v}`)
     .sort()
     .join("\n");
@@ -82,18 +92,31 @@ function testMalformedDigests() {
   assert.equal(verifyInitData("user=%7B%22id%22%3A1%7D", BOT_TOKEN).ok, false, "no hash at all rejected");
 }
 
-function testSignatureIsARegularField() {
-  // Current semantics: `signature` (Bot API 8.0+) participates in the check
-  // string like any other field. This pins the behavior the live-client
-  // logging is watching; change it together with verify.ts, not before.
-  const payload = sign({
+function testSignatureExcludedFromCheckString() {
+  const fields = {
     auth_date: String(Math.floor(Date.now() / 1000) - 30),
     query_id: "AAHtest",
     signature: "dGVzdC1zaWduYXR1cmU",
     user: '{"id":9,"first_name":"Sara"}',
+  };
+  // Documented algorithm: the client signs all fields EXCEPT hash and
+  // signature. Our validator must accept exactly that payload.
+  const authentic = sign(fields);
+  const ok = verifyInitData(authentic, BOT_TOKEN);
+  assert.equal(ok.ok, true, "signature-carrying payload (signed per spec) verifies");
+
+  // The old-validator mistake: fold signature into the check string. Every
+  // real Bot API 8.0+ payload would fail that way — pin the rejection.
+  const legacyHashed = sign(fields, BOT_TOKEN, true);
+  assert.equal(verifyInitData(legacyHashed, BOT_TOKEN).ok, false, "signature-in-check-string hash mismatches");
+
+  // A legacy payload WITHOUT the field is unaffected by the exclusion.
+  const legacy = sign({
+    auth_date: fields.auth_date,
+    query_id: fields.query_id,
+    user: fields.user,
   });
-  const r = verifyInitData(payload, BOT_TOKEN);
-  assert.equal(r.ok, true, "signature-as-regular-field payload verifies");
+  assert.equal(verifyInitData(legacy, BOT_TOKEN).ok, true, "pre-8.0 payload still verifies");
 }
 
 function testDevToken() {
@@ -109,7 +132,9 @@ export async function runVerifyTests(): Promise<void> {
   testTampering();
   testAuthDateRules();
   testMalformedDigests();
-  testSignatureIsARegularField();
+  testSignatureExcludedFromCheckString();
   testDevToken();
-  console.log("  verify: valid/tamper/wrong-token, auth_date required+fresh, bad digests closed, dev tokens OK");
+  console.log(
+    "  verify: valid/tamper/wrong-token, auth_date required+fresh, bad digests closed, signature excluded, dev tokens OK",
+  );
 }

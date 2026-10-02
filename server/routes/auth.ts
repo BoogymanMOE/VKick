@@ -123,27 +123,18 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
   const initData = String(req.body?.initData ?? "");
   const verified = initData && botToken() ? verifyInitData(initData, botToken()) : null;
 
-  // TEMP AUTH PROBE — remove once a real Telegram client has been observed.
-  // Never logs the initData, tokens, or any payload bytes: only the verdict,
-  // the verification reason on failure, and the resulting identity mode.
-  if (!initData) {
-    console.log("[auth:guest] TEMP no initData sent (plain web guest)");
-  } else if (verified?.ok) {
-    console.log("[auth:guest] TEMP initData verified: true");
-  } else {
+  // A sent-but-unverified initData is the one auth outcome worth an ops line:
+  // it means a Telegram user is about to become a guest (silent downgrade).
+  // Successes and plain web guests stay silent — they are the normal paths.
+  if (initData && !verified?.ok) {
     const reason =
-      verified && !verified.ok
-        ? verified.reason
-        : botToken()
-          ? "verify returned no verdict"
-          : "no bot token configured";
-    console.log(`[auth:guest] TEMP initData verified: false reason="${reason}"`);
+      verified && !verified.ok ? verified.reason : botToken() ? "verify returned no verdict" : "no bot token configured";
+    console.log(`[auth:guest] initData sent but NOT verified (falling back to guest) reason="${reason}"`);
   }
 
   // Telegram identity wins over the guest id, so reopening in the Mini App
   // merges straight into the Telegram account instead of a second profile.
   if (verified?.ok) {
-    console.log("[auth:guest] TEMP entry mode=telegram (initData verified)");
     const user = upsertUser(
       String(verified.user.id),
       [verified.user.first_name, verified.user.last_name].filter(Boolean).join(" ") ||
@@ -165,14 +156,6 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
   );
   const user = existing ?? upsertUser(syntheticId, `Guest ${deviceId.slice(0, 4)}`);
   const token = issueSession(user.id);
-  if (initData) {
-    // TEMP AUTH PROBE — the interesting case: the client DID send initData
-    // but it did not verify, so a Telegram user is about to become a guest.
-    console.log(
-      `[auth:guest] TEMP entry mode=session (guest) — initData was sent but NOT verified` +
-        (verified && !verified.ok ? ` reason="${verified.reason}"` : ""),
-    );
-  }
   res.json({ ok: true, mode: "session", token, user: publicUser(user) });
 });
 
