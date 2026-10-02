@@ -11,6 +11,10 @@ type BoardTab = "global" | "league" | "club";
  * The stakes layer, made visible: season prediction points across the three
  * boards from the concept — global, per-league, per-club. Public by design;
  * ties resolved by first-to-reach (the server ranks, we render).
+ *
+ * A viewer ranked below the board's page limit gets an honest "you" row
+ * appended under a divider (server-computed with the board's own tiebreak),
+ * so rank 137 is a fact on screen instead of an absence.
  */
 export default function Leaderboards() {
   const { t, localize } = useI18n();
@@ -24,9 +28,9 @@ export default function Leaderboards() {
 
   const board = useLeaderboard(scope);
 
-  // The signed-in user's display name comes from the board row; there is no
-  // separate identity chip, so we just render rows.
-  const rows = board.data ?? [];
+  const rows = board.data?.board ?? [];
+  const you = board.data?.you ?? null;
+  const youOnBoard = rows.some((row) => row.is_you);
 
   return (
     <>
@@ -115,42 +119,75 @@ export default function Leaderboards() {
             </div>
             <ul className="space-y-1.5">
               {rows.map((row) => (
-                <li
+                <BoardRow
                   key={row.username ?? row.display_name}
-                  className={cx(
-                    "grid grid-cols-[2rem_1fr_3.5rem] items-center gap-2 rounded-card border p-2.5",
-                    row.is_you ? "border-volt bg-elevated" : "border-line bg-surface",
-                  )}
-                >
-                  <Num
-                    className={cx(
-                      "text-sm font-bold",
-                      row.rank === 1 ? "text-gold" : row.rank <= 3 ? "text-ink" : "text-ink-3",
-                    )}
-                  >
-                    {row.rank}
-                  </Num>
-                  <span className="flex min-w-0 items-center gap-2">
-                    <Avatar name={row.display_name} size="sm" />
-                    <span
-                      className={cx(
-                        "min-w-0 flex-1 truncate text-sm font-bold",
-                        row.is_you ? "text-volt" : "text-ink",
-                      )}
-                      dir="ltr"
-                    >
-                      {row.display_name}
-                    </span>
-                    {row.is_you ? <Chip tone="volt">{t("board.you")}</Chip> : null}
-                  </span>
-                  <Num className="text-end text-base text-gold">{row.total}</Num>
-                </li>
+                  rank={row.rank}
+                  name={row.display_name}
+                  total={row.total}
+                  highlight={row.is_you}
+                  youLabel={t("board.you")}
+                />
               ))}
+              {/* Your row, computed server-side, when it lives below the page. */}
+              {you && !youOnBoard ? (
+                <>
+                  <li
+                    aria-hidden="true"
+                    className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-ink-3"
+                  >
+                    {t("board.belowPage")}
+                  </li>
+                  <BoardRow rank={you.rank} name={t("board.you")} total={you.total} highlight />
+                </>
+              ) : null}
             </ul>
           </>
         )}
       </section>
     </>
+  );
+}
+
+function BoardRow({
+  rank,
+  name,
+  total,
+  highlight,
+  youLabel,
+}: {
+  rank: number;
+  name: string;
+  total: number;
+  highlight: boolean;
+  youLabel?: string;
+}) {
+  return (
+    <li
+      className={cx(
+        "grid grid-cols-[2rem_1fr_3.5rem] items-center gap-2 rounded-card border p-2.5",
+        highlight ? "border-volt bg-elevated" : "border-line bg-surface",
+      )}
+    >
+      <Num
+        className={cx(
+          "text-sm font-bold",
+          rank === 1 ? "text-gold" : rank <= 3 ? "text-ink" : "text-ink-3",
+        )}
+      >
+        {rank}
+      </Num>
+      <span className="flex min-w-0 items-center gap-2">
+        <Avatar name={name} size="sm" />
+        <span
+          className={cx("min-w-0 flex-1 truncate text-sm font-bold", highlight ? "text-volt" : "text-ink")}
+          dir="ltr"
+        >
+          {name}
+        </span>
+        {youLabel ? <Chip tone="volt">{youLabel}</Chip> : null}
+      </span>
+      <Num className="text-end text-base text-gold">{total}</Num>
+    </li>
   );
 }
 

@@ -247,7 +247,7 @@ export default function MatchDetail() {
         {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
         {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
         {tab === "predict" ? <PredictionsHub matchId={id} /> : null}
-        {tab === "ratings" ? <RatingsTab matchId={id} live={live} /> : null}
+        {tab === "ratings" ? <RatingsTab matchId={id} live={live} league={match.league} /> : null}
       </section>
 
       {/* Replay entry — the whole match on a 2D pitch, once it's finished. */}
@@ -559,7 +559,7 @@ function LineupsTab({
   return <LineupsPanel home={homeTeam} away={awayTeam} lineups={{ home: homeLineup, away: awayLineup }} />;
 }
 
-function RatingsTab({ matchId, live }: { matchId: string; live: boolean }) {
+function RatingsTab({ matchId, live, league }: { matchId: string; live: boolean; league: string }) {
   const { t } = useI18n();
   const query = useQuery({
     queryKey: ["ratings", matchId],
@@ -567,7 +567,7 @@ function RatingsTab({ matchId, live }: { matchId: string; live: boolean }) {
     refetchInterval: live ? 30_000 : false,
   });
   const players = query.data?.players ?? [];
-  const adapted = players.map(adaptPlayerRating);
+  const adapted = players.map((p) => adaptPlayerRating(p, league));
   if (query.isLoading) return <RatingsSkeleton rows={6} />;
   if (query.isError) {
     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
@@ -585,6 +585,7 @@ function RatingsTab({ matchId, live }: { matchId: string; live: boolean }) {
       <RatingsList
         matchId={matchId}
         players={adapted}
+        distributions={query.data?.distributions ?? null}
         cardsUsed={query.data?.cardsUsed ?? 0}
         cardsMax={query.data?.cardsMax ?? 3}
       />
@@ -595,11 +596,14 @@ function RatingsTab({ matchId, live }: { matchId: string; live: boolean }) {
 function RatingsList({
   matchId,
   players,
+  distributions,
   cardsUsed,
   cardsMax,
 }: {
   matchId: string;
   players: PlayerRating[];
+  /** Server-built per-player histograms; null = response predates the field. */
+  distributions: Record<string, number[]> | null;
   cardsUsed: number;
   cardsMax: number;
 }) {
@@ -660,7 +664,7 @@ function RatingsList({
           rating={sheetFor}
           open
           onClose={() => setSheetFor(null)}
-          distribution={distributionFromVotes(sheetFor)}
+          distribution={distributionFor(sheetFor, distributions)}
           cardsUsed={cardsUsed ?? undefined}
           cardsMax={cardsMax ?? undefined}
           onSave={(playerId, value, comment) => {
@@ -690,7 +694,7 @@ function adaptTimelineEvent(e: ApiTimelineEvent) {
   };
 }
 
-function adaptPlayerRating(p: ApiPlayerRating): PlayerRating {
+function adaptPlayerRating(p: ApiPlayerRating, league: string): PlayerRating {
   return {
     playerId: p.player_id,
     name: p.name,
@@ -708,18 +712,20 @@ function adaptPlayerRating(p: ApiPlayerRating): PlayerRating {
       shortName: p.team_short ?? p.team_name ?? "",
       abbreviation: (p.team_short ?? "").slice(0, 3) || "—",
       color: p.team_color ?? TEAM_FALLBACK,
-      league: "PL",
+      // The match's real competition; cup matches no longer read as PL sides.
+      league: league as import("../types").LeagueId,
     },
   } as PlayerRating & { _team: import("../types").Team };
 }
 
-/** Real histogram when votes exist; flat placeholder when a rating is new. */
-function distributionFromVotes(rating: PlayerRating): number[] {
-  // The API returns the aggregate; until a histogram endpoint exists, derive a
-  // single-bucket truth: all votes at the rounded average. Honest, not fake.
-  const counts = Array.from({ length: 10 }, () => 0);
-  if (rating.crowdRating !== null && rating.votes > 0) {
-    counts[Math.min(9, Math.max(0, Math.round(rating.crowdRating) - 1))] = rating.votes;
-  }
-  return counts;
+/**
+ * Build the RateSheet histogram from the server's real per-rating GROUP BY.
+ * Pre-distribution responses (or a player with zero votes) get the flat empty
+ * array — an honest "no votes yet", never a synthesized bar.
+ */
+function distributionFor(
+  rating: PlayerRating,
+  distributions: Record<string, number[]> | null,
+): number[] {
+  return distributions?.[rating.playerId] ?? Array.from({ length: 10 }, () => 0);
 }

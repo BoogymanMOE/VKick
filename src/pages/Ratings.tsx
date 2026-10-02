@@ -7,7 +7,7 @@ import { TopBar } from "../components/TopBar";
 import { Card, Chip, EmptyState, ErrorState, SectionHeading, Segmented } from "../components/ui";
 import { api, serverErrorKey } from "../lib/api";
 import { TEAM_FALLBACK } from "../lib/colors";
-import { leagueIdOf, useMatches } from "../hooks/useApi";
+import { useMatches } from "../hooks/useApi";
 import { useI18n } from "../i18n/I18nProvider";
 import type { PlayerRating } from "../types";
 import { haptic, notifyHaptic } from "../lib/telegram";
@@ -79,7 +79,11 @@ export default function Ratings() {
           />
         </div>
       ) : (
-        <MatchRatings matchId={openMatch.id} match={toRawMatch(openMatch)} />
+        <MatchRatings
+          matchId={openMatch.id}
+          match={toRawMatch(openMatch)}
+          league={openMatch.home.league}
+        />
       )}
     </>
   );
@@ -92,9 +96,12 @@ function toRawMatch(m: NonNullable<ReturnType<typeof useMatches>["data"]>[number
 function MatchRatings({
   matchId,
   match,
+  league,
 }: {
   matchId: string;
   match: { status: string; home: { shortName: string }; away: { shortName: string } } | undefined;
+  /** The match's competition (LeagueId or cup slug) for the row's team chip. */
+  league: string;
 }) {
   const { t, localize } = useI18n();
   const { push } = useToast();
@@ -105,7 +112,10 @@ function MatchRatings({
     queryFn: () => api.getRatings(matchId),
     refetchInterval: match?.status === "live" ? 30_000 : false,
   });
-  const players = (query.data?.players ?? []).map(adapt);
+  const players = (query.data?.players ?? []).map((p) => adapt(p, league));
+  // Real histograms straight from crowd_ratings (server GROUP BY); the zero
+  // array is only a brand-new player's honest "no votes yet".
+  const distributions = query.data?.distributions ?? {};
   const cardsUsed = query.data?.cardsUsed ?? 0;
   const cardsMax = query.data?.cardsMax ?? 3;
   const [sort, setSort] = useState<"crowd" | "points" | "divergence">("crowd");
@@ -232,7 +242,7 @@ function MatchRatings({
           rating={sheetFor}
           open
           onClose={() => setSheetFor(null)}
-          distribution={distributionFromVotes(sheetFor)}
+          distribution={distributions[sheetFor.playerId] ?? ZERO_DISTRIBUTION}
           cardsUsed={cardsUsed}
           cardsMax={cardsMax}
           onSave={(playerId, value, comment) => {
@@ -247,7 +257,7 @@ function MatchRatings({
 
 type Team = import("../types").Team;
 
-function adapt(p: import("../lib/api").ApiPlayerRating): PlayerRating & { _team: Team } {
+function adapt(p: import("../lib/api").ApiPlayerRating, league: string): PlayerRating & { _team: Team } {
   return {
     playerId: p.player_id,
     name: p.name,
@@ -265,15 +275,12 @@ function adapt(p: import("../lib/api").ApiPlayerRating): PlayerRating & { _team:
       shortName: p.team_short ?? p.team_name ?? "",
       abbreviation: (p.team_short ?? "").slice(0, 3) || "—",
       color: p.team_color ?? TEAM_FALLBACK,
-      league: leagueIdOf("") ?? "PL",
+      // The match's own competition, not a hardcoded default: a cup match's
+      // rating rows no longer masquerade as Premier League sides.
+      league: (league || "PL") as Team["league"],
     },
   };
 }
 
-function distributionFromVotes(rating: PlayerRating): number[] {
-  const counts = Array.from({ length: 10 }, () => 0);
-  if (rating.crowdRating !== null && rating.votes > 0) {
-    counts[Math.min(9, Math.max(0, Math.round(rating.crowdRating) - 1))] = rating.votes;
-  }
-  return counts;
-}
+/** Shared "no votes yet" histogram — a stable empty reference, not a render allocation. */
+const ZERO_DISTRIBUTION: number[] = Array.from({ length: 10 }, () => 0);

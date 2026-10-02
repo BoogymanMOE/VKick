@@ -223,3 +223,37 @@ export function readLeaderboard(
     rank: i + 1,
   }));
 }
+
+export interface ViewerRank {
+  rank: number;
+  total: number;
+}
+
+/**
+ * The viewer's rank on one board even when it sits below the page limit.
+ * Uses the SAME tiebreak as readLeaderboard (total DESC, then the earlier
+ * reached_total_at first), so the rank shown out-of-page matches what the
+ * board itself would print. Returns null when the user has no points in the
+ * scope — "you haven't scored yet", not "you are rank N".
+ */
+export function readViewerRank(
+  db: DatabaseSync,
+  scope: string,
+  season: string,
+  viewerId: number,
+): ViewerRank | null {
+  const mine = get<{ total: number; reached_total_at: string }>(
+    db,
+    "SELECT total, reached_total_at FROM user_point_totals WHERE user_id = ? AND scope = ? AND scope_season = ?",
+    [viewerId, scope, season],
+  );
+  if (!mine || mine.total <= 0) return null;
+  const ahead = get<{ n: number }>(
+    db,
+    `SELECT COUNT(*) AS n FROM user_point_totals
+     WHERE scope = ? AND scope_season = ? AND total > 0
+       AND (total > ? OR (total = ? AND reached_total_at < ?))`,
+    [scope, season, mine.total, mine.total, mine.reached_total_at],
+  );
+  return { rank: (ahead?.n ?? 0) + 1, total: mine.total };
+}

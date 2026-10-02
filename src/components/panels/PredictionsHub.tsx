@@ -73,7 +73,7 @@ const MECHANIC_META: Record<
  * season leaderboards; nothing here touches ratings.
  */
 export function PredictionsHub({ matchId }: { matchId: string }) {
-  const { t } = useI18n();
+  const { t, localize } = useI18n();
   const { push } = useToast();
   const queryClient = useQueryClient();
 
@@ -129,6 +129,20 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
   });
 
   const byMechanic = (m: Mechanic) => rows.find((r) => r.mechanic === m) ?? null;
+
+  // Player names for the saved-pick summaries ("Saka v Vinicius", not "#123 v
+  // #456"). Same query key as the lineups tab and the pick editors, so once
+  // any of them loaded, this is a cache hit — no extra request on the page.
+  const lineups = useQuery({
+    queryKey: ["lineups", matchId],
+    queryFn: () => api.getLineups(matchId),
+    staleTime: 60_000,
+    enabled: rows.some((r) => r.mechanic === "player_watch" || r.mechanic === "shot_predict" || r.mechanic === "versus"),
+  });
+  const nameOf = (id: string): string => {
+    const p = lineups.data?.players.find((x) => x.player_id === id);
+    return p ? localize(p.full_name) : `#${id}`;
+  };
 
   const statusChip = (row: ApiPrediction | null) => {
     if (!row) return null;
@@ -233,7 +247,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
                     ? t("predict.lockHT")
                     : `${t(meta.lockKey as never)}${!notOpenYet && !live && !finished ? ` · ${windowInfo(m) ?? ""}` : ""}`}
                 </span>
-                {row?.payload ? <MechanicSummary mechanic={m} payload={row.payload} /> : null}
+                {row?.payload ? <MechanicSummary mechanic={m} payload={row.payload} nameOf={nameOf} /> : null}
                 {!finished && !halftime ? (
                   <Button
                     variant={row ? "ghost" : "primary"}
@@ -586,22 +600,36 @@ function safeParse(json: string): unknown {
   }
 }
 
-function MechanicSummary({ mechanic, payload }: { mechanic: Mechanic; payload: string }) {
+function MechanicSummary({
+  mechanic,
+  payload,
+  nameOf,
+}: {
+  mechanic: Mechanic;
+  payload: string;
+  /** Player id → localized name (falls back to #id when lineups aren't in yet). */
+  nameOf: (id: string) => string;
+}) {
+  const { t } = useI18n();
   const parsed = safeParse(payload) as Record<string, unknown> | null;
   if (!parsed) return null;
 
   if (mechanic === "player_watch" || mechanic === "shot_predict") {
     const pid = String(parsed.playerId ?? "");
-    return pid ? <Num className="text-[10px] text-ink-3">#{pid}</Num> : null;
+    return pid ? (
+      <span className="max-w-[40%] truncate text-[10px] text-ink-3" dir="auto">
+        {nameOf(pid)}
+      </span>
+    ) : null;
   }
   if (mechanic === "versus") {
     const a = String(parsed.playerAId ?? "");
     const b = String(parsed.playerBId ?? "");
-    return (
-      <Num className="text-[10px] text-ink-3">
-        #{a} v #{b}
-      </Num>
-    );
+    return a && b ? (
+      <span className="max-w-[50%] truncate text-[10px] text-ink-3" dir="auto">
+        {nameOf(a)} {t("common.versus")} {nameOf(b)}
+      </span>
+    ) : null;
   }
   if (mechanic === "sub") {
     const subs = Array.isArray(parsed.subs) ? parsed.subs.length : 0;

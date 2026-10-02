@@ -14,7 +14,7 @@ import prettier from "eslint-config-prettier";
  * as a lint error.
  */
 export default tseslint.config(
-  { ignores: ["dist", "node_modules", "**/*.tsbuildinfo", "scripts/**", ".tmp/**"] },
+  { ignores: ["dist", "dist-server", "node_modules", "**/*.tsbuildinfo", "scripts/**", ".tmp/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

@@ -25,7 +25,7 @@ import { hashPassword, passwordValid, verifyPassword } from "./auth/password.js"
 import { authLimiter, credentialLimiter, writeLimiter } from "./auth/rateLimit.js";
 import { validatePayload, type Mechanic } from "./predictions/validate.js";
 // Canonical season label (scoring-rules.md season boundary) + board reads.
-import { readLeaderboard, currentSeasonLabel, award } from "./scoring/ledger.js";
+import { readLeaderboard, readViewerRank, currentSeasonLabel, award } from "./scoring/ledger.js";
 import { foldForm, type FormMatchRow } from "./standings/form.js";
 import { evaluateStreakForUser } from "./scoring/streak.js";
 import { POINTS as SCORING_POINTS } from "./scoring/predictionScore.js";
@@ -1303,11 +1303,25 @@ app.get("/api/matches/:id/ratings", requireUser, (req, res) => {
     "SELECT COUNT(*) AS n FROM crowd_ratings WHERE user_id = ? AND match_id = ?",
     [userId, matchId],
   );
+  // Real per-player histogram (10 integer buckets, index 0 = rating 1) for the
+  // RateSheet chart. One GROUP BY, no N+1; absent key = no votes yet.
+  const distRows = all<{ player_id: string; rating: number; n: number }>(
+    db,
+    "SELECT player_id, rating, COUNT(*) AS n FROM crowd_ratings WHERE match_id = ? GROUP BY player_id, rating",
+    [matchId],
+  );
+  const distributions: Record<string, number[]> = {};
+  for (const d of distRows) {
+    const buckets = distributions[d.player_id] ?? Array.from({ length: 10 }, () => 0);
+    if (Number.isInteger(d.rating) && d.rating >= 1 && d.rating <= 10) buckets[d.rating - 1] = d.n;
+    distributions[d.player_id] = buckets;
+  }
   res.json({
     players: withRatings,
     minVotes: MIN_VOTES_TO_SHOW,
     cardsUsed: used?.n ?? 0,
     cardsMax: MAX_RATINGS_PER_MATCH,
+    distributions,
   });
 });
 
@@ -1701,8 +1715,9 @@ function optionalViewerId(req: Request): number | undefined {
 
 app.get("/api/leaderboards/global", (req, res) => {
   const viewerId = optionalViewerId(req);
+  const season = currentSeasonLabel();
   res.json({
-    board: readLeaderboard(db, "global", currentSeasonLabel(), LEADERBOARD_LIMIT, viewerId).map((r) => ({
+    board: readLeaderboard(db, "global", season, LEADERBOARD_LIMIT, viewerId).map((r) => ({
       rank: r.rank,
       display_name: r.display_name,
       username: r.username,
@@ -1710,19 +1725,21 @@ app.get("/api/leaderboards/global", (req, res) => {
       total: r.total,
       last_award: r.reached_total_at,
     })),
+    // The viewer's own rank when it sits below the page limit (null when they
+    // haven't scored, or are already visible on the board).
+    you:
+      viewerId !== undefined
+        ? readViewerRank(db, "global", season, viewerId)
+        : null,
   });
 });
 
 app.get("/api/leaderboards/league/:league", (req, res) => {
   const viewerId = optionalViewerId(req);
+  const scope = `league:${String(req.params.league)}`;
+  const season = currentSeasonLabel();
   res.json({
-    board: readLeaderboard(
-      db,
-      `league:${String(req.params.league)}`,
-      currentSeasonLabel(),
-      LEADERBOARD_LIMIT,
-      viewerId,
-    ).map((r) => ({
+    board: readLeaderboard(db, scope, season, LEADERBOARD_LIMIT, viewerId).map((r) => ({
       rank: r.rank,
       display_name: r.display_name,
       username: r.username,
@@ -1730,19 +1747,16 @@ app.get("/api/leaderboards/league/:league", (req, res) => {
       total: r.total,
       last_award: r.reached_total_at,
     })),
+    you: viewerId !== undefined ? readViewerRank(db, scope, season, viewerId) : null,
   });
 });
 
 app.get("/api/leaderboards/club/:teamId", (req, res) => {
   const viewerId = optionalViewerId(req);
+  const scope = `club:${String(req.params.teamId)}`;
+  const season = currentSeasonLabel();
   res.json({
-    board: readLeaderboard(
-      db,
-      `club:${String(req.params.teamId)}`,
-      currentSeasonLabel(),
-      LEADERBOARD_LIMIT,
-      viewerId,
-    ).map((r) => ({
+    board: readLeaderboard(db, scope, season, LEADERBOARD_LIMIT, viewerId).map((r) => ({
       rank: r.rank,
       display_name: r.display_name,
       username: r.username,
@@ -1750,6 +1764,7 @@ app.get("/api/leaderboards/club/:teamId", (req, res) => {
       total: r.total,
       last_award: r.reached_total_at,
     })),
+    you: viewerId !== undefined ? readViewerRank(db, scope, season, viewerId) : null,
   });
 });
 

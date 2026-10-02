@@ -4,13 +4,11 @@ import { fileURLToPath } from "node:url";
 import { Bot, InlineKeyboard, InputFile } from "grammy";
 import { getDb, all, run, get } from "../db/index.js";
 import { asPushKind, isOptedOut } from "../notifications.js";
+import { asPushLang, botNoAccountText, botNoTeamsText, botStartText, botTeamsHeader } from "../messages.js";
 import type { GoalAlert } from "../sync/upserts.js";
 
 let bot: Bot | null = null;
 let drainTimer: NodeJS.Timeout | null = null;
-
-const WELCOME_TEXT =
-  "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, predict lineups, subs, shots and standout players, climb the season leaderboards, and rate the players who mattered most.\n\nTap below to get started.";
 
 // Brand icon sent as the /start photo — Telegram inline buttons can't carry
 // images, so the button rides on the photo's reply markup instead.
@@ -28,9 +26,14 @@ export function startBot(token: string): Bot | null {
 
   bot.command("start", async (ctx) => {
     const from = ctx.from;
+    let lang: "en" | "fa" = "en";
     if (from) {
       const db = getDb();
-      const existing = get(db, "SELECT id FROM users WHERE telegram_id = ?", [String(from.id)]);
+      const existing = get<{ id: number; language: string | null }>(
+        db,
+        "SELECT id, language FROM users WHERE telegram_id = ?",
+        [String(from.id)],
+      );
       if (!existing) {
         const name =
           [from.first_name, from.last_name].filter(Boolean).join(" ") || from.username || `User ${from.id}`;
@@ -39,6 +42,9 @@ export function startBot(token: string): Bot | null {
           name,
           new Date().toISOString(),
         ]);
+      } else {
+        // A returning user gets the language they chose in the app.
+        lang = asPushLang(existing.language);
       }
     }
     const keyboard = new InlineKeyboard().webApp("⚽ Open Vkick", webAppUrl());
@@ -48,35 +54,42 @@ export function startBot(token: string): Bot | null {
     } catch {
       // Icon not shipped/found: the text-only welcome still works.
     }
+    const text = botStartText(lang);
     if (icon) {
       await ctx.replyWithPhoto(new InputFile(icon, "telegram-icon.png"), {
-        caption: WELCOME_TEXT,
+        caption: text,
         reply_markup: keyboard,
       });
     } else {
-      await ctx.reply(WELCOME_TEXT, { reply_markup: keyboard });
+      await ctx.reply(text, { reply_markup: keyboard });
     }
   });
 
   bot.command("myteams", async (ctx) => {
     if (!ctx.from) return;
     const db = getDb();
-    const user = get<{ id: number }>(db, "SELECT id FROM users WHERE telegram_id = ?", [String(ctx.from.id)]);
+    const user = get<{ id: number; language: string | null }>(
+      db,
+      "SELECT id, language FROM users WHERE telegram_id = ?",
+      [String(ctx.from.id)],
+    );
     if (!user) {
-      await ctx.reply("Open the app first — tap the button below /start.");
+      await ctx.reply(botNoAccountText(asPushLang(null)));
       return;
     }
+    const lang = asPushLang(user.language);
     const rows = all<{ name: string; short_name: string | null; league: string }>(
       db,
       `SELECT t.name, t.short_name, t.league FROM favorite_teams f JOIN teams t ON t.id = f.team_id WHERE f.user_id = ?`,
       [user.id],
     );
     if (rows.length === 0) {
-      await ctx.reply("You haven't picked any clubs yet. Open the app and choose up to five!");
+      await ctx.reply(botNoTeamsText(lang));
       return;
     }
     await ctx.reply(
-      "Your clubs:\n" + rows.map((r) => `• ${r.short_name ?? r.name} (${r.league})`).join("\n"),
+      botTeamsHeader(lang, rows.length) +
+        rows.map((r) => `• ${r.short_name ?? r.name} (${r.league})`).join("\n"),
     );
   });
 

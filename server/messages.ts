@@ -84,3 +84,34 @@ export function ratingsPush(lang: PushLang, v: MatchPushVars): string {
     ? `⭐ پایان بازی — ${v.home} ${v.score} ${v.away}\nبه بازیکنانی که تأثیرگذار بودند امتیاز بده (۳ کارت).`
     : `⭐ Full time — ${v.home} ${v.score} ${v.away}\nRate the players who mattered (3 cards).`;
 }
+
+/* ------------------------------------------------------------ bot commands */
+
+/*
+ * The bot's command replies, EN/FA. Copy is chosen per RECIPIENT from
+ * users.language — the same rule the pushes follow — so a user who set the
+ * app to Persian never gets English back from /start or /myteams.
+ * Names (clubs, the app) stay as-is, matching the push convention above.
+ */
+
+export function botStartText(lang: PushLang): string {
+  return lang === "fa"
+    ? "به Vkick خوش آمدی! ⚽\n\nباشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، ترکیب و تعویض و شوت و بازیکن برتر هر بازی را پیش‌بینی کن، در جدول امتیازهای فصل بالا برو و به بازیکنان تأثیرگذار امتیاز بده.\n\nبرای شروع دکمه زیر را بزن."
+    : "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, predict lineups, subs, shots and standout players, climb the season leaderboards, and rate the players who mattered most.\n\nTap below to get started.";
+}
+
+export function botNoAccountText(lang: PushLang): string {
+  return lang === "fa"
+    ? "اول برنامه را باز کن — دکمه زیر، پایین /start."
+    : "Open the app first — tap the button below /start.";
+}
+
+export function botTeamsHeader(lang: PushLang, count: number): string {
+  return lang === "fa" ? `باشگاه‌های تو:\n` : `Your clubs (${count}):\n`;
+}
+
+export function botNoTeamsText(lang: PushLang): string {
+  return lang === "fa"
+    ? "هنوز باشگاهی انتخاب نکرده‌ای. برنامه را باز کن و تا پنج باشگاه انتخاب کن!"
+    : "You haven't picked any clubs yet. Open the app and choose up to five!";
+}

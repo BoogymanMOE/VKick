@@ -424,7 +424,9 @@ export function useLeaderboard(scope: LeaderboardScope) {
   return useQuery({
     queryKey: ["leaderboard", path],
     queryFn: () => api.getLeaderboard(path as "global"),
-    select: (data) => data.board,
+    // Full payload, not just rows: `you` carries the viewer's own rank when it
+    // sits below the board's page limit and no row is flagged is_you.
+    select: (data) => data,
     staleTime: 60_000,
   });
 }

@@ -173,6 +173,12 @@ export interface ApiLeaderRow {
   last_award: string | null;
 }
 
+/** The viewer's own rank when it sits below the board's page limit. */
+export interface ApiViewerRank {
+  rank: number;
+  total: number;
+}
+
 export interface ApiCompetition {
   slug: string;
   name: string;
@@ -522,7 +528,7 @@ export const api = {
     }),
 
   getLeaderboard: (board: "global" | `league/${string}` | `club/${string}`) =>
-    request<{ board: ApiLeaderRow[] }>(`/leaderboards/${board}`),
+    request<{ board: ApiLeaderRow[]; you: ApiViewerRank | null }>(`/leaderboards/${board}`),
 
   getMatches: (query: { league?: string; date?: string } = {}) => {
     const qs = new URLSearchParams();
@@ -583,9 +589,15 @@ export const api = {
     request<{ season: string; standings: ApiStanding[] }>(`/standings/${encodeURIComponent(league)}`),
 
   getRatings: (matchId: string) =>
-    request<{ players: ApiPlayerRating[]; minVotes: number; cardsUsed: number; cardsMax: number }>(
-      `/matches/${matchId}/ratings`,
-    ),
+    request<{
+      players: ApiPlayerRating[];
+      minVotes: number;
+      cardsUsed: number;
+      cardsMax: number;
+      /** Per-player histogram over crowd_ratings: 10 buckets, index 0 = rating 1.
+       *  Absent key = that player has no votes yet. */
+      distributions: Record<string, number[]>;
+    }>(`/matches/${matchId}/ratings`),
 
   ratePlayer: (matchId: string, playerId: string, rating: number, comment?: string) =>
     request<{ ok: boolean; cardsUsed: number }>(`/matches/${matchId}/ratings`, {
