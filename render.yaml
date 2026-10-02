@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: vkick
+    runtime: node
+    # Node >= 22.5: the server uses node:sqlite (DatabaseSync). Render reads
+    # .node-version at build time and installs that runtime for native start
+    # commands, so pinning here keeps node:sqlite available on the box.
+    rootDir: .
+    # tsc -b emits the client (dist/) and the server (dist-server/); vite
+    # build refreshes the client bundle. No --noEmit here: dist/server/index.js
+    # IS the deployable server.
+    buildCommand: npm install && npm run build
+    # One process serves both the API and the built frontend (server/index.ts
+    # mounts dist/ + SPA fallback). File-based SQLite + in-process cron sync
+    # loops mean exactly one instance; do not scale horizontally.
+    startCommand: node dist-server/server/index.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 22.20.0
+      # Render injects PORT; SQLITE_PATH defaults to ./data/matchday.db.
+      # Set TELEGRAM_BOT_TOKEN (and optionally ADMIN_TELEGRAM_IDS) in the
+      # dashboard — secrets never live in this file.
+      - key: SQLITE_PATH
+        value: /var/data/matchday.db
+      - key: RETENTION_DAYS
+        value: "120"
