@@ -10,8 +10,8 @@
  *   npm run sync -- --dry-run             # fetch + normalize, print, write nothing
  */
 import { getDb } from "./db/index.js";
-import { fetchScoreboard, fetchSummary } from "./espn/client.js";
-import { LEAGUES, LEAGUES_ALL, type LeagueSlug } from "./espn/types.js";
+import { fetchScoreboard, fetchStandings, fetchSummary } from "./espn/client.js";
+import { ALL_DOMESTIC, LEAGUES_ALL, type LeagueSlug } from "./espn/types.js";
 import {
   normalizeScoreboard,
   normalizeSummaryMatch,
@@ -118,29 +118,38 @@ async function main(): Promise<void> {
   }
 }
 
+/**
+ * Manual standings backfill. Uses the same v2 `/standings` feed as the daily
+ * cron (hence the same full stat set incl. goals for/against) over every
+ * domestic league in the catalog, not just the big five.
+ */
 async function standings(): Promise<void> {
-  for (const league of LEAGUES) {
+  for (const league of ALL_DOMESTIC) {
     try {
-      const sb = await fetchScoreboard(league);
-      const eventId = sb.events?.[0]?.id;
-      if (!eventId) {
-        log(`${league}: no events, skipping standings`);
-        continue;
-      }
-      const json = await fetchSummary(league, String(eventId));
+      const json = await fetchStandings(league, seasonStartYear());
+      const { rows } = normalizeStandings(json, league);
       if (dryRun) {
-        log(`${league}:`, JSON.stringify(normalizeStandings(json).rows.slice(0, 5), null, 2));
+        log(`${league}:`, JSON.stringify(rows.slice(0, 5), null, 2));
       } else {
-        const season = json.header?.season?.year
-          ? `${json.header.season.year}-${String(json.header.season.year + 1).slice(2)}`
-          : `${new Date().getUTCFullYear()}-${String(new Date().getUTCFullYear() + 1).slice(2)}`;
-        applyStandings(db, json, league, season);
-        log(`${league}: standings applied (${normalizeStandings(json).rows.length} rows)`);
+        applyStandings(db, json, league, seasonLabel());
+        log(`${league}: standings applied (${rows.length} rows)`);
       }
     } catch (err) {
       console.error(`${league}: standings failed:`, String(err));
     }
   }
+}
+
+/** "2026-27" — European season spans Aug-May. */
+function seasonLabel(): string {
+  const y = new Date().getUTCFullYear();
+  const start = new Date().getUTCMonth() >= 7 ? y : y - 1;
+  return `${start}-${String(start + 1).slice(2)}`;
+}
+
+/** ESPN's standings endpoint wants the season START year. */
+function seasonStartYear(): number {
+  return Number.parseInt(seasonLabel().slice(0, 4), 10);
 }
 
 main()

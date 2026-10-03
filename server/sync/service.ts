@@ -1,7 +1,7 @@
 import cron from "node-cron";
-import { fetchScoreboard, fetchSummary, fetchTeamRoster } from "../espn/client.js";
+import { fetchScoreboard, fetchStandings, fetchSummary, fetchTeamRoster } from "../espn/client.js";
 import { LEAGUES_ALL, ALL_DOMESTIC, pollWindow, type LeagueSlug } from "../espn/types.js";
-import { getDb, all, get } from "../db/index.js";
+import { getDb, all } from "../db/index.js";
 import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
 import { onMatchFinished } from "../predictions/resolver.js";
 import { syncAllFavoriteTeamsUnderstat, syncLeagueUnderstatTables } from "./understat.js";
@@ -182,12 +182,20 @@ export async function syncRosters(): Promise<void> {
 /**
  * Season standings for every domestic league in the catalog (big five + the
  * wider domestic set) — cups and internationals correctly have no table.
+ *
+ * Pulls the v2 `/standings` endpoint, one call per league, rather than digging
+ * a standings block out of a per-match summary. The summary block omits goals
+ * for/against entirely, which is what left every league table's goal-difference
+ * column reading zero; v2 carries the full stat set. It is also one request per
+ * league instead of a summary fetch, and it doesn't depend on a fixture
+ * existing for the league first.
  */
 export async function syncStandings(): Promise<void> {
+  const season = currentSeason();
   for (const league of ALL_DOMESTIC) {
     try {
-      const json = await fetchSummary(league, await firstEventId(league));
-      applyStandings(db, json, league, currentSeason());
+      const json = await fetchStandings(league, seasonStartYear(season));
+      applyStandings(db, json, league, season);
       log(`standings ${league}: ok`);
     } catch (err) {
       console.error(`[sync] standings ${league} FAILED:`, String(err));
@@ -195,18 +203,12 @@ export async function syncStandings(): Promise<void> {
   }
 }
 
-async function firstEventId(league: LeagueSlug): Promise<string> {
-  const row = get<{ id: string }>(
-    db,
-    "SELECT id FROM matches WHERE league = ? ORDER BY kickoff_at DESC LIMIT 1",
-    [league],
-  );
-  if (row) return row.id;
-  const json = await fetchScoreboard(league);
-  const ev = json.events?.[0];
-  if (!ev) throw new Error(`no events for ${league}`);
-  return String(ev.id);
+/** "2026-27" -> 2026. ESPN's standings endpoint wants the season START year. */
+function seasonStartYear(season: string): number {
+  return Number.parseInt(season.slice(0, 4), 10) || new Date().getUTCFullYear();
 }
+
+
 
 /**
  * Goal-alert fan-out lives in server/notifications.ts (queueGoalAlerts), which

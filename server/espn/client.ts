@@ -2,6 +2,16 @@ import { LEAGUES_ALL, type LeagueSlug } from "./types.js";
 
 const BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
 
+/**
+ * The standings feed lives on a DIFFERENT API version than the rest of the app
+ * (`/apis/v2/…`, not `/apis/site/v2/…`). It matters: the per-match summary
+ * endpoint also returns a standings block, but it publishes only
+ * gamesPlayed/wins/ties/losses/points/rank — no goals for or against — so a
+ * table built from it shows a goal-difference column of zeros. The v2 endpoint
+ * carries the full set (pointsFor/pointsAgainst/pointDifferential).
+ */
+const BASE_V2 = "https://site.api.espn.com/apis/v2/sports/soccer";
+
 export class EspnError extends Error {
   constructor(
     message: string,
@@ -39,6 +49,16 @@ export async function fetchScoreboard(league: LeagueSlug, dates?: string): Promi
 
 export async function fetchSummary(league: LeagueSlug, eventId: string): Promise<any> {
   return fetchJson(`${BASE}/${league}/summary?event=${encodeURIComponent(eventId)}`);
+}
+
+/**
+ * Season standings for a whole league table (`season` = the START year, e.g.
+ * 2026 for 2026-27). Returns the v2 payload: `children[].standings.entries[]`,
+ * each with a real `team` object (so `team.id` is available) and the full stat
+ * set including pointsFor/pointsAgainst.
+ */
+export async function fetchStandings(league: LeagueSlug, season: number): Promise<any> {
+  return fetchJson(`${BASE_V2}/${league}/standings?season=${encodeURIComponent(String(season))}`);
 }
 
 /** Full squad for one club (site API roster endpoint, season included). */

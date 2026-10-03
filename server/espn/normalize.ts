@@ -8,7 +8,8 @@
  * ESPN quirks confirmed from samples:
  * - `rosters[]` (not `boxscore.teams[].roster[]`) carries per-player stats
  * - roster stats have no minutes; derive from starter/sub flags + sub events
- * - summary standings carry GP/W/D/L/points/rank only (no goals for/against)
+ * - summary standings carry GP/W/D/L/points/rank only (no goals for/against);
+ *   league TABLES come from the v2 `/standings` endpoint instead, which does
  * - `header.competitions[0].details[]` are goals/cards; keyEvents[] is the curated timeline
  */
 import type {
@@ -564,28 +565,59 @@ export function normalizeRosterPlayers(json: any): NormPlayer[] {
 
 /* ------------------------------------------------------------ standings */
 
-export function normalizeStandings(json: any): {
+/**
+ * Season standings for a league table.
+ *
+ * Handles BOTH shapes ESPN serves, because they are not interchangeable:
+ *
+ *  - **v2** (`/apis/v2/.../standings`) — the one the sync uses. Payload is
+ *    `children[].standings.entries[]`, `entry.team` is a real object (so
+ *    `team.id` gives the true team id), and the stats include
+ *    `pointsFor`/`pointsAgainst`, which is what the goal-difference column
+ *    needs. `children[]` can hold more than one group (relegation/promotion
+ *    splits), so every group is walked.
+ *  - **summary** (`/apis/site/v2/.../summary`) — kept for the manual
+ *    `sync-match` path and any payload that still arrives that way. It nests
+ *    under `standings.groups[].standings.entries[]`, `entry.team` is a plain
+ *    NAME string, and it publishes NO goals for/against. Those rows land with
+ *    null GD rather than a fabricated zero.
+ *
+ * `leagueSlug` is passed in rather than read off the payload: the v2 response
+ * has no `header.league.slug`, and the caller always knows which catalog entry
+ * it asked for.
+ */
+export function normalizeStandings(json: any, leagueSlug = ""): {
   teams: NormTeam[];
   rows: NormStandingRow[];
 } {
   const teams: NormTeam[] = [];
   const rows: NormStandingRow[] = [];
-  const groups: any[] = json.standings?.groups ?? (json.standings ? [json.standings] : []);
+
+  // v2: children[].standings.entries — summary: standings.groups[].standings.entries.
+  const groups: any[] = Array.isArray(json?.children)
+    ? json.children
+    : (json?.standings?.groups ?? (json?.standings ? [json.standings] : []));
+
   for (const g of groups) {
-    for (const entry of g.standings?.entries ?? []) {
+    for (const entry of g?.standings?.entries ?? []) {
       const byName: Record<string, number | null> = {};
       for (const s of entry.stats ?? []) {
         byName[s.name] = s.value !== undefined && s.value !== null ? Number(s.value) : null;
       }
-      const teamId = String(entry.id ?? entry.team?.id ?? "");
-      // entry.team is a plain string in summary standings ("Manchester City")
+      // v2 puts the id on the team object; summary has it on the entry.
       const teamObj = typeof entry.team === "object" && entry.team ? entry.team : {};
+      const teamId = String(teamObj.id ?? entry.id ?? "");
+      if (!teamId) continue;
+      // entry.team is a plain string in summary standings ("Manchester City")
       const teamName =
         typeof entry.team === "string" && entry.team
           ? entry.team
-          : (teamObj.displayName ?? teamObj.name ?? null);
+          : (teamObj.displayName ?? teamObj.name ?? teamObj.location ?? null);
       const logo =
-        (Array.isArray(entry.logo) ? entry.logo?.[0]?.href : entry.logo) ?? teamObj.logos?.[0]?.href ?? null;
+        (Array.isArray(entry.logo) ? entry.logo?.[0]?.href : entry.logo) ??
+        teamObj.logos?.[0]?.href ??
+        teamObj.logo ??
+        null;
       teams.push({
         id: teamId,
         name: teamName ?? `Team ${teamId}`,
@@ -593,7 +625,7 @@ export function normalizeStandings(json: any): {
         abbreviation: teamObj.abbreviation ?? null,
         logo_url: logo,
         color: teamObj.color ? `#${String(teamObj.color).replace("#", "")}` : null,
-        league: json.header?.league?.slug ?? "",
+        league: leagueSlug || json.header?.league?.slug || "",
       });
       rows.push({
         team_id: teamId,

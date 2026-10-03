@@ -17,6 +17,7 @@ import {
   normalizeScoreboard,
   normalizeTimeline,
   normalizeRosters,
+  normalizeStandings,
   deriveMinutes,
 } from "../server/espn/normalize.js";
 
@@ -239,7 +240,170 @@ export function runNormalizeTests(): void {
   testRoundExtraction();
   testTimeline();
   testRosters();
-  console.log("  normalize: status, positions, clock, event types, scoreboard, rounds, timeline, rosters OK");
+  testStandingsV2();
+  console.log(
+    "  normalize: status, positions, clock, event types, scoreboard, rounds, timeline, rosters, standings OK",
+  );
+}
+
+/**
+ * League TABLES come from the v2 `/standings` feed, which nests under
+ * `children[].standings.entries` and — unlike the per-match summary's standings
+ * block — publishes pointsFor/pointsAgainst. The summary shape omits them
+ * entirely, which is what previously left every league table's goal-difference
+ * column reading zero.
+ */
+function testStandingsV2() {
+  const v2 = {
+    uid: "s:600~l:23",
+    id: "23",
+    name: "English Premier League",
+    children: [
+      {
+        standings: {
+          entries: [
+            {
+              team: {
+                id: "382",
+                displayName: "Manchester City",
+                shortDisplayName: "Man City",
+                abbreviation: "MNC",
+                color: "99c5ea",
+                logos: [{ href: "https://a.espncdn.com/i/teamlogos/soccer/500/382.png" }],
+              },
+              stats: [
+                { name: "gamesPlayed", value: 5 },
+                { name: "wins", value: 5 },
+                { name: "ties", value: 0 },
+                { name: "losses", value: 0 },
+                { name: "points", value: 15 },
+                { name: "pointsFor", value: 13 },
+                { name: "pointsAgainst", value: 5 },
+                { name: "rank", value: 1 },
+              ],
+            },
+            {
+              team: {
+                id: "364",
+                displayName: "Liverpool",
+                shortDisplayName: "Liverpool",
+                abbreviation: "LIV",
+                color: "c8102e",
+                logos: [{ href: "https://a.espncdn.com/i/teamlogos/soccer/500/364.png" }],
+              },
+              stats: [
+                { name: "gamesPlayed", value: 5 },
+                { name: "wins", value: 3 },
+                { name: "ties", value: 1 },
+                { name: "losses", value: 1 },
+                { name: "points", value: 10 },
+                { name: "pointsFor", value: 9 },
+                { name: "pointsAgainst", value: 7 },
+                { name: "rank", value: 2 },
+              ],
+            },
+          ],
+        },
+      },
+      // A second child group (promotion/relegation splits) must be walked too.
+      {
+        standings: {
+          entries: [
+            {
+              team: { id: "999", displayName: "Some Other Club", abbreviation: "SOC" },
+              stats: [
+                { name: "gamesPlayed", value: 5 },
+                { name: "points", value: 4 },
+                { name: "pointsFor", value: 4 },
+                { name: "pointsAgainst", value: 14 },
+                { name: "rank", value: 20 },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  };
+
+  const { teams, rows } = normalizeStandings(v2, "eng.1");
+  assert.equal(rows.length, 3, "every child group is walked");
+  assert.equal(teams.length, 3);
+
+  const city = rows.find((r) => r.team_id === "382")!;
+  assert.equal(city.played, 5);
+  assert.equal(city.wins, 5);
+  assert.equal(city.draws, 0);
+  assert.equal(city.losses, 0);
+  assert.equal(city.points, 15);
+  assert.equal(city.rank, 1);
+  assert.equal(city.goals_for, 13, "pointsFor maps to goals_for");
+  assert.equal(city.goals_against, 5, "pointsAgainst maps to goals_against");
+
+  const t = teams.find((x) => x.id === "382")!;
+  assert.equal(t.name, "Manchester City");
+  assert.equal(t.short_name, "Man City");
+  assert.equal(t.abbreviation, "MNC");
+  assert.equal(t.color, "#99c5ea");
+  assert.equal(t.logo_url, "https://a.espncdn.com/i/teamlogos/soccer/500/382.png");
+  assert.equal(t.league, "eng.1", "league comes from the caller, not the payload");
+
+  // The regression that started all this: GD must be computable.
+  assert.equal(city.goals_for! - city.goals_against!, 8, "GD column is real, not zero");
+
+  // The summary shape still parses — team id off the entry, name off the string,
+  // and goals for/against honestly null (ESPN does not publish them there).
+  const summary = {
+    header: { league: { slug: "eng.1" } },
+    standings: {
+      groups: [
+        {
+          standings: {
+            entries: [
+              {
+                id: "382",
+                team: "Manchester City",
+                logo: [{ href: "https://a.espncdn.com/i/teamlogos/soccer/500/382.png" }],
+                stats: [
+                  { name: "gamesPlayed", value: 5 },
+                  { name: "wins", value: 5 },
+                  { name: "ties", value: 0 },
+                  { name: "losses", value: 0 },
+                  { name: "points", value: 15 },
+                  { name: "rank", value: 1 },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+  const s = normalizeStandings(summary).rows[0]!;
+  assert.equal(s.team_id, "382");
+  assert.equal(s.points, 15);
+  assert.equal(s.goals_for, null, "summary has no goals-for; null beats a fake 0");
+  assert.equal(s.goals_against, null);
+
+  // A stats entry with a null/undefined value must not become NaN.
+  const withNull = normalizeStandings({
+    children: [
+      {
+        standings: {
+          entries: [
+            {
+              team: { id: "1", displayName: "X" },
+              stats: [
+                { name: "pointsFor", value: null },
+                { name: "points", value: undefined },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  }).rows[0]!;
+  assert.equal(withNull.goals_for, null);
+  assert.equal(withNull.points, null);
 }
 
 function testTimeline() {

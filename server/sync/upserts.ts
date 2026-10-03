@@ -341,7 +341,9 @@ export function applyRoster(db: DB, json: any, _league: string): void {
 }
 
 export function applyStandings(db: DB, json: any, league: string, season: string): void {
-  const { teams, rows } = normalizeStandings(json);
+  // `league` is passed in explicitly: the v2 standings payload carries no
+  // header identifying the competition, so normalizeStandings can't infer it.
+  const { teams, rows } = normalizeStandings(json, league);
   tx(db, () => {
     for (const t of teams) {
       upsertCoalesce(
