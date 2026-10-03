@@ -164,7 +164,7 @@ Every mechanic is zero-or-positive. A wrong prediction never subtracts points or
 
 Every award appends one immutable `point_ledger` row (source = `prediction` or `streak_bonus`; prediction awards carry the match). The ledger incrementally maintains `user_point_totals` per scope:
 
-- **Global** — season total across every award (predictions + streak bonuses).
+- **Global** — season total across every award (predictions + streak bonuses + capped referral bonuses).
 - **Per-league** (`league:<slug>`) — points from predictions on matches in that league. Any prediction on any match counts toward that match's league board automatically; no following requirement.
 - **Per-club** (`club:<teamId>`) — points from predictions on matches involving that club; each match feeds **both** clubs' boards.
 
@@ -172,12 +172,22 @@ Every award appends one immutable `point_ledger` row (source = `prediction` or `
 
 **Season boundary:** opens when the first tracked league kicks off, closes when the last one finishes — implemented **data-driven**, not by a calendar date: the active label is the Aug–May label of the most recent tracked-league match whose kickoff has passed (`activeSeason()` in `server/scoring/season.ts`). A summer gap therefore keeps the finished season's boards readable (summer internationals score into them), and the label flips exactly at the new season's first tracked kickoff — future-dated fixtures never flip it early. Fresh databases fall back to the calendar label. All three views (and streak state) reset together via the season label on every totals/streak row (e.g. `2026-27`); `rollSeasonIfNeeded` does the streak reset lazily. Pinned by `tests/season.test.ts` against a synthetic boundary.
 
-**The ratings firewall:** the 3-card rating system and comments are cosmetic/social only. No code path from `crowd_ratings` or `timeline_comments` reaches the ledger — only prediction resolutions and streak bonuses append to it. The Player to Watch crowd *gate* reads rating averages but never writes points from them. A test (`tests/predictionScore.test.ts`) pins that ratings produce no ledger rows.
+**The ratings firewall:** the 3-card rating system and comments are cosmetic/social only. No code path from `crowd_ratings` or `timeline_comments` reaches the ledger — only prediction resolutions, streak bonuses and capped referral bonuses append to it. The Player to Watch crowd *gate* reads rating averages but never writes points from them. A test (`tests/predictionScore.test.ts`) pins that ratings produce no ledger rows.
+
+## Referral bonuses
+
+Growth rewards, deliberately fenced off from match scoring:
+
+- Every account owns **one reusable invite code** (`referral_codes`, allocated lazily on first ask). Codes use an unambiguous alphabet (no I/L/O/0/1) because they are typed by hand into chats.
+- An account may redeem someone else's code **exactly once, ever** (`referral_redemptions.invitee_user_id` UNIQUE). Self-referral is structural: a code's owner can never redeem it.
+- The referrer earns **+10 per paid invite** (`POINTS.referral.perInvite`) on the **global scope only** — referrals are growth, not match prediction, so league and club boards are never touched.
+- Paid invites cap at **25 per referrer** (`POINTS.referral.maxPaidInvites`). Redemptions beyond the cap are still recorded with `rewarded = 0` — the social graph stays true even when the points stop.
+- The bonus flows through the same ledger (`source = 'referral_bonus'`, `source_id` = the redemption row id), so idempotency and the tiebreak come for free. Implementation: `server/scoring/referral.ts`; pinned by `tests/referral.test.ts`.
 
 ## Notes for implementation
 
 - Store every mechanic's result as a JSON `breakdown` on the `predictions` row (one key per rule that applied, even if 0) so the UI can show a transparent "why did I get X" panel.
-- All point math lives in `server/scoring/predictionScore.ts` as pure functions; `server/scoring/ledger.ts` owns the ledger + totals; `server/scoring/streak.ts` owns streak orchestration. Nothing else computes points.
+- All point math lives in `server/scoring/predictionScore.ts` as pure functions; `server/scoring/ledger.ts` owns the ledger + totals; `server/scoring/streak.ts` owns streak orchestration; `server/scoring/referral.ts` owns invite codes and their capped bonuses. Nothing else computes points.
 - Zero-point settlements write no ledger row (they'd otherwise corrupt tiebreak timestamps).
 - Re-resolution is safe: prediction awards are idempotent per prediction (ledger UNIQUE), streak evaluations per (user, match), threshold bonuses per season.
 - These values are config, not schema: if early users find them off, it's a change to this doc + the constants in `predictionScore.ts`, not a migration.

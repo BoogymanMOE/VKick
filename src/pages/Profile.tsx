@@ -6,7 +6,7 @@ import { CloseIcon, PencilIcon } from "../components/icons";
 import { useToast } from "../components/Toast";
 import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
-import { useNotificationPrefs } from "../hooks/useApi";
+import { useNotificationPrefs, useReferral } from "../hooks/useApi";
 import { LANG_LABEL, type Lang } from "../i18n/strings";
 import { useI18n } from "../i18n/I18nProvider";
 import { serverErrorKey } from "../lib/api";
@@ -190,6 +190,8 @@ export default function Profile() {
         </div>
       </section>
 
+      <ReferralSection />
+
       <section className="mt-6">
         <SectionHeading title={t("profile.settings")} />
         <div className="space-y-2">
@@ -341,6 +343,90 @@ export default function Profile() {
         ) : null}
       </BottomSheet>
     </>
+  );
+}
+
+/* ------------------------------------------------------------ referrals */
+
+/**
+ * Invite friends: the share code (copied to clipboard), the honest paid/cap
+ * count, and — until the viewer has redeemed someone's code — the redeem
+ * form. The server owns every rule (one code per user, one redemption per
+ * account, capped rewards); this card only states what the state is.
+ */
+function ReferralSection() {
+  const { t } = useI18n();
+  const { push } = useToast();
+  const { referral, loading, redeem, redeeming } = useReferral();
+  const [codeDraft, setCodeDraft] = useState("");
+
+  const copy = async () => {
+    haptic("light");
+    try {
+      await navigator.clipboard.writeText(referral?.code ?? "");
+      push({ text: t("referral.copied"), tone: "volt", icon: "✓" });
+    } catch {
+      /* clipboard unavailable (private mode) — the code is visible to copy by hand */
+    }
+  };
+
+  const submit = () => {
+    const code = codeDraft.trim();
+    if (!code || redeeming) return;
+    redeem.mutate(code, {
+      onSettled: () => setCodeDraft(""),
+    });
+  };
+
+  return (
+    <section className="mt-6">
+      <SectionHeading title={t("referral.title")} />
+      <Card className="space-y-3 p-3">
+        <p className="text-xs text-ink-2">{t("referral.hint")}</p>
+        <div className="flex items-center gap-2">
+          {/* Codes are Latin and typed by hand: always LTR, letterspaced so
+              the 8 characters stay readable at a glance. */}
+          <code
+            dir="ltr"
+            className="min-h-11 flex-1 rounded-card border border-line bg-elevated px-3 py-2.5 text-center text-sm font-black tracking-[0.3em] text-volt"
+          >
+            {loading || !referral ? "· · · · · · · ·" : referral.code}
+          </code>
+          <Button variant="ghost" onClick={() => void copy()} disabled={!referral}>
+            {t("referral.copy")}
+          </Button>
+        </div>
+        {referral ? (
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line pt-2 text-xs text-ink-3">
+            <span>{t("referral.statInvited", { invited: referral.invited })}</span>
+            <span>
+              {t("referral.statPaid", { rewarded: referral.rewarded, max: referral.maxPaidInvites })}
+            </span>
+          </div>
+        ) : null}
+        {referral && !referral.youRedeemed ? (
+          <div className="flex gap-2 border-t border-line pt-3">
+            <input
+              dir="ltr"
+              className="min-h-11 min-w-0 flex-1 rounded-card border border-line bg-surface px-3 text-sm font-bold uppercase tracking-widest text-ink placeholder:font-normal placeholder:tracking-normal placeholder:text-ink-3 focus:border-volt focus:outline-none"
+              placeholder={t("referral.redeemPlaceholder")}
+              value={codeDraft}
+              onChange={(e) => setCodeDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit();
+              }}
+              maxLength={12}
+              autoComplete="off"
+              autoCapitalize="characters"
+              aria-label={t("referral.redeemPlaceholder")}
+            />
+            <Button onClick={submit} disabled={redeeming || !codeDraft.trim()}>
+              {redeeming ? t("common.loading") : t("referral.redeem")}
+            </Button>
+          </div>
+        ) : null}
+      </Card>
+    </section>
   );
 }
 

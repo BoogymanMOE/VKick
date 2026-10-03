@@ -60,6 +60,10 @@ export function serverErrorKey(err: unknown): string {
     INVALID_PAYLOAD: "common.error",
     // ratings (3-card rule)
     RATING_CAP_REACHED: "ratings.capReached",
+    // referrals
+    INVALID_CODE: "referral.errInvalid",
+    SELF_REFERRAL: "referral.errSelf",
+    ALREADY_REDEEMED: "referral.errAlready",
     // auth
     NO_ACCOUNT: "auth.errNoAccount",
     // Wrong password and unknown username share one response (the server
@@ -156,6 +160,16 @@ export interface ApiFollowedLeague {
   name: string | null;
   kind: "league" | "cup" | "tournament" | null;
   created_at: string;
+}
+
+/** Referral program state for the viewer (Profile → Invite friends). */
+export interface ApiReferral {
+  code: string;
+  invited: number;
+  rewarded: number;
+  maxPaidInvites: number;
+  perInvite: number;
+  youRedeemed: boolean;
 }
 
 export interface ApiPredictionWindow {
@@ -515,6 +529,14 @@ export const api = {
     }),
 
   getFollowedLeagues: () => request<{ leagues: ApiFollowedLeague[] }>("/me/leagues"),
+
+  getReferral: () => request<{ referral: ApiReferral }>("/me/referral"),
+
+  redeemReferral: (code: string) =>
+    request<{ ok: boolean; rewarded: boolean; points: number }>("/me/referral/redeem", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
 
   followLeague: (league: string) =>
     request<{ ok: boolean }>("/me/leagues", {

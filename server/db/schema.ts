@@ -517,6 +517,27 @@ export function migrate(db: DatabaseSync): void {
       ratings     INTEGER NOT NULL DEFAULT 1,   -- rating-window opens
       updated_at  TEXT NOT NULL
     );
+
+    -- Referral program (scoring-rules.md "Referral bonuses"). One reusable
+    -- code per user (user_id UNIQUE); redemptions are one-per-invitee ever
+    -- (invitee_user_id UNIQUE) and record whether the referrer's cap still
+    -- allowed points ('rewarded'), so the social graph stays true even when
+    -- the points stop. The paid bonus itself lands in point_ledger with
+    -- source = 'referral_bonus' and source_id = the redemption row id.
+    CREATE TABLE IF NOT EXISTS referral_codes (
+      code       TEXT PRIMARY KEY,
+      user_id    INTEGER NOT NULL UNIQUE REFERENCES users(id),
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS referral_redemptions (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      code             TEXT NOT NULL,
+      referrer_user_id INTEGER NOT NULL REFERENCES users(id),
+      invitee_user_id  INTEGER NOT NULL UNIQUE REFERENCES users(id),
+      rewarded         INTEGER NOT NULL DEFAULT 0,  -- 1 when the cap allowed points
+      created_at       TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referral_redemptions(referrer_user_id);
   `);
 
   // The replay-pitch columns were added after v1 of this schema; fresh DBs

@@ -9,10 +9,11 @@
  * recomputed (scoring-rules.md "Leaderboard rules").
  *
  * THE FIREWALL (scoring-rules.md §8 / task spec §5): only prediction
- * resolutions and streak bonuses append to the ledger. Crowd ratings and
- * comments are cosmetic/social — no code path from `crowd_ratings` or
- * `timeline_comments` reaches this module, and nothing else may import it
- * (asserted by tests/predictionScore.test.ts, ratingsNeverTouchLedger()).
+ * resolutions, streak bonuses and (capped) referral bonuses append to the
+ * ledger. Crowd ratings and comments are cosmetic/social — no code path from
+ * `crowd_ratings` or `timeline_comments` reaches this module, and nothing
+ * else may import it (asserted by tests/predictionScore.test.ts,
+ * ratingsNeverTouchLedger()).
  *
  * No negative scoring (§7): award() rejects negative points at the door —
  * the CHECK constraint on the table is the second net.
@@ -31,7 +32,7 @@ export function currentSeasonLabel(now: Date = new Date()): string {
   return seasonLabelForDate(now);
 }
 
-export type LedgerSource = "prediction" | "streak_bonus";
+export type LedgerSource = "prediction" | "streak_bonus" | "referral_bonus";
 
 export interface AwardInput {
   userId: number;

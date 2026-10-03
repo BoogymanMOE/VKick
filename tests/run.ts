@@ -22,6 +22,7 @@ import { runRetentionTests } from "./retention.test.js";
 import { runTeamGroupsTests } from "./teamGroups.test.js";
 import { runVerifyTests } from "./verify.test.js";
 import { runBracketTests } from "./bracket.test.js";
+import { runReferralTests } from "./referral.test.js";
 
 let failed = 0;
 const groups: Array<[string, () => void | Promise<void>]> = [
@@ -44,6 +45,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["teamGroups", runTeamGroupsTests],
   ["verify", runVerifyTests],
   ["bracket", runBracketTests],
+  ["referral", runReferralTests],
 ];
 
 for (const [name, run] of groups) {

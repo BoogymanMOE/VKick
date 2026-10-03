@@ -385,6 +385,50 @@ export function useLeagueTabs(): LeagueTab[] {
   );
 }
 
+/* ------------------------------------------------------------ referrals */
+
+/**
+ * The viewer's invite code + redemption stats, with the redeem mutation.
+ * Success/failure toast here (once, centrally) so Profile only supplies the
+ * form — a redeemed code clears the local draft via the shared invalidate.
+ */
+export function useReferral() {
+  const qc = useQueryClient();
+  const { t } = useI18n();
+  const { push } = useToast();
+
+  const query = useQuery({
+    queryKey: ["referral"],
+    queryFn: () => api.getReferral(),
+    select: (data) => data.referral,
+    staleTime: 60_000,
+  });
+
+  const redeem = useMutation({
+    mutationFn: (code: string) => api.redeemReferral(code),
+    onSuccess: (res) => {
+      haptic("medium");
+      qc.invalidateQueries({ queryKey: ["referral"] });
+      push({
+        text: t(res.rewarded ? "referral.redeemed" : "referral.redeemedNoPoints"),
+        tone: "volt",
+        icon: "✓",
+      });
+    },
+    onError: (err) => {
+      haptic("medium");
+      push({ text: t(serverErrorKey(err) as StringKey), tone: "danger", icon: "✕" });
+    },
+  });
+
+  return {
+    referral: query.data,
+    loading: query.isLoading,
+    redeem,
+    redeeming: redeem.isPending,
+  };
+}
+
 /* ------------------------------------------------------------ notification prefs */
 
 export interface NotificationPrefs {

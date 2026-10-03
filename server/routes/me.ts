@@ -8,6 +8,7 @@ import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS, favoriteCapError } from "../db/teamG
 import { writeLimiter } from "../auth/rateLimit.js";
 import { currentSeasonLabel } from "../scoring/ledger.js";
 import { evaluateStreakForUser } from "../scoring/streak.js";
+import { referralStats, redeemReferralCode } from "../scoring/referral.js";
 import { POINTS as SCORING_POINTS } from "../scoring/predictionScore.js";
 import { bad, currentUser, requireUser, MAX_LEAGUES } from "./shared.js";
 
@@ -18,6 +19,26 @@ const STREAK_THRESHOLDS = SCORING_POINTS.streakThresholds;
 const STREAK_BONUS = SCORING_POINTS.streak as Record<number, number>;
 
 export const meRouter = express.Router();
+
+/* ------------------------------------------------------------ referrals */
+
+// The caller's invite code (allocated on first ask) plus their redemption
+// stats — Profile renders the share code and the honest paid-vs-cap count.
+meRouter.get("/api/me/referral", requireUser, (_req, res) => {
+  res.json({ referral: referralStats(db, currentUser(_req).id) });
+});
+
+// Redeem an invite code. One redemption per account, ever; the referrer is
+// paid a fixed bonus (global board only) while their cap lasts — the
+// connection is recorded either way. Rate-limited like every write.
+meRouter.post("/api/me/referral/redeem", requireUser, writeLimiter, (req, res) => {
+  const code = String(req.body?.code ?? "");
+  const result = redeemReferralCode(db, currentUser(req).id, code);
+  if (!result.ok) {
+    return bad(res, result.error, result.error === "INVALID_CODE" ? 404 : 400);
+  }
+  res.json(result);
+});
 
 /* ------------------------------------------------------------ profile */
 

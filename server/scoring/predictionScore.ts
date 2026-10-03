@@ -44,6 +44,12 @@ export const POINTS = {
 
   streak: { 3: 2, 5: 5, 10: 10 } as Record<number, number>,
   streakThresholds: [3, 5, 10],
+
+  // Referral bonuses (scoring-rules.md "Referral bonuses"): growth rewards,
+  // paid on the GLOBAL board only. maxPaidInvites caps a referrer's lifetime
+  // payout at perInvite × maxPaidInvites; later invites still connect the
+  // accounts but pay nothing.
+  referral: { perInvite: 10, maxPaidInvites: 25 },
 } as const;
 
 /* ------------------------------------------------------------ lineup */
