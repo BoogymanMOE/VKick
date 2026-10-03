@@ -131,7 +131,15 @@ export function matchFromApi(m: ApiMatch): Match {
 
 /* ------------------------------------------------------------ queries */
 
-export function useMatches(query: { league?: string; date?: string } = {}) {
+/**
+ * The matchday feed. Called with no arguments it gets the server's relevance
+ * window (live now, recent results, next fortnight) — which is what keeps the
+ * screen showing THIS week's football rather than the oldest rows in the DB.
+ * Pass `from`/`to` for an explicit fixture range.
+ */
+export function useMatches(
+  query: { league?: string; date?: string; from?: string; to?: string; limit?: number } = {},
+) {
   return useQuery({
     queryKey: ["matches", query],
     queryFn: () => api.getMatches(query),

@@ -552,10 +552,18 @@ export const api = {
   getLeaderboard: (board: "global" | `league/${string}` | `club/${string}`) =>
     request<{ board: ApiLeaderRow[]; you: ApiViewerRank | null }>(`/leaderboards/${board}`),
 
-  getMatches: (query: { league?: string; date?: string } = {}) => {
+  /**
+   * The matchday feed. With no args the server returns a relevance window
+   * (live now + recent results + the next fortnight); pass `from`/`to`
+   * (YYYY-MM-DD) for an explicit fixture range instead.
+   */
+  getMatches: (query: { league?: string; date?: string; from?: string; to?: string; limit?: number } = {}) => {
     const qs = new URLSearchParams();
     if (query.league) qs.set("league", query.league);
     if (query.date) qs.set("date", query.date);
+    if (query.from) qs.set("from", query.from);
+    if (query.to) qs.set("to", query.to);
+    if (query.limit) qs.set("limit", String(query.limit));
     const suffix = qs.toString() ? `?${qs}` : "";
     return request<{ matches: ApiMatch[] }>(`/matches${suffix}`);
   },

@@ -15,6 +15,7 @@ import { runLivePitchTests } from "./livePitch.test.js";
 import { runPitchArtTests } from "./pitchArt.test.js";
 import { runUnderstatTests } from "./understat.test.js";
 import { runStandingsTests } from "./standings.test.js";
+import { runFeedTests } from "./feed.test.js";
 import { runReplayTests } from "./replay.test.js";
 import { runSeasonTests } from "./season.test.js";
 import { runClientTests } from "./client.test.js";
@@ -38,6 +39,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["pitchArt", runPitchArtTests],
   ["understat", runUnderstatTests],
   ["standings", runStandingsTests],
+  ["feed", runFeedTests],
   ["replay", runReplayTests],
   ["season", runSeasonTests],
   ["client", runClientTests],

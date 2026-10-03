@@ -69,16 +69,20 @@ export default function Matches() {
   const inMyTeams = (match: Match) => isFavorite(match.home.id) || isFavorite(match.away.id);
   // Favorite clubs sort to the top of each section.
   const organize = (list: Match[]) => [...list].sort((a, b) => Number(inMyTeams(b)) - Number(inMyTeams(a)));
+  // Soonest / newest kickoff first. The server already returns its window in
+  // that order, but each section re-sorts explicitly so the screen never
+  // depends on the API's ordering (favorites sort stably on top of these).
+  const soonestFirst = (a: Match, b: Match) => +new Date(a.kickoffAt) - +new Date(b.kickoffAt);
+  const newestFirst = (a: Match, b: Match) => +new Date(b.kickoffAt) - +new Date(a.kickoffAt);
   const live = organize(live0);
   // With picks saved, discovery shrinks to a window (the heading count shows
   // the real total); without picks, it stays full so the app is usable
   // pre-onboarding. Results live in the team rows — no separate FT section.
   const capGeneral = favCount > 0 && !league && leagueFilter === null;
-  const upcomingShown = capGeneral ? organize(upcoming0).slice(0, 6) : organize(upcoming0);
+  const upcoming = organize(upcoming0).sort(soonestFirst);
+  const upcomingShown = capGeneral ? upcoming.slice(0, 6) : upcoming;
   // Recent results, newest kickoff first — the sections above sort favorites up.
-  const finished = [...finished0]
-    .sort((a, b) => +new Date(b.kickoffAt) - +new Date(a.kickoffAt))
-    .slice(0, 12);
+  const finished = organize(finished0).sort(newestFirst).slice(0, 12);
 
   // One context per favorite club: live now, else next kickoff, else last
   // result. The anchor club leads the rows.

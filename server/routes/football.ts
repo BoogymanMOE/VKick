@@ -5,11 +5,12 @@
  * Understat read keeps its requireUser gate. Behavior unchanged.
  */
 import express from "express";
-import { getDb, all, get, type BindValue } from "../db/index.js";
+import { getDb, all, get } from "../db/index.js";
 import { COMPETITIONS, isCup } from "../espn/types.js";
 import { EXTRA_COMPETITIONS } from "../espn/extra.js";
 import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
 import { foldForm, type FormMatchRow } from "../standings/form.js";
+import { buildFeedQuery } from "../matches/feed.js";
 import { currentSeasonLabel } from "../scoring/ledger.js";
 import { bad, requireUser } from "./shared.js";
 
@@ -68,18 +69,14 @@ matchesRouter.get("/api/competitions", (_req, res) => {
 /* ------------------------------------------------------------ matches */
 
 matchesRouter.get("/api/matches", (req, res) => {
-  const league = req.query.league ? String(req.query.league) : null;
-  const date = req.query.date ? String(req.query.date) : null; // YYYY-MM-DD
-  const params: BindValue[] = [];
-  let where = "1=1";
-  if (league) {
-    where += " AND m.league = ?";
-    params.push(league);
-  }
-  if (date) {
-    where += " AND substr(m.kickoff_at, 1, 10) = ?";
-    params.push(date);
-  }
+  // Window semantics live in server/matches/feed.ts (tested against real SQL).
+  const feed = buildFeedQuery({
+    league: req.query.league ? String(req.query.league) : null,
+    date: req.query.date ? String(req.query.date) : null,
+    from: req.query.from ? String(req.query.from) : null,
+    to: req.query.to ? String(req.query.to) : null,
+    limit: req.query.limit ? String(req.query.limit) : null,
+  });
   const rows = all(
     db,
     `SELECT m.*,
@@ -88,10 +85,10 @@ matchesRouter.get("/api/matches", (req, res) => {
      FROM matches m
      JOIN teams th ON th.id = m.home_team_id
      JOIN teams ta ON ta.id = m.away_team_id
-     WHERE ${where}
-     ORDER BY m.kickoff_at ASC
-     LIMIT 300`,
-    params,
+     WHERE ${feed.where}
+     ORDER BY ${feed.orderBy}
+     LIMIT ?`,
+    [...feed.params, feed.limit],
   );
   res.json({ matches: rows });
 });
