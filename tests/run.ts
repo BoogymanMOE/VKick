@@ -25,6 +25,8 @@ import { runVerifyTests } from "./verify.test.js";
 import { runBracketTests } from "./bracket.test.js";
 import { runReferralTests } from "./referral.test.js";
 import { runSeedDemoTests } from "./seedDemo.test.js";
+import { runRateLimitTests } from "./rateLimit.test.js";
+
 
 let failed = 0;
 const groups: Array<[string, () => void | Promise<void>]> = [
@@ -50,6 +52,8 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["bracket", runBracketTests],
   ["referral", runReferralTests],
   ["seedDemo", runSeedDemoTests],
+  ["rateLimit", runRateLimitTests],
+  
 ];
 
 for (const [name, run] of groups) {
