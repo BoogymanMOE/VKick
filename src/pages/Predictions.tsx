@@ -4,7 +4,7 @@ import { CompRowSkeleton } from "../components/Skeletons";
 import { Chip, EmptyState, ErrorState, Num, SectionHeading } from "../components/ui";
 import { useMyPredictionHistory, type PredictionHistoryRow } from "../hooks/useApi";
 import { useI18n } from "../i18n/I18nProvider";
-import { breakdownItems, MECHANIC_LABELS, STATUS_LABELS, type BreakdownLang } from "../lib/breakdown";
+import { breakdownItems, pickSummary, MECHANIC_LABELS, STATUS_LABELS, type BreakdownLang } from "../lib/breakdown";
 import { formatKickoff } from "../lib/format";
 
 /**
@@ -104,6 +104,16 @@ function PredictionCard({
   const { t } = useI18n();
   const items = breakdownItems(row.breakdown, lang);
   const hasScore = row.homeScore !== null && row.awayScore !== null;
+  // Names come from the server (one lookup for the page, not one per row);
+  // localize() renders them in the user's language, and an id the server
+  // couldn't resolve degrades to #id rather than a blank line.
+  const pick = pickSummary(row.mechanic, row.payload, {
+    t,
+    nameOf: (id) => {
+      const name = row.playerNames[id];
+      return name ? localize(name) : `#${id}`;
+    },
+  });
 
   return (
     <li className="rounded-card border border-line bg-surface p-3">
@@ -118,6 +128,12 @@ function PredictionCard({
           {STATUS_LABELS[row.status]?.[lang] ?? row.status}
         </Chip>
       </div>
+
+      {pick ? (
+        <p className="mt-1 truncate text-[11px] text-ink-2" dir="auto">
+          {pick}
+        </p>
+      ) : null}
 
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-2 text-[11px] text-ink-3">
         <span>

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient, type UseMutateFunction } from "@
 import { api, serverErrorKey, type ApiPrediction } from "../../lib/api";
 import { useI18n } from "../../i18n/I18nProvider";
 import { haptic, notifyHaptic, selectionHaptic } from "../../lib/telegram";
+import { pickSummary } from "../../lib/breakdown";
 import { useLocalState } from "../../lib/useLocalState";
 import { useToast } from "../Toast";
 import { BottomSheet } from "../BottomSheet";
@@ -614,23 +615,18 @@ function MechanicSummary({
   const parsed = safeParse(payload) as Record<string, unknown> | null;
   if (!parsed) return null;
 
-  if (mechanic === "player_watch" || mechanic === "shot_predict") {
-    const pid = String(parsed.playerId ?? "");
-    return pid ? (
-      <span className="max-w-[40%] truncate text-[10px] text-ink-3" dir="auto">
-        {nameOf(pid)}
-      </span>
-    ) : null;
-  }
-  if (mechanic === "versus") {
-    const a = String(parsed.playerAId ?? "");
-    const b = String(parsed.playerBId ?? "");
-    return a && b ? (
+  // One implementation for every mechanic, shared with the history page
+  // (src/lib/breakdown.ts) so the two screens can never disagree about what a
+  // pick says. `nameOf` supplies this match's lineups — a cache hit here.
+  const summary = pickSummary(mechanic, payload, { t, nameOf });
+  if (summary) {
+    return (
       <span className="max-w-[50%] truncate text-[10px] text-ink-3" dir="auto">
-        {nameOf(a)} {t("common.versus")} {nameOf(b)}
+        {summary}
       </span>
-    ) : null;
+    );
   }
+  // No payload we can summarize: fall back to a bare count rather than nothing.
   if (mechanic === "sub") {
     const subs = Array.isArray(parsed.subs) ? parsed.subs.length : 0;
     return <Num className="text-[10px] text-ink-3">{subs}</Num>;

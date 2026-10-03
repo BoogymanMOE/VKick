@@ -26,6 +26,7 @@ import { runBracketTests } from "./bracket.test.js";
 import { runReferralTests } from "./referral.test.js";
 import { runSeedDemoTests } from "./seedDemo.test.js";
 import { runRateLimitTests } from "./rateLimit.test.js";
+import { runPickSummaryTests } from "./pickSummary.test.js";
 
 
 let failed = 0;
@@ -53,6 +54,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["referral", runReferralTests],
   ["seedDemo", runSeedDemoTests],
   ["rateLimit", runRateLimitTests],
+  ["pickSummary", runPickSummaryTests],
   
 ];
 

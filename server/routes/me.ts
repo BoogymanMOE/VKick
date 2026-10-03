@@ -10,6 +10,7 @@ import { currentSeasonLabel } from "../scoring/ledger.js";
 import { evaluateStreakForUser } from "../scoring/streak.js";
 import { referralStats, redeemReferralCode } from "../scoring/referral.js";
 import { POINTS as SCORING_POINTS } from "../scoring/predictionScore.js";
+import { attachPlayerNames } from "../predictions/pickNames.js";
 import { bad, currentUser, requireUser, MAX_LEAGUES } from "./shared.js";
 
 const db = getDb();
@@ -281,7 +282,9 @@ meRouter.get("/api/me/predictions", requireUser, (req, res) => {
      WHERE p.user_id = ? ORDER BY p.locked_at DESC LIMIT 100`,
     [currentUser(req).id],
   );
-  res.json({ predictions: rows });
+  // Payloads carry ESPN athlete ids; summaries must show names. Resolved in one
+  // query for the whole page (see pickNames.ts) rather than per row.
+  res.json({ predictions: attachPlayerNames(db, rows) });
 });
 
 /* ------------------------------------------------------------ streak */

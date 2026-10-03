@@ -9,6 +9,9 @@
  * Unknown keys are humanized instead of dropped, so a mechanic that grows a new
  * line item shows up here readable enough without a client change.
  */
+import { cellZone, ZONE_LABEL_KEY } from "./zones";
+import type { StringKey } from "../i18n/strings";
+
 export type BreakdownLang = "en" | "fa";
 
 /**
@@ -109,4 +112,101 @@ export function breakdownItems(raw: string | null, lang: BreakdownLang): Breakdo
       flag,
     };
   });
+}
+
+/* ------------------------------------------------------------ pick summaries */
+
+/**
+ * "What did I actually pick?" in one line, in the user's language.
+ *
+ * Stored payloads are keyed by ESPN athlete id, and a summary is the one place
+ * that key must never surface: "Your pick's stat score 8 / Rival's 5" is
+ * meaningless without knowing WHO. So every mechanic resolves its ids through
+ * `nameOf` and every geometric pick resolves its zone label, in both EN and FA.
+ *
+ * `nameOf` is injected rather than resolved here so the caller decides the
+ * source: the match hub has the lineups query already (a cache hit), the
+ * history page has the names the server attached. Whatever `nameOf` returns is
+ * what renders, so a caller with no names yet degrades to its own "#id"
+ * fallback instead of showing a blank.
+ */
+export interface PickSummaryCtx {
+  t: (key: StringKey, vars?: Record<string, string | number>) => string;
+  nameOf: (id: string) => string;
+  /** Sub pairs listed before collapsing the rest into "+N more". */
+  maxPairs?: number;
+}
+
+/** ESPN athlete ids only — keeps formation strings and grid cells out. */
+const asId = (v: unknown): string => (typeof v === "string" && /^\d{1,15}$/.test(v) ? v : "");
+
+export function pickSummary(
+  mechanic: string,
+  payload: string | null,
+  ctx: PickSummaryCtx,
+): string | null {
+  if (!payload) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+  const p = parsed as Record<string, unknown>;
+
+  switch (mechanic) {
+    case "player_watch": {
+      const id = asId(p.playerId);
+      return id ? ctx.nameOf(id) : null;
+    }
+
+    case "shot_predict": {
+      const id = asId(p.playerId);
+      const grid = p.grid as { gridX?: unknown; gridY?: unknown } | undefined;
+      const x = typeof grid?.gridX === "number" ? grid.gridX : NaN;
+      const y = typeof grid?.gridY === "number" ? grid.gridY : NaN;
+      // The zone is half the pick: a shot prediction is "this player, from
+      // here". Naming only the player hid the half the user actually chose.
+      const zone =
+        Number.isInteger(x) && Number.isInteger(y) ? ctx.t(ZONE_LABEL_KEY[cellZone(x, y)]) : null;
+      const who = id ? ctx.nameOf(id) : null;
+      if (who && zone) return `${who} · ${zone}`;
+      return who ?? zone;
+    }
+
+    case "versus": {
+      const a = asId(p.playerAId);
+      const b = asId(p.playerBId);
+      if (!a || !b) return null;
+      return `${ctx.nameOf(a)} ${ctx.t("common.versus")} ${ctx.nameOf(b)}`;
+    }
+
+    case "sub": {
+      if (!Array.isArray(p.subs)) return null;
+      const pairs = (p.subs as Array<Record<string, unknown>>)
+        .map((pair) => {
+          const off = asId(pair?.offId);
+          const on = asId(pair?.onId);
+          return off && on ? `${ctx.nameOf(off)} → ${ctx.nameOf(on)}` : null;
+        })
+        .filter((x): x is string => !!x);
+      if (pairs.length === 0) return null;
+      const limit = Math.max(1, ctx.maxPairs ?? 1);
+      const shown = pairs.slice(0, limit);
+      const rest = pairs.length - shown.length;
+      return rest > 0 ? `${shown.join(" · ")} · ${ctx.t("predict.morePairs", { n: rest })}` : shown.join(" · ");
+    }
+
+    case "lineup": {
+      const formation = typeof p.formation === "string" ? p.formation : "";
+      const count = Array.isArray(p.playerIds) ? p.playerIds.length : 0;
+      if (!formation && count === 0) return null;
+      // Eleven names is a wall of text; the XI is already on the match page.
+      return count > 0 && formation ? `${count} · ${formation}` : formation || null;
+    }
+
+    default:
+      return null;
+  }
 }

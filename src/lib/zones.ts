@@ -5,6 +5,8 @@
  * If either side changes, both must change.
  */
 
+import type { StringKey } from "../i18n/strings";
+
 export type ShotZone =
   "inside_left" | "inside_center" | "inside_right" | "outside_left" | "outside_center" | "outside_right";
 
@@ -46,7 +48,7 @@ export function cellZone(gridX: number, gridY: number): ShotZone {
 }
 
 /** i18n keys per zone (strings.ts, EN + FA). */
-export const ZONE_LABEL_KEY: Record<ShotZone, string> = {
+export const ZONE_LABEL_KEY: Record<ShotZone, StringKey> = {
   inside_left: "shot.zoneInsideLeft",
   inside_center: "shot.zoneInsideCenter",
   inside_right: "shot.zoneInsideRight",

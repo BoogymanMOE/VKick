@@ -791,6 +791,10 @@ export interface PredictionHistoryRow {
   status: string;
   points: number;
   breakdown: string | null;
+  /** The stored pick, so the card can name the players involved. */
+  payload: string | null;
+  /** ESPN id → full name, resolved server-side for this row's payload. */
+  playerNames: Record<string, string>;
   lockedAt: string;
   resolvedAt: string | null;
   kickoffAt: string | null;
@@ -819,6 +823,8 @@ export function useMyPredictionHistory() {
           status: p.status,
           points: p.points_awarded ?? 0,
           breakdown: p.breakdown ?? null,
+          payload: (row.payload as string | null) ?? null,
+          playerNames: (row.player_names as Record<string, string> | null) ?? {},
           lockedAt: p.locked_at,
           resolvedAt: p.resolved_at ?? null,
           kickoffAt: (row.kickoff_at as string | null) ?? null,
