@@ -12,6 +12,7 @@ import {
   SectionHeading,
   Segmented,
 } from "../components/ui";
+import { buildBracket, type BracketTie } from "../lib/bracket";
 import { useKnockoutCompetitions, useMatches } from "../hooks/useApi";
 import { useI18n } from "../i18n/I18nProvider";
 import { formatKickoff } from "../lib/format";
@@ -64,35 +65,16 @@ export default function Cups() {
   // singly (the override is transient, the per-round choice is the truth).
   const [roundsOverride, setRoundsOverride] = useState<boolean | null>(null);
 
-  // Knockout structure from the sync's round labels. Every match in the window
-  // carries its round ("Quarter-final"…), so the sections render as a mini
-  // bracket — first round at the top, the final last — instead of one flat
-  // fixture list. Cups with no round data (early qualifying) fall back to the
-  // status sections below, unchanged.
-  const byRound = useMemo(() => {
-    if (matchesQuery.isLoading || matchesQuery.isError) return new Map<string, Match[]>();
-    const map = new Map<string, Match[]>();
-    for (const m of matches) {
-      const key = m.round?.trim();
-      // Live matches surface once, in the live section above the bracket —
-      // they don't repeat inside their round group.
-      if (key && m.status !== "live") {
-        const list = map.get(key);
-        if (list) list.push(m);
-        else map.set(key, [m]);
-      }
-    }
-    return map;
+  // Knockout structure from the sync's round labels: rounds in play order,
+  // two-legged pairings folded into one tie with an aggregate, winners
+  // inferred (honestly undecided when penalties decided a level tie), and
+  // feeder links connecting each tie back to the round that produced it —
+  // that is what turns five flat fixture lists into one bracket. Cups with
+  // no round data fall back to the status sections below, unchanged.
+  const bracket = useMemo(() => {
+    if (matchesQuery.isLoading || matchesQuery.isError) return { rounds: [], connected: false };
+    return buildBracket(matches);
   }, [matches, matchesQuery.isLoading, matchesQuery.isError]);
-  const roundOrder = useMemo(
-    () =>
-      [...byRound.keys()].sort(
-        // Descending rank: qualifying/early rounds first, the Final last —
-        // the bracket reads in the order the cup is actually played.
-        (a, b) => roundRank(b) - roundRank(a) || a.localeCompare(b),
-      ),
-    [byRound],
-  );
 
   return (
     <>
@@ -126,7 +108,7 @@ export default function Cups() {
         </div>
       )}
 
-      {byRound.size > 0 ? (
+      {bracket.rounds.length > 0 ? (
         /* Round structure when the sync carries it: live first, then the
            bracket from the first round to the final. */
         <>
@@ -154,7 +136,7 @@ export default function Cups() {
               <CupMatchList matches={live} />
             </section>
           ) : null}
-          {roundOrder.length > 1 ? (
+          {bracket.rounds.length > 1 ? (
             // Bulk control for the bracket: folds or unfolds every round at
             // once. The label names the action ahead — "Expand all" once the
             // rounds are collapsed, "Collapse all" otherwise.
@@ -171,22 +153,26 @@ export default function Cups() {
               </button>
             </div>
           ) : null}
-          {roundOrder.map((round) => {
-            const list = byRound.get(round)!;
+          {bracket.rounds.map((round) => {
+            const legCount = round.ties.reduce((n, tie) => n + tie.legs.length, 0);
             return (
               // Collapsible like the status sections; the fold state keys off
               // the round label, so collapsing "Qualifying" once keeps it
               // folded in every cup. Toggling one round releases the bulk
               // override so the per-round choice is the ongoing truth.
               <CollapsibleSection
-                key={round}
-                id={`cups-round-${roundId(round)}`}
-                title={localize(round)}
-                count={list.length}
+                key={round.label}
+                id={`cups-round-${roundId(round.label)}`}
+                title={localize(round.label)}
+                count={legCount}
                 openOverride={roundsOverride === null ? undefined : { open: roundsOverride }}
                 onUserToggle={roundsOverride === null ? undefined : () => setRoundsOverride(null)}
               >
-                <CupMatchList matches={list} />
+                <div className="space-y-2">
+                  {round.ties.map((tie) => (
+                    <TieCard key={tie.key} tie={tie} />
+                  ))}
+                </div>
               </CollapsibleSection>
             );
           })}
@@ -261,13 +247,20 @@ export default function Cups() {
 /**
  * Cup fixture row: teams, score/clock, replay affordance. The whole footer is
  * the touch surface — summary and replay links meet the 44px floor inside it.
+ * In `bare` mode the row drops its own card chrome: a TieCard supplies the
+ * border and the rows become the tie's legs, separated by hairlines.
  */
-function CupMatchList({ matches }: { matches: Match[] }) {
+function CupMatchList({ matches, bare = false }: { matches: Match[]; bare?: boolean }) {
   const { t, lang, localize } = useI18n();
   return (
-    <ul className="space-y-2">
+    <ul className={bare ? undefined : "space-y-2"}>
       {matches.map((match) => (
-        <li key={match.id} className="rounded-card border border-line bg-surface p-3">
+        <li
+          key={match.id}
+          className={
+            bare ? "border-t border-line px-3 py-2 first:border-t-0" : "rounded-card border border-line bg-surface p-3"
+          }
+        >
           <div className="flex items-center gap-2">
             <span className="min-w-0 flex-1 truncate text-end text-sm font-bold text-ink">
               {localize(match.home.shortName)}
@@ -318,6 +311,57 @@ function CupMatchList({ matches }: { matches: Match[] }) {
 }
 
 /**
+ * One tie of the bracket — the node that connects rounds. The card carries
+ * the pairing's aggregate header when the tie spans two legs, the legs
+ * themselves (bare rows), and a footer that states what the data proves:
+ * who advances (an honest "undecided" when penalties decided a level tie)
+ * and which round the participants came from — the visible edge of the tree.
+ * A first-round tie with nothing to say renders as a plain fixture card.
+ */
+function TieCard({ tie }: { tie: BracketTie }) {
+  const { t, localize } = useI18n();
+  const twoLegs = tie.legs.length > 1;
+  const showFooter = twoLegs || tie.winnerId != null || tie.feedRound != null;
+  return (
+    <div className="overflow-hidden rounded-card border border-line bg-surface">
+      {twoLegs ? (
+        <div className="flex items-center gap-2 border-b border-line bg-elevated px-3 py-2">
+          <span className="min-w-0 flex-1 truncate text-end text-xs font-bold text-ink">{tie.homeName}</span>
+          <span className="label flex-none text-ink-3">
+            {t("cups.tieAgg")}{" "}
+            <Num className="text-xs text-ink">
+              {tie.aggHome ?? "–"}–{tie.aggAway ?? "–"}
+            </Num>
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">{tie.awayName}</span>
+        </div>
+      ) : null}
+      <CupMatchList matches={tie.legs} bare />
+      {showFooter ? (
+        <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11px]">
+          {tie.winnerId ? (
+            <span className="min-w-0 truncate font-bold text-volt">
+              <span aria-hidden="true">→ </span>
+              {tie.winnerName}
+              <span className="sr-only"> — {t("cups.winnerAdvances")}</span>
+            </span>
+          ) : (
+            <span className="text-ink-3">{t("cups.tiePending")}</span>
+          )}
+          {tie.feedRound ? (
+            <span className="flex-none text-ink-3">
+              <span aria-hidden="true">← </span>
+              {localize(tie.feedRound)}
+              <span className="sr-only"> — {t("cups.feedsFrom", { round: localize(tie.feedRound) })}</span>
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
  * Stable, DOM-id-safe key for a round label, so its fold state survives
  * reloads and is shared across cups with the same round naming. Latin labels
  * slugify ("Quarter-final" → "quarter-final"); anything else (Persian round
@@ -335,24 +379,6 @@ function roundId(label: string): string {
     hash = (hash * 31 + label.charCodeAt(i)) | 0;
   }
   return `r${(hash >>> 0).toString(36)}`;
-}
-
-/**
- * Bracket order for round headings: Final last, semis before it, then the
- * earlier rounds. Ties fall back to alphabetical so any unexpected label
- * still groups deterministically.
- */
-function roundRank(label: string): number {
-  const l = label.toLowerCase();
-  // Order matters: "quarter-final" and "semi-final" both contain "final".
-  if (l.includes("semi")) return 1;
-  if (l.includes("quarter")) return 2;
-  if (l.includes("final") && !l.includes("qual")) return 0;
-  const n = parseInt(l.match(/(?:round of|round)\s*(\d+)$/)?.[1] ?? "", 10);
-  if (!Number.isNaN(n)) return 2 + n; // Round of 16 → 18, of 32 → 34…
-  if (l.includes("round")) return 40; // unnumbered rounds after the numbered ones
-  if (l.includes("qual") || l.includes("play")) return 60; // qualifying last
-  return 50;
 }
 
 function RowPlaceholder() {

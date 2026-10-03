@@ -353,6 +353,10 @@ export const strings = {
     "cups.empty": "No fixtures in this window right now.",
     "cups.emptyHint": "Fixtures land here as soon as the draw is scheduled — check back or retry.",
     "cups.noTable": "Knockout competitions have no league table.",
+    "cups.tieAgg": "Agg.",
+    "cups.tiePending": "Undecided",
+    "cups.winnerAdvances": "Winner advances",
+    "cups.feedsFrom": "Winners from {round}",
 
     "predict.lineup": "Lineup Predictor",
     "predict.lineupHint": "Predict the starting XI",
@@ -1009,6 +1013,10 @@ export const strings = {
     "cups.empty": "در این بازه بازی‌ای ثبت نشده است.",
     "cups.emptyHint": "بازی‌ها به محض اعلام برنامه اینجا قرار می‌گیرند — بعداً سر بزن یا دوباره تلاش کن.",
     "cups.noTable": "مسابقات حذفی جدول لیگ ندارند.",
+    "cups.tieAgg": "مجموع",
+    "cups.tiePending": "برنده مشخص نیست",
+    "cups.winnerAdvances": "برنده صعود می‌کند",
+    "cups.feedsFrom": "برندگان از {round}",
 
     "predict.lineup": "پیش‌بینی ترکیب",
     "predict.lineupHint": "ترکیب اصلی رو حدس بزن",
