@@ -203,7 +203,7 @@ export const strings = {
       "The table the chances say this season deserved: each club's xPts, with the gap to its real points. Overs is finishing above the chances.",
     "table.expectedEmpty": "No expected points for this league yet",
     "table.expectedEmptyHint":
-      "Expected points come from Understat, which only covers the big five. The next sync fills this table.",
+      "Expected points come from Understat, which only covers Europe's big five leagues. Cups and other competitions have no xPts feed.",
 
     "profile.title": "Profile",
     "profile.telegram": "Telegram account",
@@ -333,7 +333,8 @@ export const strings = {
     "xg.xa": "xA",
     "xg.xg90": "xG/90",
     "xg.emptyTitle": "No expected-goals data",
-    "xg.emptyHint": "Understat covers the big five, so clubs outside it have no xG feed.",
+    "xg.emptyHint":
+      "Understat covers Europe's big five leagues, so clubs and competitions outside them have no xG feed yet.",
     "xg.source": "Understat \u00b7 season totals",
     "xg.sitOpenPlay": "Open play",
     "xg.sitCorner": "From a corner",
@@ -877,7 +878,7 @@ export const strings = {
       "جدولی که موقعیت‌ها می‌گویند فصل شایسته‌اش بوده: امتیاز انتظاری هر باشگاه و فاصله‌اش با امتیاز واقعی.",
     "table.expectedEmpty": "هنوز امتیاز انتظاری برای این لیگ نیست",
     "table.expectedEmptyHint":
-      "امتیاز انتظاری از Understat می‌آید و فقط پنج لیگ برتر را پوشش می‌دهد. سینک بعدی این جدول را پر می‌کند.",
+      "امتیاز انتظاری از Understat می‌آید و فقط پنج لیگ برتر اروپا را پوشش می‌دهد. جام‌ها و مسابقات دیگر داده xPts ندارند.",
 
     "profile.title": "پروفایل",
     "profile.telegram": "حساب تلگرام",
@@ -1007,7 +1008,8 @@ export const strings = {
     "xg.xa": "xA",
     "xg.xg90": "xG/۹۰",
     "xg.emptyTitle": "داده گل انتظاری موجود نیست",
-    "xg.emptyHint": "Understat پنج لیگ برتر را پوشش می‌دهد؛ باشگاه‌های بیرون آن داده xG ندارند.",
+    "xg.emptyHint":
+      "Understat پنج لیگ برتر اروپا را پوشش می‌دهد؛ باشگاه‌ها و مسابقات بیرون آن داده xG ندارند.",
     "xg.source": "Understat \u00b7 آمار فصل",
     "xg.sitOpenPlay": "جریان بازی",
     "xg.sitCorner": "از کرنر",

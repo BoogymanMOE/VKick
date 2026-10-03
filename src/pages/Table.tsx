@@ -36,8 +36,16 @@ export default function Table() {
 
   // Expected points ride along on the standings payload (one left join
   // server-side, no extra request), and only the clubs Understat covers have
-  // them — so "no data" is a normal state here, never an error.
+  // them — so "no data" is a normal state here, never an error. Understat only
+  // scrapes the big five, so for any other league the Expected tab would open
+  // onto an empty board; in that case the tab is hidden rather than shown
+  // disabled, because a control that can never do anything is worse than an
+  // absent one.
   const hasExpected = rows.some((row) => row.xpts != null);
+  // Guard the view itself too: if it somehow renders without data (a league
+  // that gains coverage mid-session), fall back to the real table instead of
+  // a grid of dashes.
+  const showExpected = view === "expected" && hasExpected;
   // Ranked by xPts, with the uncovered clubs parked below in table order
   // (Array#sort is stable) rather than dropped or given a fake rank.
   const expectedRows = [...rows].sort((a, b) => (b.xpts ?? -1) - (a.xpts ?? -1));
@@ -131,13 +139,17 @@ export default function Table() {
               value={view}
               onChange={setView}
               className="mb-2"
-              options={[
-                { value: "actual", label: t("table.viewActual") },
-                { value: "expected", label: t("table.viewExpected") },
-              ]}
+              options={
+                hasExpected
+                  ? [
+                      { value: "actual", label: t("table.viewActual") },
+                      { value: "expected", label: t("table.viewExpected") },
+                    ]
+                  : [{ value: "actual", label: t("table.viewActual") }]
+              }
             />
 
-            {view === "expected" ? (
+            {showExpected ? (
               hasExpected ? (
                 <>
                   {/* Same shell as the real table so switching views doesn't

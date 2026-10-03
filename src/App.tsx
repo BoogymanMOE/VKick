@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { AuthProvider, RequireAuth } from "./hooks/useAuth";
 import { useFavorites } from "./hooks/useFavorites";
@@ -50,7 +50,11 @@ export default function App() {
                 route folds in the same way. */}
             <Route path="/my-teams" element={<Navigate to="/onboarding" replace />} />
             <Route path="/draft" element={<Navigate to="/onboarding" replace />} />
-            <Route path="/match/:id/shot-plotter" element={<MatchDetail />} />
+            {/* Legacy deep link: the Shot Plotter used to be its own route, then
+                moved into the Predict tab. It rendered MatchDetail bare, which
+                silently opened the Timeline instead — so point it at the tab
+                that actually holds the Shot Predictor. */}
+            <Route path="/match/:id/shot-plotter" element={<ShotPlotterRedirect />} />
             <Route path="/ratings" element={<Ratings />} />
             <Route path="/table" element={<Table />} />
             <Route path="/leaderboards" element={<Leaderboards />} />
@@ -65,6 +69,18 @@ export default function App() {
       </Routes>
     </AuthProvider>
   );
+}
+
+/**
+ * Legacy `/match/:id/shot-plotter` → `/match/:id?tab=predict`.
+ *
+ * `Navigate` does not interpolate route params (its `to` is a literal string,
+ * so `"/match/:id"` would navigate to a URL containing the characters ":id"),
+ * hence the wrapper that reads the param.
+ */
+function ShotPlotterRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/match/${id}?tab=predict`} replace />;
 }
 
 /**
