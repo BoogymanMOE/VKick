@@ -175,13 +175,27 @@ The 3-card post-match rating: each user rates exactly **3 players of their choic
 
 The **3-cards-per-match cap** (any 3 players of the user's choice) is enforced in the API, not by a unique constraint — count the user's rows for that match. Aggregate crowd rating per player = average of submitted scores across all users.
 
-### ~~`timeline_comments`~~ (cut)
-Pinned minute-comments were removed from the concept (`concept.md` non-goals). Do not create this table; the timeline renders `timeline_events` only. If social reaction ever returns, it is a product decision to record in `concept.md` first.
+### `timeline_comments` (SHIPPED — this note was stale)
+Pinned minute-comments were originally cut as a `concept.md` non-goal, but they later shipped: table, endpoints and a composer on the match Timeline tab. The code is the source of truth — `server/db/schema.ts`, `server/routes/ratings.ts` (`GET`/`POST /api/matches/:id/comments`).
+
+| Column | Type | Notes |
+|---|---|---|
+| id | int PK autoincrement | |
+| event_id | FK -> timeline_events(id) | pin to an event; NULL pins to a bare minute |
+| match_id | FK -> matches.id | NOT NULL |
+| minute_display | text | for unpinned comments |
+| minute_seconds | int | sort key for unpinned comments |
+| user_id | FK -> users.id | author |
+| text | text | NOT NULL, max 500 chars (API-enforced) |
+| media_link | text | optional https clip link |
+| created_at | text | |
+
+Either `event_id` or `minute_seconds` is supplied — a comment is pinned to a timeline event, or to a minute of the match. `match_id` is always set, which is what lets the timeline load a match's whole comment set in one query.
 
 ## Relationships summary
-- A `match` has many `match_player_stats`, `timeline_events`
+- A `match` has many `match_player_stats`, `timeline_events`, `timeline_comments`
 - A `player` belongs to a `team`, has many `match_player_stats`, `crowd_ratings`
-- A `user` has many `favorite_teams` (max 5, one `is_favorite`), `followed_leagues` (max 5), `crowd_ratings` (max 3 per match), `predictions`
+- A `user` has many `favorite_teams` (max 5, one `is_favorite`), `followed_leagues` (max 5), `crowd_ratings` (max 3 per match), `predictions`, `timeline_comments`
 
 ## Indexing notes for the agent
 - Index `favorite_teams` on `(user_id)` — the hot lookup for the home strip on every app open

@@ -2,7 +2,7 @@
 
 A Telegram Mini App football companion: follow a favorite club plus up to four more and up to five leagues from anywhere ESPN covers, predict lineups/subs/shots/standout players/head-to-heads before and during each match, climb season-long prediction leaderboards, and rate the players who mattered most with the crowd's "eye test". Full concept: `concept.md`.
 
-Competitions synced today: `eng.1`, `esp.1`, `ita.1`, `ger.1`, `fra.1`, `uefa.champions`, `uefa.europa`. The sync layer treats league slugs as config so any other ESPN-covered league can be added without code changes. Cups share ESPN's team-id space with domestic leagues, and a cup sync never overwrites a club's domestic `league`.
+Competitions synced today: **32** — the big five (`eng.1`, `esp.1`, `ita.1`, `ger.1`, `fra.1`), six more domestic leagues with real tables (`ned.1`, `por.1`, `tur.1`, `sco.1`, `gre.1`, `bel.1`), eleven club cups (the UEFA competitions plus the big five's domestic cups) and ten international tournaments. The sync layer treats league slugs as config (`server/espn/types.ts`) so any other ESPN-covered competition can be added without code changes. Cups share ESPN's team-id space with domestic leagues, and a cup sync never overwrites a club's domestic `league`.
 
 ## Architecture
 
@@ -51,6 +51,21 @@ npm run sync -- dev-token 12345     # print a dev auth token
 
 If ESPN changes a response shape, the fix goes in `server/espn/normalize.ts` and nowhere else. Every sync pass logs parse failures loudly — that's your cue to check this file against a fresh payload.
 
+## Demo data (dev only)
+
+```bash
+npm run seed:demo                        # 6 demo users, predictions, ratings, leaderboard rows
+npm run seed:demo -- --reset             # wipe the demo cohort first, then re-seed
+npm run seed:demo -- --users 10 --matches 20
+```
+
+`server/dev/seedDemoData.ts` writes through the real scoring path — points come from
+`scoreLineup` and land in the ledger via `award()` — so the demo board can never disagree with
+the real one. It attaches predictions to **synced** fixtures rather than inventing them (run
+`npm run sync` first), and mints no credentials: demo accounts are reachable only through the
+`?devUser=900001` dev-token path. `assertNotProduction()` refuses to run under
+`NODE_ENV=production`, and `--reset` deletes nothing but the `9000NN` cohort.
+
 ## Where things live
 
 | Path | What |
@@ -69,11 +84,13 @@ If ESPN changes a response shape, the fix goes in `server/espn/normalize.ts` and
 
 ## API surface
 
-Public (no auth): `GET /api/matches`, `GET /api/matches/:id`, `/lineups`, `/timeline`, `/players` (per-match stat table), `GET /api/teams` (+ `/:id` season line), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`
+Public (no auth): `GET /api/matches` (relevance window by default — live now + last 3 days of results + next 14; accepts `league`, `date`, `from`/`to` for an explicit range, and `limit`), `GET /api/matches/:id`, `/lineups`, `/timeline`, `/commentary`, `/players` (per-match stat table), `/replay`, `GET /api/teams` (+ `/:id` season line, `/:id/players`, `/:id/understat`), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`, `GET /api/competitions`
 
-Auth (Bearer = Telegram initData, or an `mg_` session token from the username path): `POST /api/auth/login`, `GET /api/me`, `GET/POST/DELETE /api/me/favorites` (max 5 clubs plus up to 5 national teams, one flagged `is_favorite` — errors are machine-readable codes), `GET/POST /api/matches/:id/ratings` (3-card cap, 1 vote per player per match, 1–10), `GET/POST /api/matches/:id/predictions` (lock enforcement per mechanic), `GET /api/me/predictions`, `GET /api/me/streak` (favorite-club streak + next threshold bonus)
+Auth (Bearer = Telegram initData, or an `mg_` session token from the username path): `POST /api/auth/login`, `GET /api/me`, `GET/POST/DELETE /api/me/favorites` (max 5 clubs plus up to 5 national teams, one flagged `is_favorite` — errors are machine-readable codes), `GET/POST /api/me/leagues` (max 5), `GET/POST /api/me/referral` (+ `/redeem`), `GET/POST /api/matches/:id/ratings` (3-card cap, 1 vote per player per match, 1–10), `GET/POST /api/matches/:id/comments`, `GET/POST /api/matches/:id/predictions` (lock enforcement per mechanic), `GET /api/me/predictions`, `GET /api/me/streak` (favorite-club streak + next threshold bonus)
 
-Admin (`ADMIN_TELEGRAM_IDS`): `POST /api/admin/sync`, `POST /api/admin/notify`
+Public leaderboards: `GET /api/leaderboards/global`, `/league/:league`, `/club/:teamId`
+
+Admin (`ADMIN_TELEGRAM_IDS`): `POST /api/admin/sync`, `POST /api/admin/sync-window`, `POST /api/admin/notify`
 
 ## Real data everywhere
 
@@ -93,9 +110,14 @@ fixtures and live scores from ESPN scoreboards, lineups/timelines/player stats f
 - Matchday notifications (`server/notifications.ts`): goal alerts, the lineup drop, the last call before kickoff, the half-time lock and the rating-window open — each claimed once per user/match/stage so the minute loop never repeats itself, and each mapped to its own Profile switch
 - Localized bot pushes (`server/messages.ts`): copy is rendered per **recipient** from `users.language`, which each device reports via `POST /api/me/language`, so the bot speaks the same language as the app
 - Pinned timeline comments: composer on the match Timeline tab (pin to an event or minute, 500 chars, optional https clip link), pins rendered under their event, comment counts surfaced, your own cards highlighted
+- Referral/invite mechanic: one reusable invite code per account, redeemable once per account, paying the referrer on the GLOBAL board only (capped per invite count) — `server/scoring/referral.ts`, surfaced in Profile with copy in both languages
+- League tables for **every** followed domestic league, not just the big five: `buildLeagueTabs` derives the Table tabs from `followed_leagues`, and `syncStandings()` sweeps `ALL_DOMESTIC` (11 leagues). Understat xPts remain big-five only, so the Expected view hides itself where there is no data rather than showing dashes
+- Inline Adsgram Task card (Telegram-only, opt-in via `VITE_ADSGRAM_TASK_BLOCK_ID`) — see the note below
 - Guest/device accounts with full merge-on-upgrade, username-only login, Telegram initData auth, admin sync/notify endpoints
 
 Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by migration) — Versus Mode is the user-chosen pair in the prediction payload.
+
+> **Corrections to older notes.** `roadmap.md` previously listed referral/invite, ads and "tables for a followed league outside the big five" as unstarted, and `data-model.md` marked `timeline_comments` as cut. All four shipped; the code was right and the docs were stale. Where the two disagree, the code wins.
 
 **No longer dormant — the server-only features have UI:**
 
@@ -103,9 +125,9 @@ Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by mi
 
 **Not started:**
 
-- Referral mechanics (Phase 4)
-- Full bracket tree for cups — round groupings exist (`matches.round` from ESPN notes, grouped on the Cups screen), but not a connected knockout tree
-- League tables for a followed league outside the big five — the tabs (`LEAGUE_TABS`) and `syncStandings()` are big-five only
+- (nothing outstanding from the original feature list — referral, ads, cup bracket trees and tables for followed leagues all shipped; see the notes below)
+
+**Knockout brackets ship too.** `src/lib/bracket.ts` builds a connected tree from ESPN's round labels — rounds ordered first-leg → final, ties folded onto their second legs, winners inferred from the scoreline, and each round's entrants linked back to the feeder matches that produced them. The Cups screen renders it whenever a competition carries round data, and falls back to the flat live/upcoming/results sections when it doesn't.
 
 (Ads: the inline **Adsgram Task card is live** on Matchday and Match detail — Telegram-only, and off entirely unless `VITE_ADSGRAM_TASK_BLOCK_ID` is set (`src/lib/ads.ts`). Rewarded/interstitial formats are deliberately unused.)
 

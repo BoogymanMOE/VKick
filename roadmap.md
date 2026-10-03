@@ -4,7 +4,7 @@ Scope: the big five leagues plus any other league ESPN covers that users can fol
 Data source: ESPN unofficial API (`site.api.espn.com/apis/site/v2/sports/soccer/{league}/...`), no key required.
 Concept: `concept.md`. Mechanics: `prediction-mechanics.md`. Scoring: `scoring-rules.md`.
 
-> **Reconciled 2026-09-29 against the code.** These boxes used to be aspirational — most of Phase 0–3 was shipped while the file still read as a plan, which is why the README calls the phase notes stale. Every `[x]` below was re-verified in the source, and items whose original wording overstated what exists have been **split** into what shipped and what is genuinely left. A `[x]` now means "in the code and reachable by a user", not "someone intended it".
+> **Reconciled 2026-09-29 against the code, re-audited 2026-10-03.** These boxes used to be aspirational — most of Phase 0–3 was shipped while the file still read as a plan, which is why the README calls the phase notes stale. Every `[x]` below was re-verified in the source, and items whose original wording overstated what exists have been **split** into what shipped and what is genuinely left. A `[x]` now means "in the code and reachable by a user", not "someone intended it".
 
 ---
 
@@ -35,7 +35,7 @@ Concept: `concept.md`. Mechanics: `prediction-mechanics.md`. Scoring: `scoring-r
 - [x] Persist `followed_leagues` (max 5, any covered ESPN slug, `LEAGUE_NOT_COVERED` for unknowns).
 - [x] Home: per-club fixture strip (live score / next kickoff / last result), anchored club first, favorites-first ordering, and the "my teams only" filter (`src/pages/Matches.tsx`).
 - [x] League tables screen: standings with the user's clubs highlighted and a summary strip that jumps to them (`src/pages/Table.tsx`).
-- [ ] **Tables for the leagues a user actually follows.** The picker is hard-wired to the big five (`TABLE_LEAGUES`) and `syncStandings()` loops `LEAGUES`, so a followed league outside the big five has no table to show. Cups correctly have none.
+- [x] **Tables for the leagues a user actually follows.** SHIPPED. `buildLeagueTabs()` (`src/lib/pickerGroups.ts`) derives the Table tabs from `followed_leagues` rather than a hard-wired big-five list, and `syncStandings()` sweeps `ALL_DOMESTIC` (11 leagues, not 5). Adding a slug to `DOMESTIC_EXTRAS` lights up the table, the picker tab and the stat boards at once. Cups correctly have none — the API returns `NO_TABLE_FOR_CUP`. (Understat xPts stay big-five only, so the Expected view hides itself where there is no data.)
 - [x] Profile / settings screens (`src/pages/Profile.tsx`): account, display name, EN/FA with RTL, notification prefs, haptics, version + what's-new.
 
 **Exit criteria met:** each user picks an anchor club + 4 more and 5 leagues, and their matches lead the feed with correct tables.
@@ -86,9 +86,9 @@ Concept: `concept.md`. Mechanics: `prediction-mechanics.md`. Scoring: `scoring-r
   - Each kind checks its own Profile switch (`PREF_COLUMN`), so muting goal alerts leaves lock reminders intact.
   - Copy is rendered per **recipient** from `users.language` (`server/messages.ts`), so the bot speaks whichever language the app is showing.
   - Covered by `tests/notifications.test.ts`, including the pre-`kind` and pre-`language` migrations.
-- [ ] Ad integration (Tapsell) at natural break points — post-pick onboarding, league tables, post-match reveal — never mid-match.
-- [ ] Referral/invite mechanic: share your club/league picks or a leaderboard link (likely the primary growth channel).
-- [ ] Bug bash / stability pass across the full loop (onboard → predict → live match → rate → check rank). `npm test` covers the pure logic (scoring, grid, formations, normalization, migrations, password) but nothing exercises the live loop end to end.
+- [x] Ad integration at natural break points, never mid-match. SHIPPED as the inline **Adsgram Task card** (`src/lib/ads.ts`) on Matchday and Match detail — Telegram-only, and it no-ops entirely unless `VITE_ADSGRAM_TASK_BLOCK_ID` is set. (Tapsell was the original intent; AdSense can't register inside a Telegram webview and Adsgram's Task block is the one inline format, so the provider changed but the placement rule held.)
+- [x] Referral/invite mechanic: SHIPPED. One reusable invite code per account (`server/scoring/referral.ts`), redeemable exactly once per account ever, paying the referrer `POINTS.referral.perInvite` on the GLOBAL board only and capped at `maxPaidInvites` — recorded through the same ledger as everything else, so idempotency and the tiebreak come for free. Surfaced in Profile with EN + FA copy.
+- [ ] Bug bash / stability pass across the full loop (onboard → predict → live match → rate → check rank). `npm test` covers the pure logic (scoring, grid, formations, normalization, migrations, password, notifications, season, retention, the feed window) but nothing exercises the live loop end to end.
 - [x] Leaderboard season-reset tested against a synthetic boundary — `tests/season.test.ts` inserts the finished season's last fixture and the new season's opener and drives `rollSeasonIfNeeded` across the flip; the Shot Predictor's leniency rules (`lenientSoT` exact-+2 cap, adjacency-only) are pinned in `tests/predictionScore.test.ts`.
 
 **Exit criteria:** a stranger could sign up via a shared Telegram link and understand what to do within a minute or two, unassisted.
@@ -112,14 +112,22 @@ Concept: `concept.md`. Mechanics: `prediction-mechanics.md`. Scoring: `scoring-r
 
 ## Two risks to actively manage throughout, not just at the end
 
-1. **ESPN's API is unofficial.** The manual-override fallback from Phase 0 must actually stay wired up, not get skipped for speed — it is (`npm run sync` CLI + `/api/admin/*`). Re-check response shapes periodically: "any league ESPN covers" multiplies the normalization layer's surface area every time someone follows an untested league, and the catalog now covers 26 competitions instead of 14.
+1. **ESPN's API is unofficial.** The manual-override fallback from Phase 0 must actually stay wired up, not get skipped for speed — it is (`npm run sync` CLI + `/api/admin/*`). Re-check response shapes periodically: "any league ESPN covers" multiplies the normalization layer's surface area every time someone follows an untested league, and the catalog now covers 32 competitions instead of 14.
 2. **The engagement bets are unproven.** If any single mechanic, the leaderboard loop, or the 3-card ratings show near-zero engagement after a full matchday cycle with real users, don't sink Phase 4–5 polish time into features nobody's touching — cut back to the following core (clubs, leagues, fixtures, tables).
 
 ---
 
 ## Surrounding docs that have drifted
 
-Found while reconciling this file; left alone deliberately, but they contradict the code:
+Reconciled again on 2026-10-03, after an audit of the code against the docs. Both files below now agree with the source:
 
-- **`data-model.md`** still marks `timeline_comments` as `~~cut~~`, but pinned timeline comments shipped (table + endpoints + composer). Same file may predate other additions listed in Phase 0.
-- **`README.md`** lists the prediction history and breakdown payloads as "Dormant — built on the server, no UI yet" and calls the phase notes stale; the first half of that is no longer true now that the panel renders, so the README should be read against this file rather than independently.
+- **`data-model.md`** marked `timeline_comments` as `~~cut~~`; pinned timeline comments shipped (table + endpoints + composer). Corrected, with the real column set.
+- **`README.md`** claimed 7 synced competitions (the catalog is 32), listed referral and "tables for a followed league outside the big five" as not started (both shipped), described the cup bracket as unbuilt (`src/lib/bracket.ts` builds a connected tree), and under-documented the API surface. All corrected.
+
+**Standing rule:** where a doc and the code disagree, the code wins. A `[x]` here means "in the code and reachable by a user".
+
+---
+
+## Dev-only tooling
+
+- [x] Demo dataset (`npm run seed:demo`, `server/dev/seedDemoData.ts`). Six `Demo User NN` accounts with predictions, crowd ratings and leaderboard totals, so a fresh checkout has a populated Profile, a non-empty "my predictions" and a board with more than one name on it. It scores through `scoreLineup` and awards through `award()` — the demo board cannot drift from the real one — and it attaches predictions to synced fixtures instead of inventing teams or athletes. `assertNotProduction()` refuses to run under `NODE_ENV=production`; the script mints no credentials, so demo accounts are reachable only via `?devUser=900001`. `--reset` deletes the `9000NN` cohort and nothing else.
