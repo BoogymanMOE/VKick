@@ -64,8 +64,16 @@ export function assertNotProduction(env: Record<string, string | undefined>): vo
 
 /** Demo telegram ids start here — the `--reset` sweep keys off this range. */
 export const DEMO_TELEGRAM_ID_BASE = 900001;
-/** Upper bound of the demo id range, exclusive. */
-export const DEMO_TELEGRAM_ID_END = DEMO_TELEGRAM_ID_BASE + 100;
+/**
+ * Upper bound of the demo id range, exclusive.
+ *
+ * Wide enough that the cohort can exceed 100 users: own-rank-beyond-the-page
+ * only means anything on a board longer than the page limit, and a 100-id range
+ * made `--users 120` impossible to test.
+ */
+export const DEMO_TELEGRAM_ID_END = DEMO_TELEGRAM_ID_BASE + 1000;
+/** Cohort ceiling. Generous, but bounded so a typo cannot write 10k rows. */
+export const DEMO_USER_MAX = 500;
 
 /**
  * The synthetic cohort. Ids are consecutive so `--reset` can find them with one
@@ -76,7 +84,7 @@ export const DEMO_TELEGRAM_ID_END = DEMO_TELEGRAM_ID_BASE + 100;
  * real traffic in a screenshot, and the point of the seed is to be obviously fake.
  */
 export function planDemoUsers(count: number): Array<{ telegramId: string; displayName: string }> {
-  const n = Math.max(1, Math.min(20, Math.trunc(Number.isFinite(count) ? count : 1)));
+  const n = Math.max(1, Math.min(DEMO_USER_MAX, Math.trunc(Number.isFinite(count) ? count : 1)));
   return Array.from({ length: n }, (_, i) => ({
     telegramId: String(DEMO_TELEGRAM_ID_BASE + i),
     displayName: `Demo User ${i + 1}`,
@@ -141,6 +149,21 @@ function mulberry32(seed: number): () => number {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/**
+ * A crowd rating drawn from a bell around 7, over the full 1..10 range.
+ *
+ * The rating histogram is grouped into 10 integer buckets and rendered as a
+ * real distribution, so a seed that only ever emits 6..9 leaves four buckets
+ * permanently empty and the chart looks broken. This one gives every bucket a
+ * realistic chance of being hit while still clustering the way real fan
+ * ratings do.
+ */
+const RATING_POOL = [2, 3, 4, 4, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 10];
+
+export function demoRating(rng: () => number): number {
+  return RATING_POOL[Math.min(RATING_POOL.length - 1, Math.floor(rng() * RATING_POOL.length))] as number;
 }
 
 /* ------------------------------------------------------------ db helpers */
@@ -443,9 +466,15 @@ export function seedDemoData(db: DatabaseSync, opts: SeedOptions = {}): SeedRepo
         }
       }
 
-      // Crowd ratings on real players of a real finished match — cosmetic, so
+      // Crowd ratings on real players of real finished matches — cosmetic, so
       // they never reach the ledger (scoring-rules.md §8 firewall).
-      for (const match of finished.slice(idx, idx + 2)) {
+      //
+      // Round-robin rather than slice(idx, idx+2): with a cohort larger than
+      // the match list, indexing by user left every user past the end with
+      // nothing, and the rating distribution — which is grouped PER MATCH and
+      // hidden below MIN_VOTES_TO_SHOW — stayed too sparse to render at all.
+      for (let k = 0; k < 2; k++) {
+        const match = finished[(idx + k) % finished.length]!;
         const players = all<PlayerRow>(
           db,
           `SELECT p.id FROM match_player_stats s
@@ -461,7 +490,7 @@ export function seedDemoData(db: DatabaseSync, opts: SeedOptions = {}): SeedRepo
               `INSERT INTO crowd_ratings (user_id, player_id, match_id, rating, comment, created_at)
                VALUES (?, ?, ?, ?, ?, ?)
                ON CONFLICT(user_id, player_id, match_id) DO NOTHING`,
-              [userId, p.id, match.id, 6 + Math.floor(rng() * 4), "Held his shape all afternoon.", match.kickoff_at],
+              [userId, p.id, match.id, demoRating(rng), "Held his shape all afternoon.", match.kickoff_at],
             )
           ) {
             report.ratings++;

@@ -14,8 +14,11 @@ import { DatabaseSync } from "node:sqlite";
 import { migrate } from "../server/db/schema.js";
 import {
   DEMO_TELEGRAM_ID_BASE,
+  DEMO_TELEGRAM_ID_END,
+  DEMO_USER_MAX,
   assertNotProduction,
   correctStarterCount,
+  demoRating,
   mixLineup,
   planDemoUsers,
   seedDemoData,
@@ -47,14 +50,21 @@ export function runSeedDemoTests(): void {
   for (const u of cohort) {
     const n = Number(u.telegramId);
     assert.ok(Number.isInteger(n));
-    assert.ok(n >= DEMO_TELEGRAM_ID_BASE && n < DEMO_TELEGRAM_ID_BASE + 100);
+    assert.ok(n >= DEMO_TELEGRAM_ID_BASE && n < DEMO_TELEGRAM_ID_END);
     assert.match(u.displayName, /^Demo User \d+$/, "demo names must be obviously fake");
   }
   // Clamped, and rubbish input does not produce an empty or infinite cohort.
   assert.equal(planDemoUsers(0).length, 1);
   assert.equal(planDemoUsers(-5).length, 1);
-  assert.equal(planDemoUsers(999).length, 20);
+  assert.equal(planDemoUsers(99999).length, DEMO_USER_MAX);
   assert.equal(planDemoUsers(Number.NaN).length, 1);
+  // A cohort must be able to exceed one leaderboard page, or own-rank beyond
+  // the top 100 can never be exercised with demo data.
+  assert.ok(planDemoUsers(120).length === 120, "120 users must be seedable");
+  assert.ok(
+    Number(planDemoUsers(120).at(-1)!.telegramId) < DEMO_TELEGRAM_ID_END,
+    "every demo id must fall inside the --reset range",
+  );
 
   /* ---------------------------------------------------- lineup mixing */
 
@@ -96,6 +106,23 @@ export function runSeedDemoTests(): void {
   // Out-of-range / junk skill degrades to the middle rather than going wild.
   assert.equal(correctStarterCount(Number.NaN, () => 0), 2);
   assert.equal(correctStarterCount(99, () => 1), 11);
+
+  /* ---------------------------------------------------- rating histogram shape */
+
+{
+    // The seed exists to make the rating histogram renderable, so it must not
+    // collapse into a handful of buckets: the chart groups 1..10 and a seed
+    // emitting only 6..9 leaves most of it permanently flat.
+    const seen = new Set<number>();
+    for (let i = 0; i < 4000; i++) seen.add(demoRating(mulberry(i)));
+    assert.ok(seen.size >= 7, `rating pool too narrow: ${[...seen].sort((a, b) => a - b).join(",")}`);
+    for (const v of seen) assert.ok(v >= 1 && v <= 10, `rating out of range: ${v}`);
+    // Still bell-shaped: the middle of the scale must dominate.
+    const mid = [...seen].filter((v) => v >= 6 && v <= 8).length;
+    assert.ok(mid >= 3, "ratings should cluster in the middle of the scale");
+    // Deterministic: the same seed reproduces the same board.
+    assert.equal(demoRating(mulberry(7)), demoRating(mulberry(7)));
+  }
 
   /* ---------------------------------------------------- end-to-end (temp db) */
 
@@ -166,6 +193,21 @@ export function runSeedDemoTests(): void {
     db2.close();
     fs.rmSync(dir2, { recursive: true, force: true });
   }
+
+  console.log(
+    "  seedDemo: production refusal, cohort clamps, lineups, ledger reconciliation, rating histogram, reset safety OK",
+  );
+}
+
+/** Tiny deterministic RNG so the histogram assertions are reproducible. */
+function mulberry(i: number): () => number {
+  let a = i >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 /* ------------------------------------------------------------ fixtures */
