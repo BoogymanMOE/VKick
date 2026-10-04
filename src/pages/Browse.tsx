@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { CompRowSkeleton } from "../components/Skeletons";
+import { ChevronRightIcon } from "../components/icons";
 import { Chip, Num, SectionHeading, cx } from "../components/ui";
 import { useCompetitions } from "../hooks/useApi";
 import { useI18n } from "../i18n/I18nProvider";
@@ -139,9 +140,7 @@ export default function Browse() {
                           {soon ? (
                             <Chip tone="muted">{t("browse.soon")}</Chip>
                           ) : (
-                            <span className="text-ink-3" aria-hidden="true">
-                              ›
-                            </span>
+                            <ChevronRightIcon className="text-ink-3" />
                           )}
                         </Wrapper>
                       </li>

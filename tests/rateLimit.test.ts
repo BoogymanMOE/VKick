@@ -16,7 +16,7 @@ import os from "node:os";
 import path from "node:path";
 import type { AddressInfo } from "node:net";
 import express from "express";
-import { getDb, run, get } from "../server/db/index.js";
+import { closeDb, getDb, run, get } from "../server/db/index.js";
 import { rateLimit } from "../server/auth/rateLimit.js";
 
 /** Rate limit presets, mirrored so the assertions track the real numbers. */
@@ -177,8 +177,10 @@ export async function runRateLimitTests(): Promise<void> {
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-rl-"));
   const previousDb = process.env.SQLITE_PATH;
+  // getDb() caches one handle for the whole process, so a suite that already
+  // pointed SQLITE_PATH elsewhere would hand back its (closed) handle here.
+  closeDb();
   process.env.SQLITE_PATH = path.join(dir, "ratings.db");
-  let handle: ReturnType<typeof getDb> | null = null;
   try {
     // Imported AFTER SQLITE_PATH is set: these modules call getDb() at module
     // scope, so a stale path here would point the suite at the dev database.
@@ -193,7 +195,6 @@ export async function runRateLimitTests(): Promise<void> {
       // A real session so requireUser passes: this exercises the real chain
       // (requireUser → writeLimiter → handler) rather than a stand-in.
       const db = getDb();
-      handle = db;
       const now = new Date().toISOString();
       run(db, "INSERT INTO users (telegram_id, display_name, created_at) VALUES ('999999', 'Rate Test', ?)", [
         now,
@@ -253,11 +254,7 @@ export async function runRateLimitTests(): Promise<void> {
     else process.env.SQLITE_PATH = previousDb;
     // getDb() caches its handle for the process, and Windows refuses to delete
     // an open file. Close it first, then sweep; never let cleanup fail the suite.
-    try {
-      handle?.close();
-    } catch {
-      /* already closed */
-    }
+    closeDb();
     try {
       fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
     } catch {

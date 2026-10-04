@@ -79,18 +79,10 @@ export default function Ratings() {
           />
         </div>
       ) : (
-        <MatchRatings
-          matchId={openMatch.id}
-          match={toRawMatch(openMatch)}
-          league={openMatch.home.league}
-        />
+        <MatchRatings matchId={openMatch.id} match={openMatch} league={openMatch.home.league} />
       )}
     </>
   );
-}
-
-function toRawMatch(m: NonNullable<ReturnType<typeof useMatches>["data"]>[number]) {
-  return m;
 }
 
 function MatchRatings({

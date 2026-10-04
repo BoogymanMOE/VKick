@@ -8,7 +8,6 @@ import { MatchCardSkeleton } from "../components/Skeletons";
 import { TopBar } from "../components/TopBar";
 import { useToast } from "../components/Toast";
 import {
-  Button,
   Card,
   Chip,
   CollapsibleSection,
@@ -26,8 +25,9 @@ import { useI18n } from "../i18n/I18nProvider";
 import { formatClock, formatKickoff } from "../lib/format";
 import { LEAGUE_BY_SLUG } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
-import { BallIcon, RefreshIcon, StarFilledIcon } from "../components/icons";
+import { BallIcon, ChartIcon, ChevronRightIcon, RefreshIcon, StarFilledIcon } from "../components/icons";
 import { TaskAdCard } from "../components/TaskAdCard";
+import { PullIndicator, usePullToRefresh } from "../components/PullToRefresh";
 import type { Match, Team } from "../types";
 
 export default function Matches() {
@@ -80,19 +80,25 @@ export default function Matches() {
   // pre-onboarding. Results live in the team rows — no separate FT section.
   const capGeneral = favCount > 0 && !league && leagueFilter === null;
   const upcoming = organize(upcoming0).sort(soonestFirst);
-  const upcomingShown = capGeneral ? upcoming.slice(0, 6) : upcoming;
+  // Tighter cap on a matchday: with live games on screen the feed should fit
+  // live + your teams in one viewport, and the rest is one disclosure away.
+  const upcomingShown = capGeneral ? upcoming.slice(0, live.length > 0 ? 4 : 6) : upcoming;
   // Recent results, newest kickoff first — the sections above sort favorites up.
   const finished = organize(finished0).sort(newestFirst).slice(0, 12);
 
   // One context per favorite club: live now, else next kickoff, else last
   // result. The anchor club leads the rows.
-  const teamRows = useMemo(
-    () =>
-      [...favTeams]
-        .sort((a, b) => Number(b.id === anchorId) - Number(a.id === anchorId))
-        .map((team) => ({ team, context: clubContext(team.id, allMatches) })),
-    [favTeams, anchorId, allMatches],
-  );
+  const teamRows = useMemo(() => {
+    // A fixture the Live section already carries is dropped here. The same
+    // game printed twice on one screen reads as two games, and the rows are
+    // meant to answer "what's next for my clubs", not repeat what is on now
+    // (PRODUCT.md rule 1: the live moment gets the stage to itself).
+    const liveIds = new Set(live.map((match) => match.id));
+    return [...favTeams]
+      .sort((a, b) => Number(b.id === anchorId) - Number(a.id === anchorId))
+      .map((team) => ({ team, context: clubContext(team.id, allMatches) }))
+      .filter(({ context }) => !(context.live && liveIds.has(context.live.id)));
+  }, [favTeams, anchorId, allMatches, live]);
 
   // Goal detection: when a refetch brings a new score for a match, fire the
   // volt sweep + toast. The server polls ESPN every minute; this picks that up.
@@ -107,6 +113,9 @@ export default function Matches() {
     if (!seeded.current) {
       scoreRef.current = incoming;
       seeded.current = true;
+      // The first successful fetch counts as a sync, so the feed can say when
+      // it was last updated before any score has changed.
+      setLastSync(new Date());
       return;
     }
     for (const [id, score] of incoming) {
@@ -145,12 +154,19 @@ export default function Matches() {
     });
   }
 
+  // Pull down from the top of the feed to resync: the gesture this screen's
+  // users expect on a live-score view. The TopBar icon stays as the equivalent
+  // for keyboard and screen-reader users, so this is an addition, never the
+  // only path.
+  const pull = usePullToRefresh(refresh, !refreshing);
+
   // PRODUCT.md rule 1: the live moment leads the screen. Collapsible so a
   // quiet matchday can be folded away to leave more room for the feed below;
   // the pulsing dot keeps the folded header honest while games are running.
   const liveSection = (
     <CollapsibleSection
       id="matches-live"
+      level={2}
       title={t("matches.live")}
       count={live.length}
       collapsedBadge={
@@ -162,22 +178,15 @@ export default function Matches() {
         ) : null
       }
     >
-      {matchesQuery.isLoading ? (
-        <ul className="space-y-2">
-          <MatchCardSkeleton />
-          <MatchCardSkeleton />
-        </ul>
-      ) : matchesQuery.isError ? (
-        <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => matchesQuery.refetch()} />
-      ) : live.length > 0 ? (
-        <ul className="space-y-2">
-          {live.map((match) => (
-            <MatchCard key={match.id} match={match} flash={flashId === match.id} />
-          ))}
-        </ul>
-      ) : (
-        <EmptyState title={t("matches.empty")} hint={t("matches.emptyHint")} />
-      )}
+      {/* The section only mounts when a game is actually running (see the
+          render site), so a skeleton or an empty state inside it could never
+          fire: while the feed loads there is simply no Live section yet, and
+          a quiet matchday gets no header at all. */}
+      <ul className="space-y-2">
+        {live.map((match) => (
+          <MatchCard key={match.id} match={match} flash={flashId === match.id} />
+        ))}
+      </ul>
     </CollapsibleSection>
   );
 
@@ -203,160 +212,137 @@ export default function Matches() {
         }
       />
 
-      {/* Followed leagues: one tap re-scopes the whole feed (concept pillar 1). */}
-      {!league && followed.count > 0 ? (
-        <div className="-mx-3 mt-3 flex gap-1.5 overflow-x-auto px-3 pb-1">
-          <button
-            type="button"
-            onClick={() => {
-              haptic("light");
-              setLeagueFilter(null);
-            }}
-            aria-pressed={leagueFilter === null}
-            className={cx(
-              "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
-              leagueFilter === null ? "border-volt text-volt" : "border-line text-ink-3",
-            )}
-          >
-            {t("browse.all")}
-          </button>
-          {followed.leagues.map((l) => (
+      {/* Everything below sits under the sticky header. The wrapper gives the
+          pull-to-refresh marker an anchor so it slides in between header and
+          feed instead of fighting the header for the same band. */}
+      <div className="relative">
+        <PullIndicator pull={pull} />
+
+        {/* Followed leagues: one tap re-scopes the whole feed (concept pillar 1). */}
+        {!league && followed.count > 0 ? (
+          <div className="-mx-3 mt-3 flex gap-1.5 overflow-x-auto px-3 pb-1">
             <button
-              key={l.league}
               type="button"
               onClick={() => {
                 haptic("light");
-                setLeagueFilter(l.league);
+                setLeagueFilter(null);
               }}
-              aria-pressed={leagueFilter === l.league}
+              aria-pressed={leagueFilter === null}
               className={cx(
                 "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
-                leagueFilter === l.league ? "border-volt text-volt" : "border-line text-ink-3",
+                leagueFilter === null ? "border-volt text-volt" : "border-line text-ink-3",
               )}
             >
-              {l.name ?? l.league}
+              {t("browse.all")}
             </button>
-          ))}
-        </div>
-      ) : null}
+            {followed.leagues.map((l) => (
+              <button
+                key={l.league}
+                type="button"
+                onClick={() => {
+                  haptic("light");
+                  setLeagueFilter(l.league);
+                }}
+                aria-pressed={leagueFilter === l.league}
+                className={cx(
+                  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
+                  leagueFilter === l.league ? "border-volt text-volt" : "border-line text-ink-3",
+                )}
+              >
+                {l.name ?? l.league}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
-      {/* Single-league deep link: name the scope, let the user leave. Without
+        {/* Single-league deep link: name the scope, let the user leave. Without
           this the screen looks like a broken feed when the window is quiet. */}
-      {league ? (
-        <div className="mt-3 flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-3 py-2">
-          <p className="min-w-0 truncate text-xs text-ink-2">
-            {t("matches.leagueScope", {
-              league: LEAGUE_BY_SLUG[league] ? t(`league.${LEAGUE_BY_SLUG[league]}`) : league,
-            })}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              haptic("light");
-              navigate("/matches");
-            }}
-            className="inline-flex min-h-11 flex-none items-center rounded-full border border-volt px-3 text-[11px] font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-          >
-            {t("matches.showAll")}
-          </button>
-        </div>
-      ) : null}
+        {league ? (
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-3 py-2">
+            <p className="min-w-0 truncate text-xs text-ink-2">
+              {t("matches.leagueScope", {
+                league: LEAGUE_BY_SLUG[league] ? t(`league.${LEAGUE_BY_SLUG[league]}`) : league,
+              })}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                haptic("light");
+                navigate("/matches");
+              }}
+              className="inline-flex min-h-11 flex-none items-center rounded-full border border-volt px-3 text-[11px] font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+            >
+              {t("matches.showAll")}
+            </button>
+          </div>
+        ) : null}
 
-      {/* The picks feed, one row per favorite club: live game, else next
+        {/* The picks feed, one row per favorite club: live game, else next
           fixture, else last result. Five rows max, anchor first — the whole
           answer to "what are my teams doing" without a card flood. */}
-      {!league && favCount > 0 ? (
-        <section className="mt-3">
-          <SectionHeading
-            title={t("matches.myTeams")}
-            action={
-              <Chip tone="volt">
-                <StarFilledIcon className="me-1 inline-block h-3 w-3 align-[-1px]" />
-                <Num>{favCount}</Num>
-              </Chip>
-            }
-          />
-          {matchesQuery.isLoading ? (
-            <ul className="space-y-2">
-              <MatchCardSkeleton />
-              <MatchCardSkeleton />
-            </ul>
-          ) : matchesQuery.isError ? (
-            <ErrorState
-              title={t("error.title")}
-              hint={t("error.hint")}
-              onRetry={() => matchesQuery.refetch()}
+        {/* Live leads (product principle 1): whenever a game is running it is the
+          first thing on screen, above every other block. Collapsible so a quiet
+          matchday can fold it away; the pulsing badge keeps the folded header
+          honest while games are running. */}
+        {live.length > 0 ? liveSection : null}
+
+        {!league && favCount > 0 && teamRows.length > 0 ? (
+          <section className="mt-3">
+            <SectionHeading
+              title={t("matches.myTeams")}
+              action={
+                <Chip tone="volt">
+                  <StarFilledIcon className="me-1 inline-block h-3 w-3 align-[-1px]" />
+                  <Num>{favCount}</Num>
+                </Chip>
+              }
             />
-          ) : (
-            <ul className="space-y-2">
-              {teamRows.map(({ team, context }) => (
-                <TeamRow key={team.id} team={team} context={context} anchored={team.id === anchorId} />
-              ))}
-            </ul>
-          )}
-        </section>
-      ) : null}
+            {matchesQuery.isLoading ? (
+              <ul className="space-y-2">
+                <MatchCardSkeleton />
+                <MatchCardSkeleton />
+              </ul>
+            ) : matchesQuery.isError ? (
+              <ErrorState
+                title={t("error.title")}
+                hint={t("error.hint")}
+                onRetry={() => matchesQuery.refetch()}
+              />
+            ) : (
+              <ul className="space-y-2">
+                {teamRows.map(({ team, context }) => (
+                  <TeamRow key={team.id} team={team} context={context} anchored={team.id === anchorId} />
+                ))}
+              </ul>
+            )}
+          </section>
+        ) : null}
 
-      {/* No favorites yet: one clear call to pick them. The picks feed above
+        {/* No favorites yet: one clear call to pick them. The picks feed above
           takes over once a team is saved. */}
-      {favCount === 0 ? (
-        <Card className="pitch-watermark mt-3 flex items-center justify-between gap-3 p-3">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-ink">{t("myTeams.empty")}</p>
-            <p className="mt-0.5 text-xs text-ink-3">{t("myTeams.hint")}</p>
-          </div>
-          <Link
-            to="/onboarding"
-            className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-sm font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
-          >
-            {t("matches.pickTeams")}
-          </Link>
-        </Card>
-      ) : null}
+        {favCount === 0 ? (
+          <Card className="pitch-watermark mt-3 flex items-center justify-between gap-3 p-3">
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-ink">{t("myTeams.empty")}</p>
+              <p className="mt-0.5 text-xs text-ink-3">{t("myTeams.hint")}</p>
+            </div>
+            <Link
+              to="/onboarding"
+              className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-sm font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
+            >
+              {t("matches.pickTeams")}
+            </Link>
+          </Card>
+        ) : null}
 
-      {/* The live moment leads the general feed (product principle 1); the
-          picks feed above already carries the favorite clubs' live games. */}
-      {live.length > 0 ? liveSection : null}
-
-      {/* General upcoming feed, capped with picks saved so the page stays a
+        {/* General upcoming feed, capped with picks saved so the page stays a
           glance, not a scroll. Results live in the team rows above. */}
-      <CollapsibleSection
-        id="matches-upcoming"
-        title={t("matches.upcoming")}
-        count={upcoming0.length}
-        defaultOpen
-      >
-        {matchesQuery.isLoading ? (
-          <ul className="space-y-2">
-            <MatchCardSkeleton />
-          </ul>
-        ) : matchesQuery.isError ? (
-          <ErrorState
-            title={t("error.title")}
-            hint={t("error.hint")}
-            onRetry={() => matchesQuery.refetch()}
-          />
-        ) : upcomingShown.length > 0 ? (
-          <ul className="space-y-2">
-            {upcomingShown.map((match) => (
-              <MatchCard key={match.id} match={match} />
-            ))}
-          </ul>
-        ) : (
-          <EmptyState title={t("matches.empty")} hint={t("matches.emptyHint")} />
-        )}
-      </CollapsibleSection>
-
-      {/* Previous results beneath the feed: folded away by default so the
-          matchday page leads with what's next; open when the score is wanted.
-          Hidden entirely until there is a result — an always-empty disclosure
-          is noise, not navigation. */}
-      {finished.length > 0 || matchesQuery.isLoading || matchesQuery.isError ? (
         <CollapsibleSection
-          id="matches-previous"
-          title={t("matches.previous")}
-          count={finished0.length}
-          defaultOpen={false}
+          id="matches-upcoming"
+          level={2}
+          title={t("matches.upcoming")}
+          count={upcoming0.length}
+          defaultOpen
         >
           {matchesQuery.isLoading ? (
             <ul className="space-y-2">
@@ -368,26 +354,82 @@ export default function Matches() {
               hint={t("error.hint")}
               onRetry={() => matchesQuery.refetch()}
             />
-          ) : (
+          ) : upcomingShown.length > 0 ? (
             <ul className="space-y-2">
-              {finished.map((match) => (
+              {upcomingShown.map((match) => (
                 <MatchCard key={match.id} match={match} />
               ))}
             </ul>
+          ) : (
+            <EmptyState title={t("matches.empty")} hint={t("matches.emptyHint")} />
           )}
         </CollapsibleSection>
-      ) : null}
 
-      <div className="mt-6 grid place-items-center">
-        <Button variant="ghost" className="text-xs" onClick={refresh} disabled={refreshing}>
-          {t("matches.refresh")}
-          {lastSync ? ` Â· ${formatClock(lastSync, locale)}` : ""}
-        </Button>
-      </div>
+        {/* Previous results beneath the feed: folded away by default so the
+          matchday page leads with what's next; open when the score is wanted.
+          Hidden entirely until there is a result — an always-empty disclosure
+          is noise, not navigation. */}
+        {finished.length > 0 || matchesQuery.isLoading || matchesQuery.isError ? (
+          <CollapsibleSection
+            id="matches-previous"
+            level={2}
+            title={t("matches.previous")}
+            count={finished0.length}
+            defaultOpen={false}
+          >
+            {matchesQuery.isLoading ? (
+              <ul className="space-y-2">
+                <MatchCardSkeleton />
+              </ul>
+            ) : matchesQuery.isError ? (
+              <ErrorState
+                title={t("error.title")}
+                hint={t("error.hint")}
+                onRetry={() => matchesQuery.refetch()}
+              />
+            ) : (
+              <ul className="space-y-2">
+                {finished.map((match) => (
+                  <MatchCard key={match.id} match={match} />
+                ))}
+              </ul>
+            )}
+          </CollapsibleSection>
+        ) : null}
 
-      {/* Inline sponsored card (Adsgram Task) — Telegram only, hidden when
+        {/* Sync note, not a second refresh button: pull-to-refresh and the
+          TopBar icon already carry the action, so this line only reports it. */}
+        <p className="mt-6 text-center text-[11px] text-ink-3">
+          {t("matches.hint")}
+          {lastSync ? ` · ${t("matches.lastSync", { time: formatClock(lastSync, locale) })}` : ""}
+        </p>
+
+        {/* The payoff for every pick: the resolver's own line items, so a "+3"
+          on the boards has a receipt behind it. It used to be reachable only
+          from a row inside Profile, which put the reward end of the loop two
+          taps deep in the wrong tab. */}
+        <Link
+          to="/predictions"
+          className="mt-3 flex items-center gap-2 rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+        >
+          <span
+            className="grid h-8 w-8 flex-none place-items-center rounded-full border border-volt text-volt"
+            style={{ backgroundColor: "color-mix(in srgb, var(--volt) 12%, transparent)" }}
+            aria-hidden="true"
+          >
+            <ChartIcon className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-xs font-bold text-ink">{t("predictions.title")}</span>
+            <span className="block text-[11px] text-ink-3">{t("predictions.subtitle")}</span>
+          </span>
+          <ChevronRightIcon className="flex-none text-ink-3" />
+        </Link>
+
+        {/* Inline sponsored card (Adsgram Task) — Telegram only, hidden when
           nothing fills; see src/lib/ads.ts for the whole story. */}
-      <TaskAdCard />
+        <TaskAdCard />
+      </div>
     </>
   );
 }

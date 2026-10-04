@@ -2,6 +2,37 @@
 
 ## Unreleased (player-visible — goes into WHATS_NEW)
 
+### First run & navigation
+
+- **The intro is one screen, not three.** A first-timer used to step through
+  three intro slides and then three picker steps before seeing a fixture. The
+  three ideas are now a single scannable list on one screen, so it is four
+  screens to the first fixture instead of six.
+- **Trailing chevrons now point the right way, and mirror in Persian.** The
+  cards that open Predictions, Replay, Ratings and Player Stats were drawing a
+  left-pointing chevron as a forward affordance in English (and a right-pointing
+  one in Persian); the Browse competition rows' `›` never flipped. They all use
+  one end-edge chevron that flips in RTL, matching the Profile rows.
+- **Three more bits of copy are localized.** The club-picker tab strip's label
+  (announced to screen readers), the tables' gameweek count, and the Profile
+  version line's "Telegram Mini App" / "Web" now read in the user's language
+  instead of English-only.
+
+### Boards & Browse
+
+- **Your standing now leads the leaderboard.** The boards opened on a list of
+  strangers; the viewer's own rank and points, when they have any, now sit at
+  the top of the board as a summary line, above the top-100 page. The
+  below-page "you" row was folded into it, so you can no longer appear twice.
+- **Browse no longer lists a promoted league twice.** Eredivisie, Liga
+  Portugal, Süper Lig and the Scottish Premiership had stayed in the
+  browse-only "coming soon" list after their fixtures and tables shipped, so
+  each rendered twice on Browse — once as "live scores", once as "not in your
+  feed yet", under a duplicate key. A slug now belongs to exactly one list.
+- **A club's Season tab reads honestly when there's nothing to show.** "Season
+  stats not built yet" is now "No season stats yet"; the feature is done, the
+  data simply has not arrived.
+
 ### Cups & internationals
 
 - **International tournaments are now selectable in the Cups screen.** The
@@ -38,6 +69,18 @@
 
 ### Code health
 
+- **Dead client mirrors of the server catalog removed.** `useApi.ts` exported
+  `LEAGUE_TABS`, `CUP_SLUGS`, `TOURNAMENT_SLUGS`, `isCupSlug`, `LEAGUE_SLUGS`
+  and `CompetitionRow`, none of which had a caller: they duplicated the server
+  catalog (`server/espn/types.ts`) and would drift the moment a competition was
+  promoted. The one identity helper `toRawMatch` in `Ratings.tsx` is gone too.
+- **The competitions catalog is a tested pure module.** `competitionCatalog()`
+  (`server/espn/catalog.ts`) builds the Browse list from `COMPETITIONS` plus the
+  browse-only extras and dedupes by slug, and `tests/competitions.test.ts`
+  pins the invariant that broke once: the two source lists are disjoint, every
+  competition advertised as synced is actually in `LEAGUES_ALL`, and extras are
+  always `comingSoon` with no table. `/api/competitions` now calls it instead
+  of rebuilding the merge inline.
 - **`server/index.ts` split into route modules.** One module per domain under
   `server/routes/` (`auth`, `me`, `football`, `predictions`, `ratings`,
   `leaderboards`, `admin`) with shared plumbing in `server/routes/shared.ts`;

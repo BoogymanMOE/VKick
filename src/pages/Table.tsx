@@ -112,7 +112,9 @@ export default function Table() {
           title={tabLabel(active)}
           action={
             standingsQuery.data?.length ? (
-              <span className="text-[11px] text-ink-3">{standingsQuery.data[0]?.played ?? 0} GW</span>
+              <span className="text-[11px] text-ink-3">
+                {t("table.gw", { gw: standingsQuery.data[0]?.played ?? 0 })}
+              </span>
             ) : null
           }
         />

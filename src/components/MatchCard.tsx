@@ -7,7 +7,7 @@ import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
 import { ScoreOdometer } from "./ScoreOdometer";
 import { Chip, LiveDot, Num, PredictionIcons, TeamBadge, cx } from "./ui";
-import { PlayIcon, StarFilledIcon } from "./icons";
+import { StarFilledIcon, TargetIcon } from "./icons";
 
 function StatusChip({ match }: { match: Match }) {
   const { t, lang } = useI18n();
@@ -54,52 +54,63 @@ export const MatchCard = memo(function MatchCard({
 
   return (
     <li>
-      <Link
-        to={`/match/${match.id}`}
-        onPointerDown={() => prefetchMatch(match.id)}
+      {/* One transparent hit area covers the card body, so "tap anywhere opens
+          the match" survives while the deadline link in the footer can sit
+          above it as its own target (stretched-link pattern). The overlay is
+          z-0 and the pick link z-10, both below the sticky header's z-20, so a
+          card scrolling under the header never paints over it. */}
+      <div
         className={cx(
-          "relative block overflow-hidden rounded-card border p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated",
+          "relative overflow-hidden rounded-card border p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated",
           flash ? "goal-flash border-volt/50 bg-elevated" : "border-line bg-surface",
         )}
       >
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="label truncate text-ink-3">
-            {match.gameweek > 0
-              ? t("matches.cardMeta", {
-                  league: t(`league.${match.home.league}`),
-                  gw: match.gameweek,
-                })
-              : t(`league.${match.home.league}`)}
-          </span>
-          <StatusChip match={match} />
-        </div>
+        <Link
+          to={`/match/${match.id}`}
+          onPointerDown={() => prefetchMatch(match.id)}
+          aria-label={`${localize(match.home.shortName)} ${t("common.versus")} ${localize(match.away.shortName)}`}
+          className="absolute inset-0 z-0 rounded-card focus-visible:outline-offset-[-4px]"
+        />
+        <div className="pointer-events-none">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="label truncate text-ink-3">
+              {match.gameweek > 0
+                ? t("matches.cardMeta", {
+                    league: t(`league.${match.home.league}`),
+                    gw: match.gameweek,
+                  })
+                : t(`league.${match.home.league}`)}
+            </span>
+            <StatusChip match={match} />
+          </div>
 
-        {/* One scoreline: "PSG ★ 2 – 1 CHE ★". Scores share a baseline with the
+          {/* One scoreline: "PSG ★ 2 – 1 CHE ★". Scores share a baseline with the
             separator, so the result reads as a single unit at a glance. */}
-        <div className="flex items-center gap-2">
-          <TeamBadge team={match.home} />
-          <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
-            {localize(match.home.shortName)}
-            {isFavorite(match.home.id) ? (
-              <StarFilledIcon className="ms-1 inline-block h-3 w-3 align-[-1px] text-volt" />
-            ) : null}
-          </span>
-          <ScoreOdometer
-            value={match.homeScore}
-            className={cx("flex-none text-2xl leading-none", homeLeading ? "text-ink" : "text-ink-2")}
-          />
-          <Num className="flex-none text-base text-ink-3">–</Num>
-          <ScoreOdometer
-            value={match.awayScore}
-            className={cx("flex-none text-2xl leading-none", awayLeading ? "text-ink" : "text-ink-2")}
-          />
-          <span className="min-w-0 flex-1 truncate text-end text-sm font-bold text-ink">
-            {isFavorite(match.away.id) ? (
-              <StarFilledIcon className="me-1 inline-block h-3 w-3 align-[-1px] text-volt" />
-            ) : null}
-            {localize(match.away.shortName)}
-          </span>
-          <TeamBadge team={match.away} />
+          <div className="flex items-center gap-2">
+            <TeamBadge team={match.home} />
+            <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+              {localize(match.home.shortName)}
+              {isFavorite(match.home.id) ? (
+                <StarFilledIcon className="ms-1 inline-block h-3 w-3 align-[-1px] text-volt" />
+              ) : null}
+            </span>
+            <ScoreOdometer
+              value={match.homeScore}
+              className={cx("flex-none text-2xl leading-none", homeLeading ? "text-ink" : "text-ink-2")}
+            />
+            <Num className="flex-none text-base text-ink-3">–</Num>
+            <ScoreOdometer
+              value={match.awayScore}
+              className={cx("flex-none text-2xl leading-none", awayLeading ? "text-ink" : "text-ink-2")}
+            />
+            <span className="min-w-0 flex-1 truncate text-end text-sm font-bold text-ink">
+              {isFavorite(match.away.id) ? (
+                <StarFilledIcon className="me-1 inline-block h-3 w-3 align-[-1px] text-volt" />
+              ) : null}
+              {localize(match.away.shortName)}
+            </span>
+            <TeamBadge team={match.away} />
+          </div>
         </div>
 
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2">
@@ -107,15 +118,27 @@ export const MatchCard = memo(function MatchCard({
             {formatKickoff(new Date(match.kickoffAt), lang === "fa" ? "fa-IR" : undefined)}
           </span>
           {match.status === "finished" ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-volt">
-              <PlayIcon />
-              {t("replay.title")}
-            </span>
-          ) : (
             <PredictionIcons kinds={match.predictions} />
+          ) : (
+            /* The one action on this card with a deadline. Negative margins
+               keep the pill visually small while the hit area stays on the
+               44px floor; it sits above the stretched link at z-10. */
+            <Link
+              to={`/match/${match.id}?tab=predict`}
+              onPointerDown={() => prefetchMatch(match.id)}
+              aria-label={t("predict.makePicks")}
+              className="relative z-10 -my-1.5 inline-flex min-h-11 items-center gap-1 rounded-full border border-volt px-2.5 text-[11px] font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+            >
+              <TargetIcon className="h-3.5 w-3.5" />
+              {match.predictions.length > 0 ? (
+                <Num>{match.predictions.length}/5</Num>
+              ) : (
+                t("matchCard.predict")
+              )}
+            </Link>
           )}
         </div>
-      </Link>
+      </div>
     </li>
   );
 });

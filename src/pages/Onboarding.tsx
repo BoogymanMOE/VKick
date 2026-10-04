@@ -179,7 +179,7 @@ export default function Onboarding() {
           <span
             key={i}
             className={cx(
-              "h-1.5 rounded-full transition-all duration-[var(--t-std)]",
+              "h-1.5 rounded-full transition-[width,background-color] duration-[var(--t-std)]",
               i === step ? "w-6 bg-volt" : i < step ? "w-1.5 bg-volt/50" : "w-1.5 bg-line",
             )}
           />
@@ -436,78 +436,80 @@ export default function Onboarding() {
 /* ------------------------------------------------------------ intro */
 
 /**
- * The animated first-launch intro: three light slides over the core ideas,
- * skippable with one tap, shown before the club picker (once ever — its flag
- * is separate from the picker's own gate).
+ * The first-launch intro, now one screen instead of three slides. A first-timer
+ * used to pay six screens (three intro slides, then three picker steps) before
+ * seeing a fixture — on the one app whose whole promise is "open it because a
+ * match is on". The three ideas still get explained, as a single scannable
+ * list, with one "Get started" tap into the picker. Shown once ever (its flag is
+ * separate from the picker's own gate).
  */
 function Intro({ onDone }: { onDone: () => void }) {
   const { t } = useI18n();
-  const total = SLIDES.length;
-  const [slide, setSlide] = useState(0);
-  const last = slide === total - 1;
-  const current = SLIDES[slide];
-
-  const next = () => {
-    haptic("light");
-    if (last) onDone();
-    else setSlide((s) => s + 1);
-  };
 
   return (
     <div className="pad-safe-top flex min-h-[70vh] flex-col px-3">
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={onDone}
+          onClick={() => {
+            haptic("light");
+            onDone();
+          }}
           className="min-h-11 rounded-full px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
         >
           {t("intro.skip")}
         </button>
       </div>
 
-      <div className="pitch-watermark flex flex-1 flex-col items-center justify-center px-2 text-center">
+      <div className="pitch-watermark flex flex-1 flex-col justify-center px-2 py-6">
         <span
-          key={current.key}
           className="intro-glyph grid h-20 w-20 place-items-center rounded-card border border-volt/50 bg-elevated text-volt"
           aria-hidden="true"
         >
-          <current.Glyph className="h-9 w-9" />
+          <TargetIcon className="h-9 w-9" />
         </span>
-        <h2 key={`${current.key}-t`} className="intro-in mt-5 text-xl font-extrabold text-ink">
-          {t(current.titleKey)}
-        </h2>
-        <p key={`${current.key}-b`} className="intro-in mt-2 max-w-xs text-sm leading-relaxed text-ink-2">
-          {t(current.bodyKey)}
-        </p>
-      </div>
+        {/* The intro has no TopBar, so this brand line is the screen's only
+            heading — h1, not h2, or the document opens at a level down. */}
+        <h1 className="intro-in mt-5 text-2xl font-extrabold text-ink">{t("app.name")}</h1>
 
-      {/* Dots */}
-      <div className="flex justify-center gap-1.5" aria-hidden="true">
-        {SLIDES.map((s, i) => (
-          <span
-            key={s.key}
-            className={cx(
-              "h-1.5 rounded-full transition-all duration-[var(--t-std)]",
-              i === slide ? "w-6 bg-volt" : "w-1.5 bg-line",
-            )}
-          />
-        ))}
+        <ul className="intro-in mt-5 space-y-4">
+          {SLIDES.map(({ key, titleKey, bodyKey, Glyph }) => (
+            <li key={key} className="flex items-start gap-3">
+              <span
+                className="grid h-9 w-9 flex-none place-items-center rounded-full border border-volt/50 bg-elevated text-volt"
+                aria-hidden="true"
+              >
+                <Glyph className="h-4 w-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold text-ink">{t(titleKey)}</span>
+                <span className="block text-xs leading-relaxed text-ink-2">{t(bodyKey)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
       </div>
-      <p className="sr-only">{t("intro.dots", { step: slide + 1, total })}</p>
 
       <div className="mt-4 space-y-2 pb-6">
-        <Button className="w-full" onClick={next}>
+        <Button
+          className="w-full"
+          onClick={() => {
+            haptic("light");
+            onDone();
+          }}
+        >
           {t("onboarding.next")}
         </Button>
-        {!last ? (
-          <button
-            type="button"
-            onClick={onDone}
-            className="w-full rounded-full py-2 text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
-          >
-            {t("intro.skip")}
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            haptic("light");
+            onDone();
+          }}
+          className="min-h-11 w-full rounded-full text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
+        >
+          {t("intro.skip")}
+        </button>
       </div>
     </div>
   );

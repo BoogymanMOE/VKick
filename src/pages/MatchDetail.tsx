@@ -20,8 +20,9 @@ import { CommentsSection, adaptComments } from "../components/panels/CommentsPan
 import { LineupsPanel } from "../components/panels/LineupsPanel";
 import { PredictionsHub } from "../components/panels/PredictionsHub";
 import { LivePitch } from "../components/LivePitch";
-import { ChevronLeftIcon, PlayIcon, StarIcon } from "../components/icons";
+import { ChartIcon, ChevronRightIcon, PlayIcon, StarIcon } from "../components/icons";
 import {
+  Button,
   Card,
   Chip,
   EmptyState,
@@ -44,8 +45,8 @@ import { haptic, notifyHaptic } from "../lib/telegram";
 import type { Team } from "../types";
 import type { StringKey } from "../i18n/strings";
 
-type Tab = "timeline" | "stats" | "lineups" | "predict" | "ratings";
-const TABS: Tab[] = ["timeline", "stats", "lineups", "predict", "ratings"];
+type Tab = "timeline" | "predict" | "stats" | "lineups" | "ratings";
+const TABS: Tab[] = ["timeline", "predict", "stats", "lineups", "ratings"];
 
 export default function MatchDetail() {
   const { id = "" } = useParams();
@@ -110,6 +111,16 @@ export default function MatchDetail() {
   const liveCommentary = useMemo(() => replayData?.commentary ?? [], [replayData]);
   const liveEvents = useMemo(() => replayData?.events ?? [], [replayData]);
 
+  // The deadline bar needs the pick count. Same query key as the Predict tab,
+  // so this shares its cache instead of costing a second round trip, and it
+  // warms the tab before the user opens it.
+  const predictionsQuery = useQuery({
+    queryKey: ["predictions", id],
+    queryFn: () => api.getMyPredictions(id),
+    enabled: Boolean(id) && match?.status !== "finished",
+    staleTime: 0,
+  });
+
   if (matchQuery.isLoading) {
     return (
       <>
@@ -159,6 +170,17 @@ export default function MatchDetail() {
     abbreviation: match.away_abbr ?? "—",
     color: match.away_color ?? TEAM_FALLBACK,
   };
+
+  // The deadline bar below: shown only while a pick can still be made. An
+  // unpicked mechanic whose lock has already passed is a dead end rather than
+  // an invitation, so the bar reads the same windows the Predict tab renders.
+  const picked = new Set<string>((predictionsQuery.data?.predictions ?? []).map((row) => row.mechanic));
+  const pickStillOpen = Object.entries(predictionsQuery.data?.windows ?? {}).some(
+    ([mechanic, w]) => !picked.has(mechanic) && new Date(w.lockAt).getTime() > Date.now(),
+  );
+  const picksMade = predictionsQuery.data?.predictions.length ?? 0;
+  const showPickCta = match.status !== "finished" && tab !== "predict" && pickStillOpen;
+
   return (
     <>
       <ConfettiBurst trigger={burst} />
@@ -232,9 +254,11 @@ export default function MatchDetail() {
           onChange={setTab}
           options={[
             { value: "timeline", label: t("match.tabTimeline") },
+            // Second, not fourth: predicting is the reason this app exists and
+            // the only one of the five with a deadline.
+            { value: "predict", label: t("predict.hub") },
             { value: "stats", label: t("match.tabStats") },
             { value: "lineups", label: t("match.tabLineups") },
-            { value: "predict", label: t("predict.hub") },
             { value: "ratings", label: t("match.tabRatings") },
           ]}
         />
@@ -268,9 +292,7 @@ export default function MatchDetail() {
                 <span className="block truncate text-xs font-bold text-ink">{t("replay.title")}</span>
                 <span className="block text-[11px] text-ink-3">{t("replay.openHint")}</span>
               </span>
-              <span className="flex-none text-ink-3 rtl:rotate-180">
-                <ChevronLeftIcon />
-              </span>
+              <ChevronRightIcon className="flex-none text-ink-3" />
             </Link>
           </div>
           {/* The full eye-test view (crowd vs stat, divergence sort) for finished games. */}
@@ -290,10 +312,34 @@ export default function MatchDetail() {
                 <span className="block truncate text-xs font-bold text-ink">{t("ratings.title")}</span>
                 <span className="block text-[11px] text-ink-3">{t("ratings.subtitle")}</span>
               </span>
-              <span className="flex-none text-ink-3 rtl:rotate-180">
-                <ChevronLeftIcon />
-              </span>
+              <ChevronRightIcon className="flex-none text-ink-3" />
             </Link>
+          </div>
+        </>
+      ) : null}
+
+      {/* Thumb-zone action for the only thing on this page with a deadline.
+          It floats above the tab bar instead of living at the end of a long
+          scroll, and it disappears the moment the Predict tab is open. The
+          spacer keeps the last row from hiding underneath it. */}
+      {showPickCta ? (
+        <>
+          <div className="h-16" aria-hidden="true" />
+          <div className="fixed inset-x-0 bottom-[calc(56px+max(env(safe-area-inset-bottom),8px))] z-20 border-t border-line bg-base/95">
+            <div className="mx-auto flex w-full max-w-[560px] items-center justify-between gap-3 px-3 py-2">
+              <p className="min-w-0 truncate text-[11px] text-ink-3">
+                {t("predict.picksMade", { count: picksMade, total: 5 })}
+              </p>
+              <Button
+                className="flex-none"
+                onClick={() => {
+                  haptic("light");
+                  setTab("predict");
+                }}
+              >
+                {t("predict.makePicks")}
+              </Button>
+            </div>
           </div>
         </>
       ) : null}
@@ -426,6 +472,25 @@ function StatsTab({
     <div className="space-y-3">
       <MatchPlayerTable title={home.shortName} color={home.color} rows={homeRows} />
       <MatchPlayerTable title={away.shortName} color={away.color} rows={awayRows} />
+      {/* Match stats → season stats: the same cross-link pattern as the replay
+          and crowd-rating cards below the tabs, so a stat-curious reader has
+          somewhere to go instead of a table that just ends. */}
+      <Link
+        to="/stats"
+        className="mt-4 flex items-center gap-2 rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+      >
+        <span
+          className="grid h-8 w-8 flex-none place-items-center rounded-full bg-volt text-black"
+          aria-hidden="true"
+        >
+          <ChartIcon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-bold text-ink">{t("statsPage.title")}</span>
+          <span className="block text-[11px] text-ink-3">{t("statsPage.subtitle")}</span>
+        </span>
+        <ChevronRightIcon className="flex-none text-ink-3" />
+      </Link>
     </div>
   );
 }
@@ -723,9 +788,6 @@ function adaptPlayerRating(p: ApiPlayerRating, league: string): PlayerRating {
  * Pre-distribution responses (or a player with zero votes) get the flat empty
  * array — an honest "no votes yet", never a synthesized bar.
  */
-function distributionFor(
-  rating: PlayerRating,
-  distributions: Record<string, number[]> | null,
-): number[] {
+function distributionFor(rating: PlayerRating, distributions: Record<string, number[]> | null): number[] {
   return distributions?.[rating.playerId] ?? Array.from({ length: 10 }, () => 0);
 }

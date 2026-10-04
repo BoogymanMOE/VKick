@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BottomSheet, SheetActions } from "../components/BottomSheet";
 import { TopBar } from "../components/TopBar";
-import { CloseIcon, PencilIcon } from "../components/icons";
+import { ChevronRightIcon, CloseIcon, PencilIcon } from "../components/icons";
 import { useToast } from "../components/Toast";
 import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch } from "../components/ui";
 import { useAuth } from "../hooks/useAuth";
@@ -144,7 +144,7 @@ export default function Profile() {
               haptic("light");
               setNotificationsOpen(true);
             }}
-            right={<span className="text-ink-3">›</span>}
+            right={<ChevronRightIcon className="text-ink-3" />}
           />
           {/* My Teams is gone; the saved favorite team & leagues are edited
               in the onboarding picker, reached from here. */}
@@ -155,7 +155,7 @@ export default function Profile() {
               haptic("light");
               navigate("/onboarding");
             }}
-            right={<span className="text-ink-3">›</span>}
+            right={<ChevronRightIcon className="text-ink-3" />}
           />
           {/* The "why did I get X" panel: every pick with the resolver's own
               line items, reachable from where users check their account. */}
@@ -166,7 +166,7 @@ export default function Profile() {
               haptic("light");
               navigate("/predictions");
             }}
-            right={<span className="text-ink-3">›</span>}
+            right={<ChevronRightIcon className="text-ink-3" />}
           />
         </div>
       </section>
@@ -225,7 +225,7 @@ export default function Profile() {
               }
               push({ text: t("profile.resetDone"), tone: "danger", icon: "⟲" });
             }}
-            right={<span className="text-ink-3">›</span>}
+            right={<ChevronRightIcon className="text-ink-3" />}
           />
         </div>
       </section>
@@ -237,7 +237,7 @@ export default function Profile() {
           <div className="flex items-center justify-between border-t border-line pt-2 text-xs text-ink-3">
             <span>{t("profile.version")}</span>
             <span>
-              v{APP_VERSION} · {viaTelegram ? "Telegram Mini App" : "Web"}
+              v{APP_VERSION} · {t(viaTelegram ? "profile.platformTelegram" : "profile.platformWeb")}
             </span>
           </div>
         </Card>

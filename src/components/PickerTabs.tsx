@@ -6,6 +6,7 @@
  * every tab reachable and make the active one obvious.
  */
 import { haptic } from "../lib/telegram";
+import { useI18n } from "../i18n/I18nProvider";
 import { cx } from "./ui";
 import type { PickerGroup } from "../lib/pickerGroups";
 
@@ -18,10 +19,11 @@ export function PickerTabs({
   value: string;
   onChange: (key: string) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div
       role="tablist"
-      aria-label="Club groups"
+      aria-label={t("picker.clubGroups")}
       className="-mx-3 mt-3 flex gap-1.5 overflow-x-auto px-3 pb-1"
     >
       {groups.map((group) => (

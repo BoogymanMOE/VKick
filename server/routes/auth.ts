@@ -248,6 +248,7 @@ authRouter.post("/api/auth/logout", requireUser, (req, res) => {
  *  - crowd_ratings / predictions: INSERT OR IGNORE — the UNIQUE constraints
  *    make "target's existing row wins" the whole implementation.
  *  - timeline_comments: content, so authorship moves to the target.
+ *  - referral_codes / referral_redemptions: MOVED to the target (see below).
  *  - leftovers die with the guest row (cascade-free tables deleted first).
  */
 function mergeGuestIntoUser(deviceId: string, target: AuthedUser): void {
@@ -373,6 +374,48 @@ function mergeGuestIntoUser(deviceId: string, target: AuthedUser): void {
 
     // Comments are content: they follow the author into the target account.
     run(db, "UPDATE timeline_comments SET user_id = ? WHERE user_id = ?", [target.id, guest.id]);
+
+    // Referral graph: BOTH tables reference users(id) with no ON DELETE
+    // CASCADE, so these rows must move or go before the guest row is
+    // deleted — leaving them behind is an FK violation that aborts the
+    // whole merge. It is not an edge case: GET /api/me/referral mints the
+    // guest's code lazily, so anyone who ever opened the Invite tab has
+    // one, and their next upgrade attempt failed. Because tx() rolled the
+    // merge back the guest row survived, so every retry threw again and
+    // the account could never leave the guest profile.
+    //
+    // The invitee's redemption MOVES rather than being deleted: "one
+    // redemption per account, ever" has to survive the upgrade, or the
+    // same person redeems a second code as their new self. The target's
+    // own redemption wins when it already has one (the invitee UNIQUE
+    // would refuse the move). People the guest referred move with them —
+    // the same human earned those connections — and the guest's code
+    // moves too, so an invite link they already shared keeps resolving.
+    const targetRedeemed = get<{ n: number }>(
+      db,
+      "SELECT COUNT(*) AS n FROM referral_redemptions WHERE invitee_user_id = ?",
+      [target.id],
+    );
+    if ((targetRedeemed?.n ?? 0) > 0) {
+      run(db, "DELETE FROM referral_redemptions WHERE invitee_user_id = ?", [guest.id]);
+    } else {
+      run(db, "UPDATE referral_redemptions SET invitee_user_id = ? WHERE invitee_user_id = ?", [
+        target.id,
+        guest.id,
+      ]);
+    }
+    run(db, "UPDATE referral_redemptions SET referrer_user_id = ? WHERE referrer_user_id = ?", [
+      target.id,
+      guest.id,
+    ]);
+    const targetCode = get<{ n: number }>(db, "SELECT COUNT(*) AS n FROM referral_codes WHERE user_id = ?", [
+      target.id,
+    ]);
+    if ((targetCode?.n ?? 0) > 0) {
+      run(db, "DELETE FROM referral_codes WHERE user_id = ?", [guest.id]);
+    } else {
+      run(db, "UPDATE referral_codes SET user_id = ? WHERE user_id = ?", [target.id, guest.id]);
+    }
 
     // Drop the guest entirely: uncopied conflict rows, scoring rows (FK
     // targets users.id), sessions, then the row.

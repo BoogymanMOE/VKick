@@ -125,7 +125,10 @@ export const personNamesFa: Record<string, string> = {
   "Copa América": "کوپا آمریکا",
   "Africa Cup of Nations": "جام ملت‌های آفریقا",
   "CONCACAF Gold Cup": "جام طلایی کونکاکاف",
-  // Extra ESPN competitions (Browse, coming soon)
+  // Rest of the Browse catalog: the extra ESPN slugs (server/espn/extra.ts)
+  // show as coming-soon rows — Scottish Premiership, UEFA Super Cup, UCL
+  // qualifying, Club World Cup, both World Cup qualifiers and the Nations
+  // League in this group are already synced (server/espn/types.ts).
   "EFL Championship": "چمپیونشیپ انگلیس",
   "Dutch Eredivisie": "اردیویژه هلند",
   "Portuguese Primeira Liga": "لیگ برتر پرتغال",

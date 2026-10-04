@@ -288,6 +288,19 @@ export function applySummary(db: DB, json: any, league: string): ApplySummaryRes
     participants: string;
   }>(db, goalQuery, [match.id, match.id]);
   for (const row of newGoalRows) {
+    // The notified_goals insert is the CLAIM, not bookkeeping: whoever wins it
+    // owns the alert. Two passes over the same match (the live summary loop and
+    // the live pulse both fan out to syncMatchSummary, and their overlap guards
+    // are per-loop) can otherwise both see the same "unnotified" goal and both
+    // push it. Reading `changes` makes the alert exactly-once by construction,
+    // the same pattern as claimNotification in server/notifications.ts.
+    const claim = db
+      .prepare(
+        `INSERT OR IGNORE INTO notified_goals (match_id, espn_event_key, notified_at)
+         VALUES (?, ?, ?)`,
+      )
+      .run(match.id, row.espn_event_key, new Date().toISOString());
+    if (Number(claim.changes ?? 0) === 0) continue; // another pass got there first
     if (summarySeen) {
       const parts = safeParseArray(row.participants);
       const scorer = parts[0]?.name ?? row.description.slice(0, 40);
@@ -300,11 +313,6 @@ export function applySummary(db: DB, json: any, league: string): ApplySummaryRes
         awayScore: match.away_score ?? 0,
       });
     }
-    run(db, "INSERT INTO notified_goals (match_id, espn_event_key, notified_at) VALUES (?, ?, ?)", [
-      match.id,
-      row.espn_event_key,
-      new Date().toISOString(),
-    ]);
   }
 
   return { match, goals };

@@ -6,8 +6,8 @@
  */
 import express from "express";
 import { getDb, all, get } from "../db/index.js";
-import { COMPETITIONS, isCup } from "../espn/types.js";
-import { EXTRA_COMPETITIONS } from "../espn/extra.js";
+import { isCup } from "../espn/types.js";
+import { competitionCatalog } from "../espn/catalog.js";
 import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
 import { foldForm, type FormMatchRow } from "../standings/form.js";
 import { buildFeedQuery } from "../matches/feed.js";
@@ -46,24 +46,7 @@ function matchWithTeams(id: string): unknown {
 
 /** All competitions: synced ones plus extra ESPN ones marked coming-soon. */
 matchesRouter.get("/api/competitions", (_req, res) => {
-  res.json({
-    competitions: [
-      ...COMPETITIONS.map((c) => ({
-        slug: c.slug,
-        name: c.name,
-        kind: c.kind,
-        hasTable: !isCup(c.slug),
-        comingSoon: false,
-      })),
-      ...EXTRA_COMPETITIONS.map((c) => ({
-        slug: c.slug,
-        name: c.name,
-        kind: c.kind,
-        hasTable: false,
-        comingSoon: true,
-      })),
-    ],
-  });
+  res.json({ competitions: competitionCatalog() });
 });
 
 /* ------------------------------------------------------------ matches */

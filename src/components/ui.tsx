@@ -40,9 +40,14 @@ export function SectionHeading({ title, action }: { title: string; action?: Reac
 
 /**
  * A section whose body folds away under its heading — the APG disclosure
- * pattern, with the heading OUTSIDE the toggle: the h3 wraps the button, so
- * screen-reader users navigating by headings still find Live/Upcoming/Previous
- * (the old span-inside-button made these sections invisible to H-key nav).
+ * pattern, with the heading OUTSIDE the toggle: the heading wraps the button,
+ * so screen-reader users navigating by headings still find
+ * Live/Upcoming/Previous (the old span-inside-button made these sections
+ * invisible to H-key nav).
+ *
+ * `level` sets the heading element. Default h3 for a section sitting under an
+ * h2; a top-level page section passes `level={2}` so heading order never jumps
+ * straight from the page h1 to an h3.
  * The heading row is the toggle (min-height keeps the 44px touch floor), the
  * count badge and chevron ride along as affordances, and the panel carries
  * aria-labelledby/aria-expanded so it reads as one control. The open/closed
@@ -64,6 +69,8 @@ export function CollapsibleSection({
   /** Optional badge replacement, shown while the section is collapsed — the
    *  pulsing LiveDot on the folded "Live now" header is the reason it exists. */
   collapsedBadge,
+  /** Heading level; 3 unless this section is a top level of the page itself. */
+  level = 3,
   children,
 }: {
   id: string;
@@ -74,12 +81,14 @@ export function CollapsibleSection({
   openOverride?: { open: boolean };
   onUserToggle?: () => void;
   collapsedBadge?: ReactNode;
+  level?: 2 | 3;
   children: ReactNode;
 }) {
   const [storedOpen, setOpen] = useLocalState<boolean>(`section.open.${id}`, defaultOpen);
   const open = openOverride ? openOverride.open : storedOpen;
   const headingId = `${id}-heading`;
   const panelId = `${id}-panel`;
+  const Heading = level === 2 ? "h2" : "h3";
   const headerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const handleToggle = () => {
@@ -102,7 +111,7 @@ export function CollapsibleSection({
   };
   return (
     <section className="mt-6">
-      <h3 id={headingId} className="mb-2">
+      <Heading id={headingId} className="mb-2">
         <button
           ref={headerRef}
           type="button"
@@ -113,7 +122,9 @@ export function CollapsibleSection({
         >
           <span className="flex min-w-0 items-center gap-2">
             <span className={cx("label label-lg", open ? "text-ink" : "text-ink-2")}>{title}</span>
-            {!open && collapsedBadge ? collapsedBadge : count ? (
+            {!open && collapsedBadge ? (
+              collapsedBadge
+            ) : count ? (
               <Chip tone={open ? "muted" : "volt"}>
                 <Num>{count}</Num>
               </Chip>
@@ -129,7 +140,7 @@ export function CollapsibleSection({
             <ChevronDownIcon />
           </span>
         </button>
-      </h3>
+      </Heading>
       {open ? (
         <div ref={panelRef} id={panelId} role="region" aria-labelledby={headingId} className="panel-in">
           {children}
@@ -328,6 +339,9 @@ export function Segmented<T extends string>({
             onChange(option.value);
           }}
           className={cx(
+            // flex-1 fills the track; with whitespace-nowrap each tab's
+            // min-content width is its label, so a crowded row (the five match
+            // tabs in Persian) scrolls rather than breaking a word.
             "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap transition-all duration-[var(--t-fast)]",
             value === option.value
               ? "bg-elevated text-volt shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--volt)_35%,transparent)]"

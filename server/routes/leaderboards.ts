@@ -11,6 +11,7 @@
  */
 import express, { type Request } from "express";
 import { getDb, get } from "../db/index.js";
+import { SESSION_TTL_MS } from "../db/retention.js";
 import { readLeaderboard, readViewerRank } from "../scoring/ledger.js";
 import { activeSeason } from "../scoring/season.js";
 import { verifyInitData, verifyDevToken } from "../telegram/verify.js";
@@ -34,8 +35,18 @@ function optionalViewerId(req: Request): number | undefined {
     const token = header.startsWith("Bearer ") ? header.slice(7) : "";
     if (!token) return undefined;
     if (token.startsWith("mg_")) {
-      return get<{ user_id: number }>(db, "SELECT user_id FROM user_sessions WHERE token = ?", [token])
-        ?.user_id;
+      const row = get<{ user_id: number; last_used_at: string }>(
+        db,
+        "SELECT user_id, last_used_at FROM user_sessions WHERE token = ?",
+        [token],
+      );
+      // Same sliding-expiry rule requireUser enforces. Without it a dead
+      // session still highlighted "you" on a board until the daily sweep
+      // happened to reclaim the row — the board is public, so this is the one
+      // place an expired credential was still being believed.
+      if (!row) return undefined;
+      if (Date.now() - new Date(row.last_used_at).getTime() > SESSION_TTL_MS) return undefined;
+      return row.user_id;
     }
     // initData / dev tokens verify through the same helper requireUser uses;
     // keep it light: reuse requireUser's verification without failing the

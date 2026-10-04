@@ -76,8 +76,20 @@ export async function syncScoreboardWindow(backDays: number, forwardDays: number
   return goals;
 }
 
+/**
+ * Matches currently being summarized. The live summary pass and the live pulse
+ * BOTH fan out to syncMatchSummary, and each loop has its own overlap guard —
+ * so nothing stopped them from working the same match at the same time: a
+ * doubled ESPN fetch, and a race on the notified_goals claim that could drop a
+ * goal alert mid-match. One shared in-flight set closes both.
+ */
+const summariesInFlight = new Set<string>();
+
 /** Pull the full summary for a single match and store it. */
 export async function syncMatchSummary(league: LeagueSlug, matchId: string): Promise<GoalAlert[]> {
+  // Already being worked by the other loop; it will return this match's goals.
+  if (summariesInFlight.has(matchId)) return [];
+  summariesInFlight.add(matchId);
   try {
     const json = await fetchSummary(league, matchId);
     const { match, goals } = applySummary(db, json, league);
@@ -88,6 +100,8 @@ export async function syncMatchSummary(league: LeagueSlug, matchId: string): Pro
   } catch (err) {
     console.error(`[sync] summary ${league}/${matchId} FAILED:`, String(err));
     return [];
+  } finally {
+    summariesInFlight.delete(matchId);
   }
 }
 
@@ -222,9 +236,6 @@ function currentSeason(): string {
   const startYear = now.getUTCMonth() >= 7 ? y : y - 1;
   return `${startYear}-${String(startYear + 1).slice(2)}`;
 }
-
-/**
-let started = false;
 
 /** Dev/CI escape hatch: SKIP_CRON=1 runs the API without the ESPN sync
  *  loops, so local fixtures (e.g. a match forced `live` for UI work) stay

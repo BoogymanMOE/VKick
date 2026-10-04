@@ -21,7 +21,27 @@
  */
 import type { StringKey } from "../i18n/strings";
 import type { Team } from "../types";
-import { SLUG_BY_LEAGUE } from "./leagues";
+import { SLUG_BY_LEAGUE, LEAGUE_BY_SLUG } from "./leagues";
+
+/**
+ * The picker tab a cached team row belongs under — the ONE derivation of it.
+ *
+ * Lives here, beside the group vocabulary, because three places need it and
+ * they must not drift: the `Team.groupKey` projection (lib/teams), the
+ * favorites optimistic update (lib/optimistic), and the picker's own filtering.
+ *
+ * A non-empty server `group_key` wins (it already accounts for cup-only clubs
+ * and national teams); otherwise fall back to the big-five alias for the team's
+ * league, and finally to the "other" catch-all. Big-five slugs collapse to
+ * their app alias so tabs and rows agree on the same key.
+ */
+export function teamGroupKey(team: { group_key?: string | null; league: string }): string {
+  return (
+    (team.group_key ? (LEAGUE_BY_SLUG[team.group_key] ?? team.group_key) : null) ??
+    LEAGUE_BY_SLUG[team.league] ??
+    OTHER_GROUP
+  );
+}
 
 /** Cup-only clubs: known through European/domestic cup football, no league. */
 export const OTHER_GROUP = "other";

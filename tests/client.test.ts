@@ -14,6 +14,7 @@ import {
   OTHER_GROUP,
   INTERNATIONAL_GROUP,
 } from "../src/lib/pickerGroups.js";
+import { viewerStanding } from "../src/lib/leaderboard.js";
 import type { StringKey } from "../src/i18n/strings.js";
 import type { Team } from "../src/types.js";
 
@@ -93,10 +94,43 @@ function testTeamsInGroup(): void {
   assert.deepEqual(teamsInGroup(teams, "other"), [], "an empty group is empty, not everything");
 }
 
+/**
+ * The leaderboard summary: which of the two server fields wins for the
+ * viewer's own line. Getting this wrong either hides the viewer's rank or
+ * prints it twice (on-page row plus below-page row) — the bug the strip's
+ * extraction replaced.
+ */
+function testViewerStanding(): void {
+  assert.equal(viewerStanding([], null), null, "anonymous or unscored shows nothing");
+
+  const rows = [
+    { rank: 1, total: 90 },
+    { rank: 2, total: 70, is_you: true },
+  ];
+  assert.deepEqual(
+    viewerStanding(rows, { rank: 137, total: 12 }),
+    { rank: 2, total: 70, belowPage: false },
+    "an on-page row beats the below-page rank",
+  );
+
+  assert.deepEqual(
+    viewerStanding([{ rank: 1, total: 90 }], { rank: 137, total: 12 }),
+    { rank: 137, total: 12, belowPage: true },
+    "a below-page rank is used when no row is the viewer's",
+  );
+
+  assert.equal(
+    viewerStanding([{ rank: 1, total: 90 }], null),
+    null,
+    "no viewer row and no below-page rank means no strip",
+  );
+}
+
 export function runClientTests(): void {
   testReadableInk();
   testBreakdownItems();
   testPickerGroups();
   testTeamsInGroup();
-  console.log("  client: contrast ink, breakdown rendering and picker grouping OK");
+  testViewerStanding();
+  console.log("  client: contrast ink, breakdown rendering, picker grouping and viewer standing OK");
 }

@@ -2,7 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { api, serverErrorKey, type ApiMatch, type ApiTeam } from "../lib/api";
 import { TEAM_FALLBACK } from "../lib/colors";
-import { INTERNATIONAL_GROUP, buildLeagueTabs, type LeagueTab } from "../lib/pickerGroups";
+import { buildLeagueTabs, type LeagueTab } from "../lib/pickerGroups";
+import { teamFromApi } from "../lib/teams";
+import {
+  addFavoriteOptimistic,
+  favoritesView,
+  mergePrefsOptimistic,
+  removeFavoriteOptimistic,
+  type FavoritesPayload,
+  type NotificationPrefsPayload,
+} from "../lib/optimistic";
 import { useToast } from "../components/Toast";
 import { useI18n } from "../i18n/I18nProvider";
 import type { StringKey } from "../i18n/strings";
@@ -10,85 +19,16 @@ import { haptic } from "../lib/telegram";
 import type { LeagueId, Match, Team } from "../types";
 import { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE, slugForLeague } from "../lib/leagues";
 
-// Public surface preserved: the maps now live in a pure module so non-React
-// code (and the node test runner) can use them without this file's imports.
+// Public surface preserved: these now live in pure modules so non-React code
+// (and the node test runner) can use them without this file's imports.
 export { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE, slugForLeague };
-
-/**
- * Single source for every screen that tabs over the synced domestic leagues
- * (Table, PlayerStats, Leaderboards league board). Grows with the catalog:
- * add the slug→LeagueId pair above and a `league.*` string, list it here once.
- */
-export const LEAGUE_TABS: LeagueId[] = ["PL", "LL", "SA", "BL", "L1"];
-
-/** Cup competitions synced and browsable (Mirrors server/espn/types.ts CUPS). */
-export const CUP_SLUGS: string[] = [
-  "uefa.champions",
-  "uefa.europa",
-  "uefa.europa.conf",
-  "uefa.super_cup",
-  "uefa.champions_qual",
-  "eng.fa",
-  "eng.league_cup",
-  "esp.copa_del_rey",
-  "ita.coppa_italia",
-  "ger.dfb_pokal",
-  "fra.coupe_de_france",
-];
-
-/** International tournaments (Mirrors server/espn/types.ts INTERNATIONALS). */
-export const TOURNAMENT_SLUGS: string[] = [
-  "fifa.world",
-  "fifa.cwc",
-  "uefa.euro",
-  "uefa.euroq",
-  "uefa.nations",
-  "fifa.worldq.uefa",
-  "fifa.worldq.conmebol",
-  "conmebol.america",
-  "caf.nations",
-  "concacaf.gold",
-];
-
-/**
- * True for anything with no league table — cups AND international tournaments.
- * Mirrors the server's `isCup`, which is simply "not one of the big five".
- */
-export function isCupSlug(slug: string): boolean {
-  return CUP_SLUGS.includes(slug) || TOURNAMENT_SLUGS.includes(slug) || slug.startsWith("uefa.");
-}
-
-/** The five leagues shown in the picker/tables, as slugs. */
-export const LEAGUE_SLUGS = Object.values(SLUG_BY_LEAGUE);
+export { teamFromApi };
 
 export function leagueIdOf(slug: string): LeagueId | null {
   return LEAGUE_BY_SLUG[slug] ?? null;
 }
 
 /* ------------------------------------------------------------ adapters */
-
-export function teamFromApi(t: ApiTeam): Team {
-  return {
-    id: t.id,
-    name: t.name,
-    shortName: t.short_name ?? t.name,
-    abbreviation: t.abbreviation ?? "—",
-    color: t.color ?? TEAM_FALLBACK,
-    // Cup-only teams have no LeagueId; park them in PL for colour/type purposes.
-    league: LEAGUE_BY_SLUG[t.league] ?? "PL",
-    // ...but the picker must not read them as Premier League clubs, so the tab
-    // a side belongs under comes from the server's group_key. Team payloads
-    // Picker tab key: the server's group_key is a competition slug ("eng.1")
-    // or a catch-all ("other" / "international"). The big-five slugs map to
-    // their picker aliases (PL…); every other value passes through so extra
-    // leagues keep their own tab and the catch-alls keep matching.
-    groupKey:
-      (t.group_key ? (LEAGUE_BY_SLUG[t.group_key] ?? t.group_key) : null) ??
-      LEAGUE_BY_SLUG[t.league] ??
-      "other",
-    logoUrl: t.logo_url ?? null,
-  };
-}
 
 export function matchFromApi(m: ApiMatch): Match {
   // Halftime renders as the live moment everywhere (LiveDot sections,
@@ -247,10 +187,7 @@ export function useFavorites() {
   const favoritesQuery = useQuery({
     queryKey: ["favorites"],
     queryFn: () => api.getFavorites(),
-    select: (data) => ({
-      teams: data.favorites.map(teamFromApi),
-      anchorId: data.favorites.find((f) => f.is_favorite === 1)?.id ?? data.favorites[0]?.id ?? null,
-    }),
+    select: favoritesView,
   });
 
   const teams = favoritesQuery.data?.teams ?? [];
@@ -263,28 +200,12 @@ export function useFavorites() {
     mutationFn: (teamId: string) => api.addFavorite(teamId),
     onMutate: async (teamId) => {
       await qc.cancelQueries({ queryKey: ["favorites"] });
-      const prev = qc.getQueryData(["favorites"]);
-      const current = teams;
-      // Cap guard is per bucket — five clubs plus, separately, five national
-      // teams — matching the server rule (server/db/teamGroups.ts). The
-      // cached row carries the server's group_key, so the optimistic add
-      // counts against the same shelf the picker tab shows.
-      const candidate = currentTeamFromCache(teamId);
-      const intl = candidate?.groupKey === INTERNATIONAL_GROUP;
-      const bucketUsed = current.filter((t) => (t.groupKey === INTERNATIONAL_GROUP) === intl).length;
-      if (bucketUsed < 5 && !current.some((t) => t.id === teamId)) {
-        const optimistic = current.concat(
-          candidate ?? {
-            id: teamId,
-            name: "…",
-            shortName: "…",
-            abbreviation: "—",
-            color: TEAM_FALLBACK,
-            league: "PL" as const,
-          },
-        );
-        qc.setQueryData(["favorites"], { teams: optimistic, anchorId });
-      }
+      // RAW payload, because that is what the cache holds. The optimistic
+      // helpers live in lib/optimistic next to the projection they must match
+      // — writing `{teams, anchorId}` here instead throws inside `select`.
+      const prev = qc.getQueryData<FavoritesPayload>(["favorites"]);
+      const next = addFavoriteOptimistic(prev, currentTeamFromCache(teamId));
+      if (next) qc.setQueryData<FavoritesPayload>(["favorites"], next);
       return { prev };
     },
     onError: (err, _teamId, ctx) => {
@@ -298,12 +219,9 @@ export function useFavorites() {
     mutationFn: (teamId: string) => api.removeFavorite(teamId),
     onMutate: async (teamId) => {
       await qc.cancelQueries({ queryKey: ["favorites"] });
-      const prev = qc.getQueryData(["favorites"]);
-      const current = teams;
-      qc.setQueryData(["favorites"], {
-        teams: current.filter((t) => t.id !== teamId),
-        anchorId: anchorId === teamId ? null : anchorId,
-      });
+      const prev = qc.getQueryData<FavoritesPayload>(["favorites"]);
+      const next = removeFavoriteOptimistic(prev, teamId);
+      if (next) qc.setQueryData<FavoritesPayload>(["favorites"], next);
       return { prev };
     },
     onError: (err, _teamId, ctx) => {
@@ -369,10 +287,13 @@ export function useFollowedLeagues() {
   };
 }
 
-/** Team detail from the api teams cache, for optimistic favorite badges. */
-function currentTeamFromCache(teamId: string): Team | undefined {
-  const t = api.teamsCache.get(teamId);
-  return t ? teamFromApi(t) : undefined;
+/**
+ * The RAW ApiTeam row for a club, from the api teams cache. Returned unprojected
+ * on purpose: the optimistic favorites write needs the same shape the cache
+ * holds, not the Team model the UI reads.
+ */
+function currentTeamFromCache(teamId: string): ApiTeam | undefined {
+  return api.teamsCache.get(teamId);
 }
 
 /* ------------------------------------------------------------ league tabs */
@@ -463,8 +384,9 @@ export function useNotificationPrefs() {
     mutationFn: (prefs: Partial<NotificationPrefs>) => api.setNotificationPrefs(prefs),
     onMutate: async (partial) => {
       await qc.cancelQueries({ queryKey: ["notification-prefs"] });
-      const prev = qc.getQueryData<NotificationPrefs>(["notification-prefs"]);
-      if (prev) qc.setQueryData(["notification-prefs"], { ...prev, ...partial });
+      const prev = qc.getQueryData<NotificationPrefsPayload>(["notification-prefs"]);
+      const next = mergePrefsOptimistic(prev, partial);
+      if (next) qc.setQueryData<NotificationPrefsPayload>(["notification-prefs"], next);
       return { prev };
     },
     onError: (_err, _partial, ctx) => {
@@ -502,13 +424,6 @@ export function useLeaderboard(scope: LeaderboardScope) {
 }
 
 /* ------------------------------------------------------------ competitions */
-
-export interface CompetitionRow {
-  slug: string;
-  name: string;
-  kind: "league" | "cup";
-  hasTable: boolean;
-}
 
 export function useCompetitions() {
   return useQuery({

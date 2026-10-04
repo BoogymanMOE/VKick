@@ -1,14 +1,32 @@
 import express, { type Request, type Response, type NextFunction } from "express";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// Project root, valid both running from source (tsx, __dirname = server/) and
-// from the emitted build (dist-server/server/) — the old `__dirname/../dist`
-// only worked from source and made the built server serve a dist/ that
-// doesn't exist (the SPA 404s in production).
-const ROOT_DIR = path.resolve(__dirname, "..", "..");
+
+/**
+ * Project root. Two shapes reach this file and they are NOT the same depth:
+ * the emitted build (dist-server/server/index.js) sits two levels below the
+ * root, source (tsx server/index.ts) only one. So the depth cannot be
+ * hardcoded — `path.resolve(__dirname, "..", "..")` was correct for the
+ * build and one level too high for source, which pointed the static handler
+ * at <drive-root>/dist and the rotating log at <drive-root>/logs/api.log
+ * (outside the project, and missing). Walk up to the nearest package.json
+ * instead: one rule, both layouts.
+ */
+function findProjectRoot(start: string): string {
+  let dir = start;
+  for (;;) {
+    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return start; // hit the filesystem root — nothing better to offer
+    dir = parent;
+  }
+}
+
+const ROOT_DIR = findProjectRoot(__dirname);
 import { getDb, get } from "./db/index.js";
 import { pruneFootballDetail, pruneSessions, logCapKb, RotatingLogger } from "./db/retention.js";
 import { startSyncLoop } from "./sync/service.js";
@@ -31,6 +49,15 @@ const db = getDb();
 // File-based SQLite + in-process cron loops (sync, resolver, retention): the
 // API must run as exactly one instance. Scale by making this box bigger, not
 // by running more of it.
+// apiLog writes into logs/ on the retention lines only, and appendFileSync
+// throws ENOENT when the directory is absent. start.bat creates it, but
+// `npm run server` on its own does not — so the directory is guaranteed here
+// rather than assumed. Best-effort: a read-only checkout must not stop boot.
+try {
+  fs.mkdirSync(path.join(ROOT_DIR, "logs"), { recursive: true });
+} catch {
+  /* the rotating logger degrades to console output */
+}
 const apiLog = new RotatingLogger(path.join(ROOT_DIR, "logs", "api.log"), logCapKb());
 
 // Exactly ONE trusted reverse-proxy hop sits in front of the API in every

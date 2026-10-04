@@ -102,7 +102,7 @@ fixtures and live scores from ESPN scoreboards, lineups/timelines/player stats f
 **Built end-to-end** (this list is the source of truth — older phase notes in `roadmap.md` are stale):
 
 - All five prediction mechanics with per-mechanic lock windows, payload validation, and a server-side resolver that settles picks into the points ledger — lineup (2h pre-kickoff), sub board (lineup-drop → half-time lock, enforced by a real `halftime` match status), shot predictor (6-zone grid, kickoff lock), player to watch (stat gate + crowd gate + MVP bonus, 24h settle window), versus (user-chosen pair, stat-score duel)
-- Points ledger + the three season leaderboards (global / per-league / per-club) with the first-to-reach tiebreak, and boards that render the unique `@username` identity with your own row highlighted
+- Points ledger + the three season leaderboards (global / per-league / per-club) with the first-to-reach tiebreak; boards render the unique `@username` identity, highlight your own row, and lead with your rank and points as a summary line (the below-page "you" row folds into it)
 - Favorite-club streak tracking (3/5/10 thresholds, once per season) with the settle-then-read sweep
 - The 3-card rating system (pick any 3 players, 1–10 + comment, cap enforced server-side) with aggregate crowd ratings shown beside the stat score, and a divergence-sorting eye-test page
 - ESPN sync loops (live 1m, scoreboards 10m, fixture window 6h, standings daily, rosters + Understat weekly), goal alerts with per-club fan-out, and the manual CLI fallback (`npm run sync -- …`)
@@ -135,7 +135,7 @@ Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by mi
 
 - **Matches** (`#/matches`) — matchday list, live/upcoming/finished, your clubs first, "my teams only" filter
 - **Match detail** (`#/match/:id`) — timeline, stats, lineups, ratings tabs
-- **Onboarding** (`#/onboarding`) — the club & league picker: one anchored favorite, up to four more clubs, up to five national teams on their own shelf, and up to five leagues. Old `/my-teams` deep links redirect here; Profile re-opens it for edits.
+- **Onboarding** (`#/onboarding`) — the club & league picker: one anchored favorite, up to four more clubs, up to five national teams on their own shelf, and up to five leagues. A single-screen intro (the three ideas as one list) precedes it on first run. Old `/my-teams` deep links redirect here; Profile re-opens it for edits.
 - **Ratings** (`#/ratings`) — crowd ratings beside the stat score, the "eye test" view
 - **Tables** (`#/table`) — league standings with your clubs highlighted
 - **Cups / Browse / Player Stats / Team pages** — knockout fixtures grouped by round (first round → final) when ESPN labels them, league browsing, season stat leaderboards

@@ -9,7 +9,24 @@ export type DB = DatabaseSync;
 export type BindValue = null | number | bigint | string | Uint8Array;
 export type Bindings = BindValue[] | Record<string, BindValue>;
 
-const ROOT = path.resolve(import.meta.dirname, "..", "..");
+/**
+ * Project root, for locating `.env`. The same two layouts reach this file —
+ * source (server/db/) and build (dist-server/server/db/) — and they are NOT the
+ * same depth below the root, so the depth can't be hardcoded: `../..` was right
+ * for source and pointed at `dist-server/` in the build, where no .env lives.
+ * Walk up to the nearest package.json. Mirrors server/index.ts.
+ */
+function findProjectRoot(start: string): string {
+  let dir = start;
+  for (;;) {
+    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return start; // filesystem root — nothing better to offer
+    dir = parent;
+  }
+}
+
+const ROOT = findProjectRoot(import.meta.dirname);
 
 /** Minimal .env loader (no dotenv dependency needed). */
 function loadEnv(): void {
@@ -38,6 +55,22 @@ export function getDb(): DB {
   _db = new DatabaseSync(file);
   migrate(_db);
   return _db;
+}
+
+/**
+ * Close the cached handle and forget it, so the next getDb() re-opens against
+ * the CURRENT SQLITE_PATH. Test-harness support: two suites that each point
+ * SQLITE_PATH at their own temp file cannot share one process-wide handle,
+ * and Windows refuses to delete a file that is still open. Production never
+ * calls this — the API is a single long-lived process on one database.
+ */
+export function closeDb(): void {
+  try {
+    _db?.close();
+  } catch {
+    /* already closed */
+  }
+  _db = null;
 }
 
 /**

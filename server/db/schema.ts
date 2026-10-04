@@ -257,8 +257,10 @@ export function migrate(db: DatabaseSync): void {
     -- Matchday pushes already sent, one row per (user, match, stage). The
     -- per-minute sweep re-reads the same matches over and over, so the claim is
     -- what stops "kickoff in 40 minutes" arriving forty times. It doubles as
-    -- the audit trail of who was told what, when — the rows are tiny (4 per
-    -- user per match) and deliberately never pruned.
+    -- the audit trail of who was told what, when — four tiny rows per user per
+    -- match, and retention prunes them alongside the rest of the match detail
+    -- they describe (see pruneFootballDetail), since a claim nobody can re-derive
+    -- once the match itself is gone is worth no more than the replay data.
     CREATE TABLE IF NOT EXISTS match_notifications (
       telegram_id TEXT NOT NULL,
       match_id    TEXT NOT NULL,

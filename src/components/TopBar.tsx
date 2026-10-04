@@ -19,7 +19,10 @@ export function TopBar({
   const { dir, t } = useI18n();
 
   return (
-    <header className="pad-safe-top sticky top-0 z-20 border-b border-line bg-base/95 backdrop-blur-md">
+    // No backdrop blur: the bar is 95% opaque, so the blur was invisible while
+    // still forcing a full-width backdrop read on every scroll frame — exactly
+    // the cost the low-end Android target can't afford.
+    <header className="pad-safe-top sticky top-0 z-20 border-b border-line bg-base/95">
       <div className="mx-auto flex w-full max-w-[560px] items-center gap-3 px-3 pb-3">
         {back ? (
           <button

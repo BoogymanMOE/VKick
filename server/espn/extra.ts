@@ -23,12 +23,11 @@ export interface ExtraCompetition {
 }
 
 export const EXTRA_COMPETITIONS: ExtraCompetition[] = [
-  // Domestic leagues
+  // Domestic leagues. (Eredivisie, Liga Portugal, Süper Lig and the Scottish
+  // Premiership were promoted into COMPETITIONS with real tables — listing them
+  // here too rendered each one twice on Browse, once as "live" and once as
+  // "coming soon". A slug belongs in exactly one of the two lists.)
   { slug: "eng.2", name: "EFL Championship", kind: "league" },
-  { slug: "ned.1", name: "Dutch Eredivisie", kind: "league" },
-  { slug: "por.1", name: "Portuguese Primeira Liga", kind: "league" },
-  { slug: "tur.1", name: "Turkish Super Lig", kind: "league" },
-  { slug: "sco.1", name: "Scottish Premiership", kind: "league" },
   { slug: "usa.1", name: "Major League Soccer", kind: "league" },
   { slug: "mex.1", name: "Mexican Liga BBVA MX", kind: "league" },
   { slug: "bra.1", name: "Brazilian Serie A", kind: "league" },

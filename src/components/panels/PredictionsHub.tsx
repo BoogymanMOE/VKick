@@ -7,6 +7,7 @@ import { pickSummary } from "../../lib/breakdown";
 import { useLocalState } from "../../lib/useLocalState";
 import { useToast } from "../Toast";
 import { BottomSheet } from "../BottomSheet";
+import { RulesButton } from "../RulesSheet";
 import { PredictionsHubSkeleton, PanelSkeleton } from "../Skeletons";
 import { Button, Card, Chip, EmptyState, ErrorState, Num, cx } from "../ui";
 import { SubBoard } from "./SubBoard";
@@ -138,7 +139,9 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
     queryKey: ["lineups", matchId],
     queryFn: () => api.getLineups(matchId),
     staleTime: 60_000,
-    enabled: rows.some((r) => r.mechanic === "player_watch" || r.mechanic === "shot_predict" || r.mechanic === "versus"),
+    enabled: rows.some(
+      (r) => r.mechanic === "player_watch" || r.mechanic === "shot_predict" || r.mechanic === "versus",
+    ),
   });
   const nameOf = (id: string): string => {
     const p = lineups.data?.players.find((x) => x.player_id === id);
@@ -201,9 +204,26 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
   const visible = mechanics.filter((m) => alwaysVisible.has(m) || mechanics.indexOf(m) < 1 + tier * 2);
   const hiddenCount = mechanics.length - visible.length;
 
+  // A mechanic's window counts as open when it has no scheduled open time, or
+  // that time has passed, or the match is under way / over. Shared by the
+  // disabled state below and the single primary action picked here.
+  const opensNow = (m: Mechanic) => {
+    const w = windows[m];
+    const opensAt = w?.opensAt ? new Date(w.opensAt).getTime() : null;
+    return opensAt === null || Date.now() >= opensAt || live || finished;
+  };
+  // One action leads, not five: the first visible mechanic that is open and
+  // still unpicked wears volt. Five identical primary buttons read as a
+  // checklist with no next step, which is the opposite of a deadline.
+  const primaryMechanic = visible.find((m) => !byMechanic(m) && opensNow(m));
+
   return (
     <div className="space-y-2">
-      <p className="text-[11px] text-ink-3">{t("predict.hubHint")}</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="min-w-0 text-[11px] text-ink-3">{t("predict.hubHint")}</p>
+        {/* The scoring tables live in the app now, not only in scoring-rules.md. */}
+        <RulesButton variant="link" />
+      </div>
       {halftime ? (
         <Card className="border-live/40 p-2.5">
           <span className="text-[11px] font-bold text-live">{t("sub.halftimeBanner")}</span>
@@ -216,9 +236,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
         visible.map((m) => {
           const meta = MECHANIC_META[m];
           const row = byMechanic(m);
-          const w = windows[m];
-          const opensAt = w?.opensAt ? new Date(w.opensAt).getTime() : null;
-          const notOpenYet = opensAt !== null && Date.now() < opensAt && !live && !finished;
+          const notOpenYet = !opensNow(m);
           return (
             <Card key={m} className={cx("p-3", row && "border-volt/40")}>
               <div className="flex items-center gap-2">
@@ -251,8 +269,8 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
                 {row?.payload ? <MechanicSummary mechanic={m} payload={row.payload} nameOf={nameOf} /> : null}
                 {!finished && !halftime ? (
                   <Button
-                    variant={row ? "ghost" : "primary"}
-                    className="min-h-9 px-3 text-xs"
+                    variant={m === primaryMechanic ? "primary" : "ghost"}
+                    className="px-3 text-xs"
                     disabled={notOpenYet}
                     onClick={() => {
                       haptic("light");

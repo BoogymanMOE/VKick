@@ -1,9 +1,13 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
+import { RulesButton } from "../components/RulesSheet";
+import { ChartIcon } from "../components/icons";
 import { Avatar, Chip, EmptyState, ErrorState, Num, SectionHeading, Segmented, cx } from "../components/ui";
 import { slugForLeague, useLeaderboard, useLeagueTabs, type LeaderboardScope } from "../hooks/useApi";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/I18nProvider";
+import { viewerStanding } from "../lib/leaderboard";
 
 type BoardTab = "global" | "league" | "club";
 
@@ -30,11 +34,33 @@ export default function Leaderboards() {
 
   const rows = board.data?.board ?? [];
   const you = board.data?.you ?? null;
-  const youOnBoard = rows.some((row) => row.is_you);
+  // The viewer's own placing, whether they sit on the page or below it. It
+  // leads the board as a summary: the stakes layer should answer "where do I
+  // stand" before it answers "who else is here".
+  const standing = viewerStanding(rows, you);
 
   return (
     <>
-      <TopBar title={t("board.title")} subtitle={t("board.subtitle")} />
+      <TopBar
+        title={t("board.title")}
+        subtitle={t("board.subtitle")}
+        right={
+          <div className="flex flex-none items-center gap-2">
+            {/* Ranks is where ranking-curious users land; Player Stats is the
+                same instinct one layer over — season stat leaders — so it
+                gets the navigation slot instead of a tab of its own. */}
+            <Link
+              to="/stats"
+              aria-label={t("statsPage.title")}
+              title={t("statsPage.title")}
+              className="grid h-11 w-11 flex-none place-items-center rounded-full border border-line text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated hover:text-volt"
+            >
+              <ChartIcon />
+            </Link>
+            <RulesButton />
+          </div>
+        }
+      />
 
       <div className="mt-3">
         <Segmented
@@ -112,6 +138,13 @@ export default function Leaderboards() {
           <EmptyState title={t("board.empty")} hint={t("board.emptyHint")} />
         ) : (
           <>
+            {standing ? (
+              <StandingStrip
+                rank={standing.rank}
+                total={standing.total}
+                belowPage={standing.belowPage}
+              />
+            ) : null}
             <div className="grid grid-cols-[2rem_1fr_3.5rem] gap-2 px-3 pb-1 label text-ink-3">
               <span>{t("board.rank")}</span>
               <span>{t("board.player")}</span>
@@ -128,23 +161,49 @@ export default function Leaderboards() {
                   youLabel={t("board.you")}
                 />
               ))}
-              {/* Your row, computed server-side, when it lives below the page. */}
-              {you && !youOnBoard ? (
-                <>
-                  <li
-                    aria-hidden="true"
-                    className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-ink-3"
-                  >
-                    {t("board.belowPage")}
-                  </li>
-                  <BoardRow rank={you.rank} name={t("board.you")} total={you.total} highlight />
-                </>
-              ) : null}
             </ul>
           </>
         )}
       </section>
     </>
+  );
+}
+
+/**
+ * The viewer's own line, promoted to the top of the board. A list of strangers
+ * is honest but inert; leading with "you are #12 on 87" is the fact this screen
+ * exists to deliver. Uses the same volt/gold grammar as the highlighted row.
+ */
+function StandingStrip({
+  rank,
+  total,
+  belowPage,
+}: {
+  rank: number;
+  total: number;
+  belowPage: boolean;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="mb-3 flex items-center justify-between gap-3 rounded-card border border-volt bg-elevated p-3">
+      <div className="min-w-0">
+        <p className="label text-ink-3">{t("board.yourStanding")}</p>
+        <p className="truncate text-sm font-bold text-ink">{t("board.you")}</p>
+        {belowPage ? <p className="text-[11px] text-ink-3">{t("board.belowPage")}</p> : null}
+      </div>
+      <div className="flex flex-none items-center gap-4 text-end">
+        <div>
+          <p className="label text-ink-3">{t("board.rankLabel")}</p>
+          <Num className="text-lg font-black text-volt">
+            #{rank}
+          </Num>
+        </div>
+        <div>
+          <p className="label text-ink-3">{t("board.points")}</p>
+          <Num className="text-lg font-black text-gold">{total}</Num>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -169,18 +228,18 @@ function BoardRow({
       )}
     >
       <Num
-        className={cx(
-          "text-sm font-bold",
-          rank === 1 ? "text-gold" : rank <= 3 ? "text-ink" : "text-ink-3",
-        )}
+        className={cx("text-sm font-bold", rank === 1 ? "text-gold" : rank <= 3 ? "text-ink" : "text-ink-3")}
       >
         {rank}
       </Num>
       <span className="flex min-w-0 items-center gap-2">
         <Avatar name={name} size="sm" />
+        {/* dir=auto: display names are user data. Forcing LTR mis-orders
+            Persian names and any trailing punctuation; auto picks the
+            direction from the name's own first strong character. */}
         <span
           className={cx("min-w-0 flex-1 truncate text-sm font-bold", highlight ? "text-volt" : "text-ink")}
-          dir="ltr"
+          dir="auto"
         >
           {name}
         </span>

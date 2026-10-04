@@ -40,22 +40,51 @@ const queryClient = new QueryClient({
   },
 });
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    {/* Outermost: a render crash anywhere lands on the retry card, not a
-        white screen. */}
-    <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        {/* HashRouter: works unchanged inside Telegram's webview and on static hosts
-            without needing a server-side rewrite rule. */}
-        <HashRouter>
-          <I18nProvider>
-            <ToastProvider>
-              <App />
-            </ToastProvider>
-          </I18nProvider>
-        </HashRouter>
-      </QueryClientProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
-);
+/**
+ * Mount only once the Telegram SDK has settled — loaded, failed, or hit the
+ * 1.5s deadline set in index.html. AuthProvider reads initData on its first
+ * render, so mounting first would silently downgrade a Telegram user to a
+ * guest account; the deadline is what stops an unreachable telegram.org
+ * (Iran, where this app ships) from holding the boot splash hostage while the
+ * parser waits out a blackholed connection. The timer below is insurance in
+ * case the inline script in index.html ever fails to run at all.
+ */
+let mounted = false;
+function mount() {
+  if (mounted) return;
+  mounted = true;
+  // The module-level call above ran at parse time, which may predate the SDK
+  // settling; repeat it so header colour and ready() see a present SDK.
+  try {
+    initTelegram();
+  } catch {
+    /* non-Telegram browser: no-op */
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")!).render(
+    <React.StrictMode>
+      {/* Outermost: a render crash anywhere lands on the retry card, not a
+          white screen. */}
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          {/* HashRouter: works unchanged inside Telegram's webview and on static hosts
+              without needing a server-side rewrite rule. */}
+          <HashRouter>
+            <I18nProvider>
+              <ToastProvider>
+                <App />
+              </ToastProvider>
+            </I18nProvider>
+          </HashRouter>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </React.StrictMode>,
+  );
+}
+
+if (window.__tgSdkSettled) {
+  mount();
+} else {
+  window.addEventListener("tg-sdk-settled", mount, { once: true });
+  setTimeout(mount, 2500);
+}

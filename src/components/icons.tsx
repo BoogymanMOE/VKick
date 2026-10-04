@@ -66,6 +66,19 @@ export const ChevronLeftIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/**
+ * Trailing disclosure / "go" chevron — points toward the end edge and mirrors
+ * itself in RTL so it never points back at the content in Persian. The links
+ * that used to wrap `ChevronLeftIcon` with `rtl:rotate-180` pointed the WRONG
+ * way in LTR (a left chevron trailing a row reads as "back"), so this is the
+ * one affordance for "opens something ahead".
+ */
+export const ChevronRightIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} width={18} height={18} className={cx("rtl:-scale-x-100", p.className)}>
+    <path d="M9.5 5.5L16 12l-6.5 6.5" />
+  </svg>
+);
+
 /** "Back" chevron that mirrors itself in RTL (flips to point right in Persian). */
 export const ArrowIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} width={16} height={16} className={cx("rtl:-scale-x-100", p.className)}>
@@ -148,6 +161,15 @@ export const TargetIcon = (p: SVGProps<SVGSVGElement>) => (
     <circle cx="12" cy="12" r="8.5" />
     <circle cx="12" cy="12" r="4" />
     <circle cx="12" cy="12" r="0.6" fill="currentColor" />
+  </svg>
+);
+
+/** Info — the "How points work" entry point on Predictions and Boards. */
+export const InfoIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} width={18} height={18}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 11.2v5" />
+    <path d="M12 7.9v.1" />
   </svg>
 );
 

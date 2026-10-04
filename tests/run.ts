@@ -25,9 +25,11 @@ import { runVerifyTests } from "./verify.test.js";
 import { runBracketTests } from "./bracket.test.js";
 import { runReferralTests } from "./referral.test.js";
 import { runSeedDemoTests } from "./seedDemo.test.js";
+import { runGuestMergeTests } from "./guestMerge.test.js";
 import { runRateLimitTests } from "./rateLimit.test.js";
 import { runPickSummaryTests } from "./pickSummary.test.js";
-
+import { runOptimisticTests } from "./optimistic.test.js";
+import { runCompetitionsTests } from "./competitions.test.js";
 
 let failed = 0;
 const groups: Array<[string, () => void | Promise<void>]> = [
@@ -53,9 +55,13 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["bracket", runBracketTests],
   ["referral", runReferralTests],
   ["seedDemo", runSeedDemoTests],
+  // Before rateLimit: both drive routers over getDb(), which caches one handle
+  // for the whole process and cannot be reopened once a suite closes it.
+  ["guestMerge", runGuestMergeTests],
   ["rateLimit", runRateLimitTests],
   ["pickSummary", runPickSummaryTests],
-  
+  ["optimistic", runOptimisticTests],
+  ["competitions", runCompetitionsTests],
 ];
 
 for (const [name, run] of groups) {

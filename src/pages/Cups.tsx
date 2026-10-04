@@ -163,6 +163,7 @@ export default function Cups() {
               <CollapsibleSection
                 key={round.label}
                 id={`cups-round-${roundId(round.label)}`}
+                level={2}
                 title={localize(round.label)}
                 count={legCount}
                 openOverride={roundsOverride === null ? undefined : { open: roundsOverride }}
@@ -229,7 +230,12 @@ export default function Cups() {
             )}
           </section>
 
-          <CollapsibleSection id="cups-finished" title={t("matches.previous")} count={finished.length}>
+          <CollapsibleSection
+            id="cups-finished"
+            level={2}
+            title={t("matches.previous")}
+            count={finished.length}
+          >
             {finished.length > 0 ? (
               <CupMatchList matches={finished} />
             ) : (
@@ -258,7 +264,9 @@ function CupMatchList({ matches, bare = false }: { matches: Match[]; bare?: bool
         <li
           key={match.id}
           className={
-            bare ? "border-t border-line px-3 py-2 first:border-t-0" : "rounded-card border border-line bg-surface p-3"
+            bare
+              ? "border-t border-line px-3 py-2 first:border-t-0"
+              : "rounded-card border border-line bg-surface p-3"
           }
         >
           <div className="flex items-center gap-2">

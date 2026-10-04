@@ -48,12 +48,33 @@
       <img src="/vkick-mark.svg" alt="" width="96" height="96" />
     </div>
     <div id="root"></div>
-    <!-- Telegram's official SDK, before the app bundle: initData must exist
-         when AuthProvider first reads it, or the Telegram login silently
-         degrades to a guest account (no bot pushes). Synchronous load; on a
-         plain browser this file simply never arrives and the app proceeds
-         as the web guest path. -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Telegram's official SDK: initData must exist when AuthProvider first
+         reads it, or the Telegram login silently degrades to a guest account
+         (no bot pushes).
+
+         It is loaded WITHOUT blocking the parser and with a hard 1.5s
+         deadline. As a synchronous script it stalled boot for 32 seconds on
+         any network that cannot reach telegram.org — which includes Iran,
+         where this app ships — because the parser waits for a blackholed TCP
+         connection to time out before it will even look at the app bundle.
+         Either outcome (loaded, failed, deadline) dispatches tg-sdk-settled,
+         and main.tsx mounts on that. -->
+    <script>
+      (function () {
+        function settle() {
+          if (window.__tgSdkSettled) return;
+          window.__tgSdkSettled = true;
+          window.dispatchEvent(new Event("tg-sdk-settled"));
+        }
+        var sdk = document.createElement("script");
+        sdk.src = "https://telegram.org/js/telegram-web-app.js";
+        sdk.async = true;
+        sdk.onload = settle;
+        sdk.onerror = settle;
+        document.head.appendChild(sdk);
+        setTimeout(settle, 1500);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
