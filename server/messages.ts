@@ -57,11 +57,15 @@ export function goalPush(lang: PushLang, v: GoalPushVars): string {
   return `⚽ GOAL ${v.minute}' — ${v.club ?? "A team you follow"}\n${v.scorer}\n${v.score}`;
 }
 
-/** The official lineup has dropped: the Sub Predictor is open. */
+/**
+ * The official lineup has dropped: the whole gated set is open. Names every
+ * mechanic that just unlocked, so the push converts the gate into an action
+ * instead of only announcing the XI.
+ */
 export function lineupPush(lang: PushLang, v: MatchPushVars): string {
   return lang === "fa"
-    ? `👥 ترکیب اعلام شد — ${v.home} - ${v.away}\nپیش‌بینی تعویض باز شد؛ در پایان نیمه اول قفل می‌شود.`
-    : `👥 Lineup out — ${v.home} v ${v.away}\nThe Sub Predictor is open and locks at half-time.`;
+    ? `👥 ترکیب اعلام شد — ${v.home} - ${v.away}\nپیش‌بینی شوت، بازیکن تحت نظر، رودررو و تعویض باز شد؛ در شروع بازی قفل می‌شوند (تعویض در پایان نیمه اول).`
+    : `👥 Lineup out — ${v.home} v ${v.away}\nShot, Player to Watch, Versus and the sub board are open. Picks lock at kickoff (subs at half-time).`;
 }
 
 /** Last call before everything locks at kickoff. */

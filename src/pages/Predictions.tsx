@@ -5,6 +5,8 @@ import { Chip, EmptyState, ErrorState, Num, SectionHeading } from "../components
 import { useMyPredictionHistory, type PredictionHistoryRow } from "../hooks/useApi";
 import { useI18n } from "../i18n/I18nProvider";
 import { breakdownItems, pickSummary, MECHANIC_LABELS, STATUS_LABELS, type BreakdownLang } from "../lib/breakdown";
+import { formatCountdown, isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
+import { useNow } from "../hooks/useNow";
 import { formatKickoff } from "../lib/format";
 
 /**
@@ -19,6 +21,8 @@ export default function Predictions() {
   const { t, lang, localize } = useI18n();
   const query = useMyPredictionHistory();
   const rows = query.data ?? [];
+  // Ticking clock for the pending rows' "locks in Xh Ym" state.
+  const now = useNow(30_000);
 
   const settled = rows.filter((r) => r.status !== "pending");
   const pending = rows.filter((r) => r.status === "pending");
@@ -55,7 +59,7 @@ export default function Predictions() {
             ) : (
               <ul className="space-y-2">
                 {settled.map((row) => (
-                  <PredictionCard key={row.id} row={row} lang={lang} localize={localize} />
+                  <PredictionCard key={row.id} row={row} lang={lang} localize={localize} now={now} />
                 ))}
               </ul>
             )}
@@ -73,7 +77,7 @@ export default function Predictions() {
               />
               <ul className="space-y-2">
                 {pending.map((row) => (
-                  <PredictionCard key={row.id} row={row} lang={lang} localize={localize} />
+                  <PredictionCard key={row.id} row={row} lang={lang} localize={localize} now={now} />
                 ))}
               </ul>
             </section>
@@ -96,14 +100,28 @@ function PredictionCard({
   row,
   lang,
   localize,
+  now,
 }: {
   row: PredictionHistoryRow;
   lang: BreakdownLang;
   localize: (text: string) => string;
+  now: number;
 }) {
   const { t } = useI18n();
   const items = breakdownItems(row.breakdown, lang);
   const hasScore = row.homeScore !== null && row.awayScore !== null;
+  // The same state machine the hub renders, fed by the window the server built
+  // from the write path's own rules — so a pending row says honestly whether a
+  // pick can still be changed and when it locks.
+  const windowOpen =
+    row.status === "pending" && row.window
+      ? isOpen(row.mechanic as Mechanic, row.window, {
+          matchStatus: row.matchStatus as MatchStatus,
+          lineupsPublished: row.lineupPublished,
+          now,
+        })
+      : false;
+  const countdown = windowOpen && row.window ? formatCountdown(row.window.lockAt, now) : null;
   // Names come from the server (one lookup for the page, not one per row);
   // localize() renders them in the user's language, and an id the server
   // couldn't resolve degrades to #id rather than a blank line.
@@ -142,7 +160,17 @@ function PredictionCard({
         </span>
         <span className="flex items-center gap-2">
           {row.status === "pending" ? (
-            <span className="text-ink-3">{t("predictions.notSettled")}</span>
+            row.matchStatus === "finished" ? (
+              <span className="text-ink-3">{t("predictions.notSettled")}</span>
+            ) : windowOpen ? (
+              <Chip tone="volt">
+                {countdown
+                  ? t("predictions.windowOpenLock", { time: countdown })
+                  : t("predictions.windowOpen")}
+              </Chip>
+            ) : (
+              <Chip tone="muted">{t("predictions.windowLocked")}</Chip>
+            )
           ) : (
             <Chip tone={row.points > 0 ? "volt" : "muted"}>
               {t("predictions.points", { points: row.points })}

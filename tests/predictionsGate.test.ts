@@ -71,10 +71,12 @@ async function suite(): Promise<void> {
     // Imported AFTER SQLITE_PATH is set: the router calls getDb() at module
     // scope, so a stale path here would point the suite at the dev database.
     const { predictionsRouter } = await import("../server/routes/predictions.js");
+    const { meRouter } = await import("../server/routes/me.js");
 
     const app = express();
     app.use(express.json());
     app.use(predictionsRouter);
+    app.use(meRouter);
     const server = app.listen(0);
     await new Promise<void>((r) => server.once("listening", () => r()));
     const port = (server.address() as AddressInfo).port;
@@ -160,6 +162,19 @@ async function suite(): Promise<void> {
       assert.equal(watch.status, 200, `watch open after lineup: ${JSON.stringify(watch.body)}`);
       const versus = await post("versus", { playerAId: "1001", playerBId: "1002" });
       assert.equal(versus.status, 200, `versus open after lineup: ${JSON.stringify(versus.body)}`);
+
+      // The history endpoint must surface the SAME window state the gate just
+      // enforced — built from one definition, so it can't drift.
+      const history = await request(port, "GET", "/api/me/predictions", undefined, headers);
+      assert.equal(history.status, 200, `history read failed: ${JSON.stringify(history.body)}`);
+      const hist = (history.body.predictions as Array<Record<string, unknown>>) ?? [];
+      const shotRow = hist.find((r) => r.mechanic === "shot_predict");
+      assert.ok(shotRow, "the shot pick appears in history");
+      assert.equal(shotRow!.match_status, "scheduled", "history carries the match status");
+      assert.equal(shotRow!.lineup_published, true, "history carries the published signal");
+      const shotWindow = shotRow!.window as { opensAt: string | null; requires: string | null } | null;
+      assert.equal(shotWindow?.requires, "lineup", "history window is self-describing");
+      assert.equal(shotWindow?.opensAt, null, "published lineup opens the history window now");
 
       // Fallback: a competition that never writes a formation string must not
       // strand the gate. Once BOTH sides have a starter in match_player_stats,

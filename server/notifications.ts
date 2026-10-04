@@ -19,6 +19,7 @@
  */
 import { all, get, type DB } from "./db/index.js";
 import { asPushLang, goalPush, halftimePush, lineupPush, lockPush, ratingsPush, type PushLang } from "./messages.js";
+import { lineupPublished } from "./predictions/window.js";
 
 /** Every kind of push the app sends. Also the dedupe stage for matchday pushes. */
 export type PushKind = "goal" | "lineup" | "lock" | "halftime" | "ratings";
@@ -192,6 +193,8 @@ interface MatchRow {
   home_score: number | null;
   away_score: number | null;
   home_formation: string | null;
+  /** Distinct teams with a recorded starter — the fallback half of the gate. */
+  starter_teams: number;
   home: string;
   away: string;
 }
@@ -215,7 +218,9 @@ export function queueMatchdayAlerts(db: DB, now: Date = new Date()): number {
   const matches = all<MatchRow>(
     db,
     `SELECT m.id, m.status, m.kickoff_at, m.home_score, m.away_score, m.home_formation,
-            th.short_name AS home, ta.short_name AS away
+            th.short_name AS home, ta.short_name AS away,
+            (SELECT COUNT(DISTINCT team_id) FROM match_player_stats
+              WHERE match_id = m.id AND started = 1) AS starter_teams
      FROM matches m
      JOIN teams th ON th.id = m.home_team_id
      JOIN teams ta ON ta.id = m.away_team_id
@@ -234,8 +239,15 @@ export function queueMatchdayAlerts(db: DB, now: Date = new Date()): number {
 
     if (m.status === "scheduled") {
       // Lineup drop: the formations arrive with the official lineup (~1h out)
-      // and that is when the Sub Predictor opens.
-      if (m.home_formation && minutesToKickoff > 0 && minutesToKickoff <= LINEUP_WINDOW_MINUTES) {
+      // and that is when the whole gated set opens (sub, shot, watch, versus).
+      // The published signal is the SAME one the write gate uses — formation
+      // OR both sides having a starter — so a competition that never emits a
+      // formation still wakes its followers.
+      if (
+        lineupPublished(m.home_formation, m.starter_teams ?? 0) &&
+        minutesToKickoff > 0 &&
+        minutesToKickoff <= LINEUP_WINDOW_MINUTES
+      ) {
         queued += emit(db, m.id, "lineup", (lang) => lineupPush(lang, { home: m.home, away: m.away, score }));
       }
       if (minutesToKickoff > 0 && minutesToKickoff <= LOCK_WINDOW_MINUTES) {

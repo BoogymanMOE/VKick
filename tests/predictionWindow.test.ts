@@ -8,7 +8,13 @@
  * still looking tappable until the POST rejects them.
  */
 import { strict as assert } from "node:assert";
-import { isOpen, requiresLineup, LINEUP_GATED, type Mechanic } from "../src/lib/predictionWindow.js";
+import {
+  formatCountdown,
+  isOpen,
+  requiresLineup,
+  LINEUP_GATED,
+  type Mechanic,
+} from "../src/lib/predictionWindow.js";
 
 const HOUR = 3_600_000;
 const T0 = Date.UTC(2026, 0, 1, 12, 0, 0); // a fixed "now"
@@ -77,6 +83,12 @@ export function runPredictionWindowTests(): void {
     false,
     "a window with no requires flag still honours the canonical gate",
   );
+
+  // --- countdown formatting -------------------------------------------------
+  assert.equal(formatCountdown(at(T0 + 2 * HOUR + 5 * 60_000), T0), "2h 5m", "hours and minutes");
+  assert.equal(formatCountdown(at(T0 + 45 * 60_000), T0), "0h 45m", "sub-hour shows 0h");
+  assert.equal(formatCountdown(at(T0 - 1), T0), null, "past the lock = no countdown");
+  assert.equal(formatCountdown(null, T0), null, "no lock time = no countdown");
 
   console.log("  predictionWindow: gate, clock windows, kickoff lock, self-describing requires OK");
 }

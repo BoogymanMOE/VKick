@@ -121,7 +121,8 @@ Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by mi
 
 **No longer dormant — the server-only features have UI:**
 
-- Per-user prediction history (`GET /api/me/predictions`) and the resolver's `breakdown` payloads now render as the "why did I get X" panel (`src/pages/Predictions.tsx`, reached from Profile), including the Shot Predictor's `zoneFromFallback` and `lenientSoT` leniency flags
+- Per-user prediction history (`GET /api/me/predictions`) and the resolver's `breakdown` payloads now render as the "why did I get X" panel (`src/pages/Predictions.tsx`, reached from Profile), including the Shot Predictor's `zoneFromFallback` and `lenientSoT` leniency flags, plus a live open/locked state per pending pick (the server builds the window from the same rules the write gate enforces)
+- The lineup-drop push fires on the robust published signal (formation or both XIs' starters) and names every mechanic it opens (shot, watch, versus, subs), converting the gate into an action
 
 **Not started:**
 

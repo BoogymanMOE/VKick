@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type UseMutateFunction } from "@tanstack/react-query";
 import { api, serverErrorKey, type ApiPrediction } from "../../lib/api";
 import { useI18n } from "../../i18n/I18nProvider";
@@ -13,7 +13,8 @@ import { SubBoard } from "./SubBoard";
 import { LineupPicker } from "./LineupPicker";
 import { ShotPredictor } from "./ShotPredictor";
 import { StarFilledIcon, SwapIcon, TargetIcon } from "../icons";
-import { isOpen, requiresLineup, type MatchStatus } from "../../lib/predictionWindow";
+import { formatCountdown, isOpen, requiresLineup, type MatchStatus } from "../../lib/predictionWindow";
+import { useNow } from "../../hooks/useNow";
 
 type Mechanic = ApiPrediction["mechanic"];
 type PredictionsData = Awaited<ReturnType<typeof api.getMyPredictions>>;
@@ -94,6 +95,9 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
   const finished = matchStatus === "finished";
 
   const [editor, setEditor] = useState<Mechanic | null>(null);
+  // Ticking clock: the countdown strings below are derived, not polled, so
+  // without this they would freeze until an unrelated refetch.
+  const now = useNow(30_000);
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["predictions", matchId] });
 
@@ -171,11 +175,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
     if (live) {
       return m === "sub" ? t("predict.lockHT") : t("predict.locked");
     }
-    const lockMs = new Date(w.lockAt).getTime() - Date.now();
-    if (lockMs <= 0) return t("predict.locked");
-    const hours = Math.floor(lockMs / 3_600_000);
-    const minutes = Math.floor((lockMs % 3_600_000) / 60_000);
-    return `${hours}h ${minutes}m`;
+    return formatCountdown(w.lockAt, now) ?? t("predict.locked");
   };
 
   const mechanics: Mechanic[] = ["lineup", "sub", "shot_predict", "player_watch", "versus"];
@@ -184,13 +184,22 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
   // same rules the server enforces, so a card never looks tappable when the
   // POST would answer LOCKED_MATCH_STARTED. Notably this closes every non-Sub
   // mechanic the instant the match kicks off, instead of trusting opensAt.
-  const opensNow = (m: Mechanic) => isOpen(m, windows[m], { matchStatus, lineupsPublished });
+  const opensNow = (m: Mechanic) => isOpen(m, windows[m], { matchStatus, lineupsPublished, now });
 
   // Open-and-unpicked first: the list reads as the next step, not a five-row
-  // checklist. The rest keep the canonical order (sort is stable).
-  const ordered = [...mechanics].sort(
-    (a, b) => Number(!(opensNow(a) && !byMechanic(a))) - Number(!(opensNow(b) && !byMechanic(b))),
-  );
+  // checklist. Re-ranked ONLY when the open/picked picture actually changes —
+  // the 30s countdown tick must not shuffle cards under the user's thumb.
+  const orderKey = mechanics
+    .map((m) => `${opensNow(m) ? "o" : "-"}${byMechanic(m) ? "p" : "-"}`)
+    .join("");
+  const orderedRef = useRef<Mechanic[]>(mechanics);
+  const orderKeyRef = useRef<string | null>(null);
+  if (orderKeyRef.current !== orderKey) {
+    orderKeyRef.current = orderKey;
+    const rank = (m: Mechanic) => Number(!(opensNow(m) && !byMechanic(m)));
+    orderedRef.current = [...mechanics].sort((a, b) => rank(a) - rank(b));
+  }
+  const ordered = orderedRef.current;
 
   // One action leads, not five: the first mechanic that is open and still
   // unpicked wears volt. Five identical primary buttons read as a checklist

@@ -219,6 +219,37 @@ function testPerRecipientLanguage() {
 }
 
 /**
+ * The lineup push fires on the SAME published signal the write gate uses: the
+ * formation OR both sides having a starter. A competition that never emits a
+ * formation still wakes its followers, and the copy names the mechanics that
+ * just opened rather than only announcing the XI.
+ */
+function testLineupFallbackSignal() {
+  const db = tempDb();
+  seed(db);
+  // No formation; both teams have a starter → published by the fallback.
+  addMatch(db, "m_fb", "scheduled", minutesFromNow(60));
+  db.exec(`
+    INSERT INTO players (id, team_id, full_name) VALUES
+      ('p1', 'H', 'Home Starter'), ('p2', 'A', 'Away Starter');
+    INSERT INTO match_player_stats (match_id, player_id, team_id, started) VALUES
+      ('m_fb', 'p1', 'H', 1), ('m_fb', 'p2', 'A', 1);
+  `);
+  assert.equal(queueMatchdayAlerts(db, NOW), 3, "fallback lineup push reaches every follower");
+  assert.deepEqual(idsOf(db, "lineup"), ["u1", "u2", "u3"]);
+  const text = queued(db).find((r) => r.kind === "lineup")?.text ?? "";
+  assert.ok(text.includes("are open"), `copy names the opening set: ${text}`);
+
+  // One side's starters alone must NOT open the gate.
+  addMatch(db, "m_half", "scheduled", minutesFromNow(60));
+  db.exec(
+    "INSERT INTO match_player_stats (match_id, player_id, team_id, started) VALUES ('m_half', 'p1', 'H', 1)",
+  );
+  assert.equal(queueMatchdayAlerts(db, NOW), 0, "a single side's starters do not open the gate");
+  db.close();
+}
+
+/**
  * Goal alerts fan out to followers of the scoring TEAM — club or national
  * side. The international favorites shelf stores national teams as ordinary
  * favorite_teams rows (a league-less team seen in e.g. fifa.world), so the
@@ -349,6 +380,7 @@ export async function runNotificationTests(): Promise<void> {
   testDedupeAndBothClubs();
   testPreferenceGates();
   testWindowGates();
+  testLineupFallbackSignal();
   testPerRecipientLanguage();
   testGoalAlertsCoverInternationalFavorites();
   testKindColumnBackfill();

@@ -52,6 +52,20 @@ export function requiresLineup(
   return LINEUP_GATED.includes(mechanic);
 }
 
+/**
+ * "How long until this locks", as `Xh Ym`, or null once it has passed. One
+ * implementation so the hub and the history page render the same string, and
+ * the caller owns the clock (`now`) so it can tick it.
+ */
+export function formatCountdown(lockAt: string | null | undefined, now: number = Date.now()): string | null {
+  if (!lockAt) return null;
+  const ms = new Date(lockAt).getTime() - now;
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const hours = Math.floor(ms / 3_600_000);
+  const minutes = Math.floor((ms % 3_600_000) / 60_000);
+  return `${hours}h ${minutes}m`;
+}
+
 export interface OpenContext {
   matchStatus: MatchStatus;
   /** True once the official lineup is out (server: GET lineupPublished). */

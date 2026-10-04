@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { api, serverErrorKey, type ApiMatch, type ApiTeam } from "../lib/api";
+import type { PredictionWindow } from "../lib/predictionWindow";
 import { TEAM_FALLBACK } from "../lib/colors";
 import { buildLeagueTabs, type LeagueTab } from "../lib/pickerGroups";
 import { teamFromApi } from "../lib/teams";
@@ -717,6 +718,12 @@ export interface PredictionHistoryRow {
   awayShort: string;
   homeScore: number | null;
   awayScore: number | null;
+  /** Live match status, so the card can show whether the pick window is open. */
+  matchStatus: string;
+  /** Official-lineup signal for this row's match (formation or both XIs' starters). */
+  lineupPublished: boolean;
+  /** The mechanic's window, built by the server from the same rules the gate uses. */
+  window: PredictionWindow | null;
 }
 
 /**
@@ -747,6 +754,9 @@ export function useMyPredictionHistory() {
           awayShort: (row.away_short as string | null) ?? "—",
           homeScore: (row.home_score as number | null) ?? null,
           awayScore: (row.away_score as number | null) ?? null,
+          matchStatus: (row.match_status as string | null) ?? "scheduled",
+          lineupPublished: Boolean(row.lineup_published),
+          window: (row.window as PredictionWindow | null) ?? null,
         };
       }),
   });

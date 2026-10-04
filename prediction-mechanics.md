@@ -12,9 +12,15 @@ Merge the tables below into `data-model.md` and `roadmap.md` when implementing.
 | Sub Predictor | when the official lineup drops | **half-time** (editable until then) |
 | Shot Predictor | when the official lineup is confirmed | **kickoff** |
 | Player to Watch | when the official lineup is confirmed | **kickoff** |
-| Versus Mode | immediately | **kickoff** (no adjusting once the match starts) |
+| Versus Mode | when the official lineup is confirmed | **kickoff** (no adjusting once the match starts) |
 
 All five are pre-match or first-half mechanics. Nothing is pickable after kickoff except the Sub Predictor's first-half editing window.
+
+### The lineup gate (how "when the official lineup is confirmed" is signalled)
+
+`shot_predict`, `player_watch`, `versus` and `sub` are **lineup-gated**: until the official XI is out the server refuses a write with `LINEUP_NOT_PUBLISHED`, and each window reports `requires: "lineup"` on the wire so the client renders the gate from data rather than a duplicated rule. The **Lineup Predictor is deliberately exempt** — predicting the XI *before* release is the whole point, and it runs on the 2h-before-kickoff lock.
+
+The published signal is `matches.home_formation`, set by the summary sync exactly when ESPN ships the starting XI + formation (the same flag the lineup-drop push uses). **Fallback:** some competitions send the XI in `match_player_stats` without ever writing a formation string, so once **both** sides have at least one starter recorded the XI is treated as public — those leagues are not stranded behind a signal they never emit. A tighter sync lane re-checks scheduled matches within ~90 minutes of kickoff (every ~2.5 minutes), so the gate opens within minutes of ESPN publishing the XI instead of waiting out the wider sweep.
 
 ## The 5 Mechanics
 

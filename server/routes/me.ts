@@ -11,6 +11,7 @@ import { evaluateStreakForUser } from "../scoring/streak.js";
 import { referralStats, redeemReferralCode } from "../scoring/referral.js";
 import { POINTS as SCORING_POINTS } from "../scoring/predictionScore.js";
 import { attachPlayerNames } from "../predictions/pickNames.js";
+import { lineupPublished, windowFor } from "../predictions/window.js";
 import { bad, currentUser, requireUser, MAX_LEAGUES } from "./shared.js";
 
 const db = getDb();
@@ -271,10 +272,13 @@ meRouter.delete("/api/me/leagues/:league", requireUser, (req, res) => {
 /* ------------------------------------------------------------ prediction history */
 
 meRouter.get("/api/me/predictions", requireUser, (req, res) => {
-  const rows = all(
+  const rows = all<Record<string, unknown>>(
     db,
-    `SELECT p.*, m.kickoff_at, m.home_score, m.away_score,
-       th.short_name AS home_short, ta.short_name AS away_short
+    `SELECT p.*, m.kickoff_at, m.home_score, m.away_score, m.status AS match_status,
+       m.home_formation,
+       th.short_name AS home_short, ta.short_name AS away_short,
+       (SELECT COUNT(DISTINCT team_id) FROM match_player_stats
+         WHERE match_id = m.id AND started = 1) AS starter_teams
      FROM predictions p
      JOIN matches m ON m.id = p.match_id
      JOIN teams th ON th.id = m.home_team_id
@@ -284,7 +288,23 @@ meRouter.get("/api/me/predictions", requireUser, (req, res) => {
   );
   // Payloads carry ESPN athlete ids; summaries must show names. Resolved in one
   // query for the whole page (see pickNames.ts) rather than per row.
-  res.json({ predictions: attachPlayerNames(db, rows) });
+  const named = attachPlayerNames(db, rows);
+  res.json({
+    predictions: named.map((r) => {
+      // The exact window the hub renders and the write path enforces — built
+      // from one definition (predictions/window.ts), so the history page's
+      // "open / locked" state can never disagree with reality.
+      const published = lineupPublished(
+        (r.home_formation as string | null) ?? null,
+        Number(r.starter_teams ?? 0),
+      );
+      return {
+        ...r,
+        lineup_published: published,
+        window: windowFor(String(r.mechanic ?? ""), String(r.kickoff_at ?? ""), published),
+      };
+    }),
+  });
 });
 
 /* ------------------------------------------------------------ streak */
