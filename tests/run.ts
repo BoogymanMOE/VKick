@@ -27,7 +27,9 @@ import { runReferralTests } from "./referral.test.js";
 import { runSeedDemoTests } from "./seedDemo.test.js";
 import { runGuestMergeTests } from "./guestMerge.test.js";
 import { runRateLimitTests } from "./rateLimit.test.js";
+import { runPredictionsGateTests } from "./predictionsGate.test.js";
 import { runPickSummaryTests } from "./pickSummary.test.js";
+import { runPredictionWindowTests } from "./predictionWindow.test.js";
 import { runOptimisticTests } from "./optimistic.test.js";
 import { runCompetitionsTests } from "./competitions.test.js";
 
@@ -59,7 +61,9 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   // for the whole process and cannot be reopened once a suite closes it.
   ["guestMerge", runGuestMergeTests],
   ["rateLimit", runRateLimitTests],
+  ["predictionsGate", runPredictionsGateTests],
   ["pickSummary", runPickSummaryTests],
+  ["predictionWindow", runPredictionWindowTests],
   ["optimistic", runOptimisticTests],
   ["competitions", runCompetitionsTests],
 ];

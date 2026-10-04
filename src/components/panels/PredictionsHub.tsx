@@ -4,7 +4,6 @@ import { api, serverErrorKey, type ApiPrediction } from "../../lib/api";
 import { useI18n } from "../../i18n/I18nProvider";
 import { haptic, notifyHaptic, selectionHaptic } from "../../lib/telegram";
 import { pickSummary } from "../../lib/breakdown";
-import { useLocalState } from "../../lib/useLocalState";
 import { useToast } from "../Toast";
 import { BottomSheet } from "../BottomSheet";
 import { RulesButton } from "../RulesSheet";
@@ -14,6 +13,7 @@ import { SubBoard } from "./SubBoard";
 import { LineupPicker } from "./LineupPicker";
 import { ShotPredictor } from "./ShotPredictor";
 import { StarFilledIcon, SwapIcon, TargetIcon } from "../icons";
+import { isOpen, requiresLineup, type MatchStatus } from "../../lib/predictionWindow";
 
 type Mechanic = ApiPrediction["mechanic"];
 type PredictionsData = Awaited<ReturnType<typeof api.getMyPredictions>>;
@@ -85,7 +85,10 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
   });
   const rows = query.data?.predictions ?? [];
   const windows = query.data?.windows ?? {};
-  const matchStatus = query.data?.matchStatus ?? "scheduled";
+  const matchStatus = (query.data?.matchStatus ?? "scheduled") as MatchStatus;
+  // True once the official lineup is out — the gate the lineup-dependent
+  // mechanics wait on, alongside their own clock windows.
+  const lineupsPublished = query.data?.lineupPublished ?? false;
   const live = matchStatus === "live";
   const halftime = matchStatus === "halftime";
   const finished = matchStatus === "finished";
@@ -177,45 +180,22 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
 
   const mechanics: Mechanic[] = ["lineup", "sub", "shot_predict", "player_watch", "versus"];
 
-  /* --- Progressive disclosure ------------------------------------------------
-     The full 5-mechanic board is a lot before a user's first real match. The
-     count of distinct matchdays the user has ever predicted on (persisted in
-     localStorage) opens the set up in tiers; any mechanic with an existing
-     pick and any mechanic whose window is open right now always shows. */
-  // Distinct days on which the user has ever submitted a prediction — a
-  // lightweight, local proxy for "returned and played real matchdays".
-  const [daysPlayed, setDaysPlayed] = useLocalState<string[]>("verdikick.matchdaysPredicted", []);
-  const matchdaysPlayed = daysPlayed.length;
-  const tier = matchdaysPlayed >= 2 ? 2 : matchdaysPlayed; // 0 | 1 | 2+
-  const recordMatchday = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    setDaysPlayed((prev) => (prev.includes(today) ? prev : [...prev.slice(-49), today]));
-  };
-  const alwaysVisible = new Set<Mechanic>(["lineup"]);
-  for (const m of mechanics) {
-    if (byMechanic(m)) alwaysVisible.add(m);
-    const w = windows[m];
-    const opensAt = w?.opensAt ? new Date(w.opensAt).getTime() : null;
-    const windowOpen =
-      opensAt !== null && Date.now() >= opensAt && new Date(w?.lockAt ?? 0).getTime() > Date.now();
-    if (windowOpen) alwaysVisible.add(m);
-    if (live || halftime) alwaysVisible.add("sub");
-  }
-  const visible = mechanics.filter((m) => alwaysVisible.has(m) || mechanics.indexOf(m) < 1 + tier * 2);
-  const hiddenCount = mechanics.length - visible.length;
+  // One state machine for the whole app (src/lib/predictionWindow.ts): the
+  // same rules the server enforces, so a card never looks tappable when the
+  // POST would answer LOCKED_MATCH_STARTED. Notably this closes every non-Sub
+  // mechanic the instant the match kicks off, instead of trusting opensAt.
+  const opensNow = (m: Mechanic) => isOpen(m, windows[m], { matchStatus, lineupsPublished });
 
-  // A mechanic's window counts as open when it has no scheduled open time, or
-  // that time has passed, or the match is under way / over. Shared by the
-  // disabled state below and the single primary action picked here.
-  const opensNow = (m: Mechanic) => {
-    const w = windows[m];
-    const opensAt = w?.opensAt ? new Date(w.opensAt).getTime() : null;
-    return opensAt === null || Date.now() >= opensAt || live || finished;
-  };
-  // One action leads, not five: the first visible mechanic that is open and
-  // still unpicked wears volt. Five identical primary buttons read as a
-  // checklist with no next step, which is the opposite of a deadline.
-  const primaryMechanic = visible.find((m) => !byMechanic(m) && opensNow(m));
+  // Open-and-unpicked first: the list reads as the next step, not a five-row
+  // checklist. The rest keep the canonical order (sort is stable).
+  const ordered = [...mechanics].sort(
+    (a, b) => Number(!(opensNow(a) && !byMechanic(a))) - Number(!(opensNow(b) && !byMechanic(b))),
+  );
+
+  // One action leads, not five: the first mechanic that is open and still
+  // unpicked wears volt. Five identical primary buttons read as a checklist
+  // with no next step, which is the opposite of a deadline.
+  const primaryMechanic = ordered.find((m) => !byMechanic(m) && opensNow(m));
 
   return (
     <div className="space-y-2">
@@ -233,10 +213,13 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
       {query.isLoading ? (
         <PredictionsHubSkeleton />
       ) : (
-        visible.map((m) => {
+        ordered.map((m) => {
           const meta = MECHANIC_META[m];
           const row = byMechanic(m);
           const notOpenYet = !opensNow(m);
+          // Gated and still waiting on ESPN's XI: the card explains itself
+          // rather than showing a kickoff countdown that hasn't started.
+          const lineupLocked = !finished && requiresLineup(m, windows[m]) && !lineupsPublished;
           return (
             <Card key={m} className={cx("p-3", row && "border-volt/40")}>
               <div className="flex items-center gap-2">
@@ -262,9 +245,11 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
 
               <div className="mt-2 flex items-center justify-between gap-2">
                 <span className="label text-ink-3">
-                  {m === "sub"
-                    ? t("predict.lockHT")
-                    : `${t(meta.lockKey as never)}${!notOpenYet && !live && !finished ? ` · ${windowInfo(m) ?? ""}` : ""}`}
+                  {lineupLocked
+                    ? t("predict.waitLineupHint")
+                    : m === "sub"
+                      ? t("predict.lockHT")
+                      : `${t(meta.lockKey as never)}${!notOpenYet && !live && !finished ? ` · ${windowInfo(m) ?? ""}` : ""}`}
                 </span>
                 {row?.payload ? <MechanicSummary mechanic={m} payload={row.payload} nameOf={nameOf} /> : null}
                 {!finished && !halftime ? (
@@ -286,13 +271,6 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
         })
       )}
 
-      {!query.isLoading && hiddenCount > 0 ? (
-        <div className="rounded-card border border-dashed border-line p-3">
-          <p className="text-sm font-bold text-ink-2">{t("predict.teaserTitle", { count: hiddenCount })}</p>
-          <p className="mt-0.5 text-[11px] text-ink-3">{t("predict.teaserHint")}</p>
-        </div>
-      ) : null}
-
       {editor ? (
         <MechanicEditor
           mechanic={editor}
@@ -301,7 +279,6 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
           existing={byMechanic(editor)}
           onClose={() => setEditor(null)}
           onSaved={() => {
-            recordMatchday();
             // Invalidate (don't await): the optimistic row already shows; the
             // refetch replaces it with server truth (lock windows, ids).
             invalidate();
@@ -474,7 +451,7 @@ function WatchEditor({
   if (featured.length === 0) {
     return (
       <div className="py-4">
-        <EmptyState title={t("lineups.loadingHint")} hint={t("lineups.emptyHint")} />
+        <EmptyState title={t("predict.awaitLineupTitle")} hint={t("predict.awaitLineupHint")} />
       </div>
     );
   }
@@ -555,7 +532,7 @@ function VersusEditor({
   if (featured.length === 0 || teams.length < 2) {
     return (
       <div className="py-4">
-        <EmptyState title={t("lineups.loadingHint")} hint={t("lineups.emptyHint")} />
+        <EmptyState title={t("predict.awaitLineupTitle")} hint={t("predict.awaitLineupHint")} />
       </div>
     );
   }

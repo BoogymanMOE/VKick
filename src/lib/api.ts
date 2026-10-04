@@ -57,6 +57,7 @@ export function serverErrorKey(err: unknown): string {
     SUB_NOT_OPEN: "sub.windowLive",
     SUB_LOCKED_HALFTIME: "sub.lockedHalftime",
     SUB_CAP_REACHED: "sub.capReached",
+    LINEUP_NOT_PUBLISHED: "predict.waitLineup",
     INVALID_PAYLOAD: "common.error",
     // ratings (3-card rule)
     RATING_CAP_REACHED: "ratings.capReached",
@@ -175,6 +176,12 @@ export interface ApiReferral {
 export interface ApiPredictionWindow {
   opensAt: string | null;
   lockAt: string;
+  /**
+   * What this window waits on before it can open. `"lineup"` = the official XI
+   * must be published first; `null` = clock-only. Self-describing so the UI
+   * doesn't carry its own copy of the gated set.
+   */
+  requires?: "lineup" | null;
 }
 
 export interface ApiLeaderRow {
@@ -651,6 +658,8 @@ export const api = {
       predictions: ApiPrediction[];
       windows: Record<string, ApiPredictionWindow>;
       matchStatus: string | null;
+      /** True once ESPN's official lineup is out — shot/watch/versus/sub wait on it. */
+      lineupPublished: boolean;
     }>(`/matches/${matchId}/predictions`),
 
   submitPrediction: (matchId: string, mechanic: ApiPrediction["mechanic"], payload: unknown) =>

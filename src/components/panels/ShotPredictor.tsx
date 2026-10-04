@@ -43,7 +43,7 @@ export function ShotPredictor({
   if (lineupsQuery.isLoading) return <PanelSkeleton height={160} />;
   if (lineupsQuery.isError) return <ErrorState onRetry={() => lineupsQuery.refetch()} />;
   if (featured.length === 0) {
-    return <EmptyState title={t("lineups.loadingHint")} hint={t("lineups.emptyHint")} />;
+    return <EmptyState title={t("predict.awaitLineupTitle")} hint={t("predict.awaitLineupHint")} />;
   }
 
   const cells = Array.from({ length: GRID_ROWS * GRID_COLS }, (_, i) => ({

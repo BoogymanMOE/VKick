@@ -13,16 +13,54 @@ const db = getDb();
 
 const MECHANICS: Mechanic[] = ["lineup", "shot_predict", "sub", "player_watch", "versus"];
 
+/**
+ * Mechanics that only open once ESPN's official lineup is out. The Lineup
+ * Predictor is deliberately excluded — predicting the XI *before* release is
+ * its whole point, and it runs on its own 2h-before-kickoff lock.
+ */
+const LINEUP_GATED: Mechanic[] = ["sub", "shot_predict", "player_watch", "versus"];
+
+/**
+ * Whether the match's official lineup has been published.
+ *
+ * Primary signal: `home_formation`, set by the summary sync exactly when ESPN
+ * ships the starting XI + formation (the same flag the lineup-drop push and
+ * the Sub window use — see notifications.ts). Not a wall-clock guess.
+ *
+ * Fallback: some competitions send the starting XI in `match_player_stats`
+ * without ever writing a formation string, which would otherwise strand the
+ * gated mechanics forever behind a signal that league never emits. Once BOTH
+ * sides have at least one starter recorded, the XI is de facto public.
+ */
+export function isLineupPublished(matchId: string): boolean {
+  const row = get<{ home_formation: string | null }>(
+    db,
+    "SELECT home_formation FROM matches WHERE id = ?",
+    [matchId],
+  );
+  if (row?.home_formation) return true;
+  const starters = get<{ teams: number }>(
+    db,
+    "SELECT COUNT(DISTINCT team_id) AS teams FROM match_player_stats WHERE match_id = ? AND started = 1",
+    [matchId],
+  );
+  return (starters?.teams ?? 0) >= 2;
+}
+
 export const predictionsRouter = express.Router();
 
 /**
  * Per-mechanic lock windows, relative to each match's kickoff
  * (`prediction-mechanics.md`). The old single gameweek deadline is gone.
- *   lineup:       2h before kickoff (deliberately earlier than ESPN's ~1h release)
- *   shot_predict: kickoff
- *   player_watch: kickoff
- *   versus:       kickoff
- *   sub:          handled separately — opens at lineup, locks at half-time
+ *
+ *   lineup:       opens now (no scheduled open time), locks 2h before kickoff
+ *                 — deliberately earlier than ESPN's ~1h XI release, because
+ *                 predicting the XI before it is out is the whole game.
+ *   shot_predict: opens once the OFFICIAL lineup is published (the GET path
+ *   player_watch: clears `opensAt` then); the kickoff − 1h value here is only
+ *   versus:       the pre-publication clock proxy. All three lock at kickoff.
+ *   sub:          the same lineup gate opens it; the live first half keeps it
+ *                 editable and half-time closes it (status-driven, not clock).
  */
 function lockWindowFor(mechanic: string, kickoffAt: string): { lockAt: string; opensAt: string | null } {
   const kickoff = new Date(kickoffAt).getTime();
@@ -52,10 +90,35 @@ predictionsRouter.get("/api/matches/:id/predictions", requireUser, (req, res) =>
     "SELECT kickoff_at, status FROM matches WHERE id = ?",
     [matchId],
   );
+  const lineupPublished = isLineupPublished(matchId);
   const windows = kickoffRow
-    ? Object.fromEntries(MECHANICS.map((m) => [m, lockWindowFor(m, kickoffRow.kickoff_at)]))
+    ? Object.fromEntries(
+        MECHANICS.map((m) => {
+          const w = lockWindowFor(m, kickoffRow.kickoff_at);
+          const gated = LINEUP_GATED.includes(m);
+          // Self-describing: the client renders the gate from this flag rather
+          // than carrying its own copy of the set. Gated mechanics open with
+          // the OFFICIAL lineup, not the kickoff-1h estimate — once it is out
+          // their window is open now (opensAt null = no scheduled open time),
+          // which is what lets a pick land in the ~1h before kickoff even when
+          // the earlier clock-proxy would still have it shut.
+          return [
+            m,
+            {
+              ...w,
+              requires: gated ? ("lineup" as const) : null,
+              ...(gated && lineupPublished ? { opensAt: null } : {}),
+            },
+          ];
+        }),
+      )
     : {};
-  res.json({ predictions: rows, windows, matchStatus: kickoffRow?.status ?? null });
+  res.json({
+    predictions: rows,
+    windows,
+    matchStatus: kickoffRow?.status ?? null,
+    lineupPublished,
+  });
 });
 
 predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter, (req, res) => {
@@ -74,6 +137,13 @@ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter
     [matchId],
   );
   if (!match) return bad(res, "unknown match", 404);
+
+  // The lineup-gated mechanics require the OFFICIAL lineup to be published —
+  // the same signal the first-half Sub window opens on. No wall-clock proxy:
+  // without ESPN's XI there is nothing to shoot/watch/duel against.
+  if (LINEUP_GATED.includes(mechanic as Mechanic) && !isLineupPublished(matchId)) {
+    return bad(res, "LINEUP_NOT_PUBLISHED");
+  }
 
   const now = new Date();
   const window = lockWindowFor(mechanic, match.kickoff_at);
@@ -115,4 +185,4 @@ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter
   res.json({ ok: true, lockAt: window.lockAt, opensAt: window.opensAt });
 });
 
-export { MECHANICS, lockWindowFor };
+export { MECHANICS, LINEUP_GATED, lockWindowFor };

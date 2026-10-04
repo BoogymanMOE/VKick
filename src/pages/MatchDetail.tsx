@@ -41,6 +41,7 @@ import { TaskAdCard } from "../components/TaskAdCard";
 import { useAuth } from "../hooks/useAuth";
 import { useI18n } from "../i18n/I18nProvider";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
+import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
 import { haptic, notifyHaptic } from "../lib/telegram";
 import type { Team } from "../types";
 import type { StringKey } from "../i18n/strings";
@@ -175,8 +176,14 @@ export default function MatchDetail() {
   // unpicked mechanic whose lock has already passed is a dead end rather than
   // an invitation, so the bar reads the same windows the Predict tab renders.
   const picked = new Set<string>((predictionsQuery.data?.predictions ?? []).map((row) => row.mechanic));
+  const lineupsPublished = predictionsQuery.data?.lineupPublished ?? false;
+  const predictionStatus = (predictionsQuery.data?.matchStatus ?? match.status ?? "scheduled") as MatchStatus;
+  // The Predict tab's own state machine (src/lib/predictionWindow.ts), so the
+  // sticky CTA and the cards can never disagree — it honours the lineup gate
+  // and closes non-Sub mechanics the moment kickoff passes.
   const pickStillOpen = Object.entries(predictionsQuery.data?.windows ?? {}).some(
-    ([mechanic, w]) => !picked.has(mechanic) && new Date(w.lockAt).getTime() > Date.now(),
+    ([mechanic, w]) =>
+      !picked.has(mechanic) && isOpen(mechanic as Mechanic, w, { matchStatus: predictionStatus, lineupsPublished }),
   );
   const picksMade = predictionsQuery.data?.predictions.length ?? 0;
   const showPickCta = match.status !== "finished" && tab !== "predict" && pickStillOpen;

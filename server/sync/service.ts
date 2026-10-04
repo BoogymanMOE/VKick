@@ -139,8 +139,15 @@ export async function syncSummaries(): Promise<GoalAlert[]> {
       if (!m.last_synced_at)
         should = hoursToKickoff > -24 * 30; // current season window
       else should = hoursSinceSync > 1 && hoursSinceSync < 26;
-    } else if (m.status === "scheduled" && hoursToKickoff < 3 && hoursToKickoff > -0.25)
-      should = hoursSinceSync > 0.25;
+    } else if (m.status === "scheduled" && hoursToKickoff < 3 && hoursToKickoff > -0.25) {
+      // Inside ~90 min of kickoff ESPN ships the official XI around the hour
+      // mark, and the lineup gate opens the shot/watch/versus/sub mechanics at
+      // that instant. Polling on the wider 15-min sweep left the gate shut for
+      // up to a quarter of an hour after the XI was actually out, so the final
+      // stretch runs on its own tighter lane.
+      const cadenceHours = hoursToKickoff < 1.5 ? NEAR_KICKOFF_SECONDS / 3_600 : 0.25;
+      should = hoursSinceSync > cadenceHours;
+    }
 
     if (!should) continue;
     goals.push(...(await syncMatchSummary(m.league as LeagueSlug, m.id)));
@@ -266,6 +273,20 @@ export const LIVE_PULSE_SECONDS = (() => {
   const n = parseInt(process.env.LIVE_PULSE_SECONDS ?? "", 10);
   if (!Number.isFinite(n)) return 15;
   return Math.min(3600, Math.max(10, n));
+})();
+
+/**
+ * The near-kickoff lane: how often `syncSummaries` re-checks a SCHEDULED match
+ * once it is within ~90 min of kickoff, in seconds. Default 150 (~every 2.5
+ * min), floor 60. This is a narrow slice of the schedule (a handful of matches
+ * at once), so the tighter cadence costs a few extra summary fetches, not a
+ * sweep — and it is what lets the official-lineup gate open within minutes of
+ * ESPN publishing the XI instead of waiting out the 15-min sweep.
+ */
+export const NEAR_KICKOFF_SECONDS = (() => {
+  const n = parseInt(process.env.NEAR_KICKOFF_SECONDS ?? "", 10);
+  if (!Number.isFinite(n)) return 150;
+  return Math.min(3600, Math.max(60, n));
 })();
 
 /**
@@ -402,6 +423,6 @@ export function startSyncLoop(): void {
   });
 
   log(
-    `loops started (live pulse ${LIVE_PULSE_SECONDS}s, summaries ${LIVE_SUMMARY_SECONDS}s, scoreboards 10m, window 6h per-competition, standings daily @${hour}:00, rosters weekly, understat weekly)`,
+    `loops started (live pulse ${LIVE_PULSE_SECONDS}s, summaries ${LIVE_SUMMARY_SECONDS}s, near-kickoff ${NEAR_KICKOFF_SECONDS}s, scoreboards 10m, window 6h per-competition, standings daily @${hour}:00, rosters weekly, understat weekly)`,
   );
 }
