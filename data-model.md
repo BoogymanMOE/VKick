@@ -1,6 +1,6 @@
 # Data Model
 
-Reference schema for the Postgres database. Field types are illustrative (Prisma-style); adjust as needed during implementation, but keep the relationships and field intent intact. Concept: `concept.md`. Mechanics and leaderboard rules: `prediction-mechanics.md` + `scoring-rules.md`.
+Reference schema. **As built, this runs on SQLite (`node:sqlite`) — the live schema and migrations are `server/db/schema.ts`, and that file wins on any disagreement.** Types below are illustrative (Prisma-style, from the original Postgres plan); keep the relationships and field intent intact so a later move to Postgres stays a translation exercise. Concept: `concept.md`. Mechanics and leaderboard rules: `prediction-mechanics.md` + `scoring-rules.md`.
 
 ## Core football data (populated from ESPN, via the normalization layer)
 

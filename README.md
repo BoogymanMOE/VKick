@@ -32,7 +32,9 @@ npm run dev:all
 
 Copy `.env.example` to `.env` and set `TELEGRAM_BOT_TOKEN` (from @BotFather). While developing outside Telegram, keep `DEV_AUTH_SECRET` set and append `?devUser=<any-id>` to the web app URL to simulate a user.
 
-Other scripts: `npm run build` (typecheck + bundle), `npm run typecheck`, `npm test`, `npm run preview`.
+Other scripts: `npm run build` (typecheck + bundle), `npm run typecheck`, `npm test`, `npm run lint`, `npm run format`, `npm run preview`.
+
+CI (`.github/workflows/ci.yml`) runs typecheck, lint, the test suite and the build on every push and pull request, on the Node pinned in `.node-version` (the same one Render uses). Lint gates on errors only — `no-explicit-any` is configured as a warning, so a stray `any` is flagged without breaking the build.
 
 ### Telegram Mini App setup
 1. Run `start-telegram.bat` (or any HTTPS tunnel to :5173)
@@ -46,6 +48,8 @@ npm run sync                        # full sweep: scoreboards + live summaries +
 npm run sync -- sync-match eng.1 401874934   # force one match
 npm run sync -- sync-match eng.1 401874934 --dry-run  # print what would happen
 npm run sync -- standings
+npm run sync -- rosters             # refresh club squads (weekly lane, manual)
+npm run sync -- understat           # refresh Understat xG/PPDA (big five, weekly)
 npm run sync -- dev-token 12345     # print a dev auth token
 ```
 
@@ -76,17 +80,20 @@ the real one. It attaches predictions to **synced** fixtures rather than inventi
 | `server/sync/service.ts` | Cron loops: live 1m, scoreboards 10m, standings daily |
 | `server/sync/upserts.ts` | Normalized data → SQLite, goal-alert detection |
 | `server/scoring/statScore.ts` | Player stat score per `scoring-rules.md` |
-| `server/index.ts` | All REST endpoints |
+| `server/index.ts` | App wiring: mounts the route modules, `/health`, static `dist/` + SPA fallback, sync/resolver/bot startup, retention sweep |
 | `server/sync/teamStats.ts` | Team stats normalization + season leaderboard recompute |
 | `server/bot/index.ts` | grammY bot + push queue drain |
 | `server/notifications.ts` | Matchday pushes + the one place notification prefs are enforced |
 | `src/lib/api.ts` | Frontend API client |
+| `scripts/` | Asset tools (`fetch-logos`, `import-logos`, `logo-normalize`, `make-icons`, `ui-audit`, `wait-for-api`); retired one-off debug scripts live in `scripts/legacy/` |
 
 ## API surface
 
-Public (no auth): `GET /api/matches` (relevance window by default — live now + last 3 days of results + next 14; accepts `league`, `date`, `from`/`to` for an explicit range, and `limit`), `GET /api/matches/:id`, `/lineups`, `/timeline`, `/commentary`, `/players` (per-match stat table), `GET /api/teams` (+ `/:id` season line, `/:id/players`, `/:id/understat`), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`, `GET /api/competitions`
+Ops: `GET /health` (liveness probe — 200 while the process and DB answer, 503 if the DB is broken; this is what `render.yaml`'s health check hits)
 
-Auth (Bearer = Telegram initData, or an `mg_` session token from the username path): `POST /api/auth/login`, `GET /api/me`, `GET/POST/DELETE /api/me/favorites` (max 5 clubs plus up to 5 national teams, one flagged `is_favorite` — errors are machine-readable codes), `GET/POST /api/me/leagues` (max 5), `GET/POST /api/me/referral` (+ `/redeem`), `GET/POST /api/matches/:id/ratings` (3-card cap, 1 vote per player per match, 1–10), `GET/POST /api/matches/:id/comments`, `GET/POST /api/matches/:id/predictions` (lock enforcement per mechanic), `GET /api/me/predictions`, `GET /api/me/streak` (favorite-club streak + next threshold bonus)
+Public (no auth): `GET /api/matches` (relevance window by default — live now + last 3 days of results + next 14; accepts `league`, `date`, `from`/`to` for an explicit range, and `limit`), `GET /api/matches/:id`, `/lineups`, `/timeline`, `/commentary`, `/players` (per-match stat table), `GET /api/teams` (+ `/:id` season line, `/:id/players`), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`, `GET /api/competitions`
+
+Auth (Bearer = Telegram initData, or an `mg_` session token from the username path): `POST /api/auth/login`, `GET /api/me`, `GET /api/teams/:id/understat` (xG/xPts/PPDA for one club), `GET/POST/DELETE /api/me/favorites` (max 5 clubs plus up to 5 national teams, one flagged `is_favorite` — errors are machine-readable codes), `GET/POST /api/me/leagues` (max 5), `GET/POST /api/me/referral` (+ `/redeem`), `GET/POST /api/matches/:id/ratings` (3-card cap, 1 vote per player per match, 1–10), `GET/POST /api/matches/:id/comments`, `GET/POST /api/matches/:id/predictions` (lock enforcement per mechanic), `GET /api/me/predictions`, `GET /api/me/streak` (favorite-club streak + next threshold bonus)
 
 Public leaderboards: `GET /api/leaderboards/global`, `/league/:league`, `/club/:teamId`
 
@@ -184,6 +191,17 @@ one of those helpers is a silent no-op (`src/lib/telegram.ts`).
 
 When you deploy, point the bot's menu button at your production static host instead — it's the same
 build either way, only distribution differs.
+
+## Deploy
+
+`render.yaml` is a working Render blueprint for the zero-cost shape this app was built around: one Node service, `npm install && npm run build` to produce `dist/` (frontend) + `dist-server/` (server), then `node dist-server/server/index.js`.
+
+- **One process serves everything.** The API mounts the built `dist/` with an SPA fallback, so there is no separate static host to configure.
+- **Exactly one instance.** File-based SQLite plus in-process cron loops (sync, resolver, retention) mean scaling horizontally would fight itself — scale the box, never the count. The blueprint's comment says the same thing.
+- **Health check** is `GET /health` (503 if the DB stops answering, so the check can actually fail).
+- **Secrets live in the dashboard**, not in `render.yaml`: `TELEGRAM_BOT_TOKEN`, `MINI_APP_URL`, optionally `ADMIN_TELEGRAM_IDS`.
+- **`NODE_ENV=production` refuses to boot while `DEV_AUTH_SECRET` is set** — that key turns `dev:<id>` tokens into any user's identity. Unset it before deploying.
+- After the first deploy, point BotFather's Mini App URL (and `MINI_APP_URL`) at the service's `https://` URL.
 
 ## Animations
 

@@ -1,5 +1,10 @@
 # Tech Stack & Architecture
 
+> **As built, reconciled 2026-10-06.** The constraints below are still the
+> constraints; the stack choices are now what is actually implemented, not the
+> original shortlist. Where an early choice (Postgres, Prisma) lost to a
+> zero-cost one, the reason is noted — the migration path stays open.
+
 ## Constraints that shape every decision here
 - Solo builder using an AI coding agent, near full-time capacity
 - Must work in Iran: no reliance on Google Play/Apple billing, no assumption of unrestricted API access from Iranian IPs (a VPN may be needed for outbound calls to some services during development)
@@ -20,24 +25,26 @@ ESPN public API (unofficial)
 ```
 
 ## Backend
-- **Language/framework:** Node.js (TypeScript) with a lightweight framework (Express or Fastify) — wide ecosystem, easy to find AI-agent training data for, good fit for both the polling service and the API layer
-- **Database:** PostgreSQL — relational fits this data well (teams/players/matches/favorites are all relational), and it's free to self-host or use a free tier (e.g. Supabase, Neon) during v1
-- **ORM:** Prisma — makes schema migrations and type-safe queries straightforward, easy for an AI agent to work with since the schema is declarative
-- **Job scheduling:** a simple cron-based job runner (node-cron, or a hosted cron trigger) for the ESPN polling service — no need for a heavy queue system at v1 scale
+- **Language/framework:** Node.js (TypeScript) + **Express 5** — one small server for the API, the sync loops and the bot. Fastify was on the shortlist; Express won on familiarity.
+- **Database:** **SQLite via Node's built-in `node:sqlite`** (`DatabaseSync`), file-based at `SQLITE_PATH`. Postgres was the original plan; SQLite removed the need for a hosted DB, a VPN-dependent signup and a free-tier ceiling for v1. Schema + migrations are hand-written in `server/db/schema.ts` (covered by `tests/migrate.test.ts`), and the SQL stays plain enough that a Postgres port is a translation exercise, not a redesign.
+- **ORM:** **None.** Prisma was the original plan; with one hand-written schema file, a query builder/ORM added a dependency and a codegen step without buying anything. Typed helper wrappers (`get`/`all`/`run`) do the narrowing instead.
+- **Job scheduling:** `node-cron` for the daily/weekly passes plus plain `setInterval` lanes for the second-scale ones (live pulse 15s, live summary 60s, near-kickoff 150s — all env-tunable). Overlap guards skip a tick rather than queue one. No queue system at v1 scale.
+- **Runtime constraint:** Node >= 22.5 (`node:sqlite`); pinned by `.node-version`.
 
 ## Frontend (Web App)
 - **Framework:** React (with Vite) — fits the club picker, timeline and league tables well; large ecosystem
-- **Styling:** Tailwind CSS — fast to iterate with an AI agent, no design system overhead needed yet
+- **Styling:** Tailwind CSS v4 (via the Vite plugin) with design tokens in `tokens.css` — fast to iterate with an AI agent, no design system overhead needed yet
 - **State:** React Query (TanStack Query) for server state (matches, favorites, ratings) — avoids building a custom caching layer
 
 ## Telegram Integration
 - **Telegram Mini App:** the web app is loaded inside Telegram via the Mini Apps platform (Telegram WebApp SDK) for the primary in-Telegram experience
-- **Telegram Bot:** a separate lightweight bot process (using a library like `node-telegram-bot-api` or `grammY`) handles notifications (goal alerts, lineup-drop/sub-window reminders, rating-window opens, deadline warnings) and simple commands — kept separate from the Mini App's web code so notification logic doesn't get tangled with UI code
+- **Telegram Bot:** **grammY with long-polling** (no webhook server — one less public endpoint and nothing for Telegram to reach into Iran-side). Goal alerts and matchday pushes go through a persistent push queue (`bot_push_queue`) drained in-process, with copy rendered per recipient from `users.language`. Kept separate from the Mini App's web code so notification logic doesn't get tangled with UI code.
 
 ## Hosting (v1, low/no cost)
-- Backend + polling service: a low-cost VPS (or a free-tier platform like Railway/Render) — avoid serverless for the polling service since it needs to run on a schedule reliably
-- Database: free tier of a managed Postgres provider (Supabase/Neon) to start; migrate to self-hosted or paid tier once there's real load
-- Web app: static hosting (Vercel/Netlify free tier, or bundled with the backend)
+- **One Node service** (`render.yaml` blueprint provided): it serves the API **and** the built frontend (`dist/` + SPA fallback), with `GET /health` as the health check. Exactly one instance — file-based SQLite and in-process cron loops do not tolerate a second copy.
+- Backend + polling service: a low-cost VPS or a free-tier platform (Render is what `render.yaml` targets) — avoid serverless for the polling service since it needs to run on a schedule reliably.
+- Database: the SQLite file on a persistent disk (`SQLITE_PATH`). No managed Postgres needed until there's real load; the schema is written so that move stays mechanical.
+- Web app: no separate static host required — it ships inside the same process; any static host also works if you'd rather split them.
 
 ## Data flow: ESPN normalization layer (critical)
 Do not let raw ESPN response shapes leak into the rest of the app. The polling service's only job is:
@@ -52,3 +59,5 @@ If ESPN changes their response shape, only this one layer needs to change — no
 - No microservices — a single backend service is enough at this scale
 - No paid sports data API — ESPN's free unofficial endpoint covers v1 entirely
 - No message queue / event bus — cron-based polling is sufficient until proven otherwise
+- No hosted database or ORM — file-based SQLite, hand-written schema/migrations
+- No webhook for the bot — grammY long-polling keeps the surface to one port

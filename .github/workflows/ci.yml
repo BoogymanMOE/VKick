@@ -1,0 +1,39 @@
+# Gates every push and PR on the four checks the repo already runs locally:
+# typecheck (client + server), lint, the zero-dependency tsx test runner, and
+# the production build. Docs drift and lint debt crept in precisely because
+# nothing ran these automatically.
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # .node-version pins the runtime (node:sqlite needs >= 22.5) and is what
+      # Render reads too, so CI runs the same Node the app deploys on.
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Warnings are deliberate (the repo sets `no-explicit-any` to warn), so
+      # this gates on lint ERRORS only — same as running it locally.
+      - name: Lint
+        run: npm run lint
+
+      # Self-contained: temp SQLite files and a localhost-only server. No
+      # external network calls and no secrets required.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
