@@ -15,7 +15,7 @@ export interface NormTeamStats {
   pass_accuracy_pct: number | null;
 }
 
-function num(stats: any[] | undefined, name: string): number | null {
+function num(stats: EspnStat[] | undefined, name: string): number | null {
   const s = (stats ?? []).find((x) => x.name === name);
   if (!s) return null;
   const raw = s.value ?? s.displayValue;
@@ -24,8 +24,30 @@ function num(stats: any[] | undefined, name: string): number | null {
   return Number.isNaN(v) ? null : v;
 }
 
+/** One `boxscore.teams[].statistics[]` entry; ESPN mixes value and display. */
+interface EspnStat {
+  name?: string;
+  value?: number | string | null;
+  displayValue?: number | string | null;
+}
+
+interface EspnBoxTeam {
+  team?: { id?: string | number };
+  statistics?: EspnStat[];
+}
+
+/**
+ * The slice of a match summary this normalizer reads. Declared here — not
+ * accepted as `any` — because this file, not the caller, owns the boxscore
+ * shape (the same rule server/espn/normalize.ts follows for the rest).
+ */
+export interface EspnTeamStatsPayload {
+  header?: { competitions?: Array<{ id?: string | number }> };
+  boxscore?: { teams?: EspnBoxTeam[] };
+}
+
 /** Team-level stats from `boxscore.teams[].statistics[]` (per-league stat schemas). */
-export function normalizeTeamStats(json: any, league: string): NormTeamStats[] {
+export function normalizeTeamStats(json: EspnTeamStatsPayload, league: string): NormTeamStats[] {
   const out: NormTeamStats[] = [];
   const matchId = String(json.header?.competitions?.[0]?.id ?? "");
   if (!matchId) return out;
@@ -39,7 +61,7 @@ export function normalizeTeamStats(json: any, league: string): NormTeamStats[] {
           shotsOnTarget: "shotsOnTarget",
           fouls: "foulsCommitted",
         };
-  const pct = (stats: any[] | undefined, name: string): number | null => {
+  const pct = (stats: EspnStat[] | undefined, name: string): number | null => {
     const v = num(stats, name);
     if (v === null) return null;
     return v <= 1 ? v * 100 : v; // ESPN mixes fractions and percents

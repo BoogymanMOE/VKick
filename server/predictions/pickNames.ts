@@ -40,8 +40,7 @@ export function playerIdsForMechanic(mechanic: string, payload: string | null): 
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
   const p = parsed as Record<string, unknown>;
 
-  const id = (v: unknown): string | null =>
-    typeof v === "string" && /^\d{1,15}$/.test(v) ? v : null;
+  const id = (v: unknown): string | null => (typeof v === "string" && /^\d{1,15}$/.test(v) ? v : null);
 
   switch (mechanic) {
     case "lineup":

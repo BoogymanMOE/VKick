@@ -85,6 +85,15 @@ export async function syncScoreboardWindow(backDays: number, forwardDays: number
  */
 const summariesInFlight = new Set<string>();
 
+/**
+ * Missed-flip repairs that were attempted but did not change the row (see the
+ * scheduled branch in `syncSummaries`). In-memory on purpose — same rule as
+ * the rate limiter: this server is one process, and a restart re-trying once
+ * immediately is harmless.
+ */
+const reconcileBackoff = new Map<string, number>();
+const RECONCILE_RETRY_MS = 30 * 60_000;
+
 /** Pull the full summary for a single match and store it. */
 export async function syncMatchSummary(league: LeagueSlug, matchId: string): Promise<GoalAlert[]> {
   // Already being worked by the other loop; it will return this match's goals.
@@ -110,6 +119,8 @@ export async function syncMatchSummary(league: LeagueSlug, matchId: string): Pro
  * - live matches: always (this runs every minute from the cron loop)
  * - recent finishers: once more to lock in final stats
  * - upcoming within 3h: once, so lineups/formations appear
+ * - past-kickoff fixtures still marked scheduled: the missed-flip repair in the
+ *   scheduled branch below
  */
 export async function syncSummaries(): Promise<GoalAlert[]> {
   const goals: GoalAlert[] = [];
@@ -147,6 +158,22 @@ export async function syncSummaries(): Promise<GoalAlert[]> {
       // stretch runs on its own tighter lane.
       const cadenceHours = hoursToKickoff < 1.5 ? NEAR_KICKOFF_SECONDS / 3_600 : 0.25;
       should = hoursSinceSync > cadenceHours;
+    } else if (m.status === "scheduled" && hoursToKickoff <= -0.25 && hoursToKickoff > -24 * 7) {
+      // MISSED FLIP: the box was down at kickoff, or ESPN answered with a shape
+      // we could not parse, and this fixture would otherwise read "scheduled"
+      // forever — every sweep looks forward, nothing ever looks back (measured:
+      // 17 international fixtures sat four days past kickoff in that state,
+      // rendering as upcoming fixtures with a countdown into the past).
+      // One summary retry every 30 min repairs the status, runs the final-whistle
+      // settle path for predictions, then stops trying after a week; older rows
+      // are left to `npm run sync -- sync-match <league> <id>`.
+      //
+      // `last_synced_at` only moves when a summary APPLIES, so a fixture ESPN
+      // never answers for (cancelled, pruned) would otherwise be re-polled on
+      // every 60s pass — the per-match backoff caps that at one call / 30 min.
+      const retriedAt = reconcileBackoff.get(m.id) ?? 0;
+      should = hoursSinceSync > 0.5 && retriedAt < now;
+      if (should) reconcileBackoff.set(m.id, now + RECONCILE_RETRY_MS);
     }
 
     if (!should) continue;
@@ -228,8 +255,6 @@ export async function syncStandings(): Promise<void> {
 function seasonStartYear(season: string): number {
   return Number.parseInt(season.slice(0, 4), 10) || new Date().getUTCFullYear();
 }
-
-
 
 /**
  * Goal-alert fan-out lives in server/notifications.ts (queueGoalAlerts), which

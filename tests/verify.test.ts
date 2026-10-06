@@ -27,7 +27,9 @@ function sign(
   includeSignatureInCheck = false,
 ): string {
   const secret = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
-  const checkFields = includeSignatureInCheck ? fields : Object.fromEntries(Object.entries(fields).filter(([k]) => k !== "signature"));
+  const checkFields = includeSignatureInCheck
+    ? fields
+    : Object.fromEntries(Object.entries(fields).filter(([k]) => k !== "signature"));
   const dataCheckString = Object.entries(checkFields)
     .map(([k, v]) => `${k}=${v}`)
     .sort()
@@ -108,7 +110,11 @@ function testSignatureExcludedFromCheckString() {
   // The old-validator mistake: fold signature into the check string. Every
   // real Bot API 8.0+ payload would fail that way — pin the rejection.
   const legacyHashed = sign(fields, BOT_TOKEN, true);
-  assert.equal(verifyInitData(legacyHashed, BOT_TOKEN).ok, false, "signature-in-check-string hash mismatches");
+  assert.equal(
+    verifyInitData(legacyHashed, BOT_TOKEN).ok,
+    false,
+    "signature-in-check-string hash mismatches",
+  );
 
   // A legacy payload WITHOUT the field is unaffected by the exclusion.
   const legacy = sign({

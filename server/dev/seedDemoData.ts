@@ -237,8 +237,7 @@ function actualFor(db: DatabaseSync, m: MatchRow): ActualLineup & { squad: strin
   return { starterIds: new Set(starterIds), formations, squad };
 }
 
-const MATCH_COLS =
-  "id, league, home_team_id, away_team_id, kickoff_at, home_formation, away_formation";
+const MATCH_COLS = "id, league, home_team_id, away_team_id, kickoff_at, home_formation, away_formation";
 
 /* ------------------------------------------------------------ the seed */
 
@@ -281,8 +280,7 @@ export function clearDemoData(db: DatabaseSync): number {
   if (ids.length === 0) return 0;
 
   const slots = ids.map(() => "?").join(", ");
-  const p = (table: string) =>
-    run(db, `DELETE FROM ${table} WHERE user_id IN (${slots})`, [...ids]);
+  const p = (table: string) => run(db, `DELETE FROM ${table} WHERE user_id IN (${slots})`, [...ids]);
 
   return tx(db, () => {
     for (const table of [
@@ -446,7 +444,13 @@ export function seedDemoData(db: DatabaseSync, opts: SeedOptions = {}): SeedRepo
           `UPDATE predictions
            SET status = ?, points_awarded = ?, breakdown = ?, resolved_at = ?
            WHERE id = ?`,
-          [points >= 16 ? "correct" : "partial", points, JSON.stringify(breakdown), match.kickoff_at, predictionId],
+          [
+            points >= 16 ? "correct" : "partial",
+            points,
+            JSON.stringify(breakdown),
+            match.kickoff_at,
+            predictionId,
+          ],
         );
         report.resolved++;
 

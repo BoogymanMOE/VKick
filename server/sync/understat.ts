@@ -5,6 +5,8 @@ import {
   normalizePlayersFromApi,
   normalizeShotSituationsFromApi,
   normalizeTeamHistoryFromApi,
+  type UnderstatLeaguePayload,
+  type UnderstatTeamPayload,
 } from "../understat/normalize.js";
 import { TEAM_SLUGS, LEAGUE_SLUGS, ABBR_BY_SLUG } from "../understat/ids.js";
 import { getDb } from "../db/index.js";
@@ -39,10 +41,14 @@ export async function syncTeamUnderstat(teamAbbr: string, teamId: string, league
     return;
   }
 
-  const [teamData, leagueData] = await Promise.all([
+  const [rawTeam, rawLeague] = await Promise.all([
     fetchTeamData(slug, SEASON),
     fetchLeagueData(league, SEASON),
   ]);
+  // The transport hands back `unknown`; this module owns what Understat sends,
+  // so the shape is asserted once, here, instead of spread across the client.
+  const teamData = rawTeam as UnderstatTeamPayload | null;
+  const leagueData = rawLeague as UnderstatLeaguePayload;
   if (!teamData) {
     console.warn(`[understat] no data for ${teamAbbr} (${slug})`);
     return;
@@ -196,7 +202,7 @@ export async function syncLeagueUnderstatTables(): Promise<void> {
         ppda: stats.ppda,
         deep: stats.deep,
       });
-      // Per-match xG for the replay pitch: pair this club's Understat history
+      // Per-match xG: pair this club's Understat history
       // with its finished local matches by side, both goal counts and a
       // within-a-day kickoff. Ambiguous or unmatchable rows are dropped.
       const localMatches = matchStmt.all(team_id, team_id, team_id, team_id, team_id) as Array<{

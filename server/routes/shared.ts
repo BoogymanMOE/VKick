@@ -33,6 +33,20 @@ export interface AuthedUser {
 export type AuthMode = "session" | "telegram" | "dev";
 
 /**
+ * `requireUser` attaches these before any handler runs. Declaring them on
+ * Express's own Request interface (rather than casting through `any` at every
+ * use) gives every route module a typed `req.user` / `req.authMode`, and makes
+ * reading them before the gate runs a compile error instead of a silent
+ * `undefined`.
+ */
+declare module "express-serve-static-core" {
+  interface Request {
+    user?: AuthedUser;
+    authMode?: AuthMode;
+  }
+}
+
+/**
  * Require a valid identity; attaches req.user + req.authMode.
  *
  * Two token families:
@@ -75,8 +89,8 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
       return;
     }
     run(db, "UPDATE user_sessions SET last_used_at = ? WHERE token = ?", [new Date().toISOString(), token]);
-    (req as any).user = { id: row.id, telegram_id: row.telegram_id, display_name: row.display_name };
-    (req as any).authMode = "session" satisfies AuthMode;
+    req.user = { id: row.id, telegram_id: row.telegram_id, display_name: row.display_name };
+    req.authMode = "session";
     next();
     return;
   }
@@ -105,13 +119,14 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
   // Upsert (not select-then-insert): two rapid first requests from the same
   // Telegram client race the SELECT, and the loser used to hit UNIQUE -> 500.
   const user = upsertUser(telegramId, displayName);
-  (req as any).user = user;
-  (req as any).authMode = mode;
+  req.user = user;
+  req.authMode = mode;
   next();
 }
 
 export function currentUser(req: Request): AuthedUser {
-  return (req as any).user as AuthedUser;
+  // Set by requireUser, which every route using this reads behind.
+  return req.user as AuthedUser;
 }
 
 export function isAdmin(req: Request): boolean {

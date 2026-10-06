@@ -93,23 +93,41 @@ export function runSeedDemoTests(): void {
   // Score ladder stays inside the 11 a lineup can be worth.
   for (let skill = 0; skill <= 1; skill += 0.25) {
     for (let seed = 0; seed < 50; seed++) {
-      const rng = () => (seed * 37 % 100) / 100;
+      const rng = () => ((seed * 37) % 100) / 100;
       const n = correctStarterCount(skill, rng);
       assert.ok(Number.isInteger(n) && n >= 0 && n <= 11, `correctStarterCount out of range: ${n}`);
     }
   }
   // Endpoints of the ladder: skill sets the band, the rng can move it ±2.
-  assert.equal(correctStarterCount(0, () => 0), 2); // base 4, worst jitter
-  assert.equal(correctStarterCount(0, () => 1), 6); // base 4, best jitter
-  assert.equal(correctStarterCount(1, () => 0), 7); // base 9, worst jitter
-  assert.equal(correctStarterCount(1, () => 1), 11); // base 9, best jitter — capped
+  assert.equal(
+    correctStarterCount(0, () => 0),
+    2,
+  ); // base 4, worst jitter
+  assert.equal(
+    correctStarterCount(0, () => 1),
+    6,
+  ); // base 4, best jitter
+  assert.equal(
+    correctStarterCount(1, () => 0),
+    7,
+  ); // base 9, worst jitter
+  assert.equal(
+    correctStarterCount(1, () => 1),
+    11,
+  ); // base 9, best jitter — capped
   // Out-of-range / junk skill degrades to the middle rather than going wild.
-  assert.equal(correctStarterCount(Number.NaN, () => 0), 2);
-  assert.equal(correctStarterCount(99, () => 1), 11);
+  assert.equal(
+    correctStarterCount(Number.NaN, () => 0),
+    2,
+  );
+  assert.equal(
+    correctStarterCount(99, () => 1),
+    11,
+  );
 
   /* ---------------------------------------------------- rating histogram shape */
 
-{
+  {
     // The seed exists to make the rating histogram renderable, so it must not
     // collapse into a handful of buckets: the chart groups 1..10 and a seed
     // emitting only 6..9 leaves most of it permanently flat.
@@ -158,9 +176,9 @@ export function runSeedDemoTests(): void {
     assert.equal(ledger, report.totalPoints);
 
     // Every prediction round-tripped the real validator.
-    const bad = db
-      .prepare("SELECT COUNT(*) FROM predictions WHERE json_valid(payload) = 0")
-      .get() as { "COUNT(*)": number };
+    const bad = db.prepare("SELECT COUNT(*) FROM predictions WHERE json_valid(payload) = 0").get() as {
+      "COUNT(*)": number;
+    };
     assert.equal(Number(bad["COUNT(*)"]), 0);
 
     // No demo credentials: demo accounts must not be loggable-in.
@@ -230,27 +248,25 @@ function seedFixture(db: DatabaseSync): void {
   `);
 
   for (const match of [
-    { id: 'm1', ko: "2026-09-01T18:00:00Z", status: 'finished' },
-    { id: 'm2', ko: "2026-09-08T18:00:00Z", status: 'finished' },
-    { id: 'm3', ko: "2026-09-15T18:00:00Z", status: 'finished' },
-    { id: 'm4', ko: "2030-01-01T18:00:00Z", status: 'scheduled' },
+    { id: "m1", ko: "2026-09-01T18:00:00Z", status: "finished" },
+    { id: "m2", ko: "2026-09-08T18:00:00Z", status: "finished" },
+    { id: "m3", ko: "2026-09-15T18:00:00Z", status: "finished" },
+    { id: "m4", ko: "2030-01-01T18:00:00Z", status: "scheduled" },
   ]) {
-    db
-      .prepare(
-        `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_formation, away_formation)
+    db.prepare(
+      `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_formation, away_formation)
          VALUES (?, 'eng.1', 't1', 't2', ?, ?, '4-3-3', '4-4-2')`,
-      )
-      .run(match.id, match.ko, match.status);
+    ).run(match.id, match.ko, match.status);
   }
 
   // 22 players a side: 11 starters recorded for the finished matches.
   for (let team = 1; team <= 2; team++) {
     for (let p = 1; p <= 22; p++) {
-      db
-        .prepare(
-          `INSERT INTO players (id, team_id, full_name, position) VALUES (?, ?, ?, 'MID')`,
-        )
-        .run(`${team}${String(p).padStart(2, "0")}`, `t${team}`, `Player ${team}-${p}`);
+      db.prepare(`INSERT INTO players (id, team_id, full_name, position) VALUES (?, ?, ?, 'MID')`).run(
+        `${team}${String(p).padStart(2, "0")}`,
+        `t${team}`,
+        `Player ${team}-${p}`,
+      );
     }
   }
 
@@ -261,7 +277,14 @@ function seedFixture(db: DatabaseSync): void {
   for (const matchId of ["m1", "m2", "m3"]) {
     for (let team = 1; team <= 2; team++) {
       for (let p = 1; p <= 11; p++) {
-        stmt.run(matchId, `${team}${String(p).padStart(2, "0")}`, `t${team}`, 1, p === 1 ? 1 : 0, p <= 4 ? 2 : 0);
+        stmt.run(
+          matchId,
+          `${team}${String(p).padStart(2, "0")}`,
+          `t${team}`,
+          1,
+          p === 1 ? 1 : 0,
+          p <= 4 ? 2 : 0,
+        );
       }
     }
   }

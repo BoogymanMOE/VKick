@@ -46,7 +46,12 @@ export function runPickSummaryTests(): void {
   assert.deepEqual(
     playerIdsForMechanic(
       "sub",
-      JSON.stringify({ subs: [{ offId: "101", onId: "102" }, { offId: "103", onId: "104" }] }),
+      JSON.stringify({
+        subs: [
+          { offId: "101", onId: "102" },
+          { offId: "103", onId: "104" },
+        ],
+      }),
     ),
     ["101", "102", "103", "104"],
   );
@@ -61,7 +66,10 @@ export function runPickSummaryTests(): void {
   }
   assert.deepEqual(playerIdsForMechanic("unknown_mechanic", JSON.stringify({ playerId: "101" })), []);
   // A formation string is not a numeric id, so it can't be mistaken for one.
-  assert.deepEqual(playerIdsForMechanic("lineup", JSON.stringify({ playerIds: ["4-3-3"], formation: "4-3-3" })), []);
+  assert.deepEqual(
+    playerIdsForMechanic("lineup", JSON.stringify({ playerIds: ["4-3-3"], formation: "4-3-3" })),
+    [],
+  );
 
   /* ------------------------------------------- name attachment (server) */
 
@@ -76,7 +84,10 @@ export function runPickSummaryTests(): void {
 
     const rows = [
       { mechanic: "versus", payload: JSON.stringify({ playerAId: "101", playerBId: "105" }) },
-      { mechanic: "shot_predict", payload: JSON.stringify({ playerId: "102", grid: { gridX: 4, gridY: 0 } }) },
+      {
+        mechanic: "shot_predict",
+        payload: JSON.stringify({ playerId: "102", grid: { gridX: 4, gridY: 0 } }),
+      },
       { mechanic: "lineup", payload: JSON.stringify({ playerIds: ["101", "999"], formation: "4-3-3" }) },
     ];
     const out = attachPlayerNames(db, rows as unknown as Array<Record<string, unknown>>);
@@ -99,7 +110,8 @@ export function runPickSummaryTests(): void {
 
   for (const lang of ["en", "fa"] as const) {
     const t = (key: string, vars?: Record<string, string | number>): string => {
-      let out: string = strings[lang][key as keyof typeof strings.en] ?? strings.en[key as keyof typeof strings.en] ?? key;
+      let out: string =
+        strings[lang][key as keyof typeof strings.en] ?? strings.en[key as keyof typeof strings.en] ?? key;
       if (vars) for (const [n, v] of Object.entries(vars)) out = out.replaceAll(`{${n}}`, String(v));
       return out;
     };
@@ -127,7 +139,12 @@ export function runPickSummaryTests(): void {
     // Sub: names the pair, collapses the rest.
     const sub = pickSummary(
       "sub",
-      JSON.stringify({ subs: [{ offId: "101", onId: "102" }, { offId: "103", onId: "104" }] }),
+      JSON.stringify({
+        subs: [
+          { offId: "101", onId: "102" },
+          { offId: "103", onId: "104" },
+        ],
+      }),
       ctx,
     );
     assert.ok(sub, `${lang}: sub summarizes`);
@@ -144,7 +161,11 @@ export function runPickSummaryTests(): void {
 
     // Lineup stays a count + formation: eleven names is a wall of text and the
     // XI is already on the match page.
-    const lineup = pickSummary("lineup", JSON.stringify({ playerIds: NAMES ? Object.keys(NAMES) : [], formation: "4-3-3" }), ctx);
+    const lineup = pickSummary(
+      "lineup",
+      JSON.stringify({ playerIds: NAMES ? Object.keys(NAMES) : [], formation: "4-3-3" }),
+      ctx,
+    );
     assert.equal(lineup, "5 · 4-3-3");
     assert.ok(!/Saka/.test(lineup ?? ""), `${lang}: lineup does not list names`);
 
@@ -159,7 +180,10 @@ export function runPickSummaryTests(): void {
       assert.ok(strings.en[key].length > 0, `EN label missing for ${key}`);
       assert.ok(strings.fa[key].length > 0, `FA label missing for ${key}`);
     }
-    assert.ok(strings.en["predict.morePairs"] && strings.fa["predict.morePairs"], "morePairs in both languages");
+    assert.ok(
+      strings.en["predict.morePairs"] && strings.fa["predict.morePairs"],
+      "morePairs in both languages",
+    );
   }
 
   console.log(

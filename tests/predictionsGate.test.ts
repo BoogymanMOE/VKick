@@ -27,8 +27,7 @@ import express from "express";
 import { closeDb, getDb, run, get } from "../server/db/index.js";
 
 const CHILD_FLAG = "VKICK_PREDICTIONS_GATE_CHILD";
-const SUMMARY =
-  "  predictionsGate: shot/watch/versus/sub need the official lineup, lineup exempt OK";
+const SUMMARY = "  predictionsGate: shot/watch/versus/sub need the official lineup, lineup exempt OK";
 
 interface Res {
   status: number;

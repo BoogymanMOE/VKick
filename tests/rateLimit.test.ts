@@ -30,20 +30,17 @@ interface Hit {
 
 async function hit(port: number, url: string, headers: Record<string, string> = {}): Promise<Hit> {
   return new Promise((resolve, reject) => {
-    const req = http.request(
-      { host: "127.0.0.1", port, path: url, method: "GET", headers },
-      (res) => {
-        let raw = "";
-        res.on("data", (c) => (raw += c));
-        res.on("end", () =>
-          resolve({
-            status: res.statusCode ?? 0,
-            body: raw ? (JSON.parse(raw) as Hit["body"]) : null,
-            retryAfter: res.headers["retry-after"] ?? null,
-          }),
-        );
-      },
-    );
+    const req = http.request({ host: "127.0.0.1", port, path: url, method: "GET", headers }, (res) => {
+      let raw = "";
+      res.on("data", (c) => (raw += c));
+      res.on("end", () =>
+        resolve({
+          status: res.statusCode ?? 0,
+          body: raw ? (JSON.parse(raw) as Hit["body"]) : null,
+          retryAfter: res.headers["retry-after"] ?? null,
+        }),
+      );
+    });
     req.on("error", reject);
     req.end();
   });
@@ -62,7 +59,11 @@ async function hitPost(
         port,
         path: url,
         method: "POST",
-        headers: { "content-type": "application/json", "content-length": Buffer.byteLength(body), ...headers },
+        headers: {
+          "content-type": "application/json",
+          "content-length": Buffer.byteLength(body),
+          ...headers,
+        },
       },
       (res) => {
         let raw = "";
@@ -111,7 +112,10 @@ export async function runRateLimitTests(): Promise<void> {
       // Retry-After must exist, be a positive integer number of seconds, and
       // never exceed the window (a longer hint tells clients to wait too long).
       const retry = Number(refused.retryAfter);
-      assert.ok(Number.isInteger(retry) && retry > 0 && retry <= 60, `bad Retry-After: ${refused.retryAfter}`);
+      assert.ok(
+        Number.isInteger(retry) && retry > 0 && retry <= 60,
+        `bad Retry-After: ${refused.retryAfter}`,
+      );
 
       // Still refused while the window is open — one lucky request is not enough.
       assert.equal((await hit(port, "/x")).status, 429);
@@ -213,10 +217,7 @@ export async function runRateLimitTests(): Promise<void> {
       // Both POST routes share ONE writeLimiter instance, so the budget is shared
       // across them: alternating endpoints is not a way around the cap. Spend
       // it evenly so neither route is pinned to a single 400-vs-429 verdict.
-      const urls = [
-        "/api/matches/401918766/ratings",
-        "/api/matches/401918766/comments",
-      ] as const;
+      const urls = ["/api/matches/401918766/ratings", "/api/matches/401918766/comments"] as const;
       const statuses: number[] = [];
       for (let i = 0; i < WINDOW_MAX; i++) {
         statuses.push((await hitPost(port, urls[i % urls.length] as string, auth, "{}")).status);
@@ -241,7 +242,8 @@ export async function runRateLimitTests(): Promise<void> {
       // Reads are not rate limited: a profile screen that fetches three lists
       // in a row must never trip the write budget.
       const reads = [];
-      for (let i = 0; i < WINDOW_MAX + 5; i++) reads.push((await hit(port, "/api/matches/401918766/comments", auth)).status);
+      for (let i = 0; i < WINDOW_MAX + 5; i++)
+        reads.push((await hit(port, "/api/matches/401918766/comments", auth)).status);
       assert.ok(
         reads.every((s) => s === 200),
         `reads must stay unthrottled, got ${[...new Set(reads)]}`,

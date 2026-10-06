@@ -18,6 +18,7 @@ import {
   recomputeSeasonStats,
   recomputeSeasonTeamStats,
   getSeasonKey,
+  type EspnTeamStatsPayload,
 } from "./teamStats.js";
 import type { NormMatch, NormTeam } from "../espn/types.js";
 
@@ -49,7 +50,7 @@ function teamRow(t: NormTeam, fallbackLeague: string): Record<string, BindValue>
 }
 
 /** Upsert normalized teams + matches from a scoreboard payload. */
-export function applyScoreboard(db: DB, json: any, league: string): void {
+export function applyScoreboard(db: DB, json: unknown, league: string): void {
   const { teams, matches } = normalizeScoreboard(json, league);
   tx(db, () => {
     for (const t of teams) {
@@ -104,7 +105,7 @@ export interface ApplySummaryResult {
 }
 
 /** Upsert a summary payload: match state, teams, player stats, timeline. */
-export function applySummary(db: DB, json: any, league: string): ApplySummaryResult {
+export function applySummary(db: DB, json: unknown, league: string): ApplySummaryResult {
   const { home, away } = normalizeSummaryTeams(json);
   const match = normalizeSummaryMatch(json);
   if (!match.id) return { match, goals: [] };
@@ -238,7 +239,7 @@ export function applySummary(db: DB, json: any, league: string): ApplySummaryRes
       }
     }
 
-    // Full commentary track (replay companion for finished matches).
+    // Full commentary track (the blow-by-blow tab for finished matches).
     for (const line of normalizeCommentary(json)) {
       upsert(
         db,
@@ -256,7 +257,9 @@ export function applySummary(db: DB, json: any, league: string): ApplySummaryRes
   });
 
   // Team-level stats (own transaction — never nest inside the one above).
-  applyTeamStats(db, normalizeTeamStats(json, league));
+  // Every other normalizer absorbs the raw payload itself; this one declares
+  // the summary slice it needs, so the shape is asserted once, by its owner.
+  applyTeamStats(db, normalizeTeamStats(json as EspnTeamStatsPayload, league));
 
   // When a match just finished, refresh the season leaderboards for its league.
   // Cheap full recompute — see teamStats.ts.
@@ -332,7 +335,7 @@ function safeParseArray(s: string | null): { id: string; name: string }[] {
  * Squad sync: upsert player rows and the coach. Never deactivates players here —
  * transfers are handled by the next match summary that features the new club.
  */
-export function applyRoster(db: DB, json: any, _league: string): void {
+export function applyRoster(db: DB, json: unknown, _league: string): void {
   const players = normalizeRosterPlayers(json);
   const coach = normalizeCoach(json);
   tx(db, () => {
@@ -348,7 +351,7 @@ export function applyRoster(db: DB, json: any, _league: string): void {
   });
 }
 
-export function applyStandings(db: DB, json: any, league: string, season: string): void {
+export function applyStandings(db: DB, json: unknown, league: string, season: string): void {
   // `league` is passed in explicitly: the v2 standings payload carries no
   // header identifying the competition, so normalizeStandings can't infer it.
   const { teams, rows } = normalizeStandings(json, league);
@@ -614,8 +617,8 @@ export function upsertLeagueUnderstatSummary(t: {
 }
 
 /**
- * Per-match xG/xGA, one row per (match, club) — the replay pitch's expected
- * goals. Written by the league Understat walk for every club it can name; a
+ * Per-match xG/xGA, one row per (match, club) — the per-fixture expected-goals
+ * record. Written by the league Understat walk for every club it can name; a
  * club/date/scoreline that didn't match cleanly simply gets no row.
  */
 export function upsertMatchUnderstatXg(

@@ -28,6 +28,214 @@ import { isCup } from "./types.js";
 export type { LeagueSlug } from "./types.js";
 export { LEAGUES, CUPS, LEAGUES_ALL, isCup } from "./types.js";
 
+/* ------------------------------------------------- ESPN payload (structural) */
+
+/**
+ * Structural types for ESPN's JSON. `client.ts` hands every payload over as
+ * `unknown`, and ESPN makes nearly everything optional (and changes it
+ * without notice), so each exported normalizer asserts its argument ONCE
+ * against the types below and reads typed from there — same `?.` fallbacks as
+ * before, no runtime validation added.
+ *
+ * Fields passed straight into a `Norm*` type (event `id`, fixture `date`) are
+ * declared required: that is ESPN's contract for them, and it keeps the
+ * mapping free of `as string` casts. A payload that breaks the contract still
+ * behaves exactly as it does today — an assertion is a claim about ESPN, not
+ * a guard.
+ */
+
+interface EspnLogo {
+  href?: string;
+}
+
+interface EspnPosition {
+  abbreviation?: string;
+  name?: string;
+  displayName?: string;
+}
+
+interface EspnClock {
+  value?: number;
+  displayValue?: string;
+}
+
+interface EspnNote {
+  type?: string;
+  headline?: string;
+}
+
+/** Events and competitions both carry ESPN's round notes (`name` on events). */
+interface EspnNotes {
+  notes?: EspnNote[];
+  name?: string;
+}
+
+interface EspnStatusType {
+  state?: string;
+  completed?: boolean;
+  description?: string;
+  shortDetail?: string;
+  displayClock?: string;
+  type?: string;
+}
+
+interface EspnStatus {
+  type?: EspnStatusType;
+}
+
+/** Team node: scoreboard `comp.team`, summary header team, standings team. */
+interface EspnTeamRef {
+  id?: string | number;
+  name?: string;
+  displayName?: string;
+  shortDisplayName?: string;
+  location?: string;
+  abbreviation?: string;
+  color?: string;
+  logos?: EspnLogo[];
+  /** Some league payloads carry a bare `logo` string instead of `logos[]`. */
+  logo?: string;
+  coach?: EspnCoachRow[];
+}
+
+interface EspnCompetitor {
+  homeAway?: string;
+  score?: unknown;
+  team?: EspnTeamRef;
+}
+
+interface EspnCompetition extends EspnNotes {
+  id?: string | number;
+  date?: string;
+  competitors?: EspnCompetitor[];
+  status?: EspnStatus;
+}
+
+interface EspnEvent extends EspnNotes {
+  id?: string | number;
+  /** Fixture kickoff; passed straight into `NormMatch.kickoff_at`. */
+  date: string;
+  season?: { year?: string | number };
+  status?: EspnStatus;
+  competitions?: EspnCompetition[];
+}
+
+interface EspnScoreboard {
+  events?: EspnEvent[];
+}
+
+interface EspnStat {
+  name?: string;
+  value?: number | string | null;
+  displayValue?: string | number;
+}
+
+interface EspnAthlete {
+  id?: string | number;
+  displayName?: string;
+  fullName?: string;
+  shortName?: string;
+  jersey?: string | number | null;
+  position?: EspnPosition;
+  headshot?: EspnLogo;
+  image?: unknown;
+}
+
+interface EspnRosterEntry {
+  athlete?: EspnAthlete;
+  position?: EspnPosition;
+  jersey?: string | number | null;
+  starter?: boolean;
+  subbedIn?: boolean;
+  subbedOut?: boolean;
+  didNotPlay?: boolean;
+  formationPlace?: string | number | null;
+  stats?: EspnStat[];
+}
+
+interface EspnRosterSide {
+  homeAway?: string;
+  formation?: string | null;
+  team?: { id?: string | number };
+  roster?: EspnRosterEntry[];
+}
+
+interface EspnParticipant {
+  athlete?: { id?: string | number; displayName?: string };
+}
+
+interface EspnKeyEvent {
+  id?: string | number;
+  text?: string;
+  shortText?: string;
+  team?: { id?: string | number };
+  clock?: EspnClock;
+  type?: { type?: string; text?: string };
+  participants?: EspnParticipant[];
+  fieldPositionX?: unknown;
+  fieldPositionY?: unknown;
+  goalPositionY?: unknown;
+}
+
+interface EspnCommentaryLine {
+  text?: unknown;
+  sequence?: unknown;
+  time?: { displayValue?: unknown; value?: unknown };
+}
+
+interface EspnSummaryHeader extends EspnNotes {
+  id?: string | number;
+  gregorianDate?: string;
+  league?: { slug?: string };
+  season?: { year?: string | number };
+  competitions?: EspnCompetition[];
+}
+
+/** The `/summary` endpoint: header, boxscore, rosters, keyEvents, commentary. */
+interface EspnSummary {
+  header?: EspnSummaryHeader;
+  boxscore?: { teams?: { team?: EspnTeamRef }[] };
+  rosters?: EspnRosterSide[];
+  keyEvents?: EspnKeyEvent[];
+  commentary?: EspnCommentaryLine[];
+}
+
+interface EspnCoachRow {
+  firstName?: string;
+  lastName?: string;
+}
+
+/** The `/rosters` endpoint: squad list plus coach. */
+interface EspnRosterEndpoint {
+  team?: EspnTeamRef;
+  coach?: EspnCoachRow[];
+  coaches?: EspnCoachRow[];
+  athletes?: EspnAthlete[];
+}
+
+interface EspnStandingEntry {
+  id?: string | number;
+  /** v2: the team object; summary standings: the team NAME as a plain string. */
+  team?: unknown;
+  /** v2 ships `logos[]`, summary standings a bare string. */
+  logo?: string | EspnLogo[];
+  stats?: EspnStat[];
+}
+
+interface EspnStandingGroup {
+  standings?: { entries?: EspnStandingEntry[] };
+}
+
+interface EspnStandingsSection extends EspnStandingGroup {
+  groups?: EspnStandingGroup[];
+}
+
+interface EspnStandingsPayload {
+  children?: EspnStandingGroup[];
+  standings?: EspnStandingsSection;
+  header?: { league?: { slug?: string } };
+}
+
 /* ------------------------------------------------------------ positions */
 
 // ESPN uses granular abbreviations (CD-L, AM-R, RM...). Map to the four
@@ -178,8 +386,8 @@ function parseScore(v: unknown): number | null {
 
 /* ------------------------------------------------------------ scoreboard */
 
-function teamFromCompetitor(comp: any, league: string): NormTeam {
-  const t = comp.team ?? {};
+function teamFromCompetitor(comp: EspnCompetitor, league: string): NormTeam {
+  const t: EspnTeamRef = comp.team ?? {};
   const isCupComp = isCup(league);
   return {
     id: String(t.id),
@@ -202,8 +410,11 @@ function teamFromCompetitor(comp: any, league: string): NormTeam {
  * Tries the event's headline and the competition's notes, since ESPN populates
  * one or the other depending on the competition.
  */
-function roundFromEvent(ev: any, competition: any): string | null {
-  const note: string | undefined = competition?.notes?.[0]?.headline ?? ev?.notes?.[0]?.headline ?? null;
+function roundFromEvent(
+  ev: EspnNotes | undefined | null,
+  competition: EspnNotes | undefined | null,
+): string | null {
+  const note = competition?.notes?.[0]?.headline ?? ev?.notes?.[0]?.headline ?? null;
   const source = note ?? ev?.name ?? null;
   if (!source) return null;
   const m = source.match(
@@ -220,12 +431,16 @@ function roundFromEvent(ev: any, competition: any): string | null {
   return raw.replace(/\b\w/g, (c: string) => c.toUpperCase());
 }
 
-export function normalizeScoreboard(json: any, league: string): { teams: NormTeam[]; matches: NormMatch[] } {
+export function normalizeScoreboard(
+  raw: unknown,
+  league: string,
+): { teams: NormTeam[]; matches: NormMatch[] } {
+  const json = raw as EspnScoreboard;
   const teams = new Map<string, NormTeam>();
   const matches: NormMatch[] = [];
   for (const ev of json.events ?? []) {
-    const competition = ev.competitions?.[0] ?? {};
-    const competitors: any[] = competition.competitors ?? [];
+    const competition = ev.competitions?.[0];
+    const competitors = competition?.competitors ?? [];
     const home = competitors.find((c) => c.homeAway === "home");
     const away = competitors.find((c) => c.homeAway === "away");
     if (!home || !away) continue;
@@ -233,9 +448,8 @@ export function normalizeScoreboard(json: any, league: string): { teams: NormTea
     const at = teamFromCompetitor(away, league);
     teams.set(ht.id, ht);
     teams.set(at.id, at);
-    const st = competition.status ?? ev.status ?? {};
-    const type = st.type ?? {};
-    const status = normalizeStatus(type.state, type.completed, type.description ?? type.shortDetail);
+    const type = (competition?.status ?? ev.status)?.type;
+    const status = normalizeStatus(type?.state, type?.completed, type?.description ?? type?.shortDetail);
     matches.push({
       id: String(ev.id),
       league,
@@ -246,7 +460,7 @@ export function normalizeScoreboard(json: any, league: string): { teams: NormTea
       home_score: status === "scheduled" ? null : parseScore(home.score),
       away_score: status === "scheduled" ? null : parseScore(away.score),
       minute_display:
-        status === "live" || status === "halftime" ? (type.displayClock ?? type.shortDetail ?? null) : null,
+        status === "live" || status === "halftime" ? (type?.displayClock ?? type?.shortDetail ?? null) : null,
       espn_season: ev.season ? `${ev.season.year}` : null,
       round: roundFromEvent(ev, competition),
       home_formation: null,
@@ -258,14 +472,15 @@ export function normalizeScoreboard(json: any, league: string): { teams: NormTea
 
 /* ------------------------------------------------------------ summary */
 
-export function normalizeSummaryTeams(json: any): { home: NormTeam | null; away: NormTeam | null } {
-  const comps: any[] = json.header?.competitions?.[0]?.competitors ?? [];
+export function normalizeSummaryTeams(raw: unknown): { home: NormTeam | null; away: NormTeam | null } {
+  const json = raw as EspnSummary;
+  const comps = json.header?.competitions?.[0]?.competitors ?? [];
   let home: NormTeam | null = null;
   let away: NormTeam | null = null;
   for (const c of comps) {
     const norm = teamFromCompetitor(c, json.header?.league?.slug ?? "");
     if (!norm.logo_url) {
-      const box = (json.boxscore?.teams ?? []).find((b: any) => String(b.team?.id) === norm.id);
+      const box = (json.boxscore?.teams ?? []).find((b) => String(b.team?.id) === norm.id);
       norm.logo_url = box?.team?.logo ?? null;
     }
     if (c.homeAway === "home") home = norm;
@@ -274,14 +489,15 @@ export function normalizeSummaryTeams(json: any): { home: NormTeam | null; away:
   return { home, away };
 }
 
-export function normalizeSummaryMatch(json: any): NormMatch {
+export function normalizeSummaryMatch(raw: unknown): NormMatch {
+  const json = raw as EspnSummary;
   const h = json.header?.competitions?.[0];
-  const comps: any[] = h?.competitors ?? [];
+  const comps = h?.competitors ?? [];
   const home = comps.find((c) => c.homeAway === "home");
   const away = comps.find((c) => c.homeAway === "away");
   const type = h?.status?.type ?? {};
   const status = normalizeStatus(type.state, type.completed, type.description ?? type.shortDetail);
-  const rosters: any[] = json.rosters ?? [];
+  const rosters = json.rosters ?? [];
   const homeRoster = rosters.find((r) => r.homeAway === "home");
   const awayRoster = rosters.find((r) => r.homeAway === "away");
   return {
@@ -298,7 +514,7 @@ export function normalizeSummaryMatch(json: any): NormMatch {
     home_formation: homeRoster?.formation ?? null,
     away_formation: awayRoster?.formation ?? null,
     espn_season: json.header?.season?.year ? `${json.header.season.year}` : null,
-    round: roundFromEvent(json.header, h ?? {}),
+    round: roundFromEvent(json.header, h),
   };
 }
 
@@ -318,7 +534,7 @@ const STAT_NAMES = {
   ownGoals: "ownGoals",
 } as const;
 
-function statValue(stats: any[] | undefined, name: string): number | null {
+function statValue(stats: EspnStat[] | undefined, name: string): number | null {
   const s = (stats ?? []).find((x) => x.name === name);
   if (!s || s.value === undefined || s.value === null) return null;
   const v = typeof s.value === "number" ? s.value : parseFloat(String(s.displayValue ?? s.value));
@@ -332,7 +548,9 @@ function statValue(stats: any[] | undefined, name: string): number | null {
  * - sub: 90 minus the minute they came on (fallback 25)
  * - unused/didNotPlay: 0
  */
-export function deriveMinutes(entry: any, json: any): number {
+export function deriveMinutes(rawEntry: unknown, rawJson: unknown): number {
+  const entry = rawEntry as EspnRosterEntry;
+  const json = rawJson as EspnSummary;
   if (entry.didNotPlay === true || (entry.stats ?? []).length === 0) return 0;
   const pid = String(entry.athlete?.id ?? "");
   if (entry.starter) {
@@ -348,11 +566,11 @@ export function deriveMinutes(entry: any, json: any): number {
 }
 
 /** ESPN convention on sub keyEvents: participants[0] = on, participants[1] = off. */
-function findSubMinute(json: any, playerId: string, direction: "in" | "out"): number | null {
+function findSubMinute(json: EspnSummary, playerId: string, direction: "in" | "out"): number | null {
   for (const ke of json.keyEvents ?? []) {
     const t = (ke.type?.text ?? "").toLowerCase();
     if (!t.includes("substitution")) continue;
-    const parts: any[] = ke.participants ?? [];
+    const parts = ke.participants ?? [];
     const idx = direction === "in" ? 0 : 1;
     const p = parts[idx]?.athlete?.id;
     if (p && String(p) === playerId) {
@@ -363,10 +581,11 @@ function findSubMinute(json: any, playerId: string, direction: "in" | "out"): nu
   return null;
 }
 
-export function normalizeRosters(json: any): {
+export function normalizeRosters(raw: unknown): {
   players: NormPlayer[];
   stats: NormPlayerStats[];
 } {
+  const json = raw as EspnSummary;
   const players: NormPlayer[] = [];
   const stats: NormPlayerStats[] = [];
   for (const side of json.rosters ?? []) {
@@ -451,8 +670,8 @@ const EVENT_TYPE_MAP: Record<string, string> = {
 /**
  * ESPN keyEvent types include goal SUBTYPES ("Goal - Free-kick", "Goal -
  * Header", "Second Yellow Card"...) that the exact map above misses — a
- * subtype goal landing in "other" would vanish from goal feeds, the replay
- * score and the shot plot. Map by substring after the exact lookup.
+ * subtype goal landing in "other" would vanish from goal feeds and the shot
+ * plot. Map by substring after the exact lookup.
  */
 export function mapEventType(raw: string): string {
   const exact = EVENT_TYPE_MAP[raw];
@@ -469,18 +688,19 @@ export function mapEventType(raw: string): string {
   return "other";
 }
 
-export function normalizeTimeline(json: any): NormTimelineEvent[] {
+export function normalizeTimeline(raw: unknown): NormTimelineEvent[] {
+  const json = raw as Pick<EspnSummary, "keyEvents">;
   const out: NormTimelineEvent[] = [];
   for (const ke of json.keyEvents ?? []) {
     const raw = String(ke.type?.text ?? ke.type?.type ?? "other").toLowerCase();
     const type = mapEventType(raw);
     if (type === "other" && !ke.text && !ke.shortText) continue;
-    const participants = (ke.participants ?? []).map((p: any) => ({
+    const participants = (ke.participants ?? []).map((p) => ({
       id: String(p.athlete?.id ?? ""),
       name: p.athlete?.displayName ?? "",
     }));
     // Shot origin + goal-line position: ESPN only fills these on goal events,
-    // and only in some leagues. Null elsewhere; the replay pitch copes.
+    // and only in some leagues. Null elsewhere; consumers cope.
     const num = (v: unknown): number | null => {
       if (v === undefined || v === null || v === "") return null;
       const n = Number(v);
@@ -506,17 +726,20 @@ export function normalizeTimeline(json: any): NormTimelineEvent[] {
 
 /**
  * The dense minute-by-minute feed (fouls, corners, every shot). Stored per
- * match so finished matches get a replayable commentary track.
+ * match so finished matches get a full commentary track.
  */
-export function normalizeCommentary(json: any): NormCommentaryLine[] {
+export function normalizeCommentary(raw: unknown): NormCommentaryLine[] {
+  const json = raw as Pick<EspnSummary, "commentary">;
   const out: NormCommentaryLine[] = [];
   for (const line of json.commentary ?? []) {
     const text = String(line.text ?? "").trim();
     if (!text) continue;
+    const time = line.time;
+    const seconds = time?.value;
     out.push({
       sequence: Number(line.sequence ?? out.length),
-      minute_display: line.time?.displayValue ? String(line.time.displayValue) : null,
-      minute_seconds: typeof line.time?.value === "number" ? line.time.value : null,
+      minute_display: time?.displayValue ? String(time.displayValue) : null,
+      minute_seconds: typeof seconds === "number" ? seconds : null,
       text,
     });
   }
@@ -526,7 +749,8 @@ export function normalizeCommentary(json: any): NormCommentaryLine[] {
 /* ------------------------------------------------------------ rosters */
 
 /** Coach entry from the roster endpoint (`coach[]`, first row wins). */
-export function normalizeCoach(json: any): { team_id: string; name: string } | null {
+export function normalizeCoach(raw: unknown): { team_id: string; name: string } | null {
+  const json = raw as EspnRosterEndpoint;
   const teamId = String(json.team?.id ?? "");
   // Some league payloads nest the coach under a different key (or omit it).
   const first = (json.coach ?? json.coaches ?? json.team?.coach ?? [])[0];
@@ -539,7 +763,8 @@ export function normalizeCoach(json: any): { team_id: string; name: string } | n
  * Squad rows from the roster endpoint. Roster positions are granular ("G",
  * "CD-L"...), so reuse the match-roster mapping for the GK/DEF/MID/FWD buckets.
  */
-export function normalizeRosterPlayers(json: any): NormPlayer[] {
+export function normalizeRosterPlayers(raw: unknown): NormPlayer[] {
+  const json = raw as EspnRosterEndpoint;
   const teamId = String(json.team?.id ?? "");
   const out: NormPlayer[] = [];
   for (const a of json.athletes ?? []) {
@@ -586,26 +811,31 @@ export function normalizeRosterPlayers(json: any): NormPlayer[] {
  * has no `header.league.slug`, and the caller always knows which catalog entry
  * it asked for.
  */
-export function normalizeStandings(json: any, leagueSlug = ""): {
+export function normalizeStandings(
+  raw: unknown,
+  leagueSlug = "",
+): {
   teams: NormTeam[];
   rows: NormStandingRow[];
 } {
   const teams: NormTeam[] = [];
   const rows: NormStandingRow[] = [];
+  const payload = raw as EspnStandingsPayload | null | undefined;
 
   // v2: children[].standings.entries — summary: standings.groups[].standings.entries.
-  const groups: any[] = Array.isArray(json?.children)
-    ? json.children
-    : (json?.standings?.groups ?? (json?.standings ? [json.standings] : []));
+  const children = payload?.children;
+  const groups: EspnStandingGroup[] = Array.isArray(children)
+    ? children
+    : (payload?.standings?.groups ?? (payload?.standings ? [payload.standings] : []));
 
   for (const g of groups) {
     for (const entry of g?.standings?.entries ?? []) {
       const byName: Record<string, number | null> = {};
       for (const s of entry.stats ?? []) {
-        byName[s.name] = s.value !== undefined && s.value !== null ? Number(s.value) : null;
+        byName[String(s.name)] = s.value !== undefined && s.value !== null ? Number(s.value) : null;
       }
       // v2 puts the id on the team object; summary has it on the entry.
-      const teamObj = typeof entry.team === "object" && entry.team ? entry.team : {};
+      const teamObj = (typeof entry.team === "object" && entry.team ? entry.team : {}) as EspnTeamRef;
       const teamId = String(teamObj.id ?? entry.id ?? "");
       if (!teamId) continue;
       // entry.team is a plain string in summary standings ("Manchester City")
@@ -625,7 +855,7 @@ export function normalizeStandings(json: any, leagueSlug = ""): {
         abbreviation: teamObj.abbreviation ?? null,
         logo_url: logo,
         color: teamObj.color ? `#${String(teamObj.color).replace("#", "")}` : null,
-        league: leagueSlug || json.header?.league?.slug || "",
+        league: leagueSlug || payload?.header?.league?.slug || "",
       });
       rows.push({
         team_id: teamId,

@@ -47,9 +47,7 @@ export function generateReferralCode(): string {
  * collision means something is deeply wrong).
  */
 export function ensureReferralCode(db: DatabaseSync, userId: number): string {
-  const existing = get<{ code: string }>(db, "SELECT code FROM referral_codes WHERE user_id = ?", [
-    userId,
-  ]);
+  const existing = get<{ code: string }>(db, "SELECT code FROM referral_codes WHERE user_id = ?", [userId]);
   if (existing) return existing.code;
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const code = generateReferralCode();

@@ -26,11 +26,9 @@ const MECHANICS: Mechanic[] = ["lineup", "shot_predict", "sub", "player_watch", 
  * so the history route reads the same signal.
  */
 export function isLineupPublished(matchId: string): boolean {
-  const row = get<{ home_formation: string | null }>(
-    db,
-    "SELECT home_formation FROM matches WHERE id = ?",
-    [matchId],
-  );
+  const row = get<{ home_formation: string | null }>(db, "SELECT home_formation FROM matches WHERE id = ?", [
+    matchId,
+  ]);
   const starters = get<{ teams: number }>(
     db,
     "SELECT COUNT(DISTINCT team_id) AS teams FROM match_player_stats WHERE match_id = ? AND started = 1",

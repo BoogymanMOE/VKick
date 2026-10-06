@@ -15,7 +15,7 @@ async function politeDelay() {
   lastCallAt = Date.now();
 }
 
-async function fetchJsonWithRetry(url: string, options: RequestInit = {}, attempts = 3): Promise<any> {
+async function fetchJsonWithRetry(url: string, options: RequestInit = {}, attempts = 3): Promise<unknown> {
   for (let i = 0; i < attempts; i++) {
     await politeDelay();
     const headers = {
@@ -33,11 +33,11 @@ async function fetchJsonWithRetry(url: string, options: RequestInit = {}, attemp
   throw new Error(`Understat failed after ${attempts} attempts: ${url}`);
 }
 
-export async function fetchTeamData(teamSlug: string, season: number): Promise<any> {
+export async function fetchTeamData(teamSlug: string, season: number): Promise<unknown> {
   return fetchJsonWithRetry(`${BASE}/getTeamData/${teamSlug}/${season}`);
 }
 
-export async function fetchLeagueData(leagueSlug: string, season: number): Promise<any> {
+export async function fetchLeagueData(leagueSlug: string, season: number): Promise<unknown> {
   const league = LEAGUE_SLUGS[leagueSlug] || leagueSlug;
   return fetchJsonWithRetry(`${BASE}/getLeagueData/${league}/${season}`);
 }
@@ -46,7 +46,7 @@ export async function fetchPlayerStats(
   teamSlug: string,
   season: number,
   filters?: Record<string, string>,
-): Promise<any> {
+): Promise<unknown> {
   const body = new URLSearchParams({ team: teamSlug, season: String(season), ...filters });
   return fetchJsonWithRetry(`${BASE}/main/getPlayersStats/`, {
     method: "POST",

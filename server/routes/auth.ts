@@ -33,6 +33,9 @@ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
  * TEMP AUTH PROBE — delete this block and its one call site once a real
  * Telegram client has been observed on a device.
  *
+ * Off by default (AUTH_PROBE != "1" prints nothing), so production and the
+ * test suite stay silent; the call site can stay in place until then.
+ *
  * One line per /api/auth/guest call so a phone test is readable at a glance:
  * was initData sent, did it verify, and did the user end up Telegram or a
  * guest.
@@ -42,10 +45,13 @@ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
  * names are not secrets and are what actually matter here: whether the
  * client sent `signature` decides which check-string algorithm is correct.
  */
-function authProbeGuest(initData: string, verified: { ok: true } | { ok: false; reason: string } | null, outcome: "telegram" | "guest"): void {
-  const keys = initData
-    ? [...new URLSearchParams(initData).keys()].sort().join(",")
-    : "";
+function authProbeGuest(
+  initData: string,
+  verified: { ok: true } | { ok: false; reason: string } | null,
+  outcome: "telegram" | "guest",
+): void {
+  if (process.env.AUTH_PROBE !== "1") return;
+  const keys = initData ? [...new URLSearchParams(initData).keys()].sort().join(",") : "";
   const hasSignature = initData ? new URLSearchParams(initData).has("signature") : false;
   const verdict = !initData
     ? "no-initData"
@@ -279,7 +285,13 @@ function mergeGuestIntoUser(deviceId: string, target: AuthedUser): void {
       if (targetFavs.some((e) => e.team_id === f.team_id)) continue;
       // continue (not break): one full bucket must not block picks for the
       // other — same rule the POST endpoint enforces per tap.
-      if (favoriteCapError(targetFavs.map((e) => e.group_key), f.group_key)) continue;
+      if (
+        favoriteCapError(
+          targetFavs.map((e) => e.group_key),
+          f.group_key,
+        )
+      )
+        continue;
       run(
         db,
         "INSERT OR IGNORE INTO favorite_teams (user_id, team_id, is_favorite, created_at) VALUES (?, ?, ?, ?)",

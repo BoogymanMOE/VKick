@@ -32,6 +32,7 @@ import { pruneFootballDetail, pruneSessions, logCapKb, RotatingLogger } from "./
 import { startSyncLoop } from "./sync/service.js";
 import { startBot } from "./bot/index.js";
 import { startResolverLoop } from "./predictions/resolver.js";
+import { gzip } from "./http/gzip.js";
 
 // Route modules — one per domain, mounted below. Endpoint paths and behavior
 // are identical to the pre-split monolith.
@@ -67,6 +68,19 @@ const apiLog = new RotatingLogger(path.join(ROOT_DIR, "logs", "api.log"), logCap
 // trusted anything, so a direct connection could spoof its IP past the
 // rate limiter's IP keys).
 app.set("trust proxy", 1);
+// Header hygiene: X-Powered-By advertises the stack for nothing, and nosniff
+// stops a browser re-interpreting a response as some other type. Deliberately
+// NO Content-Security-Policy yet: it has to be proven against the Telegram
+// webview (which frames the Mini App), the ESPN logo CDN and the Adsgram SDK
+// first — a wrong CSP bricks the app for every user at once.
+app.disable("x-powered-by");
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
+// Buffered gzip (see http/gzip.ts): the bundles were going out uncompressed.
+app.use(gzip);
 // 64KB body cap: far above any legit prediction/comment payload, well below
 // abuse size. (default was 100KB; explicit + smaller now that payloads are validated)
 app.use(express.json({ limit: "64kb" }));
@@ -100,17 +114,33 @@ app.use(adminRouter);
 /* ------------------------------------------------------------ static frontend */
 
 // Serve the built Vite frontend (dist/) so the React app loads in production.
-app.use(express.static(path.join(ROOT_DIR, "dist")));
+app.use(
+  express.static(path.join(ROOT_DIR, "dist"), {
+    setHeaders: (res, filePath) => {
+      // Vite fingerprints everything under /assets/, so those bytes cannot
+      // change under the same URL — cache them for a year. Everything else
+      // revalidates, index.html above all: shipping a stale shell after a
+      // deploy is how users end up requesting bundles that no longer exist.
+      const immutable = filePath.includes(`${path.sep}assets${path.sep}`);
+      res.setHeader("Cache-Control", immutable ? "public, max-age=31536000, immutable" : "no-cache");
+    },
+  }),
+);
 
 // SPA fallback: any GET that didn't match an API route or a static file
 // falls through to index.html so React Router owns client-side routing.
 app.use((req, res, next) => {
-  if (req.method === "GET" && !req.path.startsWith("/api")) {
-    return res.sendFile(path.join(ROOT_DIR, "dist", "index.html"), (err) => {
-      if (err) next(err);
-    });
-  }
-  next();
+  if (req.method !== "GET") return next();
+  // Unmatched API paths answer in the API's dialect: a JSON client parsing an
+  // HTML 404 turns a typo'd route into an opaque "Unexpected token" failure.
+  if (req.path.startsWith("/api")) return res.status(404).json({ error: "not found" });
+  // A MISS on a real file must 404 rather than fall through to the shell —
+  // returning index.html with 200 for /assets/whatever.js is what turns a
+  // post-deploy stale page into "Unexpected token '<'" instead of a reload.
+  if (/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type("text/plain").send("Not found");
+  return res.sendFile(path.join(ROOT_DIR, "dist", "index.html"), (err) => {
+    if (err) next(err);
+  });
 });
 
 /* ------------------------------------------------------------ errors */

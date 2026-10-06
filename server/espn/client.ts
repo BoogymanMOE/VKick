@@ -22,7 +22,7 @@ export class EspnError extends Error {
   }
 }
 
-async function fetchJson(url: string, retries = 2): Promise<any> {
+async function fetchJson(url: string, retries = 2): Promise<unknown> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const res = await fetch(url, {
@@ -30,7 +30,7 @@ async function fetchJson(url: string, retries = 2): Promise<any> {
         headers: { accept: "application/json" },
       });
       if (!res.ok) throw new EspnError(`HTTP ${res.status} for ${url}`, res.status);
-      return (await res.json()) as any;
+      return res.json();
     } catch (err) {
       if (attempt === retries) {
         if (err instanceof EspnError) throw err;
@@ -42,12 +42,12 @@ async function fetchJson(url: string, retries = 2): Promise<any> {
   throw new EspnError("unreachable");
 }
 
-export async function fetchScoreboard(league: LeagueSlug, dates?: string): Promise<any> {
+export async function fetchScoreboard(league: LeagueSlug, dates?: string): Promise<unknown> {
   const qs = dates ? `?dates=${encodeURIComponent(dates)}` : "";
   return fetchJson(`${BASE}/${league}/scoreboard${qs}`);
 }
 
-export async function fetchSummary(league: LeagueSlug, eventId: string): Promise<any> {
+export async function fetchSummary(league: LeagueSlug, eventId: string): Promise<unknown> {
   return fetchJson(`${BASE}/${league}/summary?event=${encodeURIComponent(eventId)}`);
 }
 
@@ -57,12 +57,12 @@ export async function fetchSummary(league: LeagueSlug, eventId: string): Promise
  * each with a real `team` object (so `team.id` is available) and the full stat
  * set including pointsFor/pointsAgainst.
  */
-export async function fetchStandings(league: LeagueSlug, season: number): Promise<any> {
+export async function fetchStandings(league: LeagueSlug, season: number): Promise<unknown> {
   return fetchJson(`${BASE_V2}/${league}/standings?season=${encodeURIComponent(String(season))}`);
 }
 
 /** Full squad for one club (site API roster endpoint, season included). */
-export async function fetchTeamRoster(league: LeagueSlug, teamId: string): Promise<any> {
+export async function fetchTeamRoster(league: LeagueSlug, teamId: string): Promise<unknown> {
   return fetchJson(`${BASE}/${league}/teams/${encodeURIComponent(teamId)}/roster`);
 }
 

@@ -13,7 +13,12 @@ export const adminRouter = express.Router();
 
 adminRouter.post("/api/admin/sync", requireUser, (req, res) => {
   if (!isAdmin(req)) return bad(res, "admin only", 403);
-  void syncScoreboards().then(() => res.json({ ok: true }));
+  // Must carry a catch: with none, a rejection is an unhandled promise rejection
+  // — Node terminates the process — AND this request would never be answered.
+  // The sync-window route below already had one; this one was missed.
+  void syncScoreboards()
+    .then(() => res.json({ ok: true }))
+    .catch((err) => bad(res, `sync failed: ${String(err).slice(0, 120)}`, 500));
 });
 
 /** Manually pull a fixture window (days back/forward) — backfills future fixtures. */

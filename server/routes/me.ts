@@ -63,7 +63,7 @@ meRouter.get("/api/me", requireUser, (req, res) => {
     user: { ...u, username: cred?.username ?? null, language: prefs?.language ?? "en" },
     favorites: favCount?.n ?? 0,
     leagues: leagueCount?.n ?? 0,
-    authMode: (req as any).authMode ?? "telegram",
+    authMode: req.authMode ?? "telegram",
   });
 });
 
@@ -125,7 +125,7 @@ meRouter.get("/api/me/favorites", requireUser, (_req, res) => {
   res.json({ favorites: rows });
 });
 
-meRouter.post("/api/me/favorites", requireUser, (req, res) => {
+meRouter.post("/api/me/favorites", requireUser, writeLimiter, (req, res) => {
   const teamId = String(req.body?.teamId ?? "");
   if (!teamId) return bad(res, "teamId required");
   const team = get<{ id: string; league: string; name: string; group_key: string }>(
@@ -186,7 +186,7 @@ meRouter.post("/api/me/favorites", requireUser, (req, res) => {
   res.json({ ok: true });
 });
 
-meRouter.delete("/api/me/favorites/:teamId", requireUser, (req, res) => {
+meRouter.delete("/api/me/favorites/:teamId", requireUser, writeLimiter, (req, res) => {
   run(db, "DELETE FROM favorite_teams WHERE user_id = ? AND team_id = ?", [
     currentUser(req).id,
     String(req.params.teamId),
@@ -195,7 +195,7 @@ meRouter.delete("/api/me/favorites/:teamId", requireUser, (req, res) => {
 });
 
 /** Set (or move) the anchor club — the one shown first everywhere. */
-meRouter.put("/api/me/favorites/:teamId/anchor", requireUser, (req, res) => {
+meRouter.put("/api/me/favorites/:teamId/anchor", requireUser, writeLimiter, (req, res) => {
   const teamId = String(req.params.teamId);
   const follows = get<{ n: number }>(
     db,
@@ -226,7 +226,7 @@ meRouter.get("/api/me/leagues", requireUser, (req, res) => {
   res.json({ leagues: rows });
 });
 
-meRouter.post("/api/me/leagues", requireUser, (req, res) => {
+meRouter.post("/api/me/leagues", requireUser, writeLimiter, (req, res) => {
   const league = String(req.body?.league ?? "");
   if (!league) return bad(res, "league required");
   const known = get<{ n: number }>(db, "SELECT COUNT(*) AS n FROM competitions WHERE slug = ?", [league]);
@@ -261,7 +261,7 @@ meRouter.post("/api/me/leagues", requireUser, (req, res) => {
   res.json({ ok: true });
 });
 
-meRouter.delete("/api/me/leagues/:league", requireUser, (req, res) => {
+meRouter.delete("/api/me/leagues/:league", requireUser, writeLimiter, (req, res) => {
   run(db, "DELETE FROM followed_leagues WHERE user_id = ? AND league = ?", [
     currentUser(req).id,
     String(req.params.league),

@@ -154,7 +154,11 @@ async function suite(): Promise<void> {
         displayName: "Merge User",
         deviceId: DEVICE,
       });
-      assert.equal(reg.status, 200, `register must not 500 on a guest with referrals (got ${JSON.stringify(reg.body)})`);
+      assert.equal(
+        reg.status,
+        200,
+        `register must not 500 on a guest with referrals (got ${JSON.stringify(reg.body)})`,
+      );
       assert.equal(reg.body?.ok, true);
 
       /* ---- 3. the guest row is gone, its data is not ------------------ */
@@ -173,9 +177,8 @@ async function suite(): Promise<void> {
       );
 
       /* ---- 4. the referral graph moved instead of vanishing ----------- */
-      const code = db
-        .prepare("SELECT user_id FROM referral_codes WHERE code = ?")
-        .get(guestCode) as { user_id: number } | undefined;
+      const code = db.prepare("SELECT user_id FROM referral_codes WHERE code = ?").get(guestCode) as
+        { user_id: number } | undefined;
       assert.ok(code, "the guest's invite code still exists");
       assert.equal(code.user_id, targetId, "and now belongs to the upgraded account");
 

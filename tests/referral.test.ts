@@ -67,7 +67,8 @@ function globalTotal(db: DatabaseSync, userId: number): number {
 }
 
 function ledgerCount(db: DatabaseSync, userId: number): number {
-  return (db.prepare("SELECT COUNT(*) AS n FROM point_ledger WHERE user_id = ?").get(userId) as { n: number }).n;
+  return (db.prepare("SELECT COUNT(*) AS n FROM point_ledger WHERE user_id = ?").get(userId) as { n: number })
+    .n;
 }
 
 function testCodeGeneration(): void {
@@ -113,9 +114,9 @@ function testRedeemHappyPath(): void {
   assert.equal(row.match_id, null, "referrals are not tied to a match");
 
   // Global scope ONLY: no league/club boards were bumped.
-  const scopes = db
-    .prepare("SELECT scope FROM user_point_totals WHERE user_id = ?")
-    .all(referrer) as Array<{ scope: string }>;
+  const scopes = db.prepare("SELECT scope FROM user_point_totals WHERE user_id = ?").all(referrer) as Array<{
+    scope: string;
+  }>;
   assert.deepEqual(
     scopes.map((s) => s.scope),
     ["global"],

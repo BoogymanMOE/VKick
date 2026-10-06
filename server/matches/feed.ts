@@ -110,14 +110,30 @@ export function buildFeedQuery(q: FeedQuery = {}): FeedSql {
     // "show me this week's fixtures" should not filter by whether they are done.
     clauses.push("substr(m.kickoff_at, 1, 10) BETWEEN ? AND ?");
     params.push(from, to);
-    return { where: clauses.join(" AND "), params, orderBy: FEED_ORDER, limit, mode: "range", past: null, future: null };
+    return {
+      where: clauses.join(" AND "),
+      params,
+      orderBy: FEED_ORDER,
+      limit,
+      mode: "range",
+      past: null,
+      future: null,
+    };
   }
 
   if (date) {
     // One specific day, whatever its status.
     clauses.push("substr(m.kickoff_at, 1, 10) = ?");
     params.push(date);
-    return { where: clauses.join(" AND "), params, orderBy: FEED_ORDER, limit, mode: "day", past: null, future: null };
+    return {
+      where: clauses.join(" AND "),
+      params,
+      orderBy: FEED_ORDER,
+      limit,
+      mode: "day",
+      past: null,
+      future: null,
+    };
   }
 
   // Relevance window. `from`/`to` each pin their own end when given alone.

@@ -38,7 +38,16 @@ function seed(db: DatabaseSync, id: string, kickoff: string, status: string, lea
   db.prepare(
     `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(id, league, `${id}h`, `${id}a`, kickoff, status, status === "scheduled" ? null : 2, status === "scheduled" ? null : 1);
+  ).run(
+    id,
+    league,
+    `${id}h`,
+    `${id}a`,
+    kickoff,
+    status,
+    status === "scheduled" ? null : 2,
+    status === "scheduled" ? null : 1,
+  );
 }
 
 /** Runs the generated feed SQL exactly as the route does. */
@@ -106,11 +115,7 @@ function testOrdering(): void {
   assert.equal(order[0], "the_live_one", "the live match leads, never buried under results");
   assert.equal(order[1], "sooner_fixture", "the next fixture is soonest");
   assert.equal(order[2], "later_fixture", "then the one further out");
-  assert.deepEqual(
-    order.slice(3),
-    ["new_result", "old_result"],
-    "results read newest-first",
-  );
+  assert.deepEqual(order.slice(3), ["new_result", "old_result"], "results read newest-first");
 }
 
 /** An explicit from/to pair is an inclusive range and ignores status. */

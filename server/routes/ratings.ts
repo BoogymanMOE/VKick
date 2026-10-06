@@ -15,17 +15,27 @@ const MIN_VOTES_TO_SHOW = 3;
 /** The 3-card rule: each user rates exactly 3 players of their choice per match. */
 const MAX_RATINGS_PER_MATCH = 3;
 
+/**
+ * The two aggregates this query computes. Everything else in the row is a
+ * passthrough column, so the index signature keeps it available downstream
+ * without restating the whole SELECT.
+ */
+type RatingAggRow = Record<string, unknown> & {
+  votes: number;
+  avg_rating: number | null;
+};
+
 ratingsRouter.get("/api/matches/:id/ratings", requireUser, (req, res) => {
   const matchId = String(req.params.id);
   const userId = currentUser(req).id;
-  const rows = all(
+  const rows = all<RatingAggRow>(
     db,
     `SELECT s.player_id, p.full_name AS name, p.short_name, s.team_id, p.position,
             s.stat_score, s.stat_breakdown, s.started, s.minutes_played,
             AVG(r.rating) AS avg_rating, COUNT(r.rating) AS votes,
             (SELECT rating FROM crowd_ratings WHERE user_id = ? AND player_id = s.player_id AND match_id = s.match_id) AS my_rating,
             (SELECT comment FROM crowd_ratings WHERE user_id = ? AND player_id = s.player_id AND match_id = s.match_id) AS my_comment,
-            (SELECT c.text FROM crowd_ratings rc JOIN users c ON c.id = rc.user_id
+            (SELECT rc.comment FROM crowd_ratings rc
               WHERE rc.player_id = s.player_id AND rc.match_id = s.match_id AND rc.comment IS NOT NULL
               ORDER BY rc.created_at DESC LIMIT 1) AS latest_comment
      FROM match_player_stats s
@@ -36,9 +46,12 @@ ratingsRouter.get("/api/matches/:id/ratings", requireUser, (req, res) => {
      ORDER BY s.team_id, s.started DESC, s.minutes_played DESC`,
     [userId, userId, matchId],
   );
-  const withRatings = rows.map((r: any) => ({
+  const withRatings = rows.map((r) => ({
     ...r,
-    crowd_rating: r.votes >= MIN_VOTES_TO_SHOW ? Math.round(r.avg_rating * 10) / 10 : null,
+    // votes >= 3 implies avg_rating is non-null (COUNT and AVG see the same
+    // NOT NULL rating column), so the null check only satisfies the compiler.
+    crowd_rating:
+      r.votes >= MIN_VOTES_TO_SHOW && r.avg_rating != null ? Math.round(r.avg_rating * 10) / 10 : null,
   }));
   const used = get<{ n: number }>(
     db,

@@ -10,7 +10,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { migrate } from "../server/db/schema.js";
-import { pruneFootballDetail, pruneSessions, SESSION_TTL_MS, RotatingLogger, logCapKb } from "../server/db/retention.js";
+import {
+  pruneFootballDetail,
+  pruneSessions,
+  SESSION_TTL_MS,
+  RotatingLogger,
+  logCapKb,
+} from "../server/db/retention.js";
 
 function tempDb(): { db: DatabaseSync; file: string } {
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vkick-retention-")), "test.db");
@@ -53,11 +59,14 @@ function testPruneFootballDetail(): void {
       `INSERT INTO timeline_events (match_id, minute_display, minute_seconds, type, description)
        VALUES (?, '12:34', 754, 'goal', 'test event')`,
     ).run(id);
-    db.prepare(`INSERT INTO match_commentary (match_id, sequence, minute_display, minute_seconds, text)
-                VALUES (?, 1, '12', 720, 'line')`).run(id);
     db.prepare(
-      `INSERT INTO match_team_stats (match_id, team_id, possession_pct) VALUES (?, ?, 55.0)`,
-    ).run(id, `${id}h`);
+      `INSERT INTO match_commentary (match_id, sequence, minute_display, minute_seconds, text)
+                VALUES (?, 1, '12', 720, 'line')`,
+    ).run(id);
+    db.prepare(`INSERT INTO match_team_stats (match_id, team_id, possession_pct) VALUES (?, ?, 55.0)`).run(
+      id,
+      `${id}h`,
+    );
     db.prepare(
       `INSERT INTO match_player_stats (match_id, player_id, team_id, minutes_played) VALUES (?, 'p1', ?, 90)`,
     ).run(id, `${id}h`);
@@ -101,13 +110,21 @@ function testPruneSessions(): void {
   const fresh = new Date(now - 3_600_000).toISOString();
   db.prepare(`INSERT INTO users (telegram_id, display_name, created_at) VALUES ('u1', 'U1', ?)`).run(stale);
   db.prepare(`INSERT INTO users (telegram_id, display_name, created_at) VALUES ('u2', 'U2', ?)`).run(fresh);
-  db.prepare(`INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES ('mg_stale', 1, ?, ?)`).run(stale, stale);
-  db.prepare(`INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES ('mg_fresh', 2, ?, ?)`).run(fresh, fresh);
+  db.prepare(
+    `INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES ('mg_stale', 1, ?, ?)`,
+  ).run(stale, stale);
+  db.prepare(
+    `INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES ('mg_fresh', 2, ?, ?)`,
+  ).run(fresh, fresh);
 
   const pruned = pruneSessions(db, now);
   assert.equal(pruned, 1, "only sessions idle past the TTL go");
   const left = db.prepare(`SELECT token FROM user_sessions`).all() as Array<{ token: string }>;
-  assert.deepEqual(left.map((r) => r.token), ["mg_fresh"], "the recently-used session survives");
+  assert.deepEqual(
+    left.map((r) => r.token),
+    ["mg_fresh"],
+    "the recently-used session survives",
+  );
 }
 
 function testRetentionZeroDisables(): void {

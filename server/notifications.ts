@@ -18,7 +18,15 @@
  * app in Persian gets Persian pushes (see server/messages.ts for the wording).
  */
 import { all, get, type DB } from "./db/index.js";
-import { asPushLang, goalPush, halftimePush, lineupPush, lockPush, ratingsPush, type PushLang } from "./messages.js";
+import {
+  asPushLang,
+  goalPush,
+  halftimePush,
+  lineupPush,
+  lockPush,
+  ratingsPush,
+  type PushLang,
+} from "./messages.js";
 import { lineupPublished } from "./predictions/window.js";
 
 /** Every kind of push the app sends. Also the dedupe stage for matchday pushes. */
@@ -56,7 +64,19 @@ interface PushRecipient {
  *
  * `column` comes from PREF_COLUMN, never from request input, so the
  * interpolation below cannot carry user data into the SQL.
+ *
+ * The deliverability filter matters: browser guests (`guest:<device>`),
+ * username accounts (`pwd:<name>`) and dev-token users (`dev:<id>`) own rows
+ * in `users` and can follow clubs, but no Telegram chat exists behind those
+ * ids. Queueing for them was pure waste — in the dev DB every single row ever
+ * queued targeted a `guest:` id, burned 5 retries and landed in failed_at.
+ * They still get the in-app experience; they simply never enter the queue.
  */
+const DELIVERABLE = `
+     u.telegram_id NOT LIKE 'guest:%'
+ AND u.telegram_id NOT LIKE 'pwd:%'
+ AND u.telegram_id NOT LIKE 'dev:%'`;
+
 export function teamFollowers(db: DB, teamId: string, kind: PushKind): PushRecipient[] {
   if (!teamId) return [];
   const column = PREF_COLUMN[kind];
@@ -66,7 +86,8 @@ export function teamFollowers(db: DB, teamId: string, kind: PushKind): PushRecip
      FROM users u
      JOIN favorite_teams f ON f.user_id = u.id
      LEFT JOIN user_notification_prefs p ON p.user_id = u.id
-     WHERE f.team_id = ? AND (p.user_id IS NULL OR p.${column} = 1)`,
+     WHERE f.team_id = ? AND (p.user_id IS NULL OR p.${column} = 1)
+       AND ${DELIVERABLE}`,
     [teamId],
   );
   return rows.map((r) => ({ telegramId: r.telegram_id, lang: asPushLang(r.language) }));
@@ -143,7 +164,12 @@ export function queueGoalAlerts(db: DB, goals: GoalAlertInput[]): number {
     const club = team?.short_name ?? team?.name ?? null;
     const score = `${g.homeScore}-${g.awayScore}`;
     for (const r of teamFollowers(db, g.scoringTeamId, "goal")) {
-      enqueuePush(db, r.telegramId, "goal", goalPush(r.lang, { minute: g.minute, club, scorer: g.scorerName, score }));
+      enqueuePush(
+        db,
+        r.telegramId,
+        "goal",
+        goalPush(r.lang, { minute: g.minute, club, scorer: g.scorerName, score }),
+      );
       queued++;
     }
   }

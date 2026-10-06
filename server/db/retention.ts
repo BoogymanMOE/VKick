@@ -7,7 +7,8 @@ import type { DB, BindValue } from "./index.js";
  * standings read them — only the per-match detail tables (timeline events,
  * commentary, per-team/per-player stat sheets) and notification bookkeeping
  * grow with every gameweek. Those get pruned once a match is old enough that
- * nobody replays it: RETENTION_DAYS, default 120 (a full season window).
+ * no screen shows it any more: RETENTION_DAYS, default 120 (a full season
+ * window).
  *
  * opt-out: RETENTION_DAYS=0 keeps everything forever.
  */
@@ -74,11 +75,27 @@ export function pruneFootballDetail(db: DB, now: number = Date.now()): Retention
 
   const deleted: Record<string, number> = {};
 
-  // Detail tables: the replay payload reads these.
-  deleted.timeline_events = runCount(db, `DELETE FROM timeline_events WHERE match_id IN (${placeholders})`, ids);
-  deleted.match_commentary = runCount(db, `DELETE FROM match_commentary WHERE match_id IN (${placeholders})`, ids);
-  deleted.match_team_stats = runCount(db, `DELETE FROM match_team_stats WHERE match_id IN (${placeholders})`, ids);
-  deleted.match_player_stats = runCount(db, `DELETE FROM match_player_stats WHERE match_id IN (${placeholders})`, ids);
+  // Detail tables: the match page's timeline, commentary and stat tabs read these.
+  deleted.timeline_events = runCount(
+    db,
+    `DELETE FROM timeline_events WHERE match_id IN (${placeholders})`,
+    ids,
+  );
+  deleted.match_commentary = runCount(
+    db,
+    `DELETE FROM match_commentary WHERE match_id IN (${placeholders})`,
+    ids,
+  );
+  deleted.match_team_stats = runCount(
+    db,
+    `DELETE FROM match_team_stats WHERE match_id IN (${placeholders})`,
+    ids,
+  );
+  deleted.match_player_stats = runCount(
+    db,
+    `DELETE FROM match_player_stats WHERE match_id IN (${placeholders})`,
+    ids,
+  );
   deleted.match_understat_stats = runCount(
     db,
     `DELETE FROM match_understat_stats WHERE match_id IN (${placeholders})`,
@@ -88,7 +105,11 @@ export function pruneFootballDetail(db: DB, now: number = Date.now()): Retention
   // Notification bookkeeping: goal-dedupe keys and per-user push audit rows.
   // Push audit rows are the audit trail of who was told what; after the
   // window they describe matches nobody can open anymore.
-  deleted.notified_goals = runCount(db, `DELETE FROM notified_goals WHERE match_id IN (${placeholders})`, ids);
+  deleted.notified_goals = runCount(
+    db,
+    `DELETE FROM notified_goals WHERE match_id IN (${placeholders})`,
+    ids,
+  );
   deleted.match_notifications = runCount(
     db,
     `DELETE FROM match_notifications WHERE match_id IN (${placeholders})`,

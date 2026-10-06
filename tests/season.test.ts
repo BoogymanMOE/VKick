@@ -108,9 +108,7 @@ function addMatch(
   status = "finished",
 ): void {
   // The matches FKs need real team rows; make them idempotent per test.
-  const team = db.prepare(
-    "INSERT OR IGNORE INTO teams (id, name, league) VALUES (?, ?, ?)",
-  );
+  const team = db.prepare("INSERT OR IGNORE INTO teams (id, name, league) VALUES (?, ?, ?)");
   team.run("57", "Home FC", league === "fifa.world" ? "" : league);
   team.run("64", "Away FC", league === "fifa.world" ? "" : league);
   db.prepare(

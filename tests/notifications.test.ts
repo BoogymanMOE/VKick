@@ -305,7 +305,9 @@ function testGoalAlertsCoverInternationalFavorites() {
 
   // A vanished team row (retention edge) is skipped without crashing.
   assert.equal(
-    queueGoalAlerts(db, [{ matchId: "x", scoringTeamId: "GHOST", scorerName: "?", minute: "1", homeScore: 0, awayScore: 0 }]),
+    queueGoalAlerts(db, [
+      { matchId: "x", scoringTeamId: "GHOST", scorerName: "?", minute: "1", homeScore: 0, awayScore: 0 },
+    ]),
     0,
     "no followers of a missing team — no crash",
   );
@@ -376,6 +378,42 @@ function testKindColumnBackfill() {
   db.close();
 }
 
+/**
+ * Accounts with no Telegram chat behind them never enter the queue. Browser
+ * guests (`guest:<device>`), username accounts (`pwd:<name>`) and dev-token
+ * users (`dev:<id>`) all live in `users` and can follow clubs — but a send to
+ * those ids is a guaranteed failure (measured: every row ever queued in the dev
+ * database targeted a guest, burned its retries, and landed in failed_at).
+ */
+function testDeliverabilityFilter() {
+  const db = tempDb();
+  seed(db);
+  db.exec(`
+    INSERT INTO users (id, telegram_id, display_name, created_at) VALUES
+      (10, 'guest:device-a', 'Guest', '2026-01-01T00:00:00.000Z'),
+      (11, 'pwd:alice', 'Alice', '2026-01-01T00:00:00.000Z'),
+      (12, 'dev:900001', 'Dev', '2026-01-01T00:00:00.000Z');
+    INSERT INTO favorite_teams (user_id, team_id, is_favorite, created_at) VALUES
+      (10, 'H', 1, '2026-01-01T00:00:00.000Z'),
+      (11, 'H', 0, '2026-01-01T00:00:00.000Z'),
+      (12, 'H', 0, '2026-01-01T00:00:00.000Z');
+  `);
+
+  const queuedCount = queueGoalAlerts(db, [
+    { matchId: "m_del", scoringTeamId: "H", scorerName: "Saka", minute: "55", homeScore: 2, awayScore: 1 },
+  ]);
+
+  assert.deepEqual(
+    queued(db)
+      .map((r) => r.telegram_id)
+      .sort(),
+    ["u1", "u2", "u3"],
+    "only real Telegram chat ids are queued",
+  );
+  assert.equal(queuedCount, 3, "the count covers deliverable recipients only");
+  db.close();
+}
+
 export async function runNotificationTests(): Promise<void> {
   testDedupeAndBothClubs();
   testPreferenceGates();
@@ -384,7 +422,9 @@ export async function runNotificationTests(): Promise<void> {
   testPerRecipientLanguage();
   testGoalAlertsCoverInternationalFavorites();
   testKindColumnBackfill();
+  testDeliverabilityFilter();
   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
   console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
+  console.log("  notifications: guest/pwd/dev accounts never enter the push queue OK");
 }

@@ -218,8 +218,17 @@ export function migrate(db: DatabaseSync): void {
       created_at   TEXT NOT NULL,
       sent_at      TEXT,
       attempts     INTEGER NOT NULL DEFAULT 0,
-      failed_at    TEXT
+      failed_at    TEXT,
+      -- Drain backoff: epoch ms before this row may be retried. Without it a
+      -- transient Telegram outage burned all 5 attempts inside 15 seconds and
+      -- dropped the push forever. 0 = eligible now.
+      next_attempt_at INTEGER NOT NULL DEFAULT 0
     );
+    -- The drain reads pending rows every 3s all season; without this it scans
+    -- the whole (sent + failed) history each time. Partial, so sent rows cost
+    -- nothing to keep.
+    CREATE INDEX IF NOT EXISTS idx_push_pending ON bot_push_queue(id)
+      WHERE sent_at IS NULL AND failed_at IS NULL;
 
     -- full minute-by-minute commentary feed (from summary commentary[])
     CREATE TABLE IF NOT EXISTS match_commentary (
@@ -260,7 +269,7 @@ export function migrate(db: DatabaseSync): void {
     -- the audit trail of who was told what, when — four tiny rows per user per
     -- match, and retention prunes them alongside the rest of the match detail
     -- they describe (see pruneFootballDetail), since a claim nobody can re-derive
-    -- once the match itself is gone is worth no more than the replay data.
+    -- once the match itself is gone is worth no more than the match detail.
     CREATE TABLE IF NOT EXISTS match_notifications (
       telegram_id TEXT NOT NULL,
       match_id    TEXT NOT NULL,
@@ -318,8 +327,8 @@ export function migrate(db: DatabaseSync): void {
     );
 
     -- Understat per-match xG/xGA, one row per (match, club). ESPN publishes no
-    -- expected goals, so this is the only source for the replay pitch's xG
-    -- read. Rows are matched from the league payload's per-match history by
+    -- expected goals, so this is the only source for per-fixture xG.
+    -- Rows are matched from the league payload's per-match history by
     -- club + kickoff date + scoreline, never guessed (see matchResultsToMatches).
     CREATE TABLE IF NOT EXISTS match_understat_stats (
       match_id      TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
@@ -542,8 +551,9 @@ export function migrate(db: DatabaseSync): void {
     CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referral_redemptions(referrer_user_id);
   `);
 
-  // The replay-pitch columns were added after v1 of this schema; fresh DBs
-  // already have them via CREATE TABLE, older ones get them here.
+  // The shot-coordinate columns (field_x, field_y, goal_y) were added after
+  // v1 of this schema; fresh DBs already have them via CREATE TABLE, older ones
+  // get them here.
   // (SQLite has no ADD COLUMN IF NOT EXISTS, hence the pragma check.)
   for (const col of ["field_x", "field_y", "goal_y"]) {
     const existing = db
@@ -661,6 +671,12 @@ export function migrate(db: DatabaseSync): void {
   // the drain needs a kind to know which preference to check it against.
   if (!pushCols.some((c) => c.name === "kind")) {
     db.exec("ALTER TABLE bot_push_queue ADD COLUMN kind TEXT NOT NULL DEFAULT 'goal';");
+  }
+  // Backoff column (see the CREATE TABLE comment). Default 0 keeps every
+  // pre-existing row eligible immediately, so the first drain after the
+  // migration behaves exactly as before.
+  if (!pushCols.some((c) => c.name === "next_attempt_at")) {
+    db.exec("ALTER TABLE bot_push_queue ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0;");
   }
 
   // users.language arrived with the localized bot pushes. The default is the

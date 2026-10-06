@@ -11,7 +11,7 @@ interface ApiFixture {
   result?: "w" | "d" | "l";
 }
 
-interface ApiPlayer {
+export interface ApiPlayer {
   id: string;
   player_name: string;
   position: string;
@@ -32,7 +32,7 @@ interface ApiPlayer {
   red_cards?: string;
 }
 
-interface ApiStatRow {
+export interface ApiStatRow {
   shots: string | number;
   goals: string | number;
   xG: string | number;
@@ -43,7 +43,7 @@ interface ApiStatRow {
   };
 }
 
-interface ApiTeamHistory {
+export interface ApiTeamHistory {
   h_a: "h" | "a";
   xG: number;
   xGA: number;
@@ -64,6 +64,25 @@ interface ApiTeamHistory {
   pts: number;
   npxGD: number;
 }
+
+/**
+ * The slice of Understat's `/getTeamData` payload this codebase reads.
+ *
+ * Declared here — rather than accepted as `any` at the fetch layer — because
+ * this module, not the client, owns the shape. That mirrors the rule
+ * server/espn/normalize.ts follows for ESPN: the transport says `unknown`,
+ * the normalizer says what it actually is.
+ */
+export interface UnderstatTeamPayload {
+  players: ApiPlayer[];
+  statistics: { situation: Record<string, ApiStatRow> };
+  dates?: Array<{ side: string; xG: { h: string; a: string } }>;
+}
+
+/** Slice of `/getLeagueData` — only the per-team history walk is consumed. */
+export type UnderstatLeaguePayload = {
+  teams?: Record<string, { id: string; title: string; history: ApiTeamHistory[] }>;
+} | null;
 
 export interface NormFixture {
   understat_match_id: string;
@@ -310,7 +329,7 @@ export interface MatchXgRow {
  * the club played and the scoreline — so a fixture earns a match only when the
  * side (home/away), both goal counts and a within-a-day kickoff all line up,
  * and exactly one candidate does. Two identical scorelines in the same window
- * are dropped rather than guessed: a wrong xG on a replay is worse than none.
+ * are dropped rather than guessed: a wrong xG for a fixture is worse than none.
  * `xg`/`xga` stay in the club's own perspective.
  */
 export function matchResultsToMatches(results: NormTeamMatch[], matches: EspnTeamMatch[]): MatchXgRow[] {

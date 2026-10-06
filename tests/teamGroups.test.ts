@@ -49,8 +49,16 @@ function testCapRules(): void {
   // matches the picker, where every non-international tab is a club shelf).
   const junk = [null, undefined, ""] as unknown as string[];
   assert.equal(favoriteCapError(junk, "eng.1"), null, "three unknown rows leave two club slots");
-  assert.equal(favoriteCapError([...junk, "eng.1", "esp.1"], "ned.1"), "MAX_CLUBS", "five unknown rows fill the club shelf");
-  assert.equal(favoriteCapError([...junk, "eng.1", "esp.1"], INTL_GROUP), null, "unknown rows never touch the intl shelf");
+  assert.equal(
+    favoriteCapError([...junk, "eng.1", "esp.1"], "ned.1"),
+    "MAX_CLUBS",
+    "five unknown rows fill the club shelf",
+  );
+  assert.equal(
+    favoriteCapError([...junk, "eng.1", "esp.1"], INTL_GROUP),
+    null,
+    "unknown rows never touch the intl shelf",
+  );
 }
 
 function tempDb(): { db: DatabaseSync; file: string } {
