@@ -54,24 +54,48 @@ const AJX = team("ajx", "Ajax");
 const BEN = team("ben", "Benfica");
 
 function testOrderRounds(): void {
-  const labels = ["Semi-final", "Final", "Quarter-final", "Round of 16", "Round of 32", "1st Qualifying Round"];
-  assert.deepEqual(orderRounds(labels), [
-    "1st Qualifying Round",
-    "Round of 32",
-    "Round of 16",
-    "Quarter-final",
+  const labels = [
     "Semi-final",
     "Final",
-  ], "the bracket plays qualifying first and the Final last");
+    "Quarter-final",
+    "Round of 16",
+    "Round of 32",
+    "1st Qualifying Round",
+  ];
+  assert.deepEqual(
+    orderRounds(labels),
+    ["1st Qualifying Round", "Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Final"],
+    "the bracket plays qualifying first and the Final last",
+  );
   assert.equal(roundRank("Final"), 0);
   assert.ok(roundRank("Quarter-final") > roundRank("Semi-final"), "later rounds rank lower (the final is 0)");
 }
 
 function testSingleLegWinner(): void {
   const b = buildBracket([
-    match({ home: ARS, away: BAY, round: "Quarter-final", kickoff: "2026-03-10T20:00:00Z", homeScore: 2, awayScore: 1 }),
-    match({ home: RMA, away: PSG, round: "Quarter-final", kickoff: "2026-03-11T20:00:00Z", homeScore: 0, awayScore: 0 }),
-    match({ home: AJX, away: BEN, round: "Quarter-final", kickoff: "2026-03-12T20:00:00Z", status: "scheduled" }),
+    match({
+      home: ARS,
+      away: BAY,
+      round: "Quarter-final",
+      kickoff: "2026-03-10T20:00:00Z",
+      homeScore: 2,
+      awayScore: 1,
+    }),
+    match({
+      home: RMA,
+      away: PSG,
+      round: "Quarter-final",
+      kickoff: "2026-03-11T20:00:00Z",
+      homeScore: 0,
+      awayScore: 0,
+    }),
+    match({
+      home: AJX,
+      away: BEN,
+      round: "Quarter-final",
+      kickoff: "2026-03-12T20:00:00Z",
+      status: "scheduled",
+    }),
   ]);
   assert.equal(b.rounds.length, 1);
   const [qf] = b.rounds;
@@ -86,11 +110,39 @@ function testSingleLegWinner(): void {
 function testTwoLegAggregate(): void {
   const b = buildBracket([
     // First leg, home Arsenal: 2-0. Second leg, venues swapped: 0-1 → agg 2-1.
-    match({ home: ARS, away: BAY, round: "Semi-final", kickoff: "2026-04-10T20:00:00Z", homeScore: 2, awayScore: 0 }),
-    match({ home: BAY, away: ARS, round: "Semi-final", kickoff: "2026-04-20T20:00:00Z", homeScore: 1, awayScore: 0 }),
+    match({
+      home: ARS,
+      away: BAY,
+      round: "Semi-final",
+      kickoff: "2026-04-10T20:00:00Z",
+      homeScore: 2,
+      awayScore: 0,
+    }),
+    match({
+      home: BAY,
+      away: ARS,
+      round: "Semi-final",
+      kickoff: "2026-04-20T20:00:00Z",
+      homeScore: 1,
+      awayScore: 0,
+    }),
     // RMA vs PSG: level aggregate (1-0, 0-1) → undecided.
-    match({ home: RMA, away: PSG, round: "Semi-final", kickoff: "2026-04-11T20:00:00Z", homeScore: 1, awayScore: 0 }),
-    match({ home: PSG, away: RMA, round: "Semi-final", kickoff: "2026-04-21T20:00:00Z", homeScore: 1, awayScore: 0 }),
+    match({
+      home: RMA,
+      away: PSG,
+      round: "Semi-final",
+      kickoff: "2026-04-11T20:00:00Z",
+      homeScore: 1,
+      awayScore: 0,
+    }),
+    match({
+      home: PSG,
+      away: RMA,
+      round: "Semi-final",
+      kickoff: "2026-04-21T20:00:00Z",
+      homeScore: 1,
+      awayScore: 0,
+    }),
   ]);
   const [sf] = b.rounds;
   assert.equal(sf?.ties.length, 2, "two legs fold into one tie");
@@ -107,8 +159,21 @@ function testTwoLegAggregate(): void {
 
 function testOpenSecondLegKeepsTieUndecided(): void {
   const b = buildBracket([
-    match({ home: ARS, away: BAY, round: "Quarter-final", kickoff: "2026-03-10T20:00:00Z", homeScore: 3, awayScore: 0 }),
-    match({ home: BAY, away: ARS, round: "Quarter-final", kickoff: "2026-04-01T20:00:00Z", status: "scheduled" }),
+    match({
+      home: ARS,
+      away: BAY,
+      round: "Quarter-final",
+      kickoff: "2026-03-10T20:00:00Z",
+      homeScore: 3,
+      awayScore: 0,
+    }),
+    match({
+      home: BAY,
+      away: ARS,
+      round: "Quarter-final",
+      kickoff: "2026-04-01T20:00:00Z",
+      status: "scheduled",
+    }),
   ]);
   const tie = b.rounds[0]?.ties[0];
   assert.equal(tie?.aggHome, 3, "finished legs count toward the aggregate");
@@ -118,10 +183,31 @@ function testOpenSecondLegKeepsTieUndecided(): void {
 function testFeederLinks(): void {
   const b = buildBracket([
     // Round of 16: Arsenal and Bayern advance.
-    match({ home: ARS, away: PSG, round: "Round of 16", kickoff: "2026-02-10T20:00:00Z", homeScore: 2, awayScore: 0 }),
-    match({ home: BAY, away: BEN, round: "Round of 16", kickoff: "2026-02-11T20:00:00Z", homeScore: 1, awayScore: 0 }),
+    match({
+      home: ARS,
+      away: PSG,
+      round: "Round of 16",
+      kickoff: "2026-02-10T20:00:00Z",
+      homeScore: 2,
+      awayScore: 0,
+    }),
+    match({
+      home: BAY,
+      away: BEN,
+      round: "Round of 16",
+      kickoff: "2026-02-11T20:00:00Z",
+      homeScore: 1,
+      awayScore: 0,
+    }),
     // Quarter-final: winners meet.
-    match({ home: ARS, away: BAY, round: "Quarter-final", kickoff: "2026-03-10T20:00:00Z", homeScore: 1, awayScore: 2 }),
+    match({
+      home: ARS,
+      away: BAY,
+      round: "Quarter-final",
+      kickoff: "2026-03-10T20:00:00Z",
+      homeScore: 1,
+      awayScore: 2,
+    }),
   ]);
   assert.equal(b.connected, true);
   const [r16, qf] = b.rounds;
@@ -132,9 +218,23 @@ function testFeederLinks(): void {
 
 function testFeederSurvivesMissingRound(): void {
   const b = buildBracket([
-    match({ home: ARS, away: PSG, round: "Round of 16", kickoff: "2026-02-10T20:00:00Z", homeScore: 2, awayScore: 0 }),
+    match({
+      home: ARS,
+      away: PSG,
+      round: "Round of 16",
+      kickoff: "2026-02-10T20:00:00Z",
+      homeScore: 2,
+      awayScore: 0,
+    }),
     // The sync window is missing the quarter-final; Arsenal reappears in the semi.
-    match({ home: ARS, away: BAY, round: "Semi-final", kickoff: "2026-04-10T20:00:00Z", homeScore: 1, awayScore: 0 }),
+    match({
+      home: ARS,
+      away: BAY,
+      round: "Semi-final",
+      kickoff: "2026-04-10T20:00:00Z",
+      homeScore: 1,
+      awayScore: 0,
+    }),
   ]);
   assert.equal(b.connected, true, "the chain reaches back over a missing round");
   const sf = b.rounds.find((r) => r.label === "Semi-final");
@@ -143,7 +243,15 @@ function testFeederSurvivesMissingRound(): void {
 
 function testLiveExcludedAndEmpty(): void {
   const b = buildBracket([
-    match({ home: ARS, away: BAY, round: "Final", kickoff: "2026-05-30T20:00:00Z", status: "live", homeScore: 0, awayScore: 0 }),
+    match({
+      home: ARS,
+      away: BAY,
+      round: "Final",
+      kickoff: "2026-05-30T20:00:00Z",
+      status: "live",
+      homeScore: 0,
+      awayScore: 0,
+    }),
   ]);
   assert.equal(b.rounds.length, 0, "live matches never form ties (the page shows them separately)");
   assert.equal(b.connected, false);

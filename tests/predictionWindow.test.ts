@@ -46,13 +46,29 @@ export function runPredictionWindowTests(): void {
   assert.equal(open("lineup", "scheduled", false), true, "lineup predictor is not gated");
 
   // --- scheduled, published: clock windows still apply ---------------------
-  assert.equal(open("shot_predict", "scheduled", true, kickoff - 2 * HOUR), false, "before the pre-kickoff open");
-  assert.equal(open("shot_predict", "scheduled", true, kickoff - 30 * 60_000), true, "open inside the window");
+  assert.equal(
+    open("shot_predict", "scheduled", true, kickoff - 2 * HOUR),
+    false,
+    "before the pre-kickoff open",
+  );
+  assert.equal(
+    open("shot_predict", "scheduled", true, kickoff - 30 * 60_000),
+    true,
+    "open inside the window",
+  );
   assert.equal(open("shot_predict", "scheduled", true, kickoff + 1), false, "locked at kickoff");
   assert.equal(open("lineup", "scheduled", false, kickoff - 3 * HOUR), true, "lineup opens immediately");
   assert.equal(open("lineup", "scheduled", false, kickoff - 2 * HOUR + 1), false, "lineup locks 2h out");
-  assert.equal(open("sub", "scheduled", true, kickoff - 2 * HOUR), false, "sub not open before the hour mark");
-  assert.equal(open("sub", "scheduled", true, kickoff - 30 * 60_000), true, "sub open in the hour before kickoff");
+  assert.equal(
+    open("sub", "scheduled", true, kickoff - 2 * HOUR),
+    false,
+    "sub not open before the hour mark",
+  );
+  assert.equal(
+    open("sub", "scheduled", true, kickoff - 30 * 60_000),
+    true,
+    "sub open in the hour before kickoff",
+  );
 
   // --- the fix: kickoff closes every non-Sub mechanic ----------------------
   assert.equal(open("shot_predict", "live", true, kickoff + 5 * 60_000), false, "shot closed in play");
