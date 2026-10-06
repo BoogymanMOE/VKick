@@ -1,4 +1,4 @@
-import { syncAllFavoriteTeamsUnderstat } from "../server/sync/understat.js";
+import { syncAllFavoriteTeamsUnderstat } from "../../server/sync/understat.js";
 
 async function main() {
   await syncAllFavoriteTeamsUnderstat();

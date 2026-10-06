@@ -6,7 +6,7 @@ const output = "D:/football/telegram-miniapp-640x360.png";
 const resizedLogo = await sharp(input)
   .resize(360, 360, {
     fit: "contain",
-    background: { r: 0, g: 0, b: 0, alpha: 1 }
+    background: { r: 0, g: 0, b: 0, alpha: 1 },
   })
   .toBuffer();
 
@@ -15,8 +15,8 @@ await sharp({
     width: 640,
     height: 360,
     channels: 4,
-    background: { r: 0, g: 0, b: 0, alpha: 1 }
-  }
+    background: { r: 0, g: 0, b: 0, alpha: 1 },
+  },
 })
   .composite([{ input: resizedLogo, gravity: "center" }])
   .png()

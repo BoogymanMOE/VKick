@@ -1,5 +1,5 @@
-import { fetchTeamData } from "../server/understat/client.js";
-import { normalizeShotSituationsFromApi } from "../server/understat/normalize.js";
+import { fetchTeamData } from "../../server/understat/client.js";
+import { normalizeShotSituationsFromApi } from "../../server/understat/normalize.js";
 
 async function main() {
   const data = await fetchTeamData("Real_Madrid", 2023);

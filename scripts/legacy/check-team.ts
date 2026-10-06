@@ -1,4 +1,4 @@
-import { getDb } from "../server/db/index.js";
+import { getDb } from "../../server/db/index.js";
 
 const db = getDb();
 const team = db.prepare("SELECT id, abbreviation, name FROM teams WHERE id = '86'").get();

@@ -1,4 +1,4 @@
-import { getDb } from "../server/db/index.js";
+import { getDb } from "../../server/db/index.js";
 
 const db = getDb();
 

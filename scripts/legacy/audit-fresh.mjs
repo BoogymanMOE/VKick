@@ -33,7 +33,6 @@ const pages = [
   ["11-myteams", "my-teams"],
   ["12-matchdetail-live", `match/${live}`],
   ["13-matchdetail-finished", `match/${big}`],
-  ["14-replay", `match/${big}/replay`],
   ["15-team", `team/${big ? "" : ""}`].filter(Boolean), // replaced below
 ];
 pages.pop(); // drop the placeholder team entry

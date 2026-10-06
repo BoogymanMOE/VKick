@@ -96,7 +96,6 @@ const pages = [
   ["05-table", "table"],
   ["06-stats", "stats"],
   ["07-leaderboards", "leaderboards"],
-  ["08-replay", "match/401882858/replay"],
   ["09-profile", "profile"],
 ];
 

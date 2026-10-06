@@ -1,4 +1,4 @@
-import { syncTeamUnderstat } from "../server/sync/understat.js";
+import { syncTeamUnderstat } from "../../server/sync/understat.js";
 
 async function main() {
   await syncTeamUnderstat("BAR", "83", "esp.1");
