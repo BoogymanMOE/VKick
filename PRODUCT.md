@@ -33,7 +33,7 @@ Emotional goals: the rush of a live goal, the pride of recognition from the crow
 2. **One meaning per color.** Teal means broadcast/action, amber means evaluation, red means danger, turf green means pitch. Never mix on one element.
 3. **Earned spectacle.** Animation and glow are reserved for goal moments and live state; the resting UI is calm and confident.
 4. **Personage without rainbow.** Club identity arrives through their own color and a real sense of place, not through decorative accents.
-5. **Tactical depth as product.** The 2.5D pitch view is not a graphic, it is the living match: formations, momentum, and pressure made legible.
+5. **Tactical depth as product.** Line-ups, timeline and stats read like the living match — formations, momentum, and pressure made legible, not a scoreboard.
 
 ## Accessibility & Inclusion
 

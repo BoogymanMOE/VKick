@@ -229,14 +229,6 @@ function FixturesTab({ fixtures }: { fixtures: ApiMatch[] }) {
               <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
             </Chip>
           )}
-          {match.status === "finished" ? (
-            <Link
-              to={`/match/${match.id}/replay`}
-              className="flex-none text-[11px] font-bold text-volt underline underline-offset-2"
-            >
-              {t("replay.title")}
-            </Link>
-          ) : null}
         </li>
       ))}
     </ul>

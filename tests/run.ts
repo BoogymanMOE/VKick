@@ -11,12 +11,9 @@ import { runPredictionScoreTests } from "./predictionScore.test.js";
 import { runMigrateTests } from "./migrate.test.js";
 import { runPasswordTests } from "./password.test.js";
 import { runNotificationTests } from "./notifications.test.js";
-import { runLivePitchTests } from "./livePitch.test.js";
-import { runPitchArtTests } from "./pitchArt.test.js";
 import { runUnderstatTests } from "./understat.test.js";
 import { runStandingsTests } from "./standings.test.js";
 import { runFeedTests } from "./feed.test.js";
-import { runReplayTests } from "./replay.test.js";
 import { runSeasonTests } from "./season.test.js";
 import { runClientTests } from "./client.test.js";
 import { runRetentionTests } from "./retention.test.js";
@@ -43,12 +40,9 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["migrate", runMigrateTests],
   ["password", runPasswordTests],
   ["notifications", runNotificationTests],
-  ["livePitch", runLivePitchTests],
-  ["pitchArt", runPitchArtTests],
   ["understat", runUnderstatTests],
   ["standings", runStandingsTests],
   ["feed", runFeedTests],
-  ["replay", runReplayTests],
   ["season", runSeasonTests],
   ["client", runClientTests],
   ["retention", runRetentionTests],

@@ -190,24 +190,6 @@ export function LineupsSkeleton() {
   );
 }
 
-/** Replay page: the 2D pitch surface + transport bar. */
-export function ReplaySkeleton() {
-  return (
-    <div className="space-y-3">
-      <div className={cx(bar, "aspect-[340/180] w-full rounded-[10px]")} />
-      <div className="rounded-card border border-line bg-surface p-3">
-        <div className="flex items-center gap-3">
-          <span className={cx(bar, "h-11 w-11 rounded-full")} />
-          <div className="flex-1 space-y-2">
-            <span className={cx(bar, "block h-2 w-full")} />
-            <span className={cx(bar, "block h-2 w-2/3")} />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** Browse/Cups competition rows: badge + two lines + chevron. */
 export function CompRowSkeleton({ rows = 6 }: { rows?: number }) {
   return (

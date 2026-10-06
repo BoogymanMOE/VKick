@@ -17,7 +17,6 @@ import { useKnockoutCompetitions, useMatches } from "../hooks/useApi";
 import { useI18n } from "../i18n/I18nProvider";
 import { formatKickoff } from "../lib/format";
 import { haptic } from "../lib/telegram";
-import { PlayIcon } from "../components/icons";
 import type { Match } from "../types";
 
 /**
@@ -251,8 +250,8 @@ export default function Cups() {
 }
 
 /**
- * Cup fixture row: teams, score/clock, replay affordance. The whole footer is
- * the touch surface — summary and replay links meet the 44px floor inside it.
+ * Cup fixture row: teams, score/clock, summary link. The whole footer is
+ * the touch surface — the link meets the 44px floor inside it.
  * In `bare` mode the row drops its own card chrome: a TieCard supplies the
  * border and the rows become the tie's legs, separated by hairlines.
  */
@@ -302,15 +301,6 @@ function CupMatchList({ matches, bare = false }: { matches: Match[]; bare?: bool
             >
               {t("match.summary")}
             </Link>
-            {match.status === "finished" ? (
-              <Link
-                to={`/match/${match.id}/replay`}
-                className="inline-flex h-11 items-center gap-1 text-[11px] font-bold text-volt"
-              >
-                <PlayIcon />
-                {t("replay.title")}
-              </Link>
-            ) : null}
           </div>
         </li>
       ))}

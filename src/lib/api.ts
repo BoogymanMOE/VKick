@@ -255,23 +255,6 @@ export interface ApiCommentaryLine {
   text: string;
 }
 
-export interface ApiReplay {
-  match: ApiMatch;
-  events: ApiTimelineEvent[];
-  commentary: ApiCommentaryLine[];
-  teamStats: {
-    team_id: string;
-    possession_pct: number | null;
-    shots: number | null;
-    shots_on_target: number | null;
-    corners: number | null;
-    fouls: number | null;
-  }[];
-  /** Per-match expected goals (Understat), one row per club. Absent when no
-   *  side was matched — the client falls back to "no data". */
-  xg?: { team_id: string; xg: number | null; xga: number | null }[];
-}
-
 export interface ApiSquadPlayer {
   id: string;
   full_name: string;
@@ -603,7 +586,6 @@ export const api = {
   getTimeline: (id: string) => request<{ events: ApiTimelineEvent[] }>(`/matches/${id}/timeline`),
 
   /** Full replay bundle for the 2D pitch playback of a finished match. */
-  getReplay: (id: string) => request<ApiReplay>(`/matches/${id}/replay`),
 
   getCommentary: (id: string) => request<{ commentary: ApiCommentaryLine[] }>(`/matches/${id}/commentary`),
 

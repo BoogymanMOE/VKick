@@ -71,7 +71,7 @@ the real one. It attaches predictions to **synced** fixtures rather than inventi
 | Path | What |
 |---|---|
 | `server/db/schema.ts` | All tables (mirrors `data-model.md` + `prediction-mechanics.md`) |
-| `server/routes/*.ts` | Route modules mounted by `server/index.ts`: `auth` (login/guest/register + guest merge), `me` (profile, favorites, leagues, streak, prefs), `football` (matches, replay, teams, squads, standings), `predictions`, `ratings` (+ comments), `leaderboards`, `admin` |
+| `server/routes/*.ts` | Route modules mounted by `server/index.ts`: `auth` (login/guest/register + guest merge), `me` (profile, favorites, leagues, streak, prefs), `football` (matches, teams, squads, standings), `predictions`, `ratings` (+ comments), `leaderboards`, `admin` |
 | `server/espn/normalize.ts` | The ONLY file that knows ESPN's JSON shapes |
 | `server/sync/service.ts` | Cron loops: live 1m, scoreboards 10m, standings daily |
 | `server/sync/upserts.ts` | Normalized data → SQLite, goal-alert detection |
@@ -84,7 +84,7 @@ the real one. It attaches predictions to **synced** fixtures rather than inventi
 
 ## API surface
 
-Public (no auth): `GET /api/matches` (relevance window by default — live now + last 3 days of results + next 14; accepts `league`, `date`, `from`/`to` for an explicit range, and `limit`), `GET /api/matches/:id`, `/lineups`, `/timeline`, `/commentary`, `/players` (per-match stat table), `/replay`, `GET /api/teams` (+ `/:id` season line, `/:id/players`, `/:id/understat`), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`, `GET /api/competitions`
+Public (no auth): `GET /api/matches` (relevance window by default — live now + last 3 days of results + next 14; accepts `league`, `date`, `from`/`to` for an explicit range, and `limit`), `GET /api/matches/:id`, `/lineups`, `/timeline`, `/commentary`, `/players` (per-match stat table), `GET /api/teams` (+ `/:id` season line, `/:id/players`, `/:id/understat`), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`, `GET /api/competitions`
 
 Auth (Bearer = Telegram initData, or an `mg_` session token from the username path): `POST /api/auth/login`, `GET /api/me`, `GET/POST/DELETE /api/me/favorites` (max 5 clubs plus up to 5 national teams, one flagged `is_favorite` — errors are machine-readable codes), `GET/POST /api/me/leagues` (max 5), `GET/POST /api/me/referral` (+ `/redeem`), `GET/POST /api/matches/:id/ratings` (3-card cap, 1 vote per player per match, 1–10), `GET/POST /api/matches/:id/comments`, `GET/POST /api/matches/:id/predictions` (lock enforcement per mechanic), `GET /api/me/predictions`, `GET /api/me/streak` (favorite-club streak + next threshold bonus)
 

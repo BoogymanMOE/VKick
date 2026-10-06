@@ -621,21 +621,6 @@ export function useTeamUnderstat(teamId: string) {
 
 /* ------------------------------------------------------------ replay & squads */
 
-export function useReplay(
-  matchId: string,
-  /** Live matches pass { refetchInterval: 30_000, staleTime: 0 } to keep the
-   *  pitch current; the default caches hard for finished replays. */
-  options?: { refetchInterval: number; staleTime: number },
-) {
-  return useQuery({
-    queryKey: ["replay", matchId],
-    queryFn: () => api.getReplay(matchId),
-    enabled: Boolean(matchId),
-    staleTime: 10 * 60_000,
-    ...options,
-  });
-}
-
 export function useCommentary(matchId: string) {
   return useQuery({
     queryKey: ["commentary", matchId],
@@ -680,17 +665,6 @@ export function useSquad(teamId: string) {
         assists: p.season_assists,
       })),
     }),
-  });
-}
-
-/** Timeline events with shot coordinates, for pitch visualizations. */
-export function useReplayEvents(matchId: string) {
-  return useQuery({
-    queryKey: ["replay", matchId],
-    queryFn: () => api.getReplay(matchId),
-    enabled: Boolean(matchId),
-    staleTime: 10 * 60_000,
-    select: (data) => data.events,
   });
 }
 

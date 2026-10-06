@@ -104,7 +104,8 @@ Per-player season xG/xA and per-90 rates (PK `player_id, season`).
 
 ### `match_understat_stats`
 **Per-match** xG, one row per club (PK `match_id, team_id`): `xg`, `xga`,
-`last_synced_at`. This is what the replay pitch's expected-goals card reads.
+`last_synced_at`. The per-fixture xG record, written by the Understat sync;
+no screen reads it yet.
 Understat's league history carries no opponent name, so a fixture is paired to
 an ESPN match only when side, both goal counts and a within-a-day kickoff agree
 with exactly one candidate (`matchResultsToMatches`); ambiguous pairings are

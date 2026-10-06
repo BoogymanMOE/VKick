@@ -1,6 +1,6 @@
 /**
- * Football-data reads: competitions, matches, match detail, replay,
- * commentary, teams (+season line), squads, Understat, season stat
+ * Football-data reads: competitions, matches, match detail, commentary,
+ * teams (+season line), squads, Understat, season stat
  * leaderboards, standings. Public routes stay public (web preview); the
  * Understat read keeps its requireUser gate. Behavior unchanged.
  */
@@ -82,46 +82,6 @@ matchesRouter.get("/api/matches/:id", (req, res) => {
   res.json({ match });
 });
 
-/**
- * Everything the 2D replay pitch needs in one payload: key events (with shot
- * coordinates when ESPN published them), the full commentary track, and the
- * per-side team stats (possession for the momentum legend).
- */
-matchesRouter.get("/api/matches/:id/replay", (req, res) => {
-  const matchId = String(req.params.id);
-  const match = matchWithTeams(matchId);
-  if (!match) return bad(res, "not found", 404);
-  const events = all(
-    db,
-    `SELECT e.*,
-       (SELECT COUNT(*) FROM timeline_comments c WHERE c.event_id = e.id) AS comment_count
-     FROM timeline_events e WHERE e.match_id = ?
-     ORDER BY e.minute_seconds ASC`,
-    [matchId],
-  );
-  const commentary = all(
-    db,
-    "SELECT sequence, minute_display, minute_seconds, text FROM match_commentary WHERE match_id = ? ORDER BY sequence ASC",
-    [matchId],
-  );
-  const teamStats = all(
-    db,
-    "SELECT team_id, possession_pct, shots, shots_on_target, corners, fouls FROM match_team_stats WHERE match_id = ?",
-    [matchId],
-  );
-  // Per-match expected goals (Understat). Empty for clubs outside the big
-  // five or a fixture the matcher couldn't pair — the client renders "no data"
-  // rather than a zero.
-  const xg = all(db, "SELECT team_id, xg, xga FROM match_understat_stats WHERE match_id = ?", [matchId]);
-  res.json({
-    match,
-    events: events.map((e: any) => ({ ...e, participants: safeArr(e.participants) })),
-    commentary,
-    teamStats,
-    xg,
-  });
-});
-
 /** Full minute-by-minute commentary for one match (blow-by-blow tab). */
 matchesRouter.get("/api/matches/:id/commentary", (req, res) => {
   const lines = all(
@@ -191,7 +151,7 @@ matchesRouter.get("/api/matches/:id/timeline", (req, res) => {
      ORDER BY e.minute_seconds ASC`,
     [matchId],
   );
-  res.json({ events: events.map((e: any) => ({ ...e, participants: safeArr(e.participants) })) });
+  res.json({ events: events.map((e) => ({ ...e, participants: safeArr(e.participants) })) });
 });
 
 /* ------------------------------------------------------------ teams */

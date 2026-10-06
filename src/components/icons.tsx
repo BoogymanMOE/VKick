@@ -133,20 +133,6 @@ export const PlusIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-/** Play — Match Replay entry points. */
-export const PlayIcon = (p: SVGProps<SVGSVGElement>) => (
-  <svg {...base(p)} width={14} height={14}>
-    <path d="M7 4.5l12 7.5-12 7.5z" />
-  </svg>
-);
-
-/** Pause — the replay transport. */
-export const PauseIcon = (p: SVGProps<SVGSVGElement>) => (
-  <svg {...base(p)} width={16} height={16}>
-    <path d="M9 5v14M15 5v14" strokeWidth={2.4} />
-  </svg>
-);
-
 /** Swap — the Sub Board prediction. */
 export const SwapIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} width={14} height={14}>

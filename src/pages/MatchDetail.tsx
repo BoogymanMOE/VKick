@@ -19,8 +19,7 @@ import { CommentaryPanel } from "../components/panels/CommentaryPanel";
 import { CommentsSection, adaptComments } from "../components/panels/CommentsPanel";
 import { LineupsPanel } from "../components/panels/LineupsPanel";
 import { PredictionsHub } from "../components/panels/PredictionsHub";
-import { LivePitch } from "../components/LivePitch";
-import { ChartIcon, ChevronRightIcon, PlayIcon, StarIcon } from "../components/icons";
+import { ChartIcon, ChevronRightIcon, StarIcon } from "../components/icons";
 import {
   Button,
   Card,
@@ -36,7 +35,7 @@ import {
 } from "../components/ui";
 import { api, serverErrorKey, type ApiPlayerRating, type ApiTimelineEvent } from "../lib/api";
 import { TEAM_FALLBACK } from "../lib/colors";
-import { leagueIdOf, useCompetitionLabel, useReplay } from "../hooks/useApi";
+import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
 import { TaskAdCard } from "../components/TaskAdCard";
 import { useAuth } from "../hooks/useAuth";
 import { useI18n } from "../i18n/I18nProvider";
@@ -98,19 +97,6 @@ export default function MatchDetail() {
     const m = /\d+/.exec(match?.minute_display ?? "");
     return m ? Number(m[0]) : 0;
   }, [match?.minute_display]);
-
-  // Live pitch (PRODUCT.md rule 1): ball-only live view driven by the replay
-  // payload — timeline events (goals with real coordinates), the full
-  // commentary track, and the live boxscore are one response, so the page
-  // polls it while the match is in play and the classifier in lib/livePitch.ts
-  // turns the stream into ball spot + action annotations. 5s while live = the
-  // pitch feels like a live feed; these are cheap SQLite reads on the server
-  // (the ESPN-side sync cadence is separate — see server/sync/service.ts).
-  // Halts when the tab is hidden so a backgrounded webview doesn't poll.
-  const replayQuery = useReplay(id, live ? { refetchInterval: 5_000, staleTime: 0 } : undefined);
-  const replayData = replayQuery.data;
-  const liveCommentary = useMemo(() => replayData?.commentary ?? [], [replayData]);
-  const liveEvents = useMemo(() => replayData?.events ?? [], [replayData]);
 
   // The deadline bar needs the pick count. Same query key as the Predict tab,
   // so this shares its cache instead of costing a second round trip, and it
@@ -237,24 +223,6 @@ export default function MatchDetail() {
         </div>
       </div>
 
-      {/* Live pitch action: the 2D floodlit view while the match is in play.
-          Renders as soon as the timeline exists; the score hero above and the
-          tabs below stay untouched. */}
-      {live ? (
-        <div className="mt-4">
-          <LivePitch
-            home={{ id: home.id, name: home.name, shortName: home.shortName, color: home.color }}
-            away={{ id: away.id, name: away.name, shortName: away.shortName, color: away.color }}
-            currentMinute={currentMinute}
-            homeScore={match.home_score ?? 0}
-            awayScore={match.away_score ?? 0}
-            events={liveEvents}
-            commentary={liveCommentary}
-            teamStats={replayData?.teamStats ?? []}
-          />
-        </div>
-      ) : null}
-
       <div className="mt-4">
         <Segmented
           value={tab}
@@ -281,27 +249,8 @@ export default function MatchDetail() {
         {tab === "ratings" ? <RatingsTab matchId={id} live={live} league={match.league} /> : null}
       </section>
 
-      {/* Replay entry — the whole match on a 2D pitch, once it's finished. */}
       {match.status === "finished" ? (
         <>
-          <div className="mt-6">
-            <Link
-              to={`/match/${match.id}/replay`}
-              className="flex items-center gap-2 rounded-card border border-volt/50 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-            >
-              <span
-                className="grid h-8 w-8 flex-none place-items-center rounded-full bg-volt text-black"
-                aria-hidden="true"
-              >
-                <PlayIcon className="h-3.5 w-3.5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-bold text-ink">{t("replay.title")}</span>
-                <span className="block text-[11px] text-ink-3">{t("replay.openHint")}</span>
-              </span>
-              <ChevronRightIcon className="flex-none text-ink-3" />
-            </Link>
-          </div>
           {/* The full eye-test view (crowd vs stat, divergence sort) for finished games. */}
           <div className="mt-3">
             <Link

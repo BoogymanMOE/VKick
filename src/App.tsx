@@ -12,7 +12,6 @@ import Login from "./pages/Login";
 
 const Browse = lazy(() => import("./pages/Browse"));
 const MatchDetail = lazy(() => import("./pages/MatchDetail"));
-const MatchReplayPage = lazy(() => import("./pages/MatchReplayPage"));
 const Cups = lazy(() => import("./pages/Cups"));
 const Matches = lazy(() => import("./pages/Matches"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -43,7 +42,6 @@ export default function App() {
             <Route path="/matches" element={<Matches />} />
             <Route path="/cups" element={<Cups />} />
             <Route path="/match/:id" element={<MatchDetail />} />
-            <Route path="/match/:id/replay" element={<MatchReplayPage />} />
             <Route path="/team/:id" element={<TeamPage />} />
             {/* My Teams is gone — the onboarding picker is the only place to
                 manage favorites. Old deep links land there. The fantasy Draft
