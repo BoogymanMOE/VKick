@@ -40,3 +40,21 @@ export function viewerStanding(
   if (you) return { rank: you.rank, total: you.total, belowPage: true };
   return null;
 }
+
+/**
+ * Rank movement between two observations of the SAME board, as a pure function.
+ * The board refetches on window focus, so the client can honestly say "you
+ * moved up N" from its own session — no server field needed. A scope change
+ * (global → league → club) or a first observation has nothing to compare
+ * against and yields null; a repeat observation at the same rank also yields
+ * null, so a delta only ever describes an actual change. Positive = the rank
+ * number fell = the viewer climbed.
+ */
+export function scopeRankDelta(
+  prev: { scope: string; rank: number } | null,
+  scope: string,
+  rank: number,
+): number | null {
+  if (!prev || prev.scope !== scope || prev.rank === rank) return null;
+  return prev.rank - rank;
+}

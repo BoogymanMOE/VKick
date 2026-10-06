@@ -14,7 +14,7 @@ import {
   OTHER_GROUP,
   INTERNATIONAL_GROUP,
 } from "../src/lib/pickerGroups.js";
-import { viewerStanding } from "../src/lib/leaderboard.js";
+import { scopeRankDelta, viewerStanding } from "../src/lib/leaderboard.js";
 import type { StringKey } from "../src/i18n/strings.js";
 import type { Team } from "../src/types.js";
 
@@ -126,11 +126,43 @@ function testViewerStanding(): void {
   );
 }
 
+/**
+ * Rank movement between two observations of the same board. The delta chip
+ * is client-session honesty only: a scope switch or a repeat observation at
+ * the same rank must produce nothing rather than a stale "up 3".
+ */
+function testScopeRankDelta(): void {
+  assert.equal(scopeRankDelta(null, "global", 12), null, "first observation has no history");
+  assert.equal(
+    scopeRankDelta({ scope: "league:eng.1", rank: 4 }, "global", 3),
+    null,
+    "a scope change resets the delta",
+  );
+  assert.equal(
+    scopeRankDelta({ scope: "global", rank: 12 }, "global", 12),
+    null,
+    "no movement means no chip",
+  );
+  assert.equal(
+    scopeRankDelta({ scope: "global", rank: 12 }, "global", 9),
+    3,
+    "a lower rank number is a climb",
+  );
+  assert.equal(
+    scopeRankDelta({ scope: "global", rank: 9 }, "global", 12),
+    -3,
+    "a higher rank number is a drop",
+  );
+}
+
 export function runClientTests(): void {
   testReadableInk();
   testBreakdownItems();
   testPickerGroups();
   testTeamsInGroup();
   testViewerStanding();
-  console.log("  client: contrast ink, breakdown rendering, picker grouping and viewer standing OK");
+  testScopeRankDelta();
+  console.log(
+    "  client: contrast ink, breakdown rendering, picker grouping, viewer standing and rank deltas OK",
+  );
 }
