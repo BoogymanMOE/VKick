@@ -20,7 +20,8 @@ function isInternational(team: Team): boolean {
 }
 
 export type FavoriteResult =
-  { ok: true; added: boolean; team: Team } | { ok: false; reason: "cap" | "intlCap" | "server"; code?: string };
+  | { ok: true; added: boolean; team: Team }
+  | { ok: false; reason: "cap" | "intlCap" | "server"; code?: string };
 
 /**
  * Favorites live on the server; this hook keeps the synchronous-feeling API

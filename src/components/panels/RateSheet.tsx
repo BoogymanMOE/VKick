@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useI18n } from "../../i18n/I18nProvider";
+import { useI18n } from "../../i18n/context";
 import { haptic, notifyHaptic, selectionHaptic } from "../../lib/telegram";
-import { useToast } from "../Toast";
+import { useToast } from "../toastContext";
 import { BottomSheet } from "../BottomSheet";
-import { Button, Chip, Num, Stars, cx } from "../ui";
+import { cx } from "../../lib/cx";
+import { Button, Chip, Num, Stars } from "../ui";
 import type { PlayerRating } from "../../types";
 
 /**

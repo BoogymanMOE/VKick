@@ -1,12 +1,13 @@
-import { memo } from "react";
+import { memo, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import type { Match } from "../types";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { useFavorites } from "../hooks/useFavorites";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
 import { ScoreOdometer } from "./ScoreOdometer";
-import { Chip, LiveDot, Num, PredictionIcons, TeamBadge, cx } from "./ui";
+import { cx } from "../lib/cx";
+import { Chip, LiveDot, Num, PredictionIcons, TeamBadge } from "./ui";
 import { StarFilledIcon, TargetIcon } from "./icons";
 
 function StatusChip({ match }: { match: Match }) {
@@ -41,9 +42,12 @@ function StatusChip({ match }: { match: Match }) {
 export const MatchCard = memo(function MatchCard({
   match,
   flash = false,
+  index = 0,
 }: {
   match: Match;
   flash?: boolean;
+  /** Position in its list, for the entrance stagger. */
+  index?: number;
 }) {
   const { t, lang, localize } = useI18n();
   const { isFavorite } = useFavorites();
@@ -53,7 +57,7 @@ export const MatchCard = memo(function MatchCard({
   const awayLeading = (match.awayScore ?? 0) > (match.homeScore ?? 0);
 
   return (
-    <li>
+    <li className="list-in" style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}>
       {/* One transparent hit area covers the card body, so "tap anywhere opens
           the match" survives while the deadline link in the footer can sit
           above it as its own target (stretched-link pattern). The overlay is
@@ -61,7 +65,7 @@ export const MatchCard = memo(function MatchCard({
           card scrolling under the header never paints over it. */}
       <div
         className={cx(
-          "relative overflow-hidden rounded-card border p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated",
+          "relative overflow-hidden rounded-card border p-3 transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
           flash ? "goal-flash border-volt/50 bg-elevated" : "border-line bg-surface",
         )}
       >

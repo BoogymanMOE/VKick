@@ -1,28 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, serverErrorKey, type ApiComment } from "../../lib/api";
-import { useI18n } from "../../i18n/I18nProvider";
+import { useI18n } from "../../i18n/context";
 import type { StringKey } from "../../i18n/strings";
 import { haptic, notifyHaptic } from "../../lib/telegram";
-import { useToast } from "../Toast";
-import { Button, Chip, EmptyState, Num, cx } from "../ui";
+import { useToast } from "../toastContext";
+import { cx } from "../../lib/cx";
+import { Button, Chip, EmptyState, Num } from "../ui";
 import type { Comment } from "../../types";
-
-/** Server → view adapter: flags your own cards so they render amber. */
-export function adaptComments(rows: ApiComment[], myUserId: number | undefined): Comment[] {
-  return rows.map((c) => ({
-    id: String(c.id),
-    eventId: c.event_id !== null && c.event_id !== undefined ? String(c.event_id) : null,
-    matchId: c.match_id,
-    minuteDisplay: c.minute_display,
-    minuteSeconds: c.minute_seconds,
-    author: c.author,
-    authorId: c.user_id,
-    text: c.text,
-    mediaLink: c.media_link,
-    isMine: myUserId !== undefined && c.user_id === myUserId,
-  }));
-}
+import { adaptComments } from "../../lib/adaptComments";
 
 function ClipSheet({ url, onClose }: { url: string; onClose: () => void }) {
   const { t } = useI18n();
@@ -149,7 +135,7 @@ export function CommentsSection({
       ) : comments.length === 0 ? (
         <EmptyState title={t("comments.empty")} hint={t("comments.emptyHint")} />
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2 fade-swap">
           {comments.map((comment) => (
             <li key={comment.id} className="rounded-card border border-line bg-surface p-3">
               <div className="flex items-center gap-2">

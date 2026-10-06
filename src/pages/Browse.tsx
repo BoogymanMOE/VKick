@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { CompRowSkeleton } from "../components/Skeletons";
 import { ChevronRightIcon } from "../components/icons";
-import { Chip, Num, SectionHeading, cx } from "../components/ui";
+import { cx } from "../lib/cx";
+import { Chip, Num, SectionHeading } from "../components/ui";
 import { useCompetitions } from "../hooks/useApi";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { haptic } from "../lib/telegram";
 
 /**
@@ -69,7 +70,7 @@ export default function Browse() {
               setFilter(value);
             }}
             className={cx(
-              "min-h-11 rounded-full text-xs font-bold transition-colors duration-[var(--t-fast)]",
+              "min-h-11 rounded-full text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
               filter === value ? "bg-elevated text-volt" : "text-ink-2 hover:text-ink",
             )}
           >
@@ -86,7 +87,7 @@ export default function Browse() {
         sections.map(
           ({ title, rows }) =>
             rows.length > 0 && (
-              <section key={title} className="mt-5">
+              <section key={title} className="mt-5 fade-swap">
                 <SectionHeading
                   title={title}
                   action={

@@ -1,4 +1,4 @@
-import { cx } from "./ui";
+import { cx } from "../lib/cx";
 
 /**
  * Signature animation 2: score odometer.

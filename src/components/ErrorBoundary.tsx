@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 
 /**
  * Render-crash insurance. Without this, one throwing component white-screens
@@ -40,7 +40,13 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-function FallbackCard({ onRetry }: { onRetry: () => void }) {
+/**
+ * Exported rather than module-private so this file's export surface is
+ * components only: React Fast Refresh keys its HMR boundary off that, and
+ * eslint-plugin-react-refresh does not recognise a class export (`ErrorBoundary`)
+ * as a component — without this the file trips `only-export-components`.
+ */
+export function FallbackCard({ onRetry }: { onRetry: () => void }) {
   const { t } = useI18n();
   return (
     <div role="alert" className="grid min-h-[100svh] place-items-center px-6">

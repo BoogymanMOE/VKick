@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadAdsgramScript, taskAdsAvailable, taskBlockId } from "../lib/ads";
 import { notifyHaptic } from "../lib/telegram";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 
 export function TaskAdCard() {
   const { t } = useI18n();

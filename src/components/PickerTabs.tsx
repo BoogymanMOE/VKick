@@ -6,8 +6,8 @@
  * every tab reachable and make the active one obvious.
  */
 import { haptic } from "../lib/telegram";
-import { useI18n } from "../i18n/I18nProvider";
-import { cx } from "./ui";
+import { useI18n } from "../i18n/context";
+import { cx } from "../lib/cx";
 import type { PickerGroup } from "../lib/pickerGroups";
 
 export function PickerTabs({
@@ -37,7 +37,7 @@ export function PickerTabs({
             onChange(group.value);
           }}
           className={cx(
-            "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
+            "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
             value === group.value ? "border-volt text-volt" : "border-line text-ink-3 hover:text-ink-2",
           )}
         >

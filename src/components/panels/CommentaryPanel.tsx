@@ -1,5 +1,5 @@
-import { useI18n } from "../../i18n/I18nProvider";
-import { cx } from "../ui";
+import { useI18n } from "../../i18n/context";
+import { cx } from "../../lib/cx";
 
 /**
  * Dense minute-by-minute readout of the match's key events — a read-only

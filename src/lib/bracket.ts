@@ -113,7 +113,7 @@ export function buildBracket(matches: Match[]): Bracket {
   // Connectivity: for each tie, trace every participant back through earlier
   // rounds to the nearest tie it won. Missing intermediate rounds (partial
   // sync windows) don't break the chain — the nearest win is the honest
- // feeder we can show.
+  // feeder we can show.
   const winIndex: Array<Map<string, BracketTie>> = [];
   for (const round of rounds) {
     const winners = new Map<string, BracketTie>();

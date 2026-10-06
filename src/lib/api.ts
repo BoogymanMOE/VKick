@@ -13,6 +13,16 @@ import { currentAuthToken, getDeviceId } from "./auth";
 
 const BASE = "/api";
 
+/**
+ * Every non-2xx response is thrown as one of these, so callers can branch on
+ * `status` (401 = the stored session is dead) instead of re-deriving it from a
+ * message string or casting through `any`.
+ */
+export interface ApiRequestError extends Error {
+  code?: string;
+  status?: number;
+}
+
 async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...opts,
@@ -24,7 +34,7 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    const err = new Error(body.error ?? `HTTP ${res.status}`) as Error & { code?: string; status?: number };
+    const err = new Error(body.error ?? `HTTP ${res.status}`) as ApiRequestError;
     err.code = body.error;
     err.status = res.status;
     throw err;
@@ -209,8 +219,65 @@ export interface ApiCompetition {
   comingSoon?: boolean;
 }
 
+/**
+ * Row behind GET /api/leagues/:league/players. Fields the client maps through
+ * a `??` default are optional — the server only sends a stat the competition
+ * actually tracks — while the identity columns the mapper reads directly are
+ * required, so a payload drift becomes a compile error here rather than a
+ * `undefined` rendered in a leaderboard.
+ */
+export interface LeaguePlayerStatRow {
+  player_id: string;
+  full_name: string;
+  short_name: string | null;
+  position?: string | null;
+  team_id: string;
+  team_name: string;
+  team_short: string | null;
+  team_color: string | null;
+  headshot_url: string | null;
+  jersey_number: number | null;
+  appearances?: number | null;
+  goals?: number | null;
+  assists?: number | null;
+  minutes?: number | null;
+  shots?: number | null;
+  shots_on_target?: number | null;
+  yellow_cards?: number | null;
+  red_cards?: number | null;
+  saves?: number | null;
+  goals_conceded?: number | null;
+  own_goals?: number | null;
+  stat_score_total?: number | null;
+  stat_score_avg?: number | null;
+}
+
+/** Row behind GET /api/leagues/:league/teams — same optional-stat convention. */
+export interface LeagueTeamStatRow {
+  team_id: string;
+  name: string;
+  short_name: string | null;
+  color: string | null;
+  logo_url: string | null;
+  played?: number | null;
+  wins?: number | null;
+  draws?: number | null;
+  losses?: number | null;
+  goals_for?: number | null;
+  goals_against?: number | null;
+  clean_sheets?: number | null;
+  avg_possession?: number | null;
+  avg_pass_accuracy?: number | null;
+  total_shots?: number | null;
+  total_shots_on_target?: number | null;
+  total_corners?: number | null;
+  total_fouls?: number | null;
+}
+
 export interface ApiStanding {
   team_id: string;
+  /** The competition this table belongs to — also feeds teamFromApi's league mapping. */
+  league: string;
   rank: number | null;
   played: number | null;
   wins: number | null;
@@ -488,13 +555,11 @@ export const api = {
     request<{
       season: string;
       sort: string;
-      players: Record<string, unknown>[];
+      players: LeaguePlayerStatRow[];
     }>(`/leagues/${encodeURIComponent(league)}/players?sort=${encodeURIComponent(sort)}&limit=${limit}`),
 
   getLeagueTeamStats: (league: string) =>
-    request<{ season: string; teams: Record<string, unknown>[] }>(
-      `/leagues/${encodeURIComponent(league)}/teams`,
-    ),
+    request<{ season: string; teams: LeagueTeamStatRow[] }>(`/leagues/${encodeURIComponent(league)}/teams`),
 
   getMatchPlayers: (matchId: string) =>
     request<{ players: Record<string, unknown>[] }>(`/matches/${matchId}/players`),
@@ -547,7 +612,9 @@ export const api = {
    * (live now + recent results + the next fortnight); pass `from`/`to`
    * (YYYY-MM-DD) for an explicit fixture range instead.
    */
-  getMatches: (query: { league?: string; date?: string; from?: string; to?: string; limit?: number } = {}) => {
+  getMatches: (
+    query: { league?: string; date?: string; from?: string; to?: string; limit?: number } = {},
+  ) => {
     const qs = new URLSearchParams();
     if (query.league) qs.set("league", query.league);
     if (query.date) qs.set("date", query.date);
@@ -584,8 +651,6 @@ export const api = {
     }>(`/matches/${id}/lineups`),
 
   getTimeline: (id: string) => request<{ events: ApiTimelineEvent[] }>(`/matches/${id}/timeline`),
-
-  /** Full replay bundle for the 2D pitch playback of a finished match. */
 
   getCommentary: (id: string) => request<{ commentary: ApiCommentaryLine[] }>(`/matches/${id}/commentary`),
 

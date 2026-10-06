@@ -11,13 +11,13 @@ import {
   SectionHeading,
   Segmented,
   TeamBadge,
-  cx,
 } from "../components/ui";
+import { cx } from "../lib/cx";
 import { useSquad, useTeamDetail, useTeamUnderstat } from "../hooks/useApi";
 import type { StringKey } from "../i18n/strings";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { TEAM_FALLBACK } from "../lib/colors";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
 import type { ApiMatch } from "../lib/api";
 import type { Position } from "../types";

@@ -1,5 +1,5 @@
 import type { StringKey } from "../../i18n/strings";
-import { useI18n } from "../../i18n/I18nProvider";
+import { useI18n } from "../../i18n/context";
 import type { Team, TeamStats } from "../../types";
 import { Card, Num, StatBar, TeamBadge } from "../ui";
 

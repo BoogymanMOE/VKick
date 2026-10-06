@@ -2,7 +2,8 @@ import { useState } from "react";
 import { TopBar } from "../components/TopBar";
 import { RowSkeleton } from "../components/Skeletons";
 import { EmptyState, ErrorState } from "../components/ui";
-import { Card, Chip, Num, SectionHeading, Segmented, TeamBadge, cx } from "../components/ui";
+import { cx } from "../lib/cx";
+import { Card, Chip, Num, SectionHeading, Segmented, TeamBadge } from "../components/ui";
 import {
   slugForLeague,
   useLeaguePlayers,
@@ -12,7 +13,7 @@ import {
   type LeaderSort,
 } from "../hooks/useApi";
 import { TEAM_FALLBACK, readableInk } from "../lib/colors";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { Link } from "react-router-dom";
 import { haptic } from "../lib/telegram";
 import type { StringKey } from "../i18n/strings";
@@ -140,7 +141,7 @@ function PlayerBoard({
           }
         />
       ) : (
-        <ul className="mt-3 space-y-2">
+        <ul className="mt-3 space-y-2 fade-swap">
           {rows.map((row, index) => (
             <li
               key={row.playerId}

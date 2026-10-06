@@ -1,12 +1,13 @@
 import { Fragment } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { Comment, TimelineEvent } from "../types";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
 import { BallIcon } from "./icons";
-import { Chip, Num, cx } from "./ui";
+import { cx } from "../lib/cx";
+import { Chip, Num } from "./ui";
 
-export const typeKey: Record<TimelineEvent["type"], StringKey> = {
+const typeKey: Record<TimelineEvent["type"], StringKey> = {
   goal: "timeline.goal",
   card: "timeline.card",
   substitution: "timeline.sub",
@@ -130,7 +131,10 @@ export function TimelineList({
 
         return (
           <Fragment key={event.id}>
-            <li className="timeline-in relative" style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}>
+            <li
+              className="timeline-in relative"
+              style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
+            >
               {/* Node on the rail; goals get the volt fill. */}
               <span
                 className={cx(

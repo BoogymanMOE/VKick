@@ -14,9 +14,10 @@ import { RateSheet } from "../components/panels/RateSheet";
 import type { PlayerRating } from "../types";
 import { TimelineList } from "../components/TimelineList";
 import { TopBar } from "../components/TopBar";
-import { useToast } from "../components/Toast";
+import { useToast } from "../components/toastContext";
 import { CommentaryPanel } from "../components/panels/CommentaryPanel";
-import { CommentsSection, adaptComments } from "../components/panels/CommentsPanel";
+import { CommentsSection } from "../components/panels/CommentsPanel";
+import { adaptComments } from "../lib/adaptComments";
 import { LineupsPanel } from "../components/panels/LineupsPanel";
 import { PredictionsHub } from "../components/panels/PredictionsHub";
 import { ChartIcon, ChevronRightIcon, StarIcon } from "../components/icons";
@@ -31,14 +32,14 @@ import {
   SectionHeading,
   Segmented,
   TeamBadge,
-  cx,
 } from "../components/ui";
+import { cx } from "../lib/cx";
 import { api, serverErrorKey, type ApiPlayerRating, type ApiTimelineEvent } from "../lib/api";
 import { TEAM_FALLBACK } from "../lib/colors";
 import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
 import { TaskAdCard } from "../components/TaskAdCard";
-import { useAuth } from "../hooks/useAuth";
-import { useI18n } from "../i18n/I18nProvider";
+import { useAuth } from "../hooks/authContext";
+import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
 import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
 import { haptic, notifyHaptic } from "../lib/telegram";
@@ -169,7 +170,8 @@ export default function MatchDetail() {
   // and closes non-Sub mechanics the moment kickoff passes.
   const pickStillOpen = Object.entries(predictionsQuery.data?.windows ?? {}).some(
     ([mechanic, w]) =>
-      !picked.has(mechanic) && isOpen(mechanic as Mechanic, w, { matchStatus: predictionStatus, lineupsPublished }),
+      !picked.has(mechanic) &&
+      isOpen(mechanic as Mechanic, w, { matchStatus: predictionStatus, lineupsPublished }),
   );
   const picksMade = predictionsQuery.data?.predictions.length ?? 0;
   const showPickCta = match.status !== "finished" && tab !== "predict" && pickStillOpen;
@@ -249,29 +251,27 @@ export default function MatchDetail() {
         {tab === "ratings" ? <RatingsTab matchId={id} live={live} league={match.league} /> : null}
       </section>
 
+      {/* The full eye-test view (crowd vs stat, divergence sort) for finished games. */}
       {match.status === "finished" ? (
-        <>
-          {/* The full eye-test view (crowd vs stat, divergence sort) for finished games. */}
-          <div className="mt-3">
-            <Link
-              to={`/ratings?match=${match.id}`}
-              className="flex items-center gap-2 rounded-card border border-gold/50 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+        <div className="mt-4">
+          <Link
+            to={`/ratings?match=${match.id}`}
+            className="flex items-center gap-2 rounded-card border border-gold/50 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+          >
+            <span
+              className="grid h-8 w-8 flex-none place-items-center rounded-full border border-gold text-gold"
+              style={{ backgroundColor: "color-mix(in srgb, var(--gold) 12%, transparent)" }}
+              aria-hidden="true"
             >
-              <span
-                className="grid h-8 w-8 flex-none place-items-center rounded-full border border-gold text-gold"
-                style={{ backgroundColor: "color-mix(in srgb, var(--gold) 12%, transparent)" }}
-                aria-hidden="true"
-              >
-                <StarIcon className="h-4 w-4" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-bold text-ink">{t("ratings.title")}</span>
-                <span className="block text-[11px] text-ink-3">{t("ratings.subtitle")}</span>
-              </span>
-              <ChevronRightIcon className="flex-none text-ink-3" />
-            </Link>
-          </div>
-        </>
+              <StarIcon className="h-4 w-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-bold text-ink">{t("ratings.title")}</span>
+              <span className="block text-[11px] text-ink-3">{t("ratings.subtitle")}</span>
+            </span>
+            <ChevronRightIcon className="flex-none text-ink-3" />
+          </Link>
+        </div>
       ) : null}
 
       {/* Thumb-zone action for the only thing on this page with a deadline.
@@ -428,8 +428,8 @@ function StatsTab({
     <div className="space-y-3">
       <MatchPlayerTable title={home.shortName} color={home.color} rows={homeRows} />
       <MatchPlayerTable title={away.shortName} color={away.color} rows={awayRows} />
-      {/* Match stats → season stats: the same cross-link pattern as the replay
-          and crowd-rating cards below the tabs, so a stat-curious reader has
+      {/* Match stats → season stats: the same cross-link pattern as the
+          crowd-rating card below the tabs, so a stat-curious reader has
           somewhere to go instead of a table that just ends. */}
       <Link
         to="/stats"
@@ -667,9 +667,10 @@ function RatingsList({
   return (
     <>
       <ul className="space-y-2">
-        {players.map((rating) => (
+        {players.map((rating, index) => (
           <RatingRow
             key={rating.playerId}
+            index={index}
             rating={rating}
             team={(rating as PlayerRating & { _team: Team })._team}
             onTap={(player) => {

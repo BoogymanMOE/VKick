@@ -1,22 +1,15 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { api } from "../lib/api";
+import { AuthContext, type AuthContextValue, type AuthUser, useAuth } from "./authContext";
+import { api, type ApiRequestError } from "../lib/api";
 import { isTelegram, waitForTelegram } from "../lib/telegram";
 import {
   clearSession,
   currentAuthToken,
   getDeviceId,
   getSessionToken,
+  hasExplicitDevUser,
   isLoggedOut,
   isRemembered,
   isSessionToken,
@@ -39,44 +32,12 @@ import {
  * sign-in and registration (after sign-out, or on a second device).
  */
 
-export interface AuthUser {
-  id: number;
-  displayName: string;
-  username: string | null;
-  authMode: "session" | "telegram" | "dev";
-}
-
-interface AuthContextValue {
-  user: AuthUser | null;
-  isLoading: boolean;
-  /** True when the stored session survives a browser restart (remember me). */
-  remembered: boolean;
-  /** Silent entry: Telegram initData when available, else a guest account. */
-  enterApp: () => Promise<void>;
-  /** Sign in with username + password (wrong/unknown share one failure). */
-  loginWithUsername: (username: string, password: string, remember: boolean) => Promise<void>;
-  /** Explicit registration (the Login screen's "Create account" form). */
-  registerWithUsername: (
-    username: string,
-    password: string,
-    displayName: string,
-    remember: boolean,
-  ) => Promise<void>;
-  /** Rename the signed-in user; resolves once /me reflects the new name. */
-  updateDisplayName: (displayName: string) => Promise<void>;
-  logout: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextValue | null>(null);
-
 function hasExternalIdentity(): boolean {
   const token = currentAuthToken();
   if (!token) return false; // explicit sign-out — force the Login screen
   // Session tokens are checked via /api/me below; initData and dev:* count as
   // direct identities (server validates them on the /me call anyway).
-  return (
-    isSessionToken(token) || token.startsWith("dev:") || Boolean((window as any).Telegram?.WebApp?.initData)
-  );
+  return isSessionToken(token) || token.startsWith("dev:") || Boolean(window.Telegram?.WebApp?.initData);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -92,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // A 401 from /me means the stored session is dead — drop it so the guard
   // sends the user to /login instead of looping on a stale token.
   useEffect(() => {
-    if (meQuery.error && (meQuery.error as any).status === 401) {
+    if (meQuery.error && (meQuery.error as ApiRequestError).status === 401) {
       const token = currentAuthToken();
       if (isSessionToken(token)) setSessionToken("", false);
     }
@@ -114,8 +75,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // `entering` starts true when auto-entry is pending so the route guard waits
   // instead of flashing the Login screen for a frame.
   const enteredRef = useRef(false);
-  const [entering, setEntering] = useState(() => !isSessionToken(getSessionToken()) && !isLoggedOut());
-  const needsAutoEntry = !isSessionToken(getSessionToken()) && !isLoggedOut();
+  // An explicit ?devUser= opts out of device auto-entry (see hasExplicitDevUser).
+  // `entering` has to opt out too, or the guard would wait forever for an
+  // entry this branch deliberately never performs.
+  const devRequested = hasExplicitDevUser();
+  const [entering, setEntering] = useState(
+    () => !devRequested && !isSessionToken(getSessionToken()) && !isLoggedOut(),
+  );
+  const needsAutoEntry = !devRequested && !isSessionToken(getSessionToken()) && !isLoggedOut();
 
   const enterApp = useCallback(async () => {
     if (enteredRef.current) return;
@@ -165,7 +132,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // reset) but initData is present, exchange it for a fresh session instead
   // of showing a Login screen that makes no sense inside the webview.
   useEffect(() => {
-    if (meQuery.error && (meQuery.error as any).status === 401 && isTelegram() && !isLoggedOut()) {
+    if (
+      meQuery.error &&
+      (meQuery.error as ApiRequestError).status === 401 &&
+      isTelegram() &&
+      !isLoggedOut()
+    ) {
       enteredRef.current = false;
       void enterApp().catch(() => {
         /* stay on the guard; Login remains the fallback */
@@ -251,12 +223,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
-  return ctx;
 }
 
 /**

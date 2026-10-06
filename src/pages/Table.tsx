@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { RowSkeleton } from "../components/Skeletons";
 import { EmptyState, ErrorState } from "../components/ui";
-import { Chip, Num, SectionHeading, Segmented, TeamBadge, cx } from "../components/ui";
+import { cx } from "../lib/cx";
+import { Chip, CountUp, Num, SectionHeading, Segmented, TeamBadge } from "../components/ui";
 import { StarFilledIcon } from "../components/icons";
 import { slugForLeague, useLeagueTabs, useStandings, type StandingRow } from "../hooks/useApi";
 
 type TableView = "actual" | "expected";
 import { useFavorites } from "../hooks/useFavorites";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 
 /**
  * League tables for the synced domestic leagues — straight from the standings.
@@ -82,7 +83,7 @@ export default function Table() {
                   type="button"
                   onClick={() => setLeague(club.league)}
                   className={cx(
-                    "flex w-[76px] flex-col items-center gap-1 rounded-card border p-2.5 text-center transition-colors duration-[var(--t-fast)]",
+                    "flex w-[76px] flex-col items-center gap-1 rounded-card border p-2.5 text-center transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
                     club.league === active
                       ? "border-volt bg-elevated"
                       : "border-line bg-surface hover:bg-elevated",
@@ -173,6 +174,7 @@ export default function Table() {
                         <ExpectedItem
                           key={row.team.id}
                           row={row}
+                          index={index}
                           rank={row.xpts == null ? null : index + 1}
                           mine={isFavorite(row.team.id)}
                         />
@@ -221,9 +223,10 @@ function StandingItem({ row, index, mine }: { row: StandingRow; index: number; m
   return (
     <li
       className={cx(
-        "relative grid grid-cols-[1.75rem_1fr_2rem_2.5rem_2.5rem] items-center gap-2 px-3 py-2 transition-colors duration-[var(--t-fast)]",
+        "list-in relative grid grid-cols-[1.75rem_1fr_2rem_2.5rem_2.5rem] items-center gap-2 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
         mine ? "bg-elevated" : "hover:bg-elevated/60",
       )}
+      style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
     >
       <Num className={cx("text-sm", mine ? "text-volt" : index < 3 ? "text-gold" : "text-ink-3")}>
         {row.rank ?? index + 1}
@@ -246,7 +249,11 @@ function StandingItem({ row, index, mine }: { row: StandingRow; index: number; m
       <Num className={cx("text-end text-xs", gd >= 0 ? "text-ink-2" : "text-ink-3")}>
         {gd > 0 ? `+${gd}` : gd}
       </Num>
-      <Num className="text-end text-sm text-ink">{row.points ?? "–"}</Num>
+      {row.points != null ? (
+        <CountUp value={row.points} className="text-end text-sm text-ink" />
+      ) : (
+        <Num className="text-end text-sm text-ink">–</Num>
+      )}
       <span className="sr-only">{t("table.pts")}</span>
     </li>
   );
@@ -290,7 +297,17 @@ function FormStrip({ form }: { form: string }) {
  * it is still listed, unranked and dimmed, because dropping it would quietly
  * make this look like a different league.
  */
-function ExpectedItem({ row, rank, mine }: { row: StandingRow; rank: number | null; mine: boolean }) {
+function ExpectedItem({
+  row,
+  index,
+  rank,
+  mine,
+}: {
+  row: StandingRow;
+  index: number;
+  rank: number | null;
+  mine: boolean;
+}) {
   const { t, localize } = useI18n();
   const expected = row.xpts;
   const actual = row.points;
@@ -298,10 +315,11 @@ function ExpectedItem({ row, rank, mine }: { row: StandingRow; rank: number | nu
   return (
     <li
       className={cx(
-        "relative grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] items-center gap-1.5 px-3 py-2 transition-colors duration-[var(--t-fast)]",
+        "list-in relative grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] items-center gap-1.5 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
         mine ? "bg-elevated" : "hover:bg-elevated/60",
         expected == null && "opacity-55",
       )}
+      style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
     >
       <Num className="text-xs text-ink-3">{rank ?? "–"}</Num>
       <Link
@@ -318,11 +336,19 @@ function ExpectedItem({ row, rank, mine }: { row: StandingRow; rank: number | nu
       {/* The header grid is decorative (aria-hidden, as in the real table), so
           every figure names itself; the wrappers keep the cell count even. */}
       <span className="text-end">
-        <Num className="text-xs font-bold text-gold">{expected != null ? expected.toFixed(1) : "–"}</Num>
+        {expected != null ? (
+          <CountUp value={expected} decimals={1} className="text-xs font-bold text-gold" />
+        ) : (
+          <Num className="text-xs font-bold text-gold">–</Num>
+        )}
         <span className="sr-only"> {t("table.xpts")}</span>
       </span>
       <span className="text-end">
-        <Num className="text-xs text-ink">{actual ?? "–"}</Num>
+        {actual != null ? (
+          <CountUp value={actual} className="text-xs text-ink" />
+        ) : (
+          <Num className="text-xs text-ink">–</Num>
+        )}
         <span className="sr-only"> {t("table.pts")}</span>
       </span>
       <span className="text-end">

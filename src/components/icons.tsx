@@ -1,5 +1,5 @@
 import type { SVGProps } from "react";
-import { cx } from "./ui";
+import { cx } from "../lib/cx";
 
 const base = (props: SVGProps<SVGSVGElement>) => ({
   width: 22,
@@ -114,6 +114,14 @@ export const AlertIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M12 4.5L21 20H3z" />
     <path d="M12 10v4.5" />
     <path d="M12 17.2v.1" />
+  </svg>
+);
+
+/** Flame — the streak widget's run icon (replaces the 🔥 emoji glyph so it
+ *  draws in the shared icon weight and never shifts with the system font). */
+export const FlameIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} width={16} height={16}>
+    <path d="M12 2.5c3 3.2 5.5 5.6 5.5 9.3A5.5 5.5 0 0112 21.5 5.5 5.5 0 016.5 11.8c0-1.9 1-3.2 2-4.3.2 1.4 1 2 1 2S11 7 12 2.5z" />
   </svg>
 );
 

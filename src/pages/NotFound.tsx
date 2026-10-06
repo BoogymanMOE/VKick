@@ -1,7 +1,7 @@
 import { useLocation } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { Button, Card } from "../components/ui";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 
 /**
  * Unknown route. The wildcard used to redirect to /browse silently, which hid

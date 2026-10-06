@@ -44,10 +44,7 @@ export const LINEUP_GATED: readonly Mechanic[] = ["sub", "shot_predict", "player
  * self-describing `requires` flag; falls back to the canonical set when the
  * payload predates the flag (or windows are empty).
  */
-export function requiresLineup(
-  mechanic: Mechanic,
-  window?: PredictionWindow | null,
-): boolean {
+export function requiresLineup(mechanic: Mechanic, window?: PredictionWindow | null): boolean {
   if (window && window.requires !== undefined) return window.requires === "lineup";
   return LINEUP_GATED.includes(mechanic);
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { useMatch, useSquad, type SquadRow } from "../../hooks/useApi";
-import { useI18n } from "../../i18n/I18nProvider";
+import { useI18n } from "../../i18n/context";
 import { haptic, selectionHaptic } from "../../lib/telegram";
 import {
   FORMATIONS,
@@ -18,7 +18,8 @@ import {
   type SlotCandidate,
   type Unit,
 } from "../../lib/formations";
-import { Button, Chip, EmptyState, ErrorState, Num, TeamBadge, cx } from "../ui";
+import { cx } from "../../lib/cx";
+import { Button, Chip, EmptyState, ErrorState, Num, TeamBadge } from "../ui";
 import { PanelSkeleton } from "../Skeletons";
 import { CheckIcon } from "../icons";
 
@@ -98,7 +99,7 @@ function PlayerRow({
         onClick={onToggle}
         aria-pressed={picked}
         className={cx(
-          "flex min-h-11 w-full items-center gap-2.5 rounded-card border p-2 text-start transition-colors duration-[var(--t-fast)]",
+          "flex min-h-11 w-full items-center gap-2.5 rounded-card border p-2 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
           picked ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
         )}
       >
@@ -124,7 +125,7 @@ function PlayerRow({
             {player.espnPosition}
           </Chip>
         ) : null}
-        {picked ? <CheckIcon className="h-4 w-4 flex-none text-volt" /> : null}
+        {picked ? <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" /> : null}
       </button>
     </li>
   );
@@ -230,7 +231,7 @@ export function LineupPicker({
                 }}
                 aria-pressed={active}
                 className={cx(
-                  "flex min-h-11 items-center gap-2 rounded-card border px-2.5 text-start transition-colors duration-[var(--t-fast)]",
+                  "flex min-h-11 items-center gap-2 rounded-card border px-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
                   active ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
                 )}
               >
@@ -238,7 +239,7 @@ export function LineupPicker({
                 <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">
                   {localize(club.shortName)}
                 </span>
-                {active ? <CheckIcon className="h-4 w-4 flex-none text-volt" /> : null}
+                {active ? <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" /> : null}
               </button>
             );
           })}
@@ -269,7 +270,7 @@ export function LineupPicker({
               }}
               aria-pressed={formation === f.id}
               className={cx(
-                "min-h-11 rounded-md border text-xs font-bold transition-colors duration-[var(--t-fast)]",
+                "min-h-11 rounded-md border text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
                 formation === f.id
                   ? "border-volt bg-elevated text-volt"
                   : "border-line bg-surface text-ink-2",

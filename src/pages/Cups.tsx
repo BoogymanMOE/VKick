@@ -14,7 +14,7 @@ import {
 } from "../components/ui";
 import { buildBracket, type BracketTie } from "../lib/bracket";
 import { useKnockoutCompetitions, useMatches } from "../hooks/useApi";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { formatKickoff } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import type { Match } from "../types";
@@ -146,7 +146,7 @@ export default function Cups() {
                   haptic("light");
                   setRoundsOverride((prev) => (prev === null ? false : !prev));
                 }}
-                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-[11px] font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated hover:text-ink"
+                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-[11px] font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
               >
                 {roundsOverride === false ? t("common.expandAll") : t("common.collapseAll")}
               </button>

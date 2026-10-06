@@ -140,11 +140,7 @@ export interface PickSummaryCtx {
 /** ESPN athlete ids only — keeps formation strings and grid cells out. */
 const asId = (v: unknown): string => (typeof v === "string" && /^\d{1,15}$/.test(v) ? v : "");
 
-export function pickSummary(
-  mechanic: string,
-  payload: string | null,
-  ctx: PickSummaryCtx,
-): string | null {
+export function pickSummary(mechanic: string, payload: string | null, ctx: PickSummaryCtx): string | null {
   if (!payload) return null;
   let parsed: unknown;
   try {
@@ -168,8 +164,7 @@ export function pickSummary(
       const y = typeof grid?.gridY === "number" ? grid.gridY : NaN;
       // The zone is half the pick: a shot prediction is "this player, from
       // here". Naming only the player hid the half the user actually chose.
-      const zone =
-        Number.isInteger(x) && Number.isInteger(y) ? ctx.t(ZONE_LABEL_KEY[cellZone(x, y)]) : null;
+      const zone = Number.isInteger(x) && Number.isInteger(y) ? ctx.t(ZONE_LABEL_KEY[cellZone(x, y)]) : null;
       const who = id ? ctx.nameOf(id) : null;
       if (who && zone) return `${who} · ${zone}`;
       return who ?? zone;
@@ -195,7 +190,9 @@ export function pickSummary(
       const limit = Math.max(1, ctx.maxPairs ?? 1);
       const shown = pairs.slice(0, limit);
       const rest = pairs.length - shown.length;
-      return rest > 0 ? `${shown.join(" · ")} · ${ctx.t("predict.morePairs", { n: rest })}` : shown.join(" · ");
+      return rest > 0
+        ? `${shown.join(" · ")} · ${ctx.t("predict.morePairs", { n: rest })}`
+        : shown.join(" · ");
     }
 
     case "lineup": {

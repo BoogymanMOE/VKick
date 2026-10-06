@@ -1,14 +1,15 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type UseMutateFunction } from "@tanstack/react-query";
 import { api, serverErrorKey, type ApiPrediction } from "../../lib/api";
-import { useI18n } from "../../i18n/I18nProvider";
+import { useI18n } from "../../i18n/context";
 import { haptic, notifyHaptic, selectionHaptic } from "../../lib/telegram";
 import { pickSummary } from "../../lib/breakdown";
-import { useToast } from "../Toast";
+import { useToast } from "../toastContext";
 import { BottomSheet } from "../BottomSheet";
 import { RulesButton } from "../RulesSheet";
 import { PredictionsHubSkeleton, PanelSkeleton } from "../Skeletons";
-import { Button, Card, Chip, EmptyState, ErrorState, Num, cx } from "../ui";
+import { cx } from "../../lib/cx";
+import { Button, Card, Chip, EmptyState, ErrorState, Num } from "../ui";
 import { SubBoard } from "./SubBoard";
 import { LineupPicker } from "./LineupPicker";
 import { ShotPredictor } from "./ShotPredictor";
@@ -95,9 +96,20 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
   const finished = matchStatus === "finished";
 
   const [editor, setEditor] = useState<Mechanic | null>(null);
+  // Save confirmation: the just-saved card wears the volt goal sweep for one
+  // beat, so the optimistic row reads as "accepted" rather than "maybe".
+  const [flash, setFlash] = useState<Mechanic | null>(null);
   // Ticking clock: the countdown strings below are derived, not polled, so
   // without this they would freeze until an unrelated refetch.
   const now = useNow(30_000);
+
+  // goal-flash paints over --t-slow (450ms); clear after the sweep lands so
+  // the class (and its ::after) can't replay on a later re-render.
+  useEffect(() => {
+    if (!flash) return;
+    const id = setTimeout(() => setFlash(null), 650);
+    return () => clearTimeout(id);
+  }, [flash]);
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["predictions", matchId] });
 
@@ -157,9 +169,26 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
 
   const statusChip = (row: ApiPrediction | null) => {
     if (!row) return null;
-    if (row.status === "pending") return <Chip tone="muted">{t("predict.pending")}</Chip>;
-    if (row.status === "correct") return <Chip tone="pitch">+{row.points_awarded}</Chip>;
-    if (row.status === "partial") return <Chip tone="gold">+{row.points_awarded}</Chip>;
+    if (row.status === "pending")
+      return (
+        <Chip tone="muted" className="marker-pop">
+          {t("predict.pending")}
+        </Chip>
+      );
+    // Awards pop in (marker-pop, transform + opacity only) rather than
+    // appearing at full size — the one moment the pick paid off.
+    if (row.status === "correct")
+      return (
+        <Chip tone="pitch" className="marker-pop">
+          +{row.points_awarded}
+        </Chip>
+      );
+    if (row.status === "partial")
+      return (
+        <Chip tone="gold" className="marker-pop">
+          +{row.points_awarded}
+        </Chip>
+      );
     if (row.status === "void") return <Chip tone="muted">±0</Chip>;
     return <Chip tone="danger">+0</Chip>;
   };
@@ -189,9 +218,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
   // Open-and-unpicked first: the list reads as the next step, not a five-row
   // checklist. Re-ranked ONLY when the open/picked picture actually changes —
   // the 30s countdown tick must not shuffle cards under the user's thumb.
-  const orderKey = mechanics
-    .map((m) => `${opensNow(m) ? "o" : "-"}${byMechanic(m) ? "p" : "-"}`)
-    .join("");
+  const orderKey = mechanics.map((m) => `${opensNow(m) ? "o" : "-"}${byMechanic(m) ? "p" : "-"}`).join("");
   const orderedRef = useRef<Mechanic[]>(mechanics);
   const orderKeyRef = useRef<string | null>(null);
   if (orderKeyRef.current !== orderKey) {
@@ -230,7 +257,18 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
           // rather than showing a kickoff countdown that hasn't started.
           const lineupLocked = !finished && requiresLineup(m, windows[m]) && !lineupsPublished;
           return (
-            <Card key={m} className={cx("p-3", row && "border-volt/40")}>
+            <Card
+              key={m}
+              className={cx(
+                // Skeleton → content: the card crossfades in once when the
+                // hub finishes loading (its key is stable, so saves and the
+                // 30s countdown tick don't replay it).
+                "fade-swap p-3",
+                row && "border-volt/40",
+                // relative + overflow-hidden frame goal-flash's ::after sweep.
+                flash === m && "relative overflow-hidden goal-flash",
+              )}
+            >
               <div className="flex items-center gap-2">
                 <span
                   className={cx(
@@ -290,6 +328,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
           onSaved={() => {
             // Invalidate (don't await): the optimistic row already shows; the
             // refetch replaces it with server truth (lock windows, ids).
+            if (editor) setFlash(editor);
             invalidate();
             setEditor(null);
           }}
@@ -477,7 +516,7 @@ function WatchEditor({
                 setPick(p.player_id);
               }}
               className={cx(
-                "flex w-full items-center gap-3 rounded-card border p-2.5 text-start transition-colors duration-[var(--t-fast)]",
+                "flex w-full items-center gap-3 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
                 pick === p.player_id ? "border-gold bg-elevated" : "border-line bg-surface hover:bg-elevated",
               )}
             >
@@ -487,7 +526,11 @@ function WatchEditor({
               <Chip tone="muted" normalCase>
                 {p.position}
               </Chip>
-              {pick === p.player_id ? <Chip tone="gold">{t("watch.selected")}</Chip> : null}
+              {pick === p.player_id ? (
+                <Chip tone="gold" className="marker-pop">
+                  {t("watch.selected")}
+                </Chip>
+              ) : null}
             </button>
           </li>
         ))}
@@ -566,7 +609,7 @@ function VersusEditor({
                     else setSideB(p.player_id);
                   }}
                   className={cx(
-                    "flex w-full items-center gap-3 rounded-card border p-2.5 text-start transition-colors duration-[var(--t-fast)]",
+                    "flex w-full items-center gap-3 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
                     (index === 0 ? sideA : sideB) === p.player_id
                       ? "border-volt bg-elevated"
                       : "border-line bg-surface hover:bg-elevated",
@@ -576,7 +619,9 @@ function VersusEditor({
                     {localize(p.full_name)}
                   </span>
                   {(index === 0 ? sideA : sideB) === p.player_id ? (
-                    <Chip tone="volt">{t("watch.selected")}</Chip>
+                    <Chip tone="volt" className="marker-pop">
+                      {t("watch.selected")}
+                    </Chip>
                   ) : null}
                 </button>
               </li>

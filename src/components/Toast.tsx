@@ -1,16 +1,8 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { cx } from "./ui";
+import { cx } from "../lib/cx";
 import { AlertIcon, BallIcon, CloseIcon, RefreshIcon, StarFilledIcon } from "./icons";
-
-export type ToastTone = "volt" | "gold" | "danger" | "muted";
-
-interface ToastItem {
-  id: string;
-  text: string;
-  tone: ToastTone;
-  icon?: ReactNode;
-}
+import { ToastContext, type ToastItem, type ToastTone } from "./toastContext";
 
 /**
  * Call sites pass a one-character glyph ("★", "✕"); they resolve to the same
@@ -24,8 +16,6 @@ const GLYPHS: Record<string, ReactNode> = {
   "⚠": <AlertIcon className="h-4 w-4" />,
   "⚽": <BallIcon className="h-4 w-4" />,
 };
-
-const ToastContext = createContext<{ push: (toast: Omit<ToastItem, "id">) => void } | null>(null);
 
 const toneClass: Record<ToastTone, string> = {
   volt: "border-volt text-volt",
@@ -49,7 +39,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setToasts((prev) => [...prev.slice(-2), { ...toast, id }]);
     window.setTimeout(() => {
-      setToasts((prev) => prev.filter((item) => item.id !== id));
+      // Mark leaving rather than remove: the exit animation tells the
+      // animationend handler below when it is actually safe to drop it.
+      setToasts((prev) => prev.map((item) => (item.id === id ? { ...item, leaving: true } : item)));
     }, 3600);
   }, []);
 
@@ -66,8 +58,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((toast) => (
           <div
             key={toast.id}
+            onAnimationEnd={() => {
+              // Only the leave reaps the toast; the enter animation also ends
+              // here and must be ignored.
+              if (toast.leaving) setToasts((prev) => prev.filter((item) => item.id !== toast.id));
+            }}
             className={cx(
-              "toast-in flex w-full max-w-[420px] items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold backdrop-blur-md",
+              "flex w-full max-w-[420px] items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold backdrop-blur-md",
+              toast.leaving ? "toast-out" : "toast-in",
               toneClass[toast.tone],
             )}
             style={{ backgroundColor: toneTint[toast.tone] ?? "rgba(18,44,37,0.95)" }}
@@ -83,10 +81,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       </div>
     </ToastContext.Provider>
   );
-}
-
-export function useToast() {
-  const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error("useToast must be used inside <ToastProvider>");
-  return ctx;
 }

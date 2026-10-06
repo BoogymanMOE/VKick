@@ -128,9 +128,7 @@ export function buildLeagueTabs(
 ): LeagueTab[] {
   const bigFive = PICKER_GROUPS.filter((g) => g.key !== OTHER_GROUP && g.key !== INTERNATIONAL_GROUP);
   const aliasBySlug = new Map(Object.entries(SLUG_BY_LEAGUE).map(([slug, alias]) => [slug, alias]));
-  const extras = followed.filter(
-    (row) => row.kind === "league" && !aliasBySlug.has(row.league),
-  );
+  const extras = followed.filter((row) => row.kind === "league" && !aliasBySlug.has(row.league));
   const seen = new Set<string>();
   return [
     ...bigFive.map((g) => ({ value: g.key, label: t(g.label) })),

@@ -1,8 +1,8 @@
 import { NavLink } from "react-router-dom";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { haptic } from "../lib/telegram";
 import { BallIcon, ChartIcon, TableIcon, UserIcon, ShirtIcon } from "./icons";
-import { cx } from "./ui";
+import { cx } from "../lib/cx";
 import type { StringKey } from "../i18n/strings";
 
 /**
@@ -34,8 +34,8 @@ export function TabBar() {
               onClick={() => haptic("light")}
               className={({ isActive }) =>
                 cx(
-                  "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
-                  isActive ? "text-volt" : "text-ink-3 hover:text-ink-2",
+                  "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-bold transition-[color,background-color] duration-[var(--t-fast)]",
+                  isActive ? "bg-elevated/70 text-volt" : "text-ink-3 hover:text-ink-2",
                 )
               }
             >
@@ -54,7 +54,10 @@ export function TabBar() {
                   />
                   <Icon
                     strokeWidth={isActive ? 2.2 : 1.8}
-                    className={cx("transition-transform duration-[var(--t-fast)]", isActive && "scale-105")}
+                    className={cx(
+                      "transition-transform duration-[var(--t-fast)]",
+                      isActive && "tab-pop scale-105",
+                    )}
                   />
                   <span className="truncate">{t(key)}</span>
                 </>

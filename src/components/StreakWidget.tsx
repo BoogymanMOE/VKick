@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, type ApiStreak } from "../lib/api";
-import { useI18n } from "../i18n/I18nProvider";
-import { Card, Chip, cx } from "./ui";
+import { useI18n } from "../i18n/context";
+import { cx } from "../lib/cx";
+import { Card, Chip } from "./ui";
+import { FlameIcon } from "./icons";
 
 /**
  * Favorite-club streak (scoring-rules.md §6): how many consecutive anchor-club
@@ -39,7 +41,7 @@ export function StreakWidget({ className }: { className?: string }) {
           )}
           aria-hidden="true"
         >
-          🔥
+          <FlameIcon className="h-4 w-4" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold text-ink">{t("streak.title")}</p>
@@ -63,7 +65,7 @@ export function StreakWidget({ className }: { className?: string }) {
             key={i}
             className={cx(
               "h-1.5 flex-1 rounded-full",
-              i < filled ? (streak.active ? "bg-volt" : "bg-ink-3/40") : "bg-line",
+              i < filled ? cx(streak.active ? "bg-volt" : "bg-ink-3/40", "dot-pop") : "bg-line",
             )}
           />
         ))}

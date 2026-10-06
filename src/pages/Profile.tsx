@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { BottomSheet, SheetActions } from "../components/BottomSheet";
 import { TopBar } from "../components/TopBar";
 import { ChevronRightIcon, CloseIcon, PencilIcon } from "../components/icons";
-import { useToast } from "../components/Toast";
+import { useToast } from "../components/toastContext";
 import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch } from "../components/ui";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth } from "../hooks/authContext";
 import { useNotificationPrefs, useReferral } from "../hooks/useApi";
 import { LANG_LABEL, type Lang } from "../i18n/strings";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { serverErrorKey } from "../lib/api";
 import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
 import { useLocalState } from "../lib/useLocalState";
@@ -198,6 +198,7 @@ export default function Profile() {
           <ListRow
             label={t("profile.haptics")}
             hint={t("profile.hapticsHint")}
+            onToggle={() => setHapticsOn(!hapticsOn)}
             right={<Switch checked={hapticsOn} label={t("profile.haptics")} onChange={setHapticsOn} />}
           />
           <ListRow
@@ -266,6 +267,7 @@ export default function Profile() {
           <ListRow
             label={t("profile.notifGoals")}
             hint={t("profile.notifGoalsHint")}
+            onToggle={() => setPref("goals")(!serverPrefs.goals)}
             right={
               <Switch
                 checked={serverPrefs.goals}
@@ -277,6 +279,7 @@ export default function Profile() {
           <ListRow
             label={t("profile.notifDeadline")}
             hint={t("profile.notifDeadlineHint")}
+            onToggle={() => setPref("deadline")(!serverPrefs.deadline)}
             right={
               <Switch
                 checked={serverPrefs.deadline}
@@ -288,6 +291,7 @@ export default function Profile() {
           <ListRow
             label={t("profile.notifRatings")}
             hint={t("profile.notifRatingsHint")}
+            onToggle={() => setPref("ratings")(!serverPrefs.ratings)}
             right={
               <Switch
                 checked={serverPrefs.ratings}

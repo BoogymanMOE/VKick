@@ -8,10 +8,10 @@ import { Card, Chip, EmptyState, ErrorState, SectionHeading, Segmented } from ".
 import { api, serverErrorKey } from "../lib/api";
 import { TEAM_FALLBACK } from "../lib/colors";
 import { useMatches } from "../hooks/useApi";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import type { PlayerRating } from "../types";
 import { haptic, notifyHaptic } from "../lib/telegram";
-import { useToast } from "../components/Toast";
+import { useToast } from "../components/toastContext";
 import type { StringKey } from "../i18n/strings";
 import { useSearchParams, Link } from "react-router-dom";
 
@@ -214,9 +214,10 @@ function MatchRatings({
           action={<span className="text-[11px] text-ink-3">{t("ratings.tapToRate")}</span>}
         />
         <ul className="mt-2 space-y-2">
-          {rows.map((rating) => (
+          {rows.map((rating, index) => (
             <RatingRow
               key={rating.playerId}
+              index={index}
               rating={rating}
               team={rating._team}
               onTap={(player) => {

@@ -3,8 +3,14 @@ import { TopBar } from "../components/TopBar";
 import { CompRowSkeleton } from "../components/Skeletons";
 import { Chip, EmptyState, ErrorState, Num, SectionHeading } from "../components/ui";
 import { useMyPredictionHistory, type PredictionHistoryRow } from "../hooks/useApi";
-import { useI18n } from "../i18n/I18nProvider";
-import { breakdownItems, pickSummary, MECHANIC_LABELS, STATUS_LABELS, type BreakdownLang } from "../lib/breakdown";
+import { useI18n } from "../i18n/context";
+import {
+  breakdownItems,
+  pickSummary,
+  MECHANIC_LABELS,
+  STATUS_LABELS,
+  type BreakdownLang,
+} from "../lib/breakdown";
 import { formatCountdown, isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
 import { useNow } from "../hooks/useNow";
 import { formatKickoff } from "../lib/format";
@@ -45,7 +51,7 @@ export default function Predictions() {
         </div>
       ) : (
         <>
-          <section className="mt-4">
+          <section className="mt-4 fade-swap">
             <SectionHeading
               title={t("predictions.settled")}
               action={
@@ -66,7 +72,7 @@ export default function Predictions() {
           </section>
 
           {pending.length > 0 ? (
-            <section className="mt-6">
+            <section className="mt-6 fade-swap">
               <SectionHeading
                 title={t("predictions.pending")}
                 action={

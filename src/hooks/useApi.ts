@@ -13,8 +13,8 @@ import {
   type FavoritesPayload,
   type NotificationPrefsPayload,
 } from "../lib/optimistic";
-import { useToast } from "../components/Toast";
-import { useI18n } from "../i18n/I18nProvider";
+import { useToast } from "../components/toastContext";
+import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
 import { haptic } from "../lib/telegram";
 import type { LeagueId, Match, Team } from "../types";
@@ -85,8 +85,15 @@ export function useMatches(
     queryKey: ["matches", query],
     queryFn: () => api.getMatches(query),
     select: (data) => data.matches.map(matchFromApi),
-    // Live scores: poll gently; the server polls ESPN on its own schedule.
-    refetchInterval: 60_000,
+    // Poll on a clock that notices liveness. The server's own pulse hits ESPN
+    // every 15s, so a flat 60s client poll made a goal take up to a minute to
+    // reach the one screen that exists to show goals — while with nothing live
+    // there is nothing worth refetching at all.
+    refetchInterval: (q) => {
+      const live =
+        q.state.data?.matches?.some((m) => m.status === "live" || m.status === "halftime") ?? false;
+      return live ? 20_000 : 60_000;
+    },
   });
 }
 
@@ -131,7 +138,21 @@ export function useStandings(league: string) {
     queryFn: () => api.getStandings(league),
     select: (data): StandingRow[] =>
       data.standings.map((row) => ({
-        team: teamFromApi(row as unknown as ApiTeam & ApiStandingFields),
+        // A standings row is not an ApiTeam: it carries `team_id`, not `id`.
+        // Building the team explicitly instead of casting the row is what keeps
+        // `/team/:id` links, React keys, isFavorite() and the bundled-crest
+        // lookup fed with a real id — teamFromApi reads t.id, so the old blind
+        // cast handed it undefined for every row in the table (every link on the
+        // Table screen pointed at /team/undefined).
+        team: teamFromApi({
+          id: row.team_id,
+          name: row.name,
+          short_name: row.short_name,
+          abbreviation: row.abbreviation,
+          color: row.color,
+          logo_url: row.logo_url,
+          league: row.league,
+        }),
         rank: row.rank,
         played: row.played,
         wins: row.wins,
@@ -149,21 +170,6 @@ export function useStandings(league: string) {
     staleTime: 5 * 60_000,
   });
 }
-
-type ApiStandingFields = {
-  rank: number | null;
-  played: number | null;
-  wins: number | null;
-  draws: number | null;
-  losses: number | null;
-  points: number | null;
-  goals_for: number | null;
-  goals_against: number | null;
-  xpts?: number | null;
-  xg?: number | null;
-  xga?: number | null;
-  form?: string | null;
-};
 
 /* ------------------------------------------------------------ favorites */
 
@@ -309,10 +315,7 @@ function currentTeamFromCache(teamId: string): ApiTeam | undefined {
 export function useLeagueTabs(): LeagueTab[] {
   const { t, localize } = useI18n();
   const followed = useFollowedLeagues();
-  return useMemo(
-    () => buildLeagueTabs(followed.leagues, t, localize),
-    [followed.leagues, t, localize],
-  );
+  return useMemo(() => buildLeagueTabs(followed.leagues, t, localize), [followed.leagues, t, localize]);
 }
 
 /* ------------------------------------------------------------ referrals */
@@ -515,7 +518,7 @@ export function useLeaguePlayers(league: string, sort: LeaderSort = "goals", lim
     queryKey: ["leaguePlayers", league, sort, limit],
     queryFn: () => api.getLeaguePlayers(league, sort, limit),
     select: (data): LeaderPlayerRow[] =>
-      data.players.map((p: any) => ({
+      data.players.map((p) => ({
         playerId: p.player_id,
         name: p.full_name,
         shortName: p.short_name,
@@ -571,7 +574,7 @@ export function useLeagueTeamStats(league: string) {
     queryKey: ["leagueTeamStats", league],
     queryFn: () => api.getLeagueTeamStats(league),
     select: (data): LeagueTeamRow[] =>
-      data.teams.map((t: any) => ({
+      data.teams.map((t) => ({
         teamId: t.team_id,
         name: t.name,
         shortName: t.short_name,
@@ -619,7 +622,7 @@ export function useTeamUnderstat(teamId: string) {
   });
 }
 
-/* ------------------------------------------------------------ replay & squads */
+/* ------------------------------------------------------------------ squads */
 
 export function useCommentary(matchId: string) {
   return useQuery({

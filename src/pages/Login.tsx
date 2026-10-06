@@ -1,9 +1,9 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { LanguageToggle } from "../components/TopBar";
 import { Button, Card, Segmented } from "../components/ui";
-import { useAuth } from "../hooks/useAuth";
-import { useI18n } from "../i18n/I18nProvider";
+import { useAuth } from "../hooks/authContext";
+import { useI18n } from "../i18n/context";
 import { serverErrorKey } from "../lib/api";
 import { isTelegram, haptic, telegramDisplayName } from "../lib/telegram";
 import type { StringKey } from "../i18n/strings";
@@ -110,7 +110,7 @@ export default function Login() {
           <p className="mx-auto mt-2 max-w-[34ch] text-sm leading-relaxed text-ink-2">{t("auth.subtitle")}</p>
         </section>
 
-        <Card className="rise-in p-4 sm:p-5" style={{ animationDelay: "70ms" }}>
+        <Card className="rise-in p-4 sm:p-5" style={{ "--stagger": "70ms" } as CSSProperties}>
           {showUsername ? (
             <form onSubmit={submitUsername} className="space-y-3">
               <Segmented
@@ -239,7 +239,7 @@ export default function Login() {
 
         <p
           className="rise-in mt-5 px-2 text-center text-[11px] leading-relaxed text-ink-3"
-          style={{ animationDelay: "140ms" }}
+          style={{ "--stagger": "140ms" } as CSSProperties}
         >
           {t("auth.legal")}
         </p>

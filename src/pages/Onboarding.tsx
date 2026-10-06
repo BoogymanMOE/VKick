@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
-import { useToast } from "../components/Toast";
-import { Button, Chip, Num, Segmented, TeamBadge, cx } from "../components/ui";
+import { useToast } from "../components/toastContext";
+import { cx } from "../lib/cx";
+import { Button, Chip, Num, Segmented, TeamBadge } from "../components/ui";
 import { ArrowIcon, CheckIcon, CloseIcon, PencilIcon, StarFilledIcon, TargetIcon } from "../components/icons";
 import { useTeams, useCompetitions } from "../hooks/useApi";
 import { MAX_FAVORITES, MAX_INTERNATIONALS, useFavorites, useFollowedLeagues } from "../hooks/useFavorites";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
 import { serverErrorKey } from "../lib/api";
 import { haptic, selectionHaptic, notifyHaptic } from "../lib/telegram";
@@ -202,7 +203,7 @@ export default function Onboarding() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-ink">{anchorName}</p>
                 <p className="flex items-center gap-1 text-[11px] font-bold text-gold">
-                  <StarFilledIcon className="h-3 w-3 flex-none" />
+                  <StarFilledIcon className="star-pop h-3 w-3 flex-none" />
                   {t("onboarding.isFavorite")}
                 </p>
               </div>
@@ -223,7 +224,7 @@ export default function Onboarding() {
                     type="button"
                     onClick={() => pickClub(team)}
                     className={cx(
-                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-colors duration-[var(--t-fast)]",
+                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
                       pickedHere
                         ? isAnchor
                           ? "border-gold bg-elevated"
@@ -236,9 +237,9 @@ export default function Onboarding() {
                       {localize(team.shortName)}
                     </span>
                     {isAnchor ? (
-                      <StarFilledIcon className="h-4 w-4 flex-none text-gold" />
+                      <StarFilledIcon className="star-pop h-4 w-4 flex-none text-gold" />
                     ) : pickedHere ? (
-                      <CheckIcon className="h-4 w-4 flex-none text-volt" />
+                      <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" />
                     ) : null}
                   </button>
                 </li>
@@ -269,7 +270,7 @@ export default function Onboarding() {
                     </div>
                     {team.id === anchorId ? (
                       <span
-                        className="absolute -top-1 -start-1 grid h-5 w-5 place-items-center rounded-full border border-gold bg-elevated text-gold"
+                        className="star-pop absolute -top-1 -start-1 grid h-5 w-5 place-items-center rounded-full border border-gold bg-elevated text-gold"
                         aria-label={t("onboarding.isFavorite")}
                       >
                         <StarFilledIcon className="h-2.5 w-2.5" />
@@ -306,7 +307,7 @@ export default function Onboarding() {
                     type="button"
                     onClick={() => pickClub(team)}
                     className={cx(
-                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-colors duration-[var(--t-fast)]",
+                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
                       pickedHere ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
                     )}
                   >
@@ -315,7 +316,7 @@ export default function Onboarding() {
                       {localize(team.shortName)}
                     </span>
                     {pickedHere ? (
-                      <CheckIcon className="h-4 w-4 flex-none text-volt" aria-hidden="true" />
+                      <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" aria-hidden="true" />
                     ) : null}
                   </button>
                 </li>

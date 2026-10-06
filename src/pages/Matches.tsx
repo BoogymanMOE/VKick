@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ConfettiBurst } from "../components/Confetti";
-import { clubContext, opponentOf } from "../components/ClubCard";
+import { clubContext, opponentOf } from "../lib/clubContext";
 import { MatchCard } from "../components/MatchCard";
 import { MatchCardSkeleton } from "../components/Skeletons";
 import { TopBar } from "../components/TopBar";
-import { useToast } from "../components/Toast";
+import { useToast } from "../components/toastContext";
 import {
   Card,
   Chip,
@@ -17,17 +17,18 @@ import {
   Num,
   SectionHeading,
   TeamBadge,
-  cx,
 } from "../components/ui";
+import { cx } from "../lib/cx";
 import { useMatches, useFollowedLeagues } from "../hooks/useApi";
 import { useFavorites } from "../hooks/useFavorites";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { formatClock, formatKickoff } from "../lib/format";
 import { LEAGUE_BY_SLUG } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
 import { BallIcon, ChartIcon, ChevronRightIcon, RefreshIcon, StarFilledIcon } from "../components/icons";
 import { TaskAdCard } from "../components/TaskAdCard";
-import { PullIndicator, usePullToRefresh } from "../components/PullToRefresh";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
+import { PullIndicator } from "../components/PullToRefresh";
 import type { Match, Team } from "../types";
 
 export default function Matches() {
@@ -183,8 +184,8 @@ export default function Matches() {
           fire: while the feed loads there is simply no Live section yet, and
           a quiet matchday gets no header at all. */}
       <ul className="space-y-2">
-        {live.map((match) => (
-          <MatchCard key={match.id} match={match} flash={flashId === match.id} />
+        {live.map((match, index) => (
+          <MatchCard key={match.id} match={match} flash={flashId === match.id} index={index} />
         ))}
       </ul>
     </CollapsibleSection>
@@ -229,7 +230,7 @@ export default function Matches() {
               }}
               aria-pressed={leagueFilter === null}
               className={cx(
-                "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
+                "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
                 leagueFilter === null ? "border-volt text-volt" : "border-line text-ink-3",
               )}
             >
@@ -245,7 +246,7 @@ export default function Matches() {
                 }}
                 aria-pressed={leagueFilter === l.league}
                 className={cx(
-                  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
+                  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
                   leagueFilter === l.league ? "border-volt text-volt" : "border-line text-ink-3",
                 )}
               >
@@ -309,7 +310,7 @@ export default function Matches() {
                 onRetry={() => matchesQuery.refetch()}
               />
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-2 fade-swap">
                 {teamRows.map(({ team, context }) => (
                   <TeamRow key={team.id} team={team} context={context} anchored={team.id === anchorId} />
                 ))}
@@ -356,8 +357,8 @@ export default function Matches() {
             />
           ) : upcomingShown.length > 0 ? (
             <ul className="space-y-2">
-              {upcomingShown.map((match) => (
-                <MatchCard key={match.id} match={match} />
+              {upcomingShown.map((match, index) => (
+                <MatchCard key={match.id} match={match} index={index} />
               ))}
             </ul>
           ) : (
@@ -389,8 +390,8 @@ export default function Matches() {
               />
             ) : (
               <ul className="space-y-2">
-                {finished.map((match) => (
-                  <MatchCard key={match.id} match={match} />
+                {finished.map((match, index) => (
+                  <MatchCard key={match.id} match={match} index={index} />
                 ))}
               </ul>
             )}

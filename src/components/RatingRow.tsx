@@ -1,7 +1,9 @@
+import type { CSSProperties } from "react";
 import type { PlayerRating, Team } from "../types";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { haptic, selectionHaptic } from "../lib/telegram";
-import { Chip, Num, TeamBadge, cx } from "./ui";
+import { cx } from "../lib/cx";
+import { Chip, Num, TeamBadge } from "./ui";
 
 /**
  * The differentiator in one row: the stat score on one side, the crowd's
@@ -12,12 +14,15 @@ export function RatingRow({
   team,
   onRate,
   onTap,
+  index = 0,
 }: {
   rating: PlayerRating;
   team: Team;
   onRate?: (playerId: string, value: number) => void;
   /** When set, the whole row opens the rating sheet instead of showing a slider. */
   onTap?: (player: PlayerRating) => void;
+  /** Position in its list, for the entrance stagger. */
+  index?: number;
 }) {
   const { t, localize } = useI18n();
   const hasCrowd = rating.crowdRating !== null;
@@ -26,7 +31,7 @@ export function RatingRow({
   const Tag = onTap ? "button" : "div";
 
   return (
-    <li>
+    <li className="list-in" style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}>
       <Tag
         {...(onTap
           ? {
@@ -39,7 +44,8 @@ export function RatingRow({
           : {})}
         className={cx(
           "flex w-full items-center gap-3 rounded-card border border-line bg-surface p-3 text-start",
-          onTap && "transition-colors duration-[var(--t-fast)] hover:bg-elevated",
+          onTap &&
+            "transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
         )}
       >
         <TeamBadge team={team} size="sm" />

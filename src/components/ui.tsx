@@ -1,13 +1,19 @@
-import { useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+} from "react";
 import type { Team } from "../types";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
+import { cx } from "../lib/cx";
 import { crestSources } from "../lib/logos";
 import { haptic } from "../lib/telegram";
 import { useLocalState } from "../lib/useLocalState";
 import { AlertIcon, ChevronDownIcon, RefreshIcon, StarFilledIcon, SwapIcon, TargetIcon } from "./icons";
-
-export const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(" ");
 
 /* ------------------------------------------------------------------ surfaces */
 
@@ -162,6 +168,13 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
   const dims = { sm: "h-6 w-6 text-[10px]", md: "h-9 w-9 text-xs", lg: "h-12 w-12 text-sm" }[size];
   const [broken, setBroken] = useState(false);
   const [remoteBroken, setRemoteBroken] = useState(false);
+  // Crests that arrive over the network otherwise pop in from nothing; fade
+  // them up on load (bundled and remote share it) so the tile settles in.
+  const [loaded, setLoaded] = useState(false);
+  const crestImgClass = cx(
+    "h-full w-full object-contain transition-opacity duration-[var(--t-fast)] ease-[var(--ease-out)]",
+    loaded ? "opacity-100" : "opacity-0",
+  );
   // Bundled crest first: it is normalized to one footprint so a row of badges
   // reads evenly, and it needs no network. When a club has none, fall back to
   // the ESPN crest URL carried on every team payload — that URL used to be
@@ -195,9 +208,10 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
             src={crest.png}
             alt=""
             onError={() => setBroken(true)}
+            onLoad={() => setLoaded(true)}
             loading="lazy"
             decoding="async"
-            className="h-full w-full object-contain"
+            className={crestImgClass}
           />
         </picture>
       ) : remote ? (
@@ -205,9 +219,10 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
           src={remote}
           alt=""
           onError={() => setRemoteBroken(true)}
+          onLoad={() => setLoaded(true)}
           loading="lazy"
           decoding="async"
-          className="h-full w-full object-contain"
+          className={crestImgClass}
         />
       ) : (
         team.abbreviation
@@ -280,6 +295,48 @@ export function Num({ children, className }: { children: ReactNode; className?: 
   return <span className={cx("num-display tabular-nums", className)}>{children}</span>;
 }
 
+/**
+ * Evaluative (gold) totals count up from zero on mount — season points,
+ * standings points, xPts — so a number that just appeared reads as earned
+ * rather than snapped in. Integer-only; a reduced-motion user sees the value
+ * immediately (no animation, no intermediate frames).
+ */
+export function CountUp({
+  value,
+  className,
+  duration = 650,
+  decimals = 0,
+}: {
+  value: number;
+  className?: string;
+  duration?: number;
+  /** Decimal places (xPts carry one); integers round instead. */
+  decimals?: number;
+}) {
+  const [progressValue, setProgressValue] = useState(value);
+  useLayoutEffect(() => {
+    const reduce =
+      typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      setProgressValue(value);
+      return;
+    }
+    // Runs before paint, so the first frame is already 0 — no flash of the
+    // final value before the count starts.
+    setProgressValue(0);
+    const start = performance.now();
+    let frame = requestAnimationFrame(function tick(now) {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setProgressValue(value * eased);
+      if (progress < 1) frame = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [value, duration]);
+  const shown = decimals > 0 ? progressValue.toFixed(decimals) : String(Math.round(progressValue));
+  return <Num className={className}>{shown}</Num>;
+}
+
 /* ------------------------------------------------------------------- buttons */
 
 type Variant = "primary" | "ghost" | "volt-outline";
@@ -323,11 +380,58 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
   className?: string;
 }) {
+  const { dir } = useI18n();
+  const activeIndex = options.findIndex((option) => option.value === value);
+  // The selected pill slides along the track instead of the background
+  // snapping between tabs. Position and width are MEASURED from the active
+  // button (not derived from 1/n): a crowded track scrolls and its tabs can
+  // carry different widths (Cups, Ratings), so equal-width math would misalign.
+  // Only the travel is animated (transform); width settles instantly.
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [indicator, setIndicator] = useState<{ start: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!track || activeIndex < 0) {
+      setIndicator(null);
+      return;
+    }
+    const measure = () => {
+      const tab = track.querySelectorAll<HTMLButtonElement>('[role="tab"]')[activeIndex];
+      if (!tab) return;
+      // The pill is position:absolute INSIDE the scroll container, so it scrolls
+      // with the content — its offset has to be measured in the track's CONTENT
+      // space, not its viewport space. A viewport offset is only correct while
+      // scrollLeft is 0: scroll a crowded row and switch tabs, and the pill lands
+      // `scrollLeft` pixels to the left of the active tab (off-screen entirely on
+      // the 8-tab Ratings row). Adding the scroll puts both on the same axis.
+      const origin = track.getBoundingClientRect().left + track.clientLeft;
+      const rect = tab.getBoundingClientRect();
+      setIndicator({ start: rect.left - origin + track.scrollLeft, width: rect.width });
+    };
+    measure();
+    // Guarded: legacy webviews without ResizeObserver still get a correct
+    // indicator, it just won't re-measure on container resize.
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(track);
+    return () => observer.disconnect();
+  }, [activeIndex, options.length, dir]);
   return (
     <div
+      ref={trackRef}
       role="tablist"
-      className={cx("flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1", className)}
+      className={cx(
+        "relative flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1",
+        className,
+      )}
     >
+      {indicator ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1 bottom-1 rounded-full bg-elevated shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--volt)_35%,transparent)] transition-transform duration-[var(--t-fast)] ease-[var(--ease-pop)]"
+          style={{ left: 0, width: indicator.width, transform: `translateX(${indicator.start}px)` }}
+        />
+      ) : null}
       {options.map((option) => (
         <button
           key={option.value}
@@ -339,13 +443,12 @@ export function Segmented<T extends string>({
             onChange(option.value);
           }}
           className={cx(
-            // flex-1 fills the track; with whitespace-nowrap each tab's
-            // min-content width is its label, so a crowded row (the five match
-            // tabs in Persian) scrolls rather than breaking a word.
-            "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap transition-all duration-[var(--t-fast)]",
-            value === option.value
-              ? "bg-elevated text-volt shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--volt)_35%,transparent)]"
-              : "text-ink-2 hover:text-ink",
+            // relative keeps each label painted above the sliding pill; flex-1
+            // fills the track, and with whitespace-nowrap each tab's min-content
+            // width is its label, so a crowded row (the five match tabs in
+            // Persian) scrolls rather than breaking a word.
+            "relative flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap transition-colors duration-[var(--t-fast)]",
+            value === option.value ? "text-volt" : "text-ink-2 hover:text-ink",
           )}
         >
           {option.label}
@@ -375,6 +478,13 @@ export function StatBar({
 }) {
   const total = home + away || 1;
   const homePct = (home / total) * 100;
+  // Seed at 0 and grow on the next frame, so the width transition actually
+  // runs on mount instead of the final value painting in one step.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
   return (
     <li className="space-y-1">
       <div className="flex items-center justify-between text-[11px]">
@@ -385,7 +495,7 @@ export function StatBar({
       <div className="flex h-1.5 overflow-hidden rounded-full bg-elevated">
         <span
           className="h-full rounded-s-full transition-[width] duration-[var(--t-std)] ease-[var(--ease-out)]"
-          style={{ width: `${homePct}%`, backgroundColor: homeColor }}
+          style={{ width: ready ? `${homePct}%` : "0%", backgroundColor: homeColor }}
         />
         <span className="h-full flex-1 rounded-e-full" style={{ backgroundColor: awayColor }} />
       </div>
@@ -409,6 +519,12 @@ export function ProgressBar({
 }) {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   const colors = { volt: "var(--volt)", gold: "var(--gold)", live: "var(--live)" };
+  // Same as StatBar: paint full-width on mount, then animate down to value.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
   return (
     <div className="space-y-1">
       {label || valueLabel ? (
@@ -420,7 +536,7 @@ export function ProgressBar({
       <div className="h-1.5 overflow-hidden rounded-full bg-elevated">
         <span
           className="block h-full rounded-full transition-[width] duration-[var(--t-slow)] ease-[var(--ease-out)]"
-          style={{ width: `${pct}%`, backgroundColor: colors[tone] }}
+          style={{ width: ready ? `${pct}%` : "0%", backgroundColor: colors[tone] }}
         />
       </div>
     </div>
@@ -475,15 +591,24 @@ export function ListRow({
   hint,
   right,
   onClick,
+  onToggle,
   icon,
 }: {
   label: string;
   hint?: string;
   right?: ReactNode;
   onClick?: () => void;
+  /**
+   * Whole-row tap for a row whose control is a switch on the right: users tap
+   * the label, not the 44×24 track. The row stays a <div> so the switch inside
+   * it is never a button nested in a button — the switch remains the real,
+   * keyboard-operable control.
+   */
+  onToggle?: () => void;
   icon?: ReactNode;
 }) {
   const Tag = onClick ? "button" : "div";
+  const active = Boolean(onClick || onToggle);
   return (
     <Tag
       {...(onClick
@@ -494,10 +619,14 @@ export function ListRow({
               onClick();
             },
           }
-        : {})}
+        : onToggle
+          ? { onClick: onToggle }
+          : {})}
       className={cx(
-        "flex w-full items-center gap-3 rounded-card border border-line bg-surface p-3 text-start transition-colors duration-[var(--t-fast)]",
-        onClick && "hover:bg-elevated",
+        "flex w-full items-center gap-3 rounded-card border border-line bg-surface p-3 text-start",
+        active
+          ? "cursor-pointer transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
+          : "transition-colors duration-[var(--t-fast)]",
       )}
     >
       {icon ? <span className="flex-none text-ink-2">{icon}</span> : null}
@@ -526,7 +655,10 @@ export function Switch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
-      onClick={() => {
+      onClick={(e) => {
+        // The row can toggle too (ListRow.onToggle): without this the tap would
+        // reach both handlers and cancel itself out.
+        e.stopPropagation();
         haptic("light");
         onChange(!checked);
       }}
@@ -536,7 +668,7 @@ export function Switch({
       }}
     >
       <span
-        className="absolute top-0.5 h-4 w-4 rounded-full bg-black/80 transition-[inset-inline-start] duration-[var(--t-fast)]"
+        className="absolute top-0.5 h-4 w-4 rounded-full bg-black/80 transition-[inset-inline-start] duration-[var(--t-fast)] ease-[var(--ease-pop)]"
         style={{ insetInlineStart: checked ? "22px" : "3px" }}
       />
     </button>
@@ -547,7 +679,7 @@ export function Switch({
 
 export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
   return (
-    <div className="pitch-watermark rounded-card border border-dashed border-line px-4 py-10 text-center">
+    <div className="rise-in pitch-watermark rounded-card border border-dashed border-line px-4 py-10 text-center">
       <p className="text-sm font-bold text-ink-2">{title}</p>
       {hint ? <p className="mt-1 text-xs text-ink-3">{hint}</p> : null}
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
@@ -563,7 +695,10 @@ export function EmptyState({ title, hint, action }: { title: string; hint?: stri
 export function ErrorState({ title, hint, onRetry }: { title?: string; hint?: string; onRetry: () => void }) {
   const { t } = useI18n();
   return (
-    <div role="alert" className="pitch-watermark rounded-card border border-danger/40 px-4 py-10 text-center">
+    <div
+      role="alert"
+      className="rise-in pitch-watermark rounded-card border border-danger/40 px-4 py-10 text-center"
+    >
       <p className="text-danger">
         <AlertIcon className="mx-auto h-6 w-6" />
       </p>

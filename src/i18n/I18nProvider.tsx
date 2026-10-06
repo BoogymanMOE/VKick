@@ -1,19 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { strings, type Lang, type StringKey } from "./strings";
 import { toFa } from "./names";
-
-interface I18nValue {
-  lang: Lang;
-  dir: "ltr" | "rtl";
-  setLang: (lang: Lang) => void;
-  toggleLang: () => void;
-  t: (key: StringKey, vars?: Record<string, string | number>) => string;
-  /** Team / player / coach names: Persian in `fa`, identity in `en`. */
-  localize: (name: string) => string;
-}
-
-const I18nContext = createContext<I18nValue | null>(null);
+import { I18nContext, type I18nValue } from "./context";
 
 const STORAGE_KEY = "matchday.lang";
 
@@ -76,10 +65,4 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   );
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
-}
-
-export function useI18n(): I18nValue {
-  const ctx = useContext(I18nContext);
-  if (!ctx) throw new Error("useI18n must be used inside <I18nProvider>");
-  return ctx;
 }

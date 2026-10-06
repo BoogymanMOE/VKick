@@ -3,10 +3,11 @@ import { Link } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { RulesButton } from "../components/RulesSheet";
 import { ChartIcon } from "../components/icons";
-import { Avatar, Chip, EmptyState, ErrorState, Num, SectionHeading, Segmented, cx } from "../components/ui";
+import { Avatar, Chip, EmptyState, ErrorState, Num, SectionHeading, Segmented } from "../components/ui";
+import { cx } from "../lib/cx";
 import { slugForLeague, useLeaderboard, useLeagueTabs, type LeaderboardScope } from "../hooks/useApi";
 import { useFavorites } from "../hooks/useFavorites";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { viewerStanding } from "../lib/leaderboard";
 
 type BoardTab = "global" | "league" | "club";

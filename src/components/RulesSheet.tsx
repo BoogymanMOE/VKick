@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { BottomSheet } from "./BottomSheet";
 import { InfoIcon } from "./icons";
-import { cx } from "./ui";
+import { cx } from "../lib/cx";
 
 const RULE_KEYS = [
   "rules.lineup",

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useI18n } from "../../i18n/I18nProvider";
+import { useI18n } from "../../i18n/context";
 import type { LineupPlayer, MatchLineup, Position, Team } from "../../types";
-import { Card, Chip, Num, Segmented, TeamBadge, cx } from "../ui";
+import { cx } from "../../lib/cx";
+import { Card, Chip, Num, Segmented, TeamBadge } from "../ui";
 
 const order: Position[] = ["GK", "DEF", "MID", "FWD"];
 

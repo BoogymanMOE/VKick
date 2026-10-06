@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { useI18n } from "../i18n/I18nProvider";
-import { cx } from "./ui";
+import { useI18n } from "../i18n/context";
+import { cx } from "../lib/cx";
 
 /**
  * Signature animation 7: deadline heat.
  * Under an hour it turns danger red; in the last ten seconds every tick pulses.
  */
-export function useCountdown(deadlineAt: string) {
+function useCountdown(deadlineAt: string) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export function Countdown({
       // Remounting per second in panic heat is what animates the pulse.
       key={heat === "panic" ? totalSeconds : "steady"}
       className={cx(
-        "num-display tabular-nums inline-flex items-baseline",
+        "num-display tabular-nums inline-flex items-baseline transition-colors duration-[var(--t-slow)]",
         color,
         size === "lg" ? "text-2xl" : "text-base",
         heat === "panic" && "tick-panic",

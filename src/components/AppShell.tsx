@@ -2,7 +2,7 @@ import { Suspense, useEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { initTelegram } from "../lib/telegram";
 import { useBackNavigation } from "../hooks/useBackNavigation";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { LanguageSync } from "./LanguageSync";
 import { RowSkeleton } from "./Skeletons";
 import { TabBar } from "./TabBar";

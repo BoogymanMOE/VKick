@@ -1,4 +1,4 @@
-import { cx } from "./ui";
+import { cx } from "../lib/cx";
 
 const bar = "shimmer rounded";
 

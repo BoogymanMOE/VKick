@@ -113,7 +113,7 @@ function clearLoggedOut(): void {
 
 /** The Telegram initData, when the app actually runs inside Telegram. */
 export function telegramInitData(): string | null {
-  const tg = (window as any).Telegram?.WebApp;
+  const tg = window.Telegram?.WebApp;
   return typeof tg?.initData === "string" && tg.initData ? tg.initData : null;
 }
 
@@ -133,6 +133,23 @@ export function currentAuthToken(): string {
 
   const dev = new URLSearchParams(window.location.search).get("devUser");
   return dev ? `dev:${dev}` : "dev:1";
+}
+
+/**
+ * True when the URL explicitly asks to be a particular user (`?devUser=<id>`).
+ *
+ * Auto-entry has to stand down in that case. It exchanges the device id for a
+ * `mg_` session, and a stored session outranks every other token family — so
+ * without this guard the freshly minted guest account replaced the dev
+ * identity on its first request and `?devUser=` did nothing at all, despite
+ * being the documented way to preview another account.
+ */
+export function hasExplicitDevUser(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).has("devUser");
+  } catch {
+    return false;
+  }
 }
 
 /** Clear every client-side credential (remembered + tab + sign-out flag). */

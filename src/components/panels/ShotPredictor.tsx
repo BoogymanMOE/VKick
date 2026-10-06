@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
-import { useI18n } from "../../i18n/I18nProvider";
+import { useI18n } from "../../i18n/context";
 import { selectionHaptic } from "../../lib/telegram";
-import { Button, Chip, EmptyState, ErrorState, cx } from "../ui";
+import { cx } from "../../lib/cx";
+import { Button, Chip, EmptyState, ErrorState } from "../ui";
 import { PanelSkeleton } from "../Skeletons";
 import { cellZone, GRID_COLS, GRID_ROWS, ZONE_LABEL_KEY } from "../../lib/zones";
 

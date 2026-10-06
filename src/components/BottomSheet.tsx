@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { useI18n } from "../i18n/I18nProvider";
-import { cx } from "./ui";
+import { useI18n } from "../i18n/context";
+import { cx } from "../lib/cx";
 import { CloseIcon } from "./icons";
 
 /**
@@ -26,6 +26,13 @@ export function BottomSheet({
 }) {
   const { t } = useI18n();
   const [dragY, setDragY] = useState(0);
+  // Enter/exit phase: keep the dialog mounted through the ~150ms leave, so it
+  // animates out instead of vanishing. Derived from `open` during render (the
+  // React-endorsed "adjust state when a prop changes" pattern), so the commit
+  // that flips `open` to false already knows it should play the exit.
+  const [phase, setPhase] = useState<"closed" | "open" | "closing">(open ? "open" : "closed");
+  if (open && phase !== "open") setPhase("open");
+  if (!open && phase === "open") setPhase("closing");
   const dragStart = useRef<number | null>(null);
   const sheetRef = useRef<HTMLDivElement | null>(null);
   // Whatever had focus before the sheet opened gets it back on close.
@@ -80,11 +87,16 @@ export function BottomSheet({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (phase === "closed") return null;
+  const closing = phase === "closing";
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center">
-      <div className="backdrop-fade absolute inset-0 bg-black/65" onClick={onClose} aria-hidden="true" />
+      <div
+        className={cx("absolute inset-0 bg-black/65", closing ? "backdrop-fade-out" : "backdrop-fade")}
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
       <div
         ref={sheetRef}
@@ -92,7 +104,15 @@ export function BottomSheet({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className="sheet-in relative w-full max-w-[560px] rounded-t-[20px] border border-line bg-elevated outline-none"
+        onAnimationEnd={(event) => {
+          // Only the sheet's own leave animation ends the mount; child
+          // animations bubble (goal sweeps, pulses) and must not unmount it.
+          if (closing && event.target === event.currentTarget) setPhase("closed");
+        }}
+        className={cx(
+          "relative w-full max-w-[560px] rounded-t-[20px] border border-line bg-elevated outline-none",
+          closing ? "sheet-out" : "sheet-in",
+        )}
         style={{
           transform: dragY ? `translateY(${dragY}px)` : undefined,
           paddingBottom: "max(env(safe-area-inset-bottom), 16px)",

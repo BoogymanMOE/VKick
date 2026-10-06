@@ -2,26 +2,13 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
 import { useMatches } from "../hooks/useApi";
-import { useI18n } from "../i18n/I18nProvider";
+import { useI18n } from "../i18n/context";
 import { formatKickoff } from "../lib/format";
-import type { Match, Team } from "../types";
-import { LiveDot, Num, TeamBadge, cx } from "./ui";
+import type { Team } from "../types";
+import { cx } from "../lib/cx";
+import { LiveDot, Num, TeamBadge } from "./ui";
 import { CloseIcon, StarFilledIcon } from "./icons";
-
-/** A club's context in the fixture list: live now, else next kickoff, else last result. */
-export function clubContext(teamId: string, matches: Match[]) {
-  const mine = matches.filter((m) => m.home.id === teamId || m.away.id === teamId);
-  const newestFirst = (a: Match, b: Match) => +new Date(b.kickoffAt) - +new Date(a.kickoffAt);
-  const soonestFirst = (a: Match, b: Match) => +new Date(a.kickoffAt) - +new Date(b.kickoffAt);
-  const live = mine.find((m) => m.status === "live");
-  const next = mine.filter((m) => m.status === "scheduled").sort(soonestFirst)[0];
-  const last = mine.filter((m) => m.status === "finished").sort(newestFirst)[0];
-  return { match: live ?? next ?? last, live, next, last };
-}
-
-export function opponentOf(teamId: string, match: Match) {
-  return match.home.id === teamId ? match.away : match.home;
-}
+import { clubContext, opponentOf } from "../lib/clubContext";
 
 /**
  * Compact club tile with its fixture state — the shared atom behind the home
@@ -102,7 +89,7 @@ export function ClubFixtureCard({
       {match ? (
         <Link
           to={`/match/${match.id}`}
-          className="block rounded-card transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+          className="block rounded-card transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
         >
           {body}
         </Link>
@@ -120,8 +107,11 @@ export function ClubFixtureCard({
           <span
             className={cx(
               "grid h-5 w-5 place-items-center rounded-full border bg-elevated transition-colors duration-[var(--t-fast)]",
-              anchored ? "border-gold text-gold" : "border-line text-ink-3",
+              // Keyed on `anchored`: promotion remounts the dot so the star
+              // replays star-pop instead of the fill just blinking on.
+              anchored ? "star-pop border-gold text-gold" : "border-line text-ink-3",
             )}
+            key={anchored ? "on" : "off"}
             aria-hidden="true"
           >
             <StarFilledIcon className="h-2.5 w-2.5" />
