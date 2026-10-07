@@ -42,6 +42,32 @@ export function viewerStanding(
 }
 
 /**
+ * One board row as the screen renders it: the volt highlight, and the YOU
+ * chip's text — `undefined` on everyone else's rows.
+ */
+export interface BoardRowView {
+  highlight: boolean;
+  youLabel: string | undefined;
+}
+
+/**
+ * The YOU chip belongs to the viewer's own row and NOWHERE else.
+ *
+ * This rule used to live inline in the render, where the label was passed
+ * unconditionally — so every row on the board wore a YOU chip, a list of
+ * strangers all claiming to be you (caught in the launch audit: 6 of 6 rows
+ * on the global board). Keeping the decision here means the component's chip
+ * condition (`youLabel ? chip : null`) has exactly one input, and a test can
+ * render a six-row board and count the chips it would produce.
+ */
+export function boardRowView(row: ViewerBoardRow, youLabel: string): BoardRowView {
+  return {
+    highlight: Boolean(row.is_you),
+    youLabel: row.is_you ? youLabel : undefined,
+  };
+}
+
+/**
  * Rank movement between two observations of the SAME board, as a pure function.
  * The board refetches on window focus, so the client can honestly say "you
  * moved up N" from its own session — no server field needed. A scope change

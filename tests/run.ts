@@ -30,6 +30,7 @@ import { runPredictionWindowTests } from "./predictionWindow.test.js";
 import { runOptimisticTests } from "./optimistic.test.js";
 import { runCompetitionsTests } from "./competitions.test.js";
 import { runAnchorRaceTests } from "./anchorRace.test.js";
+import { runLeaderboardTests } from "./leaderboard.test.js";
 
 let failed = 0;
 const groups: Array<[string, () => void | Promise<void>]> = [
@@ -62,6 +63,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["optimistic", runOptimisticTests],
   ["competitions", runCompetitionsTests],
   ["anchorRace", runAnchorRaceTests],
+  ["leaderboard", runLeaderboardTests],
 ];
 
 for (const [name, run] of groups) {

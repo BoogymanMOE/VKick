@@ -17,7 +17,7 @@ import { cx } from "../lib/cx";
 import { slugForLeague, useLeaderboard, useLeagueTabs, type LeaderboardScope } from "../hooks/useApi";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
-import { scopeRankDelta, viewerStanding } from "../lib/leaderboard";
+import { boardRowView, scopeRankDelta, viewerStanding } from "../lib/leaderboard";
 
 type BoardTab = "global" | "league" | "club";
 
@@ -177,18 +177,23 @@ export default function Leaderboards() {
               <span className="text-end">{t("board.points")}</span>
             </div>
             <ul className="space-y-1.5">
-              {rows.map((row, index) => (
-                <BoardRow
-                  key={row.username ?? row.display_name}
-                  index={index}
-                  rank={row.rank}
-                  name={row.display_name}
-                  total={row.total}
-                  highlight={row.is_you}
-                  youLabel={t("board.you")}
-                  delta={row.is_you ? rankDelta : null}
-                />
-              ))}
+              {rows.map((row, index) => {
+                // The YOU chip is the viewer's own row and nobody else's —
+                // boardRowView owns that rule (see lib/leaderboard.ts).
+                const view = boardRowView(row, t("board.you"));
+                return (
+                  <BoardRow
+                    key={row.username ?? row.display_name}
+                    index={index}
+                    rank={row.rank}
+                    name={row.display_name}
+                    total={row.total}
+                    highlight={view.highlight}
+                    youLabel={view.youLabel}
+                    delta={row.is_you ? rankDelta : null}
+                  />
+                );
+              })}
             </ul>
           </>
         )}
