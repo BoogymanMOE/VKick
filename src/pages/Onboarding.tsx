@@ -44,7 +44,8 @@ export default function Onboarding() {
   const { t, localize } = useI18n();
   const { push } = useToast();
   const navigate = useNavigate();
-  const { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, setAnchor } = useFavorites();
+  const { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, toggleAndAnchor } =
+    useFavorites();
   const followed = useFollowedLeagues();
   const [intro, setIntro] = useState(() => !introSeen());
   const [step, setStep] = useState(0);
@@ -82,9 +83,10 @@ export default function Onboarding() {
     // written confirmation never names a team the user just swapped out.
     setSaved(false);
     if (count === 0) {
-      // First pick becomes the anchor automatically.
-      toggle(team);
-      setAnchor.mutate(team.id);
+      // First pick becomes the anchor automatically — but only AFTER the
+      // follow has persisted (the anchor endpoint 404s otherwise). The
+      // ordering + retry live in toggleAndAnchor / lib/favoriteAnchor.ts.
+      toggleAndAnchor(team);
       return;
     }
     // The caps are per bucket — five clubs plus, separately, five national

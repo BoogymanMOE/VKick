@@ -20,6 +20,7 @@
     "format:check": "prettier --check .",
     "sync": "tsx server/cli.ts",
     "seed:demo": "tsx server/dev/seed-demo.ts",
+    "repair:anchors": "tsx server/dev/repairAnchors.ts",
     "sync:dry": "tsx server/cli.ts --dry-run",
     "fetch-logos": "node scripts/fetch-logos.mjs",
     "import-logos": "node scripts/import-logos.mjs"

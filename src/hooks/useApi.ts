@@ -240,6 +240,12 @@ export function useFavorites() {
 
   const setAnchor = useMutation({
     mutationFn: (teamId: string) => api.setAnchor(teamId),
+    // Never silent: the pre-fix anchor call had no error handler, so a failed
+    // anchor vanished without a trace (the zero-anchor bug's cover). The
+    // transient-failure retry lives in followThenAnchor, which owns the
+    // follow→anchor ordering — a retry here would also re-run on terminal
+    // 4xxs like NOT_FOLLOWING.
+    onError: (err) => notifyError(err),
     onSettled: () => qc.invalidateQueries({ queryKey: ["favorites"] }),
   });
 

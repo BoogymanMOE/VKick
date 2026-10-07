@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useFavorites as useFavoritesQuery, useFollowedLeagues } from "./useApi";
+import { followThenAnchor } from "../lib/favoriteAnchor";
 import type { Team } from "../types";
 
 /**
@@ -48,7 +49,44 @@ export function useFavorites() {
     return { ok: true, added: true, team };
   };
 
-  return { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, setAnchor, loading };
+  /**
+   * First pick: follow the team, then set it as the anchor — strictly in
+   * that order (the anchor endpoint 404s NOT_FOLLOWING before the follow row
+   * exists; see src/lib/favoriteAnchor.ts for the race this replaced).
+   * Cap checks match `toggle`, so a full shelf still answers here too.
+   *
+   * Failures are NOT swallowed: each mutation's own onError runs before the
+   * mutateAsync promise settles — `add` rolls back the optimistic row and
+   * toasts, `setAnchor` toasts — and this catch runs after those handlers
+   * have already surfaced the same error to the user.
+   */
+  const toggleAndAnchor = (team: Team): FavoriteResult => {
+    if (isFavorite(team.id)) return { ok: true, added: false, team };
+    const intl = isInternational(team);
+    const full = intl ? intlCount >= MAX_INTERNATIONALS : clubCount >= MAX_FAVORITES;
+    if (full) return { ok: false, reason: intl ? "intlCap" : "cap" };
+    void followThenAnchor(
+      team.id,
+      (id) => add.mutateAsync(id),
+      (id) => setAnchor.mutateAsync(id),
+    ).catch(() => {
+      /* surfaced by the mutations' onError handlers (see doc block) */
+    });
+    return { ok: true, added: true, team };
+  };
+
+  return {
+    teams,
+    anchorId,
+    count,
+    clubCount,
+    intlCount,
+    isFavorite,
+    toggle,
+    toggleAndAnchor,
+    setAnchor,
+    loading,
+  };
 }
 
 export { useFollowedLeagues };
