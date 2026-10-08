@@ -131,7 +131,10 @@ export async function runAnchorRaceTests(): Promise<void> {
 
   // 6. Retry classification: transient (no status / 5xx / 429) vs terminal 4xx.
   {
-    assert.equal(isRetryableAnchorError(Object.assign(new Error("fetch failed"), { status: undefined })), true);
+    assert.equal(
+      isRetryableAnchorError(Object.assign(new Error("fetch failed"), { status: undefined })),
+      true,
+    );
     assert.equal(isRetryableAnchorError(httpError(500)), true);
     assert.equal(isRetryableAnchorError(httpError(502)), true);
     assert.equal(isRetryableAnchorError(httpError(429)), true);
