@@ -113,7 +113,9 @@ function main(): void {
   const db = getDb();
   const report = repairAnchors(db, { apply });
 
-  console.log(`[repair-anchors] ${apply ? "APPLY" : "DRY RUN"} (SQLITE_PATH=${process.env.SQLITE_PATH ?? "./data/matchday.db"})`);
+  console.log(
+    `[repair-anchors] ${apply ? "APPLY" : "DRY RUN"} (SQLITE_PATH=${process.env.SQLITE_PATH ?? "./data/matchday.db"})`,
+  );
   console.log(`  users with follows scanned : ${report.scanned}`);
   console.log(`  healthy (exactly 1 anchor) : ${report.healthy}`);
   console.log(`  no anchor, repairable      : ${report.repairable}`);
