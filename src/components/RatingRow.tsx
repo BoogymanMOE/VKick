@@ -4,6 +4,7 @@ import { useI18n } from "../i18n/context";
 import { haptic, selectionHaptic } from "../lib/telegram";
 import { cx } from "../lib/cx";
 import { Chip, Num, TeamBadge } from "./ui";
+import { ReportButton } from "./ReportButton";
 
 /**
  * The differentiator in one row: the stat score on one side, the crowd's
@@ -64,9 +65,14 @@ export function RatingRow({
           </div>
           {/* The eye-test comment — the crowd's why, not just its number. */}
           {(rating.myComment || rating.latestComment) && onTap ? (
-            <p className="mt-1 line-clamp-2 text-[11px] italic text-ink-3">
-              “{rating.myComment || rating.latestComment}”
-            </p>
+            <div className="mt-1 flex items-start gap-2">
+              <p className="min-w-0 flex-1 line-clamp-2 text-[11px] italic text-ink-3">
+                “{rating.myComment || rating.latestComment}”
+              </p>
+              {!rating.myComment && rating.latestCommentId ? (
+                <ReportButton commentType="rating" commentId={rating.latestCommentId} />
+              ) : null}
+            </div>
           ) : null}
         </div>
 

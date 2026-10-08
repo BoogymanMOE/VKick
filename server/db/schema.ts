@@ -549,6 +549,22 @@ export function migrate(db: DatabaseSync): void {
       created_at       TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referral_redemptions(referrer_user_id);
+
+    -- Moderation: user-filed reports against a timeline comment or a rating
+    -- comment. comment_type + comment_id name the row in the respective table;
+    -- UNIQUE keeps it to one report per user per comment. Reports are an admin
+    -- queue, never shown to the reported user.
+    CREATE TABLE IF NOT EXISTS comment_reports (
+      id               INTEGER PRIMARY KEY AUTOINCREMENT,
+      comment_type     TEXT NOT NULL CHECK (comment_type IN ('timeline', 'rating')),
+      comment_id       INTEGER NOT NULL,
+      reporter_user_id INTEGER NOT NULL REFERENCES users(id),
+      reason           TEXT,
+      created_at       TEXT NOT NULL,
+      UNIQUE(reporter_user_id, comment_type, comment_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_reports_created ON comment_reports(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_reports_comment ON comment_reports(comment_type, comment_id);
   `);
 
   // The shot-coordinate columns (field_x, field_y, goal_y) were added after
@@ -714,6 +730,23 @@ export function migrate(db: DatabaseSync): void {
   }>;
   if (!ratingCols.some((c) => c.name === "comment")) {
     db.exec("ALTER TABLE crowd_ratings ADD COLUMN comment TEXT;");
+  }
+
+  // Moderation "hidden" flags arrived with the report/hide feature. Hidden
+  // comments disappear from public reads (GET comments / GET ratings) without
+  // destroying the row, so a hide is reversible and the rating value survives.
+  // Fresh DBs get both columns via CREATE TABLE; older ones here.
+  const commentCols = db.prepare("SELECT name FROM pragma_table_info('timeline_comments')").all() as Array<{
+    name: string;
+  }>;
+  if (!commentCols.some((c) => c.name === "hidden")) {
+    db.exec("ALTER TABLE timeline_comments ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;");
+  }
+  const ratingModCols = db.prepare("SELECT name FROM pragma_table_info('crowd_ratings')").all() as Array<{
+    name: string;
+  }>;
+  if (!ratingModCols.some((c) => c.name === "comment_hidden")) {
+    db.exec("ALTER TABLE crowd_ratings ADD COLUMN comment_hidden INTEGER NOT NULL DEFAULT 0;");
   }
 
   // Streak state gained an explicit season column after v1 of the table so a

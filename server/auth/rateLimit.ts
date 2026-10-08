@@ -94,3 +94,13 @@ export const writeLimiter = rateLimit({
   windowMs: 60_000,
   max: 60,
 });
+
+/**
+ * Content reports: a write, but with a tighter budget than a normal post —
+ * reporting is rare, so a burst is either a mistake or abuse.
+ */
+export const reportLimiter = rateLimit({
+  name: "report",
+  windowMs: 60_000,
+  max: 20,
+});

@@ -400,6 +400,8 @@ export interface ApiPlayerRating {
   my_rating: number | null;
   my_comment: string | null;
   latest_comment: string | null;
+  /** crowd_ratings.id of latest_comment, for reporting it. */
+  latest_comment_id: number | null;
   crowd_rating: number | null;
   team_name?: string | null;
   team_short?: string | null;
@@ -693,6 +695,13 @@ export const api = {
     }),
 
   getComments: (matchId: string) => request<{ comments: ApiComment[] }>(`/matches/${matchId}/comments`),
+
+  /** File a moderation report against a timeline or rating comment. */
+  reportComment: (commentType: "timeline" | "rating", commentId: number, reason?: string) =>
+    request<{ ok: boolean; duplicate?: boolean }>("/reports", {
+      method: "POST",
+      body: JSON.stringify({ commentType, commentId, reason }),
+    }),
 
   addComment: (
     matchId: string,

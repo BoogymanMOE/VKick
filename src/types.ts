@@ -82,6 +82,8 @@ export interface PlayerRating {
   myComment?: string | null;
   /** A recent crowd comment on this player (any user). */
   latestComment?: string | null;
+  /** crowd_ratings.id behind latestComment, so it can be reported. */
+  latestCommentId?: number | null;
 }
 
 export interface SquadPlayer {

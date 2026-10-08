@@ -42,6 +42,7 @@ import { matchesRouter } from "./routes/football.js";
 import { predictionsRouter } from "./routes/predictions.js";
 import { ratingsRouter } from "./routes/ratings.js";
 import { leaderboardsRouter } from "./routes/leaderboards.js";
+import { moderationRouter } from "./routes/moderation.js";
 import { adminRouter } from "./routes/admin.js";
 
 const app = express();
@@ -109,6 +110,7 @@ app.use(matchesRouter);
 app.use(predictionsRouter);
 app.use(ratingsRouter);
 app.use(leaderboardsRouter);
+app.use(moderationRouter);
 app.use(adminRouter);
 
 /* ------------------------------------------------------------ static frontend */

@@ -262,6 +262,7 @@ function adapt(p: import("../lib/api").ApiPlayerRating, league: string): PlayerR
     myRating: p.my_rating ?? null,
     myComment: p.my_comment ?? null,
     latestComment: p.latest_comment ?? null,
+    latestCommentId: p.latest_comment_id ?? null,
     _team: {
       id: p.team_id,
       name: p.team_name ?? "",

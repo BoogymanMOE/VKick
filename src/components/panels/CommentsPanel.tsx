@@ -7,6 +7,7 @@ import { haptic, notifyHaptic } from "../../lib/telegram";
 import { useToast } from "../toastContext";
 import { cx } from "../../lib/cx";
 import { Button, Chip, EmptyState, Num } from "../ui";
+import { ReportButton } from "../ReportButton";
 import type { Comment } from "../../types";
 import { adaptComments } from "../../lib/adaptComments";
 
@@ -160,7 +161,12 @@ export function CommentsSection({
                   </button>
                 ) : null}
               </div>
-              <p className="mt-1.5 text-sm text-ink">{localize(comment.text)}</p>
+              <div className="mt-1.5 flex items-start gap-2">
+                <p className="min-w-0 flex-1 text-sm text-ink">{localize(comment.text)}</p>
+                {!comment.isMine ? (
+                  <ReportButton commentType="timeline" commentId={Number(comment.id)} />
+                ) : null}
+              </div>
             </li>
           ))}
         </ul>

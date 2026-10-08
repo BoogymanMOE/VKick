@@ -34,10 +34,17 @@ ratingsRouter.get("/api/matches/:id/ratings", requireUser, (req, res) => {
             s.stat_score, s.stat_breakdown, s.started, s.minutes_played,
             AVG(r.rating) AS avg_rating, COUNT(r.rating) AS votes,
             (SELECT rating FROM crowd_ratings WHERE user_id = ? AND player_id = s.player_id AND match_id = s.match_id) AS my_rating,
-            (SELECT comment FROM crowd_ratings WHERE user_id = ? AND player_id = s.player_id AND match_id = s.match_id) AS my_comment,
+            (SELECT rc.comment FROM crowd_ratings rc
+              WHERE rc.user_id = ? AND rc.player_id = s.player_id AND rc.match_id = s.match_id
+                AND rc.comment_hidden = 0) AS my_comment,
             (SELECT rc.comment FROM crowd_ratings rc
               WHERE rc.player_id = s.player_id AND rc.match_id = s.match_id AND rc.comment IS NOT NULL
-              ORDER BY rc.created_at DESC LIMIT 1) AS latest_comment
+                AND rc.comment_hidden = 0
+              ORDER BY rc.created_at DESC LIMIT 1) AS latest_comment,
+            (SELECT rc.id FROM crowd_ratings rc
+              WHERE rc.player_id = s.player_id AND rc.match_id = s.match_id AND rc.comment IS NOT NULL
+                AND rc.comment_hidden = 0
+              ORDER BY rc.created_at DESC LIMIT 1) AS latest_comment_id
      FROM match_player_stats s
      JOIN players p ON p.id = s.player_id
      LEFT JOIN crowd_ratings r ON r.player_id = s.player_id AND r.match_id = s.match_id
@@ -132,9 +139,10 @@ ratingsRouter.get("/api/matches/:id/comments", requireUser, (req, res) => {
   const matchId = String(req.params.id);
   const rows = all(
     db,
-    `SELECT c.*, u.display_name AS author
+    `     SELECT c.*, u.display_name AS author
      FROM timeline_comments c JOIN users u ON u.id = c.user_id
-     WHERE c.match_id = ? ORDER BY c.minute_seconds ASC, c.created_at ASC`,
+     WHERE c.match_id = ? AND c.hidden = 0
+     ORDER BY c.minute_seconds ASC, c.created_at ASC`,
     [matchId],
   );
   res.json({ comments: rows });
