@@ -245,13 +245,13 @@ function testWatch() {
   ];
 
   // Max 12: both gates pass + MVP.
-  const max = scorePlayerWatch({ pick: WATCH, positionRows, crowd, mvpPlayerId: "9" });
+  const max = scorePlayerWatch({ pick: WATCH, positionRows, crowd, mvpPlayerIds: ["9"] });
   assert.equal(max.outcome, "correct");
   assert.equal(max.points, POINTS.watchMax, "watch max = 12");
 
   // Base only: gates pass, no MVP. FWD peer avg = (10+2)/2 = 6 → 10 > 6 passes;
   // crowd: FWD peer = 5.0 → 7.5 > 5.0 passes.
-  const base = scorePlayerWatch({ pick: WATCH, positionRows, crowd, mvpPlayerId: "11" });
+  const base = scorePlayerWatch({ pick: WATCH, positionRows, crowd, mvpPlayerIds: ["11"] });
   assert.equal(base.points, POINTS.watchBase, "both gates pass = 8");
 
   // Zero: stat gate fails (MID pick below MID peers).
@@ -259,7 +259,7 @@ function testWatch() {
     pick: { playerId: "8" },
     positionRows,
     crowd,
-    mvpPlayerId: "9",
+    mvpPlayerIds: ["9"],
   });
   assert.equal(statFail.outcome, "wrong");
   assert.equal(statFail.points, 0, "stat gate fail = 0 even with MVP? no: MVP id is 9");
@@ -278,27 +278,42 @@ function testWatch() {
     pick: { playerId: "11" },
     positionRows: crowdFailRows,
     crowd,
-    mvpPlayerId: null,
+    mvpPlayerIds: null,
   });
   assert.equal(crowdFail.points, 0, "crowd gate fail = 0");
   assert.equal(crowdFail.outcome, "partial");
   assert.equal(crowdFail.breakdown.statGate, 1);
   assert.equal(crowdFail.breakdown.crowdGate, 0);
 
-  // A (tie-broken) MVP whose stat gate fails still scores 0: the strict
-  // match-MVP always passes the stat gate mathematically, so this case can
-  // only arise from a top-score tie — no bonus on top of a failed gate.
+  // A tied-for-top MVP whose stat gate fails still scores 0: the match MVP
+  // normally passes the stat gate, so this case only arises from a top-score
+  // tie — no bonus on top of a failed gate.
   const mvpGateFail = scorePlayerWatch({
     pick: { playerId: "4" },
     positionRows,
     crowd,
-    mvpPlayerId: "4",
+    mvpPlayerIds: ["4"],
   });
-  assert.equal(mvpGateFail.points, 0, "failed stat gate = 0 even for a tie-broken MVP");
+  assert.equal(mvpGateFail.points, 0, "failed stat gate = 0 even for a tied MVP");
   assert.equal(mvpGateFail.outcome, "wrong");
 
-  // Void: pick didn't feature.
-  const voided = scorePlayerWatch({ pick: { playerId: "777" }, positionRows, crowd, mvpPlayerId: null });
+  // Ties at the top: ALL tied players are MVP (scoring-rules.md §2) — a pick
+  // on either tied scorer earns the +4, not just an arbitrary first row.
+  const tieRows = rows([
+    ["9", "FWD", 10],
+    ["11", "FWD", 10],
+    ["8", "MID", 4],
+    ["4", "DEF", 2],
+  ]);
+  const tied = scorePlayerWatch({
+    pick: { playerId: "11" },
+    positionRows: tieRows,
+    crowd,
+    mvpPlayerIds: ["9", "11"],
+  });
+  assert.equal(tied.breakdown.mvpBonus, POINTS.watchMvpBonus, "second tied scorer also gets the MVP bonus");
+
+  const voided = scorePlayerWatch({ pick: { playerId: "777" }, positionRows, crowd, mvpPlayerIds: null });
   assert.equal(voided.outcome, "void");
   assert.equal(voided.points, 0);
 
@@ -307,7 +322,7 @@ function testWatch() {
     pick: WATCH,
     positionRows,
     crowd: [{ player_id: "9", avg: 7.5, votes: WATCH_MIN_VOTES - 1 }],
-    mvpPlayerId: null,
+    mvpPlayerIds: null,
   });
   assert.equal(pending.outcome, "pending", "sparse crowd stays pending");
   // ...unless force-settling after the grace window: crowd gate fails, MVP can pay.
@@ -315,7 +330,7 @@ function testWatch() {
     pick: WATCH,
     positionRows,
     crowd: [{ player_id: "9", avg: 7.5, votes: WATCH_MIN_VOTES - 1 }],
-    mvpPlayerId: "9",
+    mvpPlayerIds: ["9"],
     force: true,
   });
   assert.equal(forced.points, POINTS.watchMvpBonus, "force-settle pays MVP only");
@@ -432,7 +447,7 @@ function testNoNegative() {
         ["11", "FWD", -20],
       ]),
       crowd: [],
-      mvpPlayerId: null,
+      mvpPlayerIds: null,
     }).points >= 0,
   );
   // Streak bonuses are defined positive constants.

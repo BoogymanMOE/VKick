@@ -210,8 +210,11 @@ export interface WatchScoringInput {
   positionRows: PositionStatRow[];
   /** Crowd entries meeting the minimum-vote floor. */
   crowd: CrowdEntry[];
-  /** The match MVP's player id (highest stat score), or null. */
-  mvpPlayerId: string | null;
+  /**
+   * Every player sharing the top stat score — scoring-rules.md §2: "Ties at
+   * the top: all tied players are MVP" — or null when the match has none.
+   */
+  mvpPlayerIds: string[] | null;
   /** True after the grace window: sparse crowd data settles as a failed
    *  crowd gate (MVP bonus can still pay; the 8 cannot) instead of pending. */
   force?: boolean;
@@ -311,7 +314,7 @@ export function scorePlayerWatch(input: WatchScoringInput): WatchScoreResult {
   const statAvg = positionStatAverage(input.positionRows, mine.position, input.pick.playerId);
   const statPasses = statAvg !== null && mine.stat_score > statAvg;
 
-  const mvpBonus = input.mvpPlayerId === input.pick.playerId ? POINTS.watchMvpBonus : 0;
+  const mvpBonus = input.mvpPlayerIds?.includes(input.pick.playerId) ? POINTS.watchMvpBonus : 0;
   if (!statPasses) {
     return {
       outcome: "wrong",

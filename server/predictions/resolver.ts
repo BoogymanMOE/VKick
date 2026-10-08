@@ -108,17 +108,24 @@ function recordAward(row: PendingRow, points: number): void {
 
 /* ------------------------------------------------------------ shared helpers */
 
-/** Highest single-fixture stat score in the match = the match MVP (concept.md). */
-function matchMvp(matchId: string): { player_id: string; stat_score: number } | null {
-  return (
-    get<{ player_id: string; stat_score: number }>(
-      db,
-      `SELECT player_id, stat_score FROM match_player_stats
-       WHERE match_id = ? AND stat_score IS NOT NULL
-       ORDER BY stat_score DESC LIMIT 1`,
-      [matchId],
-    ) ?? null
+/**
+ * Match MVP = every player sharing the highest single-fixture stat score
+ * (concept.md). Ties at the top are ALL MVP (scoring-rules.md §2) — a
+ * `LIMIT 1` would hand the +4 bonus to an arbitrary tie-broken row while the
+ * other tied scorer (an equally valid pick) missed it.
+ */
+function matchMvpIds(matchId: string): string[] {
+  const top = get<{ mx: number | null }>(
+    db,
+    "SELECT MAX(stat_score) AS mx FROM match_player_stats WHERE match_id = ? AND stat_score IS NOT NULL",
+    [matchId],
   );
+  if (top?.mx == null) return [];
+  return all<{ player_id: string }>(
+    db,
+    "SELECT player_id FROM match_player_stats WHERE match_id = ? AND stat_score = ?",
+    [matchId, top.mx],
+  ).map((r) => r.player_id);
 }
 
 /** Per-player crowd rating aggregates for a match (vote floor applied by the scorer). */
@@ -271,7 +278,7 @@ function resolvePlayerWatch(row: PendingRow, payload: PlayerWatchPayload, force 
     pick: payload,
     positionRows: positionRows(row.match_id),
     crowd: crowdBoard(row.match_id),
-    mvpPlayerId: matchMvp(row.match_id)?.player_id ?? null,
+    mvpPlayerIds: matchMvpIds(row.match_id),
     // Grace window elapsed → sparse crowd data settles as a failed crowd gate
     // (MVP bonus can still pay; the 8 cannot) instead of pending forever.
     force,
