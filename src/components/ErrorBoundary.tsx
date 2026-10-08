@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { useI18n } from "../i18n/context";
+import { reportClientError } from "../lib/errorReporting";
 
 /**
  * Render-crash insurance. Without this, one throwing component white-screens
@@ -28,6 +29,14 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error("[ui] render crash:", error, info.componentStack);
+    // Forward to the server so the crash is reviewable after the fact, not
+    // lost when the tab closes. Best-effort: see lib/errorReporting.ts.
+    reportClientError({
+      message: error.message,
+      stack: info.componentStack ?? error.stack,
+      url: window.location.href,
+      source: "react-boundary",
+    });
   }
 
   private reset = () => {

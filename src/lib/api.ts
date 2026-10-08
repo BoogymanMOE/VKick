@@ -703,6 +703,13 @@ export const api = {
       body: JSON.stringify({ commentType, commentId, reason }),
     }),
 
+  /** Best-effort client error report (see lib/errorReporting.ts). */
+  reportClientError: (payload: { message: string; stack?: string; url?: string; source?: string }) =>
+    request<{ ok: boolean }>("/client-errors", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   addComment: (
     matchId: string,
     input: { text: string; eventId?: number; minuteDisplay?: string; mediaLink?: string },

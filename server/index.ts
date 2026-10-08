@@ -1,4 +1,4 @@
-import express, { type Request, type Response, type NextFunction } from "express";
+import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,7 +43,9 @@ import { predictionsRouter } from "./routes/predictions.js";
 import { ratingsRouter } from "./routes/ratings.js";
 import { leaderboardsRouter } from "./routes/leaderboards.js";
 import { moderationRouter } from "./routes/moderation.js";
+import { errorsRouter } from "./routes/errors.js";
 import { adminRouter } from "./routes/admin.js";
+import { apiNotFound, apiErrorHandler } from "./http/middleware.js";
 
 const app = express();
 const db = getDb();
@@ -111,7 +113,12 @@ app.use(predictionsRouter);
 app.use(ratingsRouter);
 app.use(leaderboardsRouter);
 app.use(moderationRouter);
+app.use(errorsRouter);
 app.use(adminRouter);
+
+// Any /api path that matched no route answers JSON, whatever the method —
+// before the static/SPA handlers can turn it into an HTML page.
+app.use(apiNotFound);
 
 /* ------------------------------------------------------------ static frontend */
 
@@ -147,10 +154,7 @@ app.use((req, res, next) => {
 
 /* ------------------------------------------------------------ errors */
 
-app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("[api] unhandled:", err);
-  if (!res.headersSent) res.status(500).json({ error: "internal error" });
-});
+app.use(apiErrorHandler);
 
 const PORT = parseInt(process.env.PORT ?? "8787", 10);
 

@@ -138,6 +138,43 @@ export function isAdmin(req: Request): boolean {
   return ids.includes(currentUser(req).telegram_id);
 }
 
+/**
+ * The caller's user id when a valid token is present, else undefined — the
+ * non-failing sibling of `requireUser`, for endpoints that accept anonymous
+ * callers but want to attach an identity when they have one (client-errors,
+ * leaderboards). All verification is the same; a bad or absent token simply
+ * yields undefined instead of a 401.
+ */
+export function optionalUserId(req: Request): number | undefined {
+  try {
+    const header = req.headers.authorization ?? "";
+    const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+    if (!token) return undefined;
+    if (token.startsWith("mg_")) {
+      const row = get<{ user_id: number; last_used_at: string }>(
+        db,
+        "SELECT user_id, last_used_at FROM user_sessions WHERE token = ?",
+        [token],
+      );
+      if (!row) return undefined;
+      if (Date.now() - new Date(row.last_used_at).getTime() > SESSION_TTL_MS) return undefined;
+      return row.user_id;
+    }
+    const real = botToken() ? verifyInitData(token, botToken()) : { ok: false as const };
+    if (real.ok) {
+      return get<{ id: number }>(db, "SELECT id FROM users WHERE telegram_id = ?", [String(real.user.id)])
+        ?.id;
+    }
+    const dev = verifyDevToken(token, devSecret());
+    if (dev.ok) {
+      return get<{ id: number }>(db, "SELECT id FROM users WHERE telegram_id = ?", [String(dev.user.id)])?.id;
+    }
+  } catch {
+    /* anonymous */
+  }
+  return undefined;
+}
+
 /** Create a session row and return its bearer token (mg_ prefix). */
 export function issueSession(userId: number): string {
   const token = `mg_${newSessionToken()}`;

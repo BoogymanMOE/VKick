@@ -104,3 +104,13 @@ export const reportLimiter = rateLimit({
   windowMs: 60_000,
   max: 20,
 });
+
+/**
+ * Browser error reports: accepted anonymously, so a tight budget keeps a
+ * misbehaving client (or a loop) from filling the log.
+ */
+export const clientErrorLimiter = rateLimit({
+  name: "clienterr",
+  windowMs: 60_000,
+  max: 30,
+});
