@@ -9,7 +9,7 @@ import { useAuth } from "../hooks/authContext";
 import { useNotificationPrefs, useReferral } from "../hooks/useApi";
 import { LANG_LABEL, type Lang } from "../i18n/strings";
 import { useI18n } from "../i18n/context";
-import { serverErrorKey } from "../lib/api";
+import { api, serverErrorKey } from "../lib/api";
 import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
 import { useLocalState } from "../lib/useLocalState";
 import { haptic, notifyHaptic } from "../lib/telegram";
@@ -27,6 +27,12 @@ export default function Profile() {
   const [nameDraft, setNameDraft] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
   const [nameBusy, setNameBusy] = useState(false);
+
+  // Delete account: a confirm sheet, an explicit destructive action, and the
+  // busy/error state the form pattern uses everywhere else.
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Push preferences live on the SERVER (user_notification_prefs) — the bot
   // checks them before sending, so these toggles actually gate sends. Only
@@ -48,6 +54,26 @@ export default function Profile() {
     haptic("medium");
     await logout();
     // useAuth's guard takes over and lands the user on /login.
+  };
+
+  /**
+   * Irreversible: the server removes every row the user owns, then we clear
+   * the local credential. logout()'s own request 401s (its session row is
+   * already gone) and is swallowed — clearing local state is what matters.
+   */
+  const confirmDelete = async () => {
+    if (deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await api.deleteAccount();
+      notifyHaptic("success");
+      await logout();
+    } catch (err) {
+      notifyHaptic("error");
+      setDeleteError(t(serverErrorKey(err) as never));
+      setDeleteBusy(false);
+    }
   };
 
   const openNameEditor = () => {
@@ -246,6 +272,20 @@ export default function Profile() {
 
       <WhatsNew />
 
+      <section className="mt-6">
+        <SectionHeading title={t("profile.dangerZone")} />
+        <ListRow
+          label={t("profile.deleteAccount")}
+          hint={t("profile.deleteHint")}
+          onClick={() => {
+            haptic("medium");
+            setDeleteError(null);
+            setDeleteOpen(true);
+          }}
+          right={<ChevronRightIcon className="text-danger" />}
+        />
+      </section>
+
       <section className="mt-6 mb-2">
         <Button variant="ghost" className="w-full text-danger" onClick={signOut}>
           {t("profile.signOut")}
@@ -343,6 +383,45 @@ export default function Profile() {
             role="alert"
           >
             {nameError}
+          </p>
+        ) : null}
+      </BottomSheet>
+
+      <BottomSheet
+        open={deleteOpen}
+        onClose={() => {
+          if (!deleteBusy) setDeleteOpen(false);
+        }}
+        title={t("profile.deleteConfirmTitle")}
+        subtitle={t("profile.deleteHint")}
+        footer={
+          <SheetActions>
+            <Button
+              variant="ghost"
+              className="flex-1"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleteBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              className="flex-1 border border-danger text-danger"
+              variant="ghost"
+              onClick={() => void confirmDelete()}
+              disabled={deleteBusy}
+            >
+              {deleteBusy ? t("profile.deleting") : t("profile.deleteConfirm")}
+            </Button>
+          </SheetActions>
+        }
+      >
+        <p className="text-sm leading-relaxed text-ink-2">{t("profile.deleteConfirmBody")}</p>
+        {deleteError ? (
+          <p
+            className="mt-3 rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
+            role="alert"
+          >
+            {deleteError}
           </p>
         ) : null}
       </BottomSheet>

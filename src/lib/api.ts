@@ -503,6 +503,9 @@ export const api = {
 
   logout: () => request<{ ok: boolean }>("/auth/logout", { method: "POST" }),
 
+  /** Irreversibly delete the signed-in account and all of its data. */
+  deleteAccount: () => request<{ ok: boolean }>("/me", { method: "DELETE" }),
+
   getMe: () =>
     request<{
       user: {

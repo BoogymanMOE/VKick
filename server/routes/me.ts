@@ -9,6 +9,7 @@ import { writeLimiter } from "../auth/rateLimit.js";
 import { currentSeasonLabel } from "../scoring/ledger.js";
 import { evaluateStreakForUser } from "../scoring/streak.js";
 import { referralStats, redeemReferralCode } from "../scoring/referral.js";
+import { deleteAccountData } from "../db/accountDeletion.js";
 import { POINTS as SCORING_POINTS } from "../scoring/predictionScore.js";
 import { attachPlayerNames } from "../predictions/pickNames.js";
 import { lineupPublished, windowFor } from "../predictions/window.js";
@@ -65,6 +66,22 @@ meRouter.get("/api/me", requireUser, (req, res) => {
     leagues: leagueCount?.n ?? 0,
     authMode: req.authMode ?? "telegram",
   });
+});
+
+/**
+ * Delete the caller's account and everything it owns, in one transaction.
+ *
+ * Works for every identity family — Telegram, username (`pwd:`) and web guest
+ * (`guest:`) alike, since the sweep is keyed on the user's own ids rather than
+ * on how they signed in. Rate-limited with the other writes so a stuck client
+ * cannot hammer it. The client clears its local credential and returns to the
+ * entry screen; `requireUser` has already resolved the user, so the row exists
+ * when we start.
+ */
+meRouter.delete("/api/me", requireUser, writeLimiter, (req, res) => {
+  const u = currentUser(req);
+  const report = deleteAccountData(db, u.id, u.telegram_id);
+  res.json({ ok: true, deleted: report.deleted });
 });
 
 /**
