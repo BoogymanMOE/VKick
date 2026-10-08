@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { AuthProvider, RequireAuth } from "./hooks/useAuth";
 import { useFavorites } from "./hooks/useFavorites";
+import { LEGAL_ROUTES } from "./lib/legal";
 
 // Every screen is lazy so the first paint only ships the shell, the auth gate
 // and the route the user actually landed on. On the low-end Android webviews
@@ -23,6 +24,8 @@ const TeamPage = lazy(() => import("./pages/TeamPage"));
 const Table = lazy(() => import("./pages/Table"));
 const Leaderboards = lazy(() => import("./pages/Leaderboards"));
 const Predictions = lazy(() => import("./pages/Predictions"));
+const Privacy = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Privacy })));
+const Terms = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Terms })));
 
 export default function App() {
   return (
@@ -59,6 +62,9 @@ export default function App() {
             <Route path="/predictions" element={<Predictions />} />
             <Route path="/stats" element={<PlayerStats />} />
             <Route path="/profile" element={<Profile />} />
+            {/* Legal pages: reachable from Profile and the onboarding footer. */}
+            <Route path={LEGAL_ROUTES.privacy} element={<Privacy />} />
+            <Route path={LEGAL_ROUTES.terms} element={<Terms />} />
             {/* Unknown path: say so instead of silently redirecting (broken
                   deep links from the bot become visible). */}
             <Route path="*" element={<NotFound />} />

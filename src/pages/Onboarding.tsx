@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
+import { LegalLinks } from "../components/LegalLinks";
 import { useToast } from "../components/toastContext";
 import { cx } from "../lib/cx";
 import { Button, Chip, Num, Segmented, TeamBadge } from "../components/ui";
@@ -431,6 +432,8 @@ export default function Onboarding() {
         ) : null}
       </div>
 
+      <LegalLinks className="mt-3" />
+
       <Num className="sr-only">{step}</Num>
     </>
   );
@@ -513,6 +516,7 @@ function Intro({ onDone }: { onDone: () => void }) {
         >
           {t("intro.skip")}
         </button>
+        <LegalLinks className="mt-2" />
       </div>
     </div>
   );

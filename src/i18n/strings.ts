@@ -305,6 +305,44 @@ export const strings = {
       "This permanently deletes your account, favorites, predictions, ratings, comments and points. It cannot be undone, and the data cannot be recovered.",
     "profile.deleteConfirm": "Delete forever",
     "profile.deleting": "Deleting…",
+    "profile.legal": "Legal",
+    "legal.privacyTitle": "Privacy policy",
+    "legal.termsTitle": "Terms of use",
+    "legal.updated": "Last updated: October 2026",
+    "legal.privacy.stored.title": "What we store",
+    "legal.privacy.stored.body":
+      "Your sign-in identity (Telegram or username), display name, language, favorite clubs and leagues, predictions, ratings, comments, notification preferences, invite codes, and the points you earn. Nothing else.",
+    "legal.privacy.where.title": "Where it lives",
+    "legal.privacy.where.body":
+      "On this app's own server, in a single database. We don't sell or share your data, and the web build loads no third-party analytics or ad tracker.",
+    "legal.privacy.espn.title": "Football data",
+    "legal.privacy.espn.body":
+      "Fixtures, scores, lineups and stats come from ESPN's public API. That data is ESPN's; we only store the copy we need to show it to you.",
+    "legal.privacy.ads.title": "Ads",
+    "legal.privacy.ads.body":
+      "Inside Telegram only, a clearly-marked sponsored card may be shown through Adsgram. The web build shows no ads and never loads the ad SDK.",
+    "legal.privacy.delete.title": "Deleting your data",
+    "legal.privacy.delete.body":
+      "Profile → Delete account removes your account and everything in it — favorites, picks, ratings, comments and points — immediately and permanently.",
+    "legal.privacy.contact.title": "Contact",
+    "legal.privacy.contact.body": "Questions or data requests: add your contact address here.",
+    "legal.terms.use.title": "Using the app",
+    "legal.terms.use.body":
+      "Vkick is a football companion for following clubs, predicting matches and rating players. Use it as a fan — don't abuse, scrape or automate it.",
+    "legal.terms.content.title": "Your content",
+    "legal.terms.content.body":
+      "Comments and ratings you post are yours, but you give us permission to display them in the app. Don't post unlawful, hateful or spam content, and expect reported content to be removed.",
+    "legal.terms.espn.title": "Football data",
+    "legal.terms.espn.body":
+      "Scores, fixtures and stats come from ESPN's public API and may be delayed, incomplete or wrong. Predictions and points are for fun and have no monetary value.",
+    "legal.terms.ads.title": "Ads",
+    "legal.terms.ads.body":
+      "Inside Telegram, sponsored cards may appear through Adsgram. They are always labelled as sponsored.",
+    "legal.terms.delete.title": "Account deletion",
+    "legal.terms.delete.body":
+      "You can delete your account at any time from Profile. Deletion takes effect immediately and cannot be undone.",
+    "legal.terms.contact.title": "Contact",
+    "legal.terms.contact.body": "Questions or corrections: add your contact address here.",
     "profile.editName": "Edit display name",
     "profile.nameEmpty": "Display name can't be empty",
     "profile.recipientOptedOut": "That person turned off these notifications",
@@ -794,6 +832,44 @@ export const strings = {
       "این کار حساب، تیم‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها و امتیازاتت را برای همیشه پاک می‌کند. قابل بازگشت نیست و داده‌ها بازیابی نمی‌شوند.",
     "profile.deleteConfirm": "حذف برای همیشه",
     "profile.deleting": "در حال حذف…",
+    "profile.legal": "حقوقی",
+    "legal.privacyTitle": "سیاست حفظ حریم خصوصی",
+    "legal.termsTitle": "شرایط استفاده",
+    "legal.updated": "آخرین به‌روزرسانی: مهر ۱۴۰۵",
+    "legal.privacy.stored.title": "چه چیزی ذخیره می‌کنیم",
+    "legal.privacy.stored.body":
+      "هویت ورودت (تلگرام یا نام کاربری)، نام نمایشی، زبان، باشگاه‌ها و لیگ‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها، تنظیمات اعلان، کدهای دعوت و امتیازهایی که می‌گیری. چیز دیگری نه.",
+    "legal.privacy.where.title": "کجا نگه داشته می‌شود",
+    "legal.privacy.where.body":
+      "روی سرور همین برنامه، در یک پایگاه داده. داده‌ات را نمی‌فروشیم و به اشتراک نمی‌گذاریم و نسخه وب هیچ ابزار تحلیلی یا ردیاب تبلیغاتی شخص ثالثی بار نمی‌کند.",
+    "legal.privacy.espn.title": "داده فوتبال",
+    "legal.privacy.espn.body":
+      "برنامه بازی‌ها، نتایج، ترکیب‌ها و آمار از API عمومی ESPN می‌آید. آن داده مال ESPN است؛ ما فقط نسخه‌ای را نگه می‌داریم که برای نمایش لازم است.",
+    "legal.privacy.ads.title": "تبلیغات",
+    "legal.privacy.ads.body":
+      "فقط داخل تلگرام، ممکن است یک کارت اسپانسری مشخصاً برچسب‌خورده از طریق Adsgram نمایش داده شود. نسخه وب هیچ تبلیغی نشان نمی‌دهد و کیت تبلیغاتی را بار نمی‌کند.",
+    "legal.privacy.delete.title": "حذف داده‌ها",
+    "legal.privacy.delete.body":
+      "پروفایل ← حذف حساب، حسابت و همه‌چیز درونش — باشگاه‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها و امتیازها — را فوراً و برای همیشه پاک می‌کند.",
+    "legal.privacy.contact.title": "تماس",
+    "legal.privacy.contact.body": "پرسش یا درخواست داده: نشانی تماس‌تان را اینجا اضافه کنید.",
+    "legal.terms.use.title": "استفاده از برنامه",
+    "legal.terms.use.body":
+      "وی‌کیک یک همراه فوتبالی برای دنبال‌کردن باشگاه‌ها، پیش‌بینی بازی‌ها و امتیازدادن به بازیکنان است. مثل یک هوادار از آن استفاده کن — سوءاستفاده، استخراج داده یا خودکارسازی نکن.",
+    "legal.terms.content.title": "محتوای شما",
+    "legal.terms.content.body":
+      "دیدگاه‌ها و امتیازهایی که می‌گذاری مال خودت است، اما به ما اجازه می‌دهی آن‌ها را در برنامه نمایش دهیم. محتوای غیرقانونی، نفرت‌پراکن یا اسپم نگذار و بدان محتوای گزارش‌شده حذف می‌شود.",
+    "legal.terms.espn.title": "داده فوتبال",
+    "legal.terms.espn.body":
+      "نتایج، برنامه بازی‌ها و آمار از API عمومی ESPN می‌آید و ممکن است با تأخیر، ناقص یا نادرست باشد. پیش‌بینی‌ها و امتیازها فقط برای سرگرمی‌اند و ارزش مالی ندارند.",
+    "legal.terms.ads.title": "تبلیغات",
+    "legal.terms.ads.body":
+      "داخل تلگرام، کارت‌های اسپانسری ممکن است از طریق Adsgram نمایش داده شوند. همیشه با برچسب اسپانسری مشخص می‌شوند.",
+    "legal.terms.delete.title": "حذف حساب",
+    "legal.terms.delete.body":
+      "هر وقت بخواهی می‌توانی از پروفایل حسابت را حذف کنی. حذف فوراً اعمال می‌شود و قابل بازگشت نیست.",
+    "legal.terms.contact.title": "تماس",
+    "legal.terms.contact.body": "پرسش یا اصلاح: نشانی تماس‌تان را اینجا اضافه کنید.",
     "profile.editName": "ویرایش نام نمایشی",
     "profile.nameEmpty": "نام نمایشی نمی‌تواند خالی باشد",
     "profile.recipientOptedOut": "این شخص اعلان‌هایش را خاموش کرده",

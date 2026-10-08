@@ -11,6 +11,7 @@ import { LANG_LABEL, type Lang } from "../i18n/strings";
 import { useI18n } from "../i18n/context";
 import { api, serverErrorKey } from "../lib/api";
 import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
+import { LEGAL_ROUTES } from "../lib/legal";
 import { useLocalState } from "../lib/useLocalState";
 import { haptic, notifyHaptic } from "../lib/telegram";
 
@@ -268,6 +269,28 @@ export default function Profile() {
             </span>
           </div>
         </Card>
+      </section>
+
+      <section className="mt-6">
+        <SectionHeading title={t("profile.legal")} />
+        <div className="space-y-2">
+          <ListRow
+            label={t("legal.privacyTitle")}
+            onClick={() => {
+              haptic("light");
+              navigate(LEGAL_ROUTES.privacy);
+            }}
+            right={<ChevronRightIcon className="text-ink-3" />}
+          />
+          <ListRow
+            label={t("legal.termsTitle")}
+            onClick={() => {
+              haptic("light");
+              navigate(LEGAL_ROUTES.terms);
+            }}
+            right={<ChevronRightIcon className="text-ink-3" />}
+          />
+        </div>
       </section>
 
       <WhatsNew />
