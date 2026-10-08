@@ -32,6 +32,7 @@ import { pruneFootballDetail, pruneSessions, logCapKb, RotatingLogger } from "./
 import { startSyncLoop } from "./sync/service.js";
 import { startBot } from "./bot/index.js";
 import { startResolverLoop } from "./predictions/resolver.js";
+import { startBackupLoop } from "./backupSchedule.js";
 import { gzip } from "./http/gzip.js";
 
 // Route modules — one per domain, mounted below. Endpoint paths and behavior
@@ -187,6 +188,10 @@ const server = app.listen(PORT, () => {
     startSyncLoop();
     startResolverLoop();
     startBot(process.env.TELEGRAM_BOT_TOKEN ?? "");
+    // Nightly DB snapshot. Runs here rather than as a Render cron job because a
+    // persistent disk can only be mounted by its owning service (see
+    // backupSchedule.ts). Skipped under SKIP_CRON=1, like the other loops.
+    startBackupLoop();
   }
 });
 

@@ -12,19 +12,46 @@ services:
     buildCommand: npm install && npm run build
     # One process serves both the API and the built frontend (server/index.ts
     # mounts dist/ + SPA fallback). File-based SQLite + in-process cron sync
-    # loops mean exactly one instance; do not scale horizontally.
+    # loops mean exactly one instance; do not scale horizontally. Explicit here
+    # so nobody "fixes" a slow deploy by adding instances.
     startCommand: node dist-server/server/index.js
     healthCheckPath: /health
     autoDeploy: true
+    numInstances: 1
+    # Persistent disk: SQLite lives at /var/data, which is ephemeral WITHOUT
+    # this block — every deploy and restart silently reset the database. The
+    # disk preserves it across deploys. Two consequences, both accepted:
+    #   - the disk is bound to this ONE service (Render: "accessible by only a
+    #     single service instance", "you can't scale a service to multiple
+    #     instances if it has a disk attached") — which matches the single-
+    #     process design anyway;
+    #   - disks disable zero-downtime deploys: Render stops the old instance
+    #     before starting the new one, a few seconds of downtime per deploy.
+    # Render snapshots the disk every 24h (kept >= 7 days); the nightly job in
+    # server/backupSchedule.ts writes finer-grained snapshots into
+    # BACKUP_DIR on the same disk. Off-site copies are a separate step — see
+    # the "Backups" section of README.md.
+    disk:
+      name: vkick-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
         value: 22.20.0
-      # Render injects PORT; SQLITE_PATH defaults to ./data/matchday.db.
+      # Render injects PORT; SQLITE_PATH points at the persistent disk above.
       # Set TELEGRAM_BOT_TOKEN (and optionally ADMIN_TELEGRAM_IDS) in the
       # dashboard — secrets never live in this file.
       - key: SQLITE_PATH
         value: /var/data/matchday.db
       - key: RETENTION_DAYS
         value: "120"
+      # Nightly in-process backup (see server/backupSchedule.ts): one snapshot
+      # at 03:00 UTC into /var/data/backups, newest 7 kept.
+      - key: BACKUP_DIR
+        value: /var/data/backups
+      - key: BACKUP_KEEP
+        value: "7"
+      - key: BACKUP_HOUR
+        value: "3"

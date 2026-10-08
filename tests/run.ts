@@ -32,6 +32,7 @@ import { runCompetitionsTests } from "./competitions.test.js";
 import { runAnchorRaceTests } from "./anchorRace.test.js";
 import { runLeaderboardTests } from "./leaderboard.test.js";
 import { runBackupTests } from "./backup.test.js";
+import { runBackupScheduleTests } from "./backupSchedule.test.js";
 import { runAccountDeletionTests } from "./accountDeletion.test.js";
 import { runLegalTests } from "./legal.test.js";
 import { runModerationTests } from "./moderation.test.js";
@@ -70,6 +71,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["anchorRace", runAnchorRaceTests],
   ["leaderboard", runLeaderboardTests],
   ["backup", runBackupTests],
+  ["backupSchedule", runBackupScheduleTests],
   ["accountDeletion", runAccountDeletionTests],
   ["legal", runLegalTests],
   ["moderation", runModerationTests],

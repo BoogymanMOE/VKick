@@ -9,40 +9,9 @@ export type DB = DatabaseSync;
 export type BindValue = null | number | bigint | string | Uint8Array;
 export type Bindings = BindValue[] | Record<string, BindValue>;
 
-/**
- * Project root, for locating `.env`. The same two layouts reach this file —
- * source (server/db/) and build (dist-server/server/db/) — and they are NOT the
- * same depth below the root, so the depth can't be hardcoded: `../..` was right
- * for source and pointed at `dist-server/` in the build, where no .env lives.
- * Walk up to the nearest package.json. Mirrors server/index.ts.
- */
-function findProjectRoot(start: string): string {
-  let dir = start;
-  for (;;) {
-    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
-    const parent = path.dirname(dir);
-    if (parent === dir) return start; // filesystem root — nothing better to offer
-    dir = parent;
-  }
-}
-
-const ROOT = findProjectRoot(import.meta.dirname);
-
-/** Minimal .env loader (no dotenv dependency needed). */
-function loadEnv(): void {
-  const envPath = path.join(ROOT, ".env");
-  if (!fs.existsSync(envPath)) return;
-  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
-    if (!m) continue;
-    const key = m[1] as string;
-    let value = m[2] as string;
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    if (process.env[key] === undefined) process.env[key] = value;
-  }
-}
+// `.env` is applied here (shared with the CLIs via server/env.ts) so a direct
+// `npm run server` or a test run sees the same configuration the deploy does.
+import { loadEnv } from "../env.js";
 loadEnv();
 
 let _db: DB | null = null;

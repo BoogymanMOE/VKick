@@ -23,6 +23,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { backupFileName, backupTo, listBackups, pruneBackups, restoreBackup } from "./backup.js";
+import { loadEnv } from "./env.js";
+
+// Apply `.env` before reading any config below: `npm run backup` invoked from a
+// shell that never exported SQLITE_PATH/BACKUP_DIR must still find the same
+// database and destination the server uses.
+loadEnv();
 
 const SQLITE_PATH = process.env.SQLITE_PATH ?? "./data/matchday.db";
 const BACKUP_DIR = process.env.BACKUP_DIR ?? "./backups";

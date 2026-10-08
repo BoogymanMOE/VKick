@@ -194,14 +194,38 @@ build either way, only distribution differs.
 
 ## Deploy
 
-`render.yaml` is a working Render blueprint for the zero-cost shape this app was built around: one Node service, `npm install && npm run build` to produce `dist/` (frontend) + `dist-server/` (server), then `node dist-server/server/index.js`.
+`render.yaml` is a working Render blueprint: one Node service, `npm install && npm run build` to produce `dist/` (frontend) + `dist-server/` (server), then `node dist-server/server/index.js`.
 
 - **One process serves everything.** The API mounts the built `dist/` with an SPA fallback, so there is no separate static host to configure.
-- **Exactly one instance.** File-based SQLite plus in-process cron loops (sync, resolver, retention) mean scaling horizontally would fight itself — scale the box, never the count. The blueprint's comment says the same thing.
+- **Exactly one instance** (`numInstances: 1`). File-based SQLite plus in-process cron loops (sync, resolver, retention, backup) mean scaling horizontally would fight itself — scale the box, never the count.
+- **Persistent disk** (`disk:` block, mounted at `/var/data`). Without it `/var/data` is ephemeral and **every deploy/restart resets the database** — this is the single most important line in the blueprint. A disk pins the service to one instance (Render's own constraint, which matches the design) and disables zero-downtime deploys: the old instance stops before the new one starts, a few seconds of downtime per deploy. Disks need a paid instance type, so the blueprint is no longer on the completely free tier.
 - **Health check** is `GET /health` (503 if the DB stops answering, so the check can actually fail).
 - **Secrets live in the dashboard**, not in `render.yaml`: `TELEGRAM_BOT_TOKEN`, `MINI_APP_URL`, optionally `ADMIN_TELEGRAM_IDS`.
 - **`NODE_ENV=production` refuses to boot while `DEV_AUTH_SECRET` is set** — that key turns `dev:<id>` tokens into any user's identity. Unset it before deploying.
 - After the first deploy, point BotFather's Mini App URL (and `MINI_APP_URL`) at the service's `https://` URL.
+
+## Backups
+
+The database is a single file on the persistent disk, so the backup story has three layers:
+
+1. **Render's automatic disk snapshots** — once every 24h, kept for at least seven days. Free with the disk. Restore a whole disk from the service's Disks page (restores the entire disk, not one file). This is the outer safety net for the case where the app itself is down.
+2. **A nightly app-level snapshot** — `server/backupSchedule.ts` runs one `VACUUM INTO` snapshot (the same code path as `npm run backup`) at `BACKUP_HOUR` (UTC, default `3`) into `BACKUP_DIR` (default `/var/data/backups` on Render), keeping the newest `BACKUP_KEEP` (default 7). It lives **inside the server process** on purpose: a Render cron job is a separate container and **cannot mount this service's disk** (Render: "You can't add a disk to a cron job service", "you can't access a service's disk from any other service"), so it could never see `/var/data/matchday.db`. These files give a fast, granular, point-in-time restore.
+3. **Off-site copies** — *not implemented; options only.* A backup on the same disk dies with the disk, so a real disaster-recovery copy belongs somewhere else:
+   - After each nightly run, upload `BACKUP_DIR` to any S3-compatible bucket (`rclone`, `aws s3 cp`) — cheapest, one small file per night.
+   - `restic`/`borg` to object storage for encrypted, deduplicated, retained history.
+   - A managed Postgres (Render Postgres, Neon, Supabase) if you ever outgrow a file-based SQLite — it brings its own point-in-time recovery.
+   Whichever you pick, keep the write-only credential in the dashboard, never in `render.yaml`, and store copies **outside** the Render account/region.
+
+**Restore (stop the server first):**
+
+```bash
+npm run backup:restore -- /var/data/backups/matchday-YYYYMMDD-HHMMSS.db /var/data/matchday.restored.db
+# then point SQLITE_PATH at the restored file and check /health before trusting it
+```
+
+The CLI refuses to overwrite an existing file, and materialising through `VACUUM INTO` validates the snapshot — a corrupt backup fails the restore instead of being copied into place.
+
+`npm run backup` and `npm run backup:restore` load `.env` (via `server/env.ts`), so they use the same `SQLITE_PATH`/`BACKUP_*` configuration as the server.
 
 ## Animations
 
