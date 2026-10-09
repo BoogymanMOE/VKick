@@ -330,7 +330,7 @@ export const strings = {
     "legal.privacy.delete.body":
       "Profile → Delete account removes your account and everything in it — favorites, picks, ratings, comments and points — immediately and permanently.",
     "legal.privacy.contact.title": "Contact",
-    "legal.privacy.contact.body": "Questions or data requests: add your contact address here.",
+    "legal.privacy.contact.body": "Questions or data requests: loslocrian@gmail.com",
     "legal.terms.use.title": "Using the app",
     "legal.terms.use.body":
       "Vkick is a football companion for following clubs, predicting matches and rating players. Use it as a fan — don't abuse, scrape or automate it.",
@@ -347,7 +347,7 @@ export const strings = {
     "legal.terms.delete.body":
       "You can delete your account at any time from Profile. Deletion takes effect immediately and cannot be undone.",
     "legal.terms.contact.title": "Contact",
-    "legal.terms.contact.body": "Questions or corrections: add your contact address here.",
+    "legal.terms.contact.body": "Questions or corrections: loslocrian@gmail.com",
     "profile.editName": "Edit display name",
     "profile.nameEmpty": "Display name can't be empty",
     "profile.recipientOptedOut": "That person turned off these notifications",
@@ -862,7 +862,7 @@ export const strings = {
     "legal.privacy.delete.body":
       "پروفایل ← حذف حساب، حسابت و همه‌چیز درونش — باشگاه‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها و امتیازها — را فوراً و برای همیشه پاک می‌کند.",
     "legal.privacy.contact.title": "تماس",
-    "legal.privacy.contact.body": "پرسش یا درخواست داده: نشانی تماس‌تان را اینجا اضافه کنید.",
+    "legal.privacy.contact.body": "پرسش یا درخواست داده: loslocrian@gmail.com",
     "legal.terms.use.title": "استفاده از برنامه",
     "legal.terms.use.body":
       "وی‌کیک یک همراه فوتبالی برای دنبال‌کردن باشگاه‌ها، پیش‌بینی بازی‌ها و امتیازدادن به بازیکنان است. مثل یک هوادار از آن استفاده کن — سوءاستفاده، استخراج داده یا خودکارسازی نکن.",
@@ -879,7 +879,7 @@ export const strings = {
     "legal.terms.delete.body":
       "هر وقت بخواهی می‌توانی از پروفایل حسابت را حذف کنی. حذف فوراً اعمال می‌شود و قابل بازگشت نیست.",
     "legal.terms.contact.title": "تماس",
-    "legal.terms.contact.body": "پرسش یا اصلاح: نشانی تماس‌تان را اینجا اضافه کنید.",
+    "legal.terms.contact.body": "پرسش یا اصلاح: loslocrian@gmail.com",
     "profile.editName": "ویرایش نام نمایشی",
     "profile.nameEmpty": "نام نمایشی نمی‌تواند خالی باشد",
     "profile.recipientOptedOut": "این شخص اعلان‌هایش را خاموش کرده",
