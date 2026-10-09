@@ -46,7 +46,7 @@ export function useFavorites() {
         (id: string) => add.mutateAsync(id),
         (id: string) => setAnchor.mutateAsync(id),
       ),
-    [add, setAnchor],
+    [add.mutateAsync, setAnchor.mutateAsync],
   );
 
   const toggle = (team: Team): FavoriteResult => {
