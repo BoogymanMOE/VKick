@@ -210,6 +210,7 @@ export function CommentsSection({
           onChange={(e) => setText(e.target.value)}
           rows={2}
           maxLength={500}
+          aria-label={t("comments.textAria")}
           placeholder={t("comments.placeholder")}
           className="mt-2 w-full resize-none rounded-card border border-line bg-elevated p-3 text-sm text-ink placeholder:text-ink-3 focus-visible:outline-2 focus-visible:outline-volt"
         />
@@ -224,6 +225,7 @@ export function CommentsSection({
           onChange={(e) => setMediaLink(e.target.value)}
           type="url"
           dir="ltr"
+          aria-label={t("comments.mediaAria")}
           placeholder="https://…"
           className="mt-1 min-h-11 w-full rounded-card border border-line bg-elevated px-3 text-sm text-ink placeholder:text-ink-3 focus-visible:outline-2 focus-visible:outline-volt"
         />
