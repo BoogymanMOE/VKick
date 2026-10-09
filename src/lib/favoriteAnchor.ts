@@ -72,3 +72,33 @@ export async function followThenAnchor(
     }
   }
 }
+
+/**
+ * A SYNCHRONOUS first-pick coordinator for the picker.
+ *
+ * `followThenAnchor` fixes the follow-before-anchor ordering, but it is still
+ * called once per pick — so two club tiles tapped in the SAME tick (both see
+ * the favorite count as 0, before the optimistic update re-renders the list)
+ * both run the anchor step, and the last PUT wins: two anchor requests fire and
+ * the anchor ends up on the second club instead of the first.
+ *
+ * This wraps that flow with an in-tick claim: the FIRST pick takes the claim
+ * and owns the anchor; any pick that arrives while the first is still in flight
+ * is only FOLLOWED (never anchored). The claim is released when the first flow
+ * settles, so a genuine retry after a failure can still anchor. The claim is
+ * set and read synchronously, so no amount of same-tick batching can slip a
+ * second anchor through.
+ */
+export function createFirstPickCoordinator(
+  follow: (teamId: string) => Promise<unknown>,
+  anchor: (teamId: string) => Promise<unknown>,
+): (teamId: string) => Promise<void> {
+  let claimed = false;
+  return function pick(teamId: string): Promise<void> {
+    if (claimed) return follow(teamId).then(() => undefined);
+    claimed = true;
+    return followThenAnchor(teamId, follow, anchor).finally(() => {
+      claimed = false;
+    });
+  };
+}

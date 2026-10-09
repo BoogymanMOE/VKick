@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useFavorites as useFavoritesQuery, useFollowedLeagues } from "./useApi";
-import { followThenAnchor } from "../lib/favoriteAnchor";
+import { createFirstPickCoordinator } from "../lib/favoriteAnchor";
 import type { Team } from "../types";
 
 /**
@@ -37,6 +37,18 @@ export function useFavorites() {
   const intlCount = useMemo(() => teams.filter(isInternational).length, [teams]);
   const clubCount = count - intlCount;
 
+  // The first-pick coordinator holds the in-tick anchor claim (see
+  // lib/favoriteAnchor.ts): two club tiles tapped in the same tick follow both
+  // clubs but send exactly ONE anchor request — the first-picked club's.
+  const coordinateFirstPick = useMemo(
+    () =>
+      createFirstPickCoordinator(
+        (id: string) => add.mutateAsync(id),
+        (id: string) => setAnchor.mutateAsync(id),
+      ),
+    [add, setAnchor],
+  );
+
   const toggle = (team: Team): FavoriteResult => {
     if (isFavorite(team.id)) {
       remove.mutate(team.id);
@@ -65,11 +77,7 @@ export function useFavorites() {
     const intl = isInternational(team);
     const full = intl ? intlCount >= MAX_INTERNATIONALS : clubCount >= MAX_FAVORITES;
     if (full) return { ok: false, reason: intl ? "intlCap" : "cap" };
-    void followThenAnchor(
-      team.id,
-      (id) => add.mutateAsync(id),
-      (id) => setAnchor.mutateAsync(id),
-    ).catch(() => {
+    void coordinateFirstPick(team.id).catch(() => {
       /* surfaced by the mutations' onError handlers (see doc block) */
     });
     return { ok: true, added: true, team };

@@ -12,7 +12,11 @@
  * and failures propagate so the UI can surface them.
  */
 import { strict as assert } from "node:assert";
-import { followThenAnchor, isRetryableAnchorError } from "../src/lib/favoriteAnchor.js";
+import {
+  createFirstPickCoordinator,
+  followThenAnchor,
+  isRetryableAnchorError,
+} from "../src/lib/favoriteAnchor.js";
 
 /** An ApiRequestError-shaped failure (src/lib/api.ts attaches `status`). */
 function httpError(status: number): Error & { status: number } {
@@ -141,6 +145,42 @@ export async function runAnchorRaceTests(): Promise<void> {
     assert.equal(isRetryableAnchorError(httpError(404)), false);
     assert.equal(isRetryableAnchorError(httpError(400)), false);
     assert.equal(isRetryableAnchorError(httpError(403)), false);
+  }
+
+  // 7. Same-tick double pick: two club tiles tapped in ONE tick (both still see
+  //    count 0) must follow both clubs but send exactly ONE anchor request, and
+  //    that anchor must be the FIRST-picked club — not the last one to finish.
+  {
+    const calls: string[] = [];
+    const pick = createFirstPickCoordinator(
+      async (id) => {
+        calls.push(`follow:${id}`);
+      },
+      async (id) => {
+        calls.push(`anchor:${id}`);
+      },
+    );
+    // Fired together, before either has settled.
+    await Promise.all([pick("359"), pick("349")]);
+    assert.deepEqual(
+      calls.filter((c) => c.startsWith("anchor:")),
+      ["anchor:359"],
+      "exactly one anchor request, for the first-picked club",
+    );
+    assert.deepEqual(
+      calls.filter((c) => c.startsWith("follow:")).sort(),
+      ["follow:349", "follow:359"],
+      "both clubs are still followed",
+    );
+
+    // The claim releases when the first flow settles, so a later genuine pick
+    // (e.g. after a failed first attempt) can still claim the anchor.
+    await pick("111");
+    assert.equal(
+      calls.filter((c) => c.startsWith("anchor:")).at(-1),
+      "anchor:111",
+      "a later pick can anchor once the previous flow has settled",
+    );
   }
 
   console.log("  anchor ordering + retry OK");
