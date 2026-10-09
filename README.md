@@ -210,11 +210,8 @@ The database is a single file on the persistent disk, so the backup story has th
 
 1. **Render's automatic disk snapshots** — once every 24h, kept for at least seven days. Free with the disk. Restore a whole disk from the service's Disks page (restores the entire disk, not one file). This is the outer safety net for the case where the app itself is down.
 2. **A nightly app-level snapshot** — `server/backupSchedule.ts` runs one `VACUUM INTO` snapshot (the same code path as `npm run backup`) at `BACKUP_HOUR` (UTC, default `3`) into `BACKUP_DIR` (default `/var/data/backups` on Render), keeping the newest `BACKUP_KEEP` (default 7). It lives **inside the server process** on purpose: a Render cron job is a separate container and **cannot mount this service's disk** (Render: "You can't add a disk to a cron job service", "you can't access a service's disk from any other service"), so it could never see `/var/data/matchday.db`. These files give a fast, granular, point-in-time restore.
-3. **Off-site copies** — *not implemented; options only.* A backup on the same disk dies with the disk, so a real disaster-recovery copy belongs somewhere else:
-   - After each nightly run, upload `BACKUP_DIR` to any S3-compatible bucket (`rclone`, `aws s3 cp`) — cheapest, one small file per night.
-   - `restic`/`borg` to object storage for encrypted, deduplicated, retained history.
-   - A managed Postgres (Render Postgres, Neon, Supabase) if you ever outgrow a file-based SQLite — it brings its own point-in-time recovery.
-   Whichever you pick, keep the write-only credential in the dashboard, never in `render.yaml`, and store copies **outside** the Render account/region.
+3. **Off-site copies** — wired up with `rclone`. After each nightly snapshot, `server/backupSchedule.ts` runs `rclone copy "$BACKUP_DIR" "$BACKUP_REMOTE"` (default `r2:vkick-backups/`) to push the whole backup directory to Cloudflare R2. Set `RCLONE_CONFIG_R2_TYPE`, `RCLONE_CONFIG_R2_PROVIDER`, `RCLONE_CONFIG_R2_ACCESS_KEY_ID`, `RCLONE_CONFIG_R2_SECRET_ACCESS_KEY`, `RCLONE_CONFIG_R2_ENDPOINT` and `BACKUP_REMOTE` in the dashboard — rclone reads its remote from those variables, so credentials never live in the repo. The upload is best-effort: if `rclone` is not installed, the config is incomplete, or the bucket is unreachable, the scheduler logs a warning and the local snapshot still stands. (`restic`/`borg` remain options if you want encrypted, deduplicated history.)
+   Keep the credential scoped to this bucket, never in `render.yaml`, and store copies **outside** the Render account/region.
 
 **Restore (stop the server first):**
 

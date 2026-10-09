@@ -9,15 +9,18 @@
  * It reuses exactly the server/backup.ts functions the CLI does, and produces the
  * same `matchday-<stamp>.db` snapshots, so a restore is identical either way.
  *
- * This is local durability, not off-site: Render also snapshots the disk itself
- * once every 24h (kept >= 7 days), which covers the case where this process is
- * down. Only an off-site copy survives losing the disk (see README "Backups").
+ * Render also snapshots the disk itself once every 24h (kept >= 7 days), which
+ * covers the case where this process is down. After each local snapshot this
+ * loop also copies BACKUP_DIR off-site to Cloudflare R2 via rclone (see
+ * server/offsiteBackup.ts), so a lost disk does not lose the backups too.
  *
  * Env: BACKUP_DIR (default ./backups), BACKUP_KEEP (default 7), BACKUP_HOUR
- * (UTC hour 0-23, default 3), SQLITE_PATH (default ./data/matchday.db).
+ * (UTC hour 0-23, default 3), SQLITE_PATH (default ./data/matchday.db), plus
+ * the RCLONE_CONFIG_R2_* / BACKUP_REMOTE pair offsiteBackup.ts reads.
  */
 import path from "node:path";
 import { backupFileName, backupTo, listBackups, pruneBackups } from "./backup.js";
+import { readRcloneConfig, uploadBackup } from "./offsiteBackup.js";
 
 export interface BackupRunResult {
   file: string;
@@ -75,6 +78,7 @@ export function startBackupLoop(): () => void {
   }
 
   let lastRunDay = "";
+  const offsite = readRcloneConfig();
   const tick = (): void => {
     const now = new Date();
     if (!backupDue(now, hour, lastRunDay)) return;
@@ -84,6 +88,17 @@ export function startBackupLoop(): () => void {
       console.log(
         `[backup] nightly: ${dbPath} → ${r.file} (${r.bytes} bytes); kept ${r.kept}, pruned ${r.pruned.length}`,
       );
+      // Off-site is best-effort and must never crash the loop: uploadBackup
+      // resolves on every failure and the local snapshot is already safe.
+      void uploadBackup(dir, offsite).then((res) => {
+        if (res.status === "uploaded") {
+          console.log(`[backup] offsite: uploaded ${dir} → ${offsite.remote}`);
+        } else if (res.status === "skipped") {
+          console.warn(`[backup] offsite skipped: ${res.detail}`);
+        } else {
+          console.error(`[backup] offsite failed: ${res.detail}`);
+        }
+      });
     } catch (err) {
       // A failed snapshot must never take the API down; Render's own disk
       // snapshots are the safety net for the day this one misses.
