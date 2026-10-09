@@ -9,10 +9,10 @@
  * node:sqlite version this app supports (22.5+), it is one synchronous call,
  * and the resulting file has no WAL left to recover.
  *
- * Nothing here uploads anywhere: scheduling (nightly cron / Render cron job)
- * and off-site storage are ops decisions made in server/backupCli.ts and
- * outside the repo. A backup is only a backup if it lives on another disk —
- * treat BACKUP_DIR as staging, not as safety.
+ * Nothing here uploads anywhere: scheduling (the nightly loop in
+ * server/backupSchedule.ts) and off-site storage (server/offsiteBackup.ts)
+ * are separate concerns. A backup is only a backup if it lives on another
+ * disk — treat BACKUP_DIR as staging, not as safety.
  */
 import fs from "node:fs";
 import path from "node:path";

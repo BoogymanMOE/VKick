@@ -9,12 +9,7 @@ services:
     # tsc -b emits the client (dist/) and the server (dist-server/); vite
     # build refreshes the client bundle. No --noEmit here: dist/server/index.js
     # IS the deployable server.
-    #
-    # rclone ships with neither the Render Node image nor npm, but the nightly
-    # backup loop shells out to it to push snapshots off-site to R2
-    # (server/offsiteBackup.ts). Install it in the build so it is on PATH at
-    # start; the loop degrades to local-only backups if it is ever missing.
-    buildCommand: sudo apt-get update && sudo apt-get install -y rclone && npm install && npm run build
+    buildCommand: npm install && npm run build
     # One process serves both the API and the built frontend (server/index.ts
     # mounts dist/ + SPA fallback). File-based SQLite + in-process cron sync
     # loops mean exactly one instance; do not scale horizontally. Explicit here

@@ -11,16 +11,16 @@
  *
  * Render also snapshots the disk itself once every 24h (kept >= 7 days), which
  * covers the case where this process is down. After each local snapshot this
- * loop also copies BACKUP_DIR off-site to Cloudflare R2 via rclone (see
+ * loop also pushes the snapshot off-site to a private git repo (see
  * server/offsiteBackup.ts), so a lost disk does not lose the backups too.
  *
  * Env: BACKUP_DIR (default ./backups), BACKUP_KEEP (default 7), BACKUP_HOUR
  * (UTC hour 0-23, default 3), SQLITE_PATH (default ./data/matchday.db), plus
- * the RCLONE_CONFIG_R2_* / BACKUP_REMOTE pair offsiteBackup.ts reads.
+ * the BACKUP_GIT_URL remote offsiteBackup.ts reads.
  */
 import path from "node:path";
 import { backupFileName, backupTo, listBackups, pruneBackups } from "./backup.js";
-import { readRcloneConfig, uploadBackup } from "./offsiteBackup.js";
+import { readGitBackupConfig, pushSnapshotToGit } from "./offsiteBackup.js";
 
 export interface BackupRunResult {
   file: string;
@@ -78,7 +78,7 @@ export function startBackupLoop(): () => void {
   }
 
   let lastRunDay = "";
-  const offsite = readRcloneConfig();
+  const offsite = readGitBackupConfig();
   const tick = (): void => {
     const now = new Date();
     if (!backupDue(now, hour, lastRunDay)) return;
@@ -88,11 +88,12 @@ export function startBackupLoop(): () => void {
       console.log(
         `[backup] nightly: ${dbPath} → ${r.file} (${r.bytes} bytes); kept ${r.kept}, pruned ${r.pruned.length}`,
       );
-      // Off-site is best-effort and must never crash the loop: uploadBackup
-      // resolves on every failure and the local snapshot is already safe.
-      void uploadBackup(dir, offsite).then((res) => {
-        if (res.status === "uploaded") {
-          console.log(`[backup] offsite: uploaded ${dir} → ${offsite.remote}`);
+      // Off-site is best-effort and must never crash the loop:
+      // pushSnapshotToGit resolves on every failure and the local snapshot is
+      // already safe. The remote URL (which carries the token) is never logged.
+      void pushSnapshotToGit(r.file, offsite).then((res) => {
+        if (res.status === "pushed") {
+          console.log(`[backup] offsite: pushed ${path.basename(r.file)} to git remote`);
         } else if (res.status === "skipped") {
           console.warn(`[backup] offsite skipped: ${res.detail}`);
         } else {

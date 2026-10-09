@@ -1,117 +1,146 @@
 /**
- * Off-site backup: config reading and the rclone invocation contract.
+ * Off-site backup: config reading and the git invocation contract.
  *
- * The upload must never throw, must skip cleanly when rclone is absent, and —
- * because rclone's remote lives in RCLONE_CONFIG_* environment variables — must
- * hand credentials to the child through the environment, never as argv (argv is
- * visible in a process list). This pins all of that with a fake spawn.
+ * The push must never throw, must skip cleanly when BACKUP_GIT_URL is unset or
+ * the working dir is not a git repo, must copy the snapshot into the repo's
+ * `backups/` folder and run `git add` / `git commit` / `git push`, and must
+ * treat a git-absent or failing night as a result (not a crash). Pinned with a
+ * fake spawn so no real git runs.
  */
 import { strict as assert } from "node:assert";
 import { EventEmitter } from "node:events";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
-  DEFAULT_REMOTE,
-  offsiteConfigured,
-  readRcloneConfig,
-  uploadBackup,
-  type RcloneConfig,
+  BACKUP_FOLDER,
+  COMMIT_MESSAGE,
+  pushSnapshotToGit,
+  readGitBackupConfig,
 } from "../server/offsiteBackup.js";
 
-const FULL: RcloneConfig = {
-  type: "s3",
-  provider: "Cloudflare",
-  accessKeyId: "AKIA-test",
-  secretAccessKey: "super-secret",
-  endpoint: "https://acct.r2.cloudflarestorage.com",
-  remote: DEFAULT_REMOTE,
-};
+type SpawnFn = Parameters<typeof pushSnapshotToGit>[2];
 
-type SpawnFn = Parameters<typeof uploadBackup>[2];
+const URL = "https://user:token@github.com/example/vkick.git";
+/** Subcommands we recognise, in match order ("remote" before "add"). */
+const SUBCOMMANDS = ["remote", "commit", "push", "add"];
 
-function fakeSpawn(behavior: "enoent" | "ok" | "fail"): {
+interface Behavior {
+  code: number;
+  stderr?: string;
+  error?: string;
+}
+
+function fakeGit(behaviors: Record<string, Behavior>): {
   fn: SpawnFn;
-  calls: Array<{ cmd: string; args: string[]; env: NodeJS.ProcessEnv }>;
+  calls: Array<{ args: string[]; cwd: string }>;
 } {
-  const calls: Array<{ cmd: string; args: string[]; env: NodeJS.ProcessEnv }> = [];
-  const fn = ((cmd: string, args: string[], opts: { env: NodeJS.ProcessEnv }) => {
-    calls.push({ cmd, args, env: opts.env });
-    const child = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+  const calls: Array<{ args: string[]; cwd: string }> = [];
+  const fn = ((cmd: string, args: string[], opts: { cwd: string }) => {
+    calls.push({ args: [...args], cwd: opts.cwd });
+    const sub = SUBCOMMANDS.find((s) => args.includes(s)) ?? "";
+    const b = behaviors[sub] ?? { code: 0 };
+    const child = new EventEmitter() as EventEmitter & { stdout: EventEmitter; stderr: EventEmitter };
+    child.stdout = new EventEmitter();
     child.stderr = new EventEmitter();
     setImmediate(() => {
-      if (behavior === "enoent") {
-        const err = new Error("spawn rclone ENOENT") as NodeJS.ErrnoException;
-        err.code = "ENOENT";
+      if (b.error) {
+        const err = new Error(`spawn git ${b.error}`) as NodeJS.ErrnoException;
+        err.code = b.error;
         child.emit("error", err);
-      } else if (behavior === "ok") {
-        child.emit("close", 0);
-      } else {
-        child.stderr.emit("data", Buffer.from("fatal: bucket not found"));
-        child.emit("close", 1);
+        return;
       }
+      if (b.stderr) child.stderr.emit("data", Buffer.from(b.stderr));
+      child.emit("close", b.code);
     });
     return child;
   }) as unknown as SpawnFn;
   return { fn, calls };
 }
 
+function makeRepo(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-gitbk-"));
+  fs.mkdirSync(path.join(dir, ".git"), { recursive: true });
+  return dir;
+}
+
 export async function runOffsiteBackupTests(): Promise<void> {
   /* ------------------------------------------------ reading the config */
-  const empty = readRcloneConfig({});
-  assert.equal(empty.remote, DEFAULT_REMOTE, "remote defaults to the R2 bucket");
-  assert.equal(empty.type, "", "missing keys read as empty, not undefined");
+  const empty = readGitBackupConfig({});
+  assert.equal(empty.url, "", "a missing URL reads as empty");
+  const cfg = readGitBackupConfig({ BACKUP_GIT_URL: `  ${URL}  ` });
+  assert.equal(cfg.url, URL, "BACKUP_GIT_URL is read and trimmed");
 
-  const cfg = readRcloneConfig({
-    RCLONE_CONFIG_R2_TYPE: "s3",
-    RCLONE_CONFIG_R2_PROVIDER: "Cloudflare",
-    RCLONE_CONFIG_R2_ACCESS_KEY_ID: "AKIA-test",
-    RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: "super-secret",
-    RCLONE_CONFIG_R2_ENDPOINT: "https://acct.r2.cloudflarestorage.com",
-    BACKUP_REMOTE: "  r2:custom-bucket/  ",
-  });
-  assert.equal(cfg.remote, "r2:custom-bucket/", "BACKUP_REMOTE overrides the default, trimmed");
-  assert.equal(cfg.endpoint, "https://acct.r2.cloudflarestorage.com");
+  /* ------------------------------------------------ no URL → skip, never spawns */
+  const noUrl = fakeGit({});
+  const noUrlRes = await pushSnapshotToGit("/tmp/x.db", { url: "", repoDir: "/tmp" }, noUrl.fn);
+  assert.equal(noUrlRes.status, "skipped", "no URL skips");
+  assert.equal(noUrl.calls.length, 0, "git is not spawned without a URL");
 
-  assert.equal(offsiteConfigured(FULL), true, "a complete config is usable");
-  assert.equal(offsiteConfigured({ ...FULL, secretAccessKey: "" }), false, "a missing secret is not usable");
+  /* ------------------------------------------------ not a git repo → skip */
+  const plainDir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-plain-"));
+  const noGit = fakeGit({});
+  const noGitRes = await pushSnapshotToGit("/tmp/x.db", { url: URL, repoDir: plainDir }, noGit.fn);
+  assert.equal(noGitRes.status, "skipped", "a non-repo working dir skips");
+  assert.equal(noGit.calls.length, 0, "git is not spawned outside a repo");
 
-  /* ------------------------------------------------ incomplete config never spawns */
-  const noConfig = fakeSpawn("ok");
-  const skipped = await uploadBackup("/tmp/backups", { ...FULL, accessKeyId: "" }, noConfig.fn);
-  assert.equal(skipped.status, "skipped", "an incomplete config skips");
-  assert.equal(noConfig.calls.length, 0, "rclone is not spawned without config");
+  /* ------------------------------------------------ happy path: copy + add + commit + push */
+  const repoDir = makeRepo();
+  const snapshot = path.join(repoDir, "snapshot-src.db");
+  fs.writeFileSync(snapshot, "sqlite-bytes");
+  const ok = fakeGit({ remote: { code: 0 }, add: { code: 0 }, commit: { code: 0 }, push: { code: 0 } });
+  const pushed = await pushSnapshotToGit(snapshot, { url: URL, repoDir }, ok.fn);
+  assert.equal(pushed.status, "pushed", "a clean run pushes");
 
-  /* ------------------------------------------------ rclone missing */
-  const missing = fakeSpawn("enoent");
-  const enoent = await uploadBackup("/tmp/backups", FULL, missing.fn);
-  assert.equal(enoent.status, "skipped", "a missing binary is a skip, not a crash");
-  assert.match(enoent.detail ?? "", /not installed/);
+  // The snapshot is copied into the repo's backups/ folder under its own name.
+  const dest = path.join(repoDir, BACKUP_FOLDER, "snapshot-src.db");
+  assert.ok(fs.existsSync(dest), "the snapshot is copied into backups/");
+  assert.equal(fs.readFileSync(dest, "utf8"), "sqlite-bytes");
 
-  /* ------------------------------------------------ success + argv/env contract */
-  const ok = fakeSpawn("ok");
-  const uploaded = await uploadBackup("/var/data/backups", FULL, ok.fn);
-  assert.equal(uploaded.status, "uploaded");
-  assert.equal(ok.calls.length, 1);
-  assert.equal(ok.calls[0]!.cmd, "rclone");
-  assert.deepEqual(
-    ok.calls[0]!.args,
-    ["copy", "/var/data/backups", DEFAULT_REMOTE],
-    "usage is `rclone copy <dir> <remote>`",
-  );
-  assert.ok(
-    !ok.calls[0]!.args.some((a) => a.includes("super-secret")),
-    "the secret never appears in argv (visible in a process list)",
-  );
+  // One call per git step, in order, all inside the repo.
+  const subs = ok.calls.map((c) => SUBCOMMANDS.find((s) => c.args.includes(s)));
+  assert.deepEqual(subs, ["remote", "add", "commit", "push"], "runs add → commit → push");
+  assert.equal(ok.calls[0]!.args.includes(URL), true, "the remote URL is configured from BACKUP_GIT_URL");
   assert.equal(
-    ok.calls[0]!.env.RCLONE_CONFIG_R2_SECRET_ACCESS_KEY,
-    "super-secret",
-    "the secret travels via env",
+    ok.calls[1]!.args.includes(`backups${path.sep}snapshot-src.db`) ||
+      ok.calls[1]!.args.includes("backups/snapshot-src.db"),
+    true,
+    "git add targets the copied snapshot",
   );
-  assert.equal(ok.calls[0]!.env.RCLONE_CONFIG_R2_ENDPOINT, FULL.endpoint);
+  assert.ok(ok.calls[2]!.args.includes(COMMIT_MESSAGE), "the commit message is fixed");
+  assert.equal(ok.calls[0]!.cwd, repoDir, "git runs inside the repo");
 
-  /* ------------------------------------------------ rclone error */
-  const bad = fakeSpawn("fail");
-  const failed = await uploadBackup("/var/data/backups", FULL, bad.fn);
-  assert.equal(failed.status, "failed", "a non-zero exit is a failure result, not a rejection");
-  assert.match(failed.detail ?? "", /exited 1/);
+  /* ------------------------------------------------ nothing to commit → skip, not fail */
+  const clean = makeRepo();
+  const snap2 = path.join(clean, "snapshot-src.db");
+  fs.writeFileSync(snap2, "same");
+  const nothing = fakeGit({
+    remote: { code: 0 },
+    add: { code: 0 },
+    commit: { code: 1, stderr: "nothing to commit, working tree clean" },
+  });
+  const nothingRes = await pushSnapshotToGit(snap2, { url: URL, repoDir: clean }, nothing.fn);
+  assert.equal(nothingRes.status, "skipped", "an unchanged snapshot is a skip");
 
-  console.log("  offsiteBackup: config gate, graceful ENOENT, env-only secrets, copy argv OK");
+  /* ------------------------------------------------ git push fails → failed result */
+  const failRepo = makeRepo();
+  const snap3 = path.join(failRepo, "snapshot-src.db");
+  fs.writeFileSync(snap3, "v3");
+  const fail = fakeGit({
+    remote: { code: 0 },
+    add: { code: 0 },
+    commit: { code: 0 },
+    push: { code: 1, stderr: "fatal: could not read from remote repository" },
+  });
+  const failRes = await pushSnapshotToGit(snap3, { url: URL, repoDir: failRepo }, fail.fn);
+  assert.equal(failRes.status, "failed", "a non-zero push is a failure result, not a rejection");
+  assert.match(failRes.detail ?? "", /could not read/);
+
+  /* ------------------------------------------------ git binary missing → failed, never throws */
+  const enoent = fakeGit({ remote: { error: "ENOENT" } });
+  const enoentRes = await pushSnapshotToGit(snap3, { url: URL, repoDir: failRepo }, enoent.fn);
+  assert.equal(enoentRes.status, "failed", "a missing git binary is a failure result");
+
+  for (const d of [repoDir, plainDir, clean, failRepo]) fs.rmSync(d, { recursive: true, force: true });
+  console.log("  offsiteBackup: config gate, copy → add → commit → push, graceful failures OK");
 }

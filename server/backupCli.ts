@@ -15,10 +15,9 @@
  *   - Inside the server process: not done on purpose — a backup tied to the
  *     app's lifetime dies with the app.
  *
- * Off-site (NOT wired yet, deliberately): upload BACKUP_DIR after the
- * snapshot — rclone/cron to any S3-compatible store, `restic`/`borg` for
- * encrypted dedup, or a managed DB product if you ever leave SQLite. Local
- * copies survive a bad deploy; only an off-site copy survives the disk.
+ * Off-site is wired in the server, not here: the nightly loop in
+ * server/backupSchedule.ts pushes each snapshot to a private git repo (see
+ * server/offsiteBackup.ts). This CLI stays local-only on purpose.
  */
 import fs from "node:fs";
 import path from "node:path";

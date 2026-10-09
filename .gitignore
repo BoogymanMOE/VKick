@@ -30,6 +30,8 @@ yarn-error.log*
 *.db-journal
 *.db-wal
 *.db-shm
+# nightly DB snapshots pushed off-site as git backups — re-include them
+!backups/*.db
 
 # keep static assets that live in data/ folders
 !src/data/logos.json
