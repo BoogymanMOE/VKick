@@ -27,7 +27,7 @@ import { clientErrorLogFile, serverErrorLogFile } from "../server/http/errorLog.
 
 const CHILD_FLAG = "VKICK_ERRORS_CHILD";
 const SUMMARY =
-  "  errors: unhandled error persisted to logs/, client-errors 200+cap+rate-limit+identity, non-GET /api/* JSON 404 OK";
+  "  errors: unhandled error persisted to logs/, client errors keep 400/413 while real faults stay 500, client-errors 200+cap+rate-limit+identity, non-GET /api/* JSON 404 OK";
 
 interface Res {
   status: number;
@@ -74,6 +74,41 @@ function call(
           ...(raw ? { "content-type": "application/json", "content-length": Buffer.byteLength(raw) } : {}),
           ...headers,
         },
+      },
+      (res) => {
+        let buf = "";
+        res.on("data", (c) => (buf += c));
+        res.on("end", () =>
+          resolve({
+            status: res.statusCode ?? 0,
+            contentType: String(res.headers["content-type"] ?? ""),
+            body: parseBody(buf),
+            retryAfter: (res.headers["retry-after"] as string) ?? null,
+          }),
+        );
+      },
+    );
+    req.on("error", reject);
+    req.end(raw);
+  });
+}
+
+/** POST a raw (possibly invalid) body with an explicit content-type. */
+function callRaw(
+  port: number,
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  raw: string,
+): Promise<Res> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      {
+        host: "127.0.0.1",
+        port,
+        path: url,
+        method,
+        headers: { "content-type": "application/json", "content-length": Buffer.byteLength(raw), ...headers },
       },
       (res) => {
         let buf = "";
@@ -148,6 +183,34 @@ async function suite(): Promise<void> {
       assert.ok(serverAfter.length > serverBefore.length, "the error appended to logs/server-errors.log");
       assert.ok(serverAfter.includes(boomMarker), "the log carries the error message");
       assert.ok(serverAfter.includes("GET /api/boom"), "and the request context");
+
+      /* ------------------------------------ client errors keep their own status */
+      // Malformed JSON: express.json throws a SyntaxError carrying status 400.
+      // It must come back as 400 JSON — not the old flat 500 "internal error".
+      const malformed = await callRaw(port, "POST", "/api/client-errors", {}, "{not valid json");
+      assert.equal(malformed.status, 400, `malformed JSON answers 400, not 500 (got ${malformed.status})`);
+      assert.ok(malformed.contentType.includes("application/json"), "and as JSON");
+      assert.equal(malformed.body?.error, "bad request");
+
+      // Oversized body: express.json's 100kb cap throws PayloadTooLargeError
+      // (status 413) before any route runs.
+      const oversized = await callRaw(
+        port,
+        "POST",
+        "/api/client-errors",
+        {},
+        JSON.stringify({ message: "A".repeat(200 * 1024) }),
+      );
+      assert.equal(oversized.status, 413, `an oversized body answers 413, not 500 (got ${oversized.status})`);
+      assert.ok(oversized.contentType.includes("application/json"), "and as JSON");
+      assert.equal(oversized.body?.error, "payload too large");
+
+      // Both are still persisted — status handling must not skip the log.
+      const logAfterClientErrors = readLog(serverErrorLogFile);
+      assert.ok(
+        logAfterClientErrors.includes("POST /api/client-errors"),
+        "malformed and oversized requests are persisted too",
+      );
 
       /* ------------------------------------------------ client-errors: signed in */
       const signed = await call(port, "POST", "/api/client-errors", auth, {
