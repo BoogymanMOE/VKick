@@ -35,6 +35,7 @@ import { runBackupTests } from "./backup.test.js";
 import { runBackupScheduleTests } from "./backupSchedule.test.js";
 import { runAccountDeletionTests } from "./accountDeletion.test.js";
 import { runLegalTests } from "./legal.test.js";
+import { runA11yKeysTests } from "./a11yKeys.test.js";
 import { runModerationTests } from "./moderation.test.js";
 import { runErrorsTests } from "./errors.test.js";
 
@@ -74,6 +75,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["backupSchedule", runBackupScheduleTests],
   ["accountDeletion", runAccountDeletionTests],
   ["legal", runLegalTests],
+  ["a11yKeys", runA11yKeysTests],
   ["moderation", runModerationTests],
   ["errors", runErrorsTests],
 ];
