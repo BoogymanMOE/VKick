@@ -34,6 +34,7 @@ import {
   StarFilledIcon,
 } from "../components/icons";
 import { TaskAdCard } from "../components/TaskAdCard";
+import { AdBanner } from "../components/AdBanner";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { PullIndicator } from "../components/PullToRefresh";
@@ -402,6 +403,12 @@ export default function Matches() {
             <EmptyState title={t("matches.empty")} hint={t("matches.emptyHint")} />
           )}
         </CollapsibleSection>
+
+        {/* Sponsored banner, below the Upcoming feed: after today's games have
+          had their say, so it can never push the fixtures out of view. Renders
+          nothing unless ADGRAM_ENABLED is "true" and a snippet is pasted into
+          src/components/AdBanner.tsx. */}
+        <AdBanner />
 
         {/* Previous results beneath the feed: folded away by default so the
           matchday page leads with what's next; open when the score is wanted.

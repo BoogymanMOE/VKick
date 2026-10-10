@@ -38,6 +38,7 @@ import { api, serverErrorKey, type ApiPlayerRating, type ApiTimelineEvent } from
 import { TEAM_FALLBACK } from "../lib/colors";
 import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
 import { TaskAdCard } from "../components/TaskAdCard";
+import { AdBanner } from "../components/AdBanner";
 import { useAuth } from "../hooks/authContext";
 import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
@@ -303,6 +304,11 @@ export default function MatchDetail() {
       {/* Inline sponsored card (Adsgram Task) — Telegram only, hidden when
           nothing fills; see src/lib/ads.ts for the whole story. */}
       <TaskAdCard />
+
+      {/* Sponsored banner, last thing on the page: below the tab body (timeline
+          and comments included) so it never sits between the user and the
+          match. Off unless ADGRAM_ENABLED is "true". */}
+      <AdBanner />
 
       {/* The Shot Predictor lives in the Predict tab now (concept v2). */}
     </>

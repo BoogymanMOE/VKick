@@ -5,6 +5,19 @@ import type * as React from "react";
 declare global {
   /** Injected by vite.config `define` — the package.json version at build time. */
   const __APP_VERSION__: string;
+  /**
+   * Injected by vite.config `define` from the plain `ADGRAM_ENABLED` environment
+   * variable — the banner-ads kill switch under the name the deploy sets.
+   * Inlined at build time; see src/lib/ads.ts.
+   */
+  const __ADGRAM_ENABLED__: string;
+
+  interface ImportMetaEnv {
+    /** The Vite-native spelling of the same switch (`VITE_ADGRAM_ENABLED`). */
+    readonly VITE_ADGRAM_ENABLED?: string;
+    /** Adsgram Task block id (see src/lib/ads.ts). */
+    readonly VITE_ADSGRAM_TASK_BLOCK_ID?: string;
+  }
 
   interface Window {
     /**

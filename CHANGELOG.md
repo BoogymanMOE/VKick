@@ -208,6 +208,18 @@
 
 ### Added
 
+- **Banner ad slots (`<AdBanner>`) — off by default, awaiting the provider
+  snippet.** Two placements: the end of the Matchday Upcoming feed (after
+  today's games, so nothing is pushed out of view) and the foot of Match detail
+  (below the tab body, timeline and comments). The slot wears the app's own card
+  chrome, labels itself "Sponsored", and is capped at a 468px banner width for
+  desktop. It renders `null` unless `ADGRAM_ENABLED=true` (or
+  `VITE_ADGRAM_ENABLED`; vite.config maps the un-prefixed name into the bundle,
+  and both are inlined at build time so switching them means a rebuild), and it
+  renders nothing at all until the provider SDK is ready — an empty or blocked
+  slot leaves no hollow frame behind. The provider snippet goes in the `TODO`
+  block in `src/components/AdBanner.tsx`; until it is pasted, the slot stays
+  empty and hides itself.
 - **Explicit username registration.** The Login screen has a Sign in / Create
   account switch wired to `POST /api/auth/register` (with guest-upgrade
   merge). Unknown usernames on sign-in stay `NO_ACCOUNT` — never auto-created,

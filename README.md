@@ -120,6 +120,7 @@ fixtures and live scores from ESPN scoreboards, lineups/timelines/player stats f
 - Referral/invite mechanic: one reusable invite code per account, redeemable once per account, paying the referrer on the GLOBAL board only (capped per invite count) — `server/scoring/referral.ts`, surfaced in Profile with copy in both languages
 - League tables for **every** followed domestic league, not just the big five: `buildLeagueTabs` derives the Table tabs from `followed_leagues`, and `syncStandings()` sweeps `ALL_DOMESTIC` (11 leagues). Understat xPts remain big-five only, so the Expected view hides itself where there is no data rather than showing dashes
 - Inline Adsgram Task card (Telegram-only, opt-in via `VITE_ADSGRAM_TASK_BLOCK_ID`) — see the note below
+- Banner ad slots (`<AdBanner>`, Adsgram banner format) after the Matchday Upcoming feed and at the foot of Match detail — off unless `ADGRAM_ENABLED=true` (or `VITE_ADGRAM_ENABLED`), and awaiting the provider snippet in `src/components/AdBanner.tsx`
 - Guest/device accounts with full merge-on-upgrade, username-only login, Telegram initData auth, admin sync/notify endpoints
 
 Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by migration) — Versus Mode is the user-chosen pair in the prediction payload.
@@ -137,7 +138,9 @@ Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by mi
 
 **Knockout brackets ship too.** `src/lib/bracket.ts` builds a connected tree from ESPN's round labels — rounds ordered first-leg → final, ties folded onto their second legs, winners inferred from the scoreline, and each round's entrants linked back to the feeder matches that produced them. The Cups screen renders it whenever a competition carries round data, and falls back to the flat live/upcoming/results sections when it doesn't.
 
-(Ads: the inline **Adsgram Task card is live** on Matchday and Match detail — Telegram-only, and off entirely unless `VITE_ADSGRAM_TASK_BLOCK_ID` is set (`src/lib/ads.ts`). Rewarded/interstitial formats are deliberately unused.)
+(Ads: the inline **Adsgram Task card is live** on Matchday and Match detail — Telegram-only, and off entirely unless `VITE_ADSGRAM_TASK_BLOCK_ID` is set (`src/lib/ads.ts`). Rewarded/interstitial formats are deliberately unused.
+
+**Banner slots** are wired but dormant: `<AdBanner>` (`src/components/AdBanner.tsx`) renders at the end of the Upcoming feed and at the foot of Match detail, and it returns `null` unless `ADGRAM_ENABLED=true` — at which point it loads the Adsgram SDK and expects your banner snippet in the `TODO` block inside the component. Both env names work (`VITE_ADGRAM_ENABLED` is Vite's own prefix; vite.config maps the plain `ADGRAM_ENABLED` in), and both are baked in at build time, so changing the flag means a rebuild.)
 
 ## Screens
 
