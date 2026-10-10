@@ -122,8 +122,12 @@ export function telegramInitData(): string | null {
  * screen result persists even inside Telegram (logout must actually log out).
  * After an explicit sign-out this returns "" — every call 401s and the guard
  * keeps the user on the Login screen.
+ *
+ * The `dev:<id>` escape hatch is a development convenience only. In production
+ * it falls back to `null`, so RequireAuth redirects to /login instead of
+ * stalling on a blank screen waiting for a token the server will 401.
  */
-export function currentAuthToken(): string {
+export function currentAuthToken(): string | null {
   const session = getSessionToken();
   if (isSessionToken(session)) return session as string;
   if (isLoggedOut()) return "";
@@ -131,8 +135,12 @@ export function currentAuthToken(): string {
   const initData = telegramInitData();
   if (initData) return initData;
 
+  if (typeof process !== "undefined" && process.env?.NODE_ENV === "production") {
+    return null;
+  }
+
   const dev = new URLSearchParams(window.location.search).get("devUser");
-  return dev ? `dev:${dev}` : "dev:1";
+  return dev ? `dev:${dev}` : `dev:1`;
 }
 
 /**

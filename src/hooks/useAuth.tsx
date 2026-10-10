@@ -34,7 +34,7 @@ import {
 
 function hasExternalIdentity(): boolean {
   const token = currentAuthToken();
-  if (!token) return false; // explicit sign-out — force the Login screen
+  if (!token) return false; // explicit sign-out or production guest — force the Login screen
   // Session tokens are checked via /api/me below; initData and dev:* count as
   // direct identities (server validates them on the /me call anyway).
   return isSessionToken(token) || token.startsWith("dev:") || Boolean(window.Telegram?.WebApp?.initData);

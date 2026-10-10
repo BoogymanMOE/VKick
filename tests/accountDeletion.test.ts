@@ -127,8 +127,8 @@ async function suite(): Promise<void> {
     const now = new Date().toISOString();
 
     // Minimal world: two teams, a player, a match and one timeline event.
-    run(db, "INSERT INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
-    run(db, "INSERT INTO teams (id, name, league) VALUES ('364', 'Other FC', 'eng.1')");
+    run(db, "INSERT OR REPLACE INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
+    run(db, "INSERT OR REPLACE INTO teams (id, name, league) VALUES ('364', 'Other FC', 'eng.1')");
     run(db, "INSERT INTO players (id, team_id, full_name) VALUES ('1001', '359', 'Test Player')");
     run(
       db,

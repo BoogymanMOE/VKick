@@ -447,6 +447,13 @@ export const strings = {
     "onboarding.done": "Start watching",
     "onboarding.makeFavorite": "Set as favorite",
     "onboarding.isFavorite": "Your favorite",
+    "onboarding.teamsLoading": "Loading teams…",
+    "onboarding.teamsError": "Couldn't load teams",
+    "onboarding.teamsErrorHint":
+      "The connection dropped or the data feed is unavailable. Your picks are safe — tap to retry.",
+    "onboarding.teamsEmpty": "No teams available yet",
+    "onboarding.teamsEmptyHint":
+      "The team list is syncing from the data feed. It should appear here in a moment.",
     "intro.skip": "Skip",
     "intro.dots": "Slide {step} of {total}",
     "intro.follow.title": "Follow your clubs",
@@ -964,6 +971,13 @@ export const strings = {
     "onboarding.done": "شروع کن",
     "onboarding.makeFavorite": "تنظیم به‌عنوان مورد علاقه",
     "onboarding.isFavorite": "مورد علاقه تو",
+    "onboarding.teamsLoading": "در حال بارگذاری تیم‌ها…",
+    "onboarding.teamsError": "بارگذاری تیم‌ها نشد",
+    "onboarding.teamsErrorHint":
+      "اتصال قطع شد یا منبع داده در دسترس نیست. انتخاب‌هایت سالم است — برای تلاش دوباره بزن.",
+    "onboarding.teamsEmpty": "هنوز تیمی موجود نیست",
+    "onboarding.teamsEmptyHint":
+      "listed تیم‌ها از منبع داده در حال همگام‌سازی است. احتمالاً همین الان اینجا ظاهر می‌شوند.",
     "intro.skip": "رد شدن",
     "intro.dots": "اسلاید {step} از {total}",
     "intro.follow.title": "باشگاه‌هایت را دنبال کن",

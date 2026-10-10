@@ -93,8 +93,8 @@ async function suite(): Promise<void> {
     const db = getDb();
     const now = new Date().toISOString();
 
-    run(db, "INSERT INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
-    run(db, "INSERT INTO teams (id, name, league) VALUES ('364', 'Other FC', 'eng.1')");
+    run(db, "INSERT OR REPLACE INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
+    run(db, "INSERT OR REPLACE INTO teams (id, name, league) VALUES ('364', 'Other FC', 'eng.1')");
     run(
       db,
       "INSERT INTO players (id, team_id, full_name, position) VALUES ('1001', '359', 'Test Player', 'FWD')",

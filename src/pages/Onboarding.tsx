@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { LegalLinks } from "../components/LegalLinks";
 import { useToast } from "../components/toastContext";
+import { PanelSkeleton } from "../components/Skeletons";
+import { ErrorState, EmptyState } from "../components/ui";
 import { cx } from "../lib/cx";
 import { Button, Chip, Num, Segmented, TeamBadge } from "../components/ui";
 import { ArrowIcon, CheckIcon, CloseIcon, PencilIcon, StarFilledIcon, TargetIcon } from "../components/icons";
@@ -60,6 +62,25 @@ export default function Onboarding() {
   // big five — an onboarding flow that can only pick big-five clubs would
   // silently make everything else in the catalog unfollowable.
   const groupTeams = useMemo(() => teamsInGroup(allTeams, group), [allTeams, group]);
+
+  // Team-grid states: loading skeleton, error retry, or empty hint — never a
+  // silent blank grid while the data layer is still warming up or has gone
+  // quiet (fresh deploy, ESPN hiccup, cold cache).
+  function teamGridStates() {
+    if (teamsQuery.isLoading) {
+      return { kind: "loading" as const };
+    }
+    if (teamsQuery.isError) {
+      return {
+        kind: "error" as const,
+        retry: () => teamsQuery.refetch(),
+      };
+    }
+    if (allTeams.length === 0) {
+      return { kind: "empty" as const };
+    }
+    return { kind: "content" as const };
+  }
 
   const compsQuery = useCompetitions();
   const leagueComps = (compsQuery.data?.competitions ?? []).filter((c) => c.kind === "league");
@@ -217,38 +238,58 @@ export default function Onboarding() {
             <Segmented value={group} onChange={setGroup} options={pickerGroups} />
           </div>
 
-          <ul className="mt-3 grid grid-cols-2 gap-2">
-            {groupTeams.map((team) => {
-              const pickedHere = isFavorite(team.id);
-              const isAnchor = team.id === anchorId;
+          {(() => {
+            const state = teamGridStates();
+            if (state.kind === "loading") {
+              return <PanelSkeleton height={220} />;
+            }
+            if (state.kind === "error") {
               return (
-                <li key={team.id}>
-                  <button
-                    type="button"
-                    onClick={() => pickClub(team)}
-                    className={cx(
-                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
-                      pickedHere
-                        ? isAnchor
-                          ? "border-gold bg-elevated"
-                          : "border-volt bg-elevated"
-                        : "border-line bg-surface hover:bg-elevated",
-                    )}
-                  >
-                    <TeamBadge team={team} size="sm" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
-                      {localize(team.shortName)}
-                    </span>
-                    {isAnchor ? (
-                      <StarFilledIcon className="star-pop h-4 w-4 flex-none text-gold" />
-                    ) : pickedHere ? (
-                      <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" />
-                    ) : null}
-                  </button>
-                </li>
+                <ErrorState
+                  title={t("onboarding.teamsError")}
+                  hint={t("onboarding.teamsErrorHint")}
+                  onRetry={state.retry}
+                />
               );
-            })}
-          </ul>
+            }
+            if (state.kind === "empty") {
+              return <EmptyState title={t("onboarding.teamsEmpty")} hint={t("onboarding.teamsEmptyHint")} />;
+            }
+            return (
+              <ul className="mt-3 grid grid-cols-2 gap-2">
+                {groupTeams.map((team) => {
+                  const pickedHere = isFavorite(team.id);
+                  const isAnchor = team.id === anchorId;
+                  return (
+                    <li key={team.id}>
+                      <button
+                        type="button"
+                        onClick={() => pickClub(team)}
+                        className={cx(
+                          "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+                          pickedHere
+                            ? isAnchor
+                              ? "border-gold bg-elevated"
+                              : "border-volt bg-elevated"
+                            : "border-line bg-surface hover:bg-elevated",
+                        )}
+                      >
+                        <TeamBadge team={team} size="sm" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+                          {localize(team.shortName)}
+                        </span>
+                        {isAnchor ? (
+                          <StarFilledIcon className="star-pop h-4 w-4 flex-none text-gold" />
+                        ) : pickedHere ? (
+                          <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" />
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+          })()}
         </section>
       ) : null}
 
@@ -301,31 +342,51 @@ export default function Onboarding() {
             <Segmented value={group} onChange={setGroup} options={pickerGroups} />
           </div>
 
-          <ul className="mt-3 grid grid-cols-2 gap-2">
-            {groupTeams.map((team) => {
-              const pickedHere = isFavorite(team.id);
+          {(() => {
+            const state = teamGridStates();
+            if (state.kind === "loading") {
+              return <PanelSkeleton height={220} />;
+            }
+            if (state.kind === "error") {
               return (
-                <li key={team.id}>
-                  <button
-                    type="button"
-                    onClick={() => pickClub(team)}
-                    className={cx(
-                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
-                      pickedHere ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
-                    )}
-                  >
-                    <TeamBadge team={team} size="sm" />
-                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
-                      {localize(team.shortName)}
-                    </span>
-                    {pickedHere ? (
-                      <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" aria-hidden="true" />
-                    ) : null}
-                  </button>
-                </li>
+                <ErrorState
+                  title={t("onboarding.teamsError")}
+                  hint={t("onboarding.teamsErrorHint")}
+                  onRetry={state.retry}
+                />
               );
-            })}
-          </ul>
+            }
+            if (state.kind === "empty") {
+              return <EmptyState title={t("onboarding.teamsEmpty")} hint={t("onboarding.teamsEmptyHint")} />;
+            }
+            return (
+              <ul className="mt-3 grid grid-cols-2 gap-2">
+                {groupTeams.map((team) => {
+                  const pickedHere = isFavorite(team.id);
+                  return (
+                    <li key={team.id}>
+                      <button
+                        type="button"
+                        onClick={() => pickClub(team)}
+                        className={cx(
+                          "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+                          pickedHere ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
+                        )}
+                      >
+                        <TeamBadge team={team} size="sm" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+                          {localize(team.shortName)}
+                        </span>
+                        {pickedHere ? (
+                          <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" aria-hidden="true" />
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+          })()}
 
           {/* Two honest counters, one per shelf: clubs on the left, the
               optional national-team shelf on the right. */}

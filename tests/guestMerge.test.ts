@@ -111,7 +111,9 @@ async function suite(): Promise<void> {
     const db = getDb();
 
     // A club the guest follows, so the merge has real rows to move.
-    run(db, "INSERT INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
+    // INSERT OR REPLACE: the static team seed (migrate) may already have
+    // inserted this id, and a bare INSERT would throw UNIQUE on the seed row.
+    run(db, "INSERT OR REPLACE INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
     // Someone else with an invite code, for the redemption case.
     run(db, "INSERT INTO users (telegram_id, display_name, created_at) VALUES ('424242', 'Referrer', ?)", [
       new Date().toISOString(),
