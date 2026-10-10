@@ -15,6 +15,8 @@ import {
   INTERNATIONAL_GROUP,
 } from "../src/lib/pickerGroups.js";
 import { scopeRankDelta, viewerStanding } from "../src/lib/leaderboard.js";
+import { leaguePickerSections } from "../src/lib/leaguePicker.js";
+import type { ApiCompetition } from "../src/lib/api.js";
 import type { StringKey } from "../src/i18n/strings.js";
 import type { Team } from "../src/types.js";
 
@@ -116,6 +118,65 @@ function testViewerStanding(): void {
 }
 
 /**
+ * The Favorite Leagues picker's list. Two rules with real consequences: the
+ * "cups" filter also carries the international tournaments (both are knockout
+ * competitions — leaving them out made them unreachable when that tab was
+ * active), and followed competitions sort to the top of their section so the
+ * sheet opens on the user's own list.
+ */
+function testLeaguePickerSections(): void {
+  const comps: ApiCompetition[] = [
+    { slug: "eng.1", name: "Premier League", kind: "league", hasTable: true },
+    { slug: "ned.1", name: "Eredivisie", kind: "league", hasTable: true },
+    { slug: "uefa.champions", name: "Champions League", kind: "cup", hasTable: false },
+    { slug: "fifa.world", name: "World Cup", kind: "tournament", hasTable: false },
+  ];
+
+  // "all" keeps the catalog's section order (leagues, cups, tournaments).
+  assert.deepEqual(
+    leaguePickerSections(comps, "all", []).map((s) => s.id),
+    ["league", "cup", "tournament"],
+  );
+
+  // "cup" means BOTH knockout kinds — a cup filter that hid the World Cup
+  // would make international tournaments unreachable from the picker.
+  const cupFiltered = leaguePickerSections(comps, "cup", []);
+  assert.deepEqual(
+    cupFiltered.map((s) => s.id),
+    ["cup", "tournament"],
+    "the cups tab carries the international tournaments too",
+  );
+  assert.deepEqual(
+    cupFiltered.flatMap((s) => s.rows.map((r) => r.slug)),
+    ["uefa.champions", "fifa.world"],
+  );
+  assert.equal(
+    leaguePickerSections(comps, "league", []).length,
+    1,
+    "the leagues tab is leagues only, and drops empty sections",
+  );
+
+  // Followed competitions rise to the top of their own section, catalog order
+  // otherwise untouched, and nothing is ever duplicated or dropped.
+  const withFollows = leaguePickerSections(comps, "all", ["ned.1", "fifa.world"]);
+  assert.deepEqual(
+    withFollows[0]?.rows.map((r) => r.slug),
+    ["ned.1", "eng.1"],
+    "followed leagues lead their section",
+  );
+  assert.deepEqual(
+    withFollows[2]?.rows.map((r) => r.slug),
+    ["fifa.world"],
+    "followed tournaments lead theirs",
+  );
+  assert.deepEqual(
+    withFollows.flatMap((s) => s.rows.map((r) => r.slug)).sort(),
+    ["eng.1", "fifa.world", "ned.1", "uefa.champions"],
+    "every competition appears exactly once",
+  );
+}
+
+/**
  * Rank movement between two observations of the same board. The delta chip
  * is client-session honesty only: a scope switch or a repeat observation at
  * the same rank must produce nothing rather than a stale "up 3".
@@ -151,7 +212,8 @@ export function runClientTests(): void {
   testTeamsInGroup();
   testViewerStanding();
   testScopeRankDelta();
+  testLeaguePickerSections();
   console.log(
-    "  client: contrast ink, breakdown rendering, picker grouping, viewer standing and rank deltas OK",
+    "  client: contrast ink, breakdown rendering, picker grouping, viewer standing, league picker OK",
   );
 }

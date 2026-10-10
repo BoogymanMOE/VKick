@@ -18,6 +18,26 @@
   version line's "Telegram Mini App" / "Web" now read in the user's language
   instead of English-only.
 
+### Leagues & alerts
+
+- **Favorite leagues are pickable from the Matchday feed.** Following a league
+  was only reachable inside first-run onboarding, so a returning user had no way
+  to add the Champions League to their feed. A chip at the top of Matchday —
+  "Pick your leagues", or "Edit" once something is followed — opens a sheet
+  listing every competition in the catalog (leagues, cups and international
+  tournaments, filterable), with the followed ones pinned to the top of their
+  section. The chips behind it re-scope the whole feed, crossfading into the
+  chosen competition.
+- **Following a league now means following its alerts, not just its scores.**
+  The push producers only ever looked at `favorite_teams`, so a followed
+  competition was silent — you had to favorite a club to hear about a goal. The
+  matchday stages (lineup drop, last call before kickoff, half-time, rating
+  window) and goal alerts now also fan out to the competition's followers, cups
+  and international tournaments included, because a followed cup is an ordinary
+  `followed_leagues` row. Following both a club and its league still sends
+  exactly one push, and the Profile switches and the Telegram-deliverability
+  rule apply unchanged.
+
 ### Boards & Browse
 
 - **Your standing now leads the leaderboard.** The boards opened on a list of
@@ -157,6 +177,14 @@
 
 ### Tests
 
+- `tests/notifications.test.ts` — followed-league delivery: a competition
+  follower with no club favorite is woken for its fixtures and its goals, a
+  different league's fixtures are not, club + league follows dedupe to one
+  push, and the per-kind opt-outs and guest/pwd/dev filter still apply.
+- `tests/client.test.ts` — the Favorite Leagues picker's list algebra
+  (`src/lib/leaguePicker.ts`): the cups tab carries the international
+  tournaments, followed competitions sort to the top of their section, and no
+  competition is dropped or duplicated.
 - `tests/season.test.ts` — previous-season streak reset, current-season no-op
   and the no-row path (the untested season boundary the roadmap flagged).
 - `tests/client.test.ts` — contrast-aware `readableInk`, the "why did I get X"

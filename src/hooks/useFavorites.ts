@@ -12,6 +12,13 @@ import type { Team } from "../types";
  */
 export const MAX_FAVORITES = 5;
 export const MAX_INTERNATIONALS = 5;
+/**
+ * Followed-competition cap, mirrored from the server's `MAX_LEAGUES`
+ * (server/routes/shared.ts). The client checks it so a full list answers
+ * instantly with the right copy; the server check behind it stays the rule
+ * that actually holds under two rapid taps.
+ */
+export const MAX_FOLLOWED_LEAGUES = 5;
 
 /** The picker tab national teams live under (mirrors the server's group_key). */
 const INTERNATIONAL_GROUP = "international";

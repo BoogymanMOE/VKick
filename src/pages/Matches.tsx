@@ -25,11 +25,23 @@ import { useI18n } from "../i18n/context";
 import { formatClock, formatKickoff } from "../lib/format";
 import { LEAGUE_BY_SLUG } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
-import { BallIcon, ChartIcon, ChevronRightIcon, RefreshIcon, StarFilledIcon } from "../components/icons";
+import {
+  BallIcon,
+  ChartIcon,
+  ChevronRightIcon,
+  PlusIcon,
+  RefreshIcon,
+  StarFilledIcon,
+} from "../components/icons";
 import { TaskAdCard } from "../components/TaskAdCard";
+import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { PullIndicator } from "../components/PullToRefresh";
 import type { Match, Team } from "../types";
+
+/** One chip in the league scope row: same shape, tone flips with the state. */
+const LEAGUE_CHIP =
+  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]";
 
 export default function Matches() {
   const { t, lang, localize } = useI18n();
@@ -59,6 +71,9 @@ export default function Matches() {
   const allMatchesQuery = useMatches();
   const allMatches = useMemo(() => allMatchesQuery.data ?? [], [allMatchesQuery.data]);
 
+  // The Favorite Leagues sheet. Local to the feed (not a route) so opening and
+  // closing it never loses the scroll position or the selected league chip.
+  const [leaguesOpen, setLeaguesOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
@@ -219,42 +234,64 @@ export default function Matches() {
       <div className="relative">
         <PullIndicator pull={pull} />
 
-        {/* Followed leagues: one tap re-scopes the whole feed (concept pillar 1). */}
-        {!league && followed.count > 0 ? (
-          <div className="-mx-3 mt-3 flex gap-1.5 overflow-x-auto px-3 pb-1">
+        {/* Favorite leagues — the start page's own way in. One tap re-scopes
+            the whole feed (concept pillar 1); the last chip opens the picker,
+            and the row is here even with nothing followed so leagues are
+            pickable from the feed rather than only during onboarding. */}
+        {!league ? (
+          <div className="-mx-3 mt-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
+            {followed.count > 0 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    setLeagueFilter(null);
+                  }}
+                  aria-pressed={leagueFilter === null}
+                  className={cx(
+                    LEAGUE_CHIP,
+                    leagueFilter === null ? "border-volt text-volt" : "border-line text-ink-3",
+                  )}
+                >
+                  {t("browse.all")}
+                </button>
+                {followed.leagues.map((l) => (
+                  <button
+                    key={l.league}
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      setLeagueFilter(l.league);
+                    }}
+                    aria-pressed={leagueFilter === l.league}
+                    className={cx(
+                      LEAGUE_CHIP,
+                      leagueFilter === l.league ? "border-volt text-volt" : "border-line text-ink-3",
+                    )}
+                  >
+                    {l.name ?? l.league}
+                  </button>
+                ))}
+              </>
+            ) : null}
             <button
               type="button"
               onClick={() => {
                 haptic("light");
-                setLeagueFilter(null);
+                setLeaguesOpen(true);
               }}
-              aria-pressed={leagueFilter === null}
-              className={cx(
-                "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
-                leagueFilter === null ? "border-volt text-volt" : "border-line text-ink-3",
-              )}
+              aria-haspopup="dialog"
+              className={cx(LEAGUE_CHIP, "inline-flex items-center gap-1.5 border-volt text-volt")}
+              style={{ backgroundColor: "color-mix(in srgb, var(--volt) 12%, transparent)" }}
             >
-              {t("browse.all")}
+              <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              {t(followed.count > 0 ? "leagues.edit" : "matches.pickLeagues")}
             </button>
-            {followed.leagues.map((l) => (
-              <button
-                key={l.league}
-                type="button"
-                onClick={() => {
-                  haptic("light");
-                  setLeagueFilter(l.league);
-                }}
-                aria-pressed={leagueFilter === l.league}
-                className={cx(
-                  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
-                  leagueFilter === l.league ? "border-volt text-volt" : "border-line text-ink-3",
-                )}
-              >
-                {l.name ?? l.league}
-              </button>
-            ))}
           </div>
         ) : null}
+
+        <LeaguePickerSheet open={leaguesOpen} onClose={() => setLeaguesOpen(false)} />
 
         {/* Single-league deep link: name the scope, let the user leave. Without
           this the screen looks like a broken feed when the window is quiet. */}
@@ -356,7 +393,7 @@ export default function Matches() {
               onRetry={() => matchesQuery.refetch()}
             />
           ) : upcomingShown.length > 0 ? (
-            <ul className="space-y-2">
+            <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
               {upcomingShown.map((match, index) => (
                 <MatchCard key={match.id} match={match} index={index} />
               ))}
@@ -389,7 +426,7 @@ export default function Matches() {
                 onRetry={() => matchesQuery.refetch()}
               />
             ) : (
-              <ul className="space-y-2">
+              <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
                 {finished.map((match, index) => (
                   <MatchCard key={match.id} match={match} index={index} />
                 ))}

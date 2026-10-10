@@ -56,14 +56,15 @@ function addMatch(
   id: string,
   status: string,
   kickoffAt: string,
-  extra: { lineup?: boolean; home?: number; away?: number } = {},
+  extra: { lineup?: boolean; home?: number; away?: number; league?: string } = {},
 ): void {
   db.prepare(
     `INSERT INTO matches
        (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score, home_formation, away_formation)
-     VALUES (?, 'eng.1', 'H', 'A', ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, 'H', 'A', ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
+    extra.league ?? "eng.1",
     kickoffAt,
     status,
     extra.home ?? null,
@@ -379,6 +380,121 @@ function testKindColumnBackfill() {
 }
 
 /**
+ * Following a COMPETITION (not just a club) subscribes to every match in it:
+ * the matchday stages for any fixture the sync files under that slug, cups and
+ * international tournaments included, and goals scored by clubs nobody follows.
+ *
+ * This is the "favorite leagues" promise from the Matches feed's picker. The
+ * rules that matter are (a) a league follower needs no club favorite at all,
+ * (b) a different league's fixtures never wake them, (c) a user who follows
+ * BOTH the club and its league still gets exactly one push, and (d) the same
+ * per-kind opt-out and deliverability gates apply.
+ */
+function testFollowedLeagueAlerts(): void {
+  const db = tempDb();
+  seed(db);
+  db.exec(`
+    -- The cup fixture is between two sides nobody follows, so any recipient
+    -- below can only have come from the competition follow.
+    INSERT INTO teams (id, name, short_name, league) VALUES
+      ('C', 'Cup Home', 'CUP', ''), ('D', 'Cup Away', 'CUPA', '');
+    INSERT INTO users (id, telegram_id, display_name, created_at) VALUES
+      (5, 'u5', 'Five', '2026-01-01T00:00:00.000Z'),
+      (6, 'u6', 'Six', '2026-01-01T00:00:00.000Z'),
+      (7, 'u7', 'Seven', '2026-01-01T00:00:00.000Z'),
+      (8, 'guest:league-guest', 'Guest', '2026-01-01T00:00:00.000Z');
+    -- u5 follows the whole Premier League and no club; u6 follows a cup; u7 a
+    -- different league entirely (the negative control); u8 is a browser guest.
+    INSERT INTO followed_leagues (user_id, league, created_at) VALUES
+      (5, 'eng.1', '2026-01-01T00:00:00.000Z'),
+      (6, 'uefa.champions', '2026-01-01T00:00:00.000Z'),
+      (7, 'esp.1', '2026-01-01T00:00:00.000Z'),
+      (8, 'eng.1', '2026-01-01T00:00:00.000Z');
+    INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
+      VALUES ('m_cup', 'uefa.champions', 'C', 'D', '2026-09-29T17:20:00.000Z', 'halftime', 1, 1);
+  `);
+
+  addMatch(db, "m_pool", "scheduled", minutesFromNow(90), { lineup: true });
+  queueMatchdayAlerts(db, NOW);
+
+  // (a) the league follower is reached for a fixture of the league they follow
+  // on top of the three club followers of the fixture's sides;
+  assert.deepEqual(
+    idsOf(db, "lineup"),
+    ["u1", "u2", "u3", "u5"],
+    "eng.1 followers get the lineup push, with no club favorite in it",
+  );
+  // (b) a followed CUP behaves exactly like a league…
+  const halftime = idsOf(db, "halftime");
+  assert.ok(halftime.includes("u6"), "a followed CUP delivers its fixtures like any league");
+  // …and (c) nobody else's follow leaks into that competition.
+  assert.ok(!halftime.includes("u5"), "a league follower is not woken by another competition");
+  assert.ok(!halftime.includes("u7"), "a different league's follower is left alone");
+  assert.ok(!halftime.includes("u8"), "a browser guest never enters the queue");
+  assert.ok(
+    !halftime.includes("u1"),
+    "club follows do not drag a user into an unfollowed competition's fixture",
+  );
+  db.close();
+}
+
+/** A followed league delivers goals in its matches, deduped against club follows. */
+function testFollowedLeagueGoalAlerts(): void {
+  const db = tempDb();
+  seed(db);
+  db.exec(`
+    INSERT INTO teams (id, name, short_name, league) VALUES ('X', 'Xanthi', 'XAN', 'esp.1');
+    INSERT INTO users (id, telegram_id, display_name, created_at) VALUES
+      (5, 'u5', 'Five', '2026-01-01T00:00:00.000Z'),
+      (6, 'u6', 'Six', '2026-01-01T00:00:00.000Z'),
+      (7, 'u7', 'Seven', '2026-01-01T00:00:00.000Z'),
+      (8, 'guest:league-guest', 'Guest', '2026-01-01T00:00:00.000Z');
+    -- u5 follows esp.1 only; u6 follows esp.1 AND the scoring club X; u7 follows
+    -- eng.1 (negative control); u8 is a browser guest following esp.1.
+    INSERT INTO followed_leagues (user_id, league, created_at) VALUES
+      (5, 'esp.1', '2026-01-01T00:00:00.000Z'),
+      (6, 'esp.1', '2026-01-01T00:00:00.000Z'),
+      (7, 'eng.1', '2026-01-01T00:00:00.000Z'),
+      (8, 'esp.1', '2026-01-01T00:00:00.000Z');
+    INSERT INTO favorite_teams (user_id, team_id, is_favorite, created_at) VALUES
+      (6, 'X', 1, '2026-01-01T00:00:00.000Z');
+    INSERT INTO user_notification_prefs (user_id, goals, deadline, ratings, updated_at) VALUES
+      (7, 0, 1, 1, '2026-01-01T00:00:00.000Z');
+    INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
+      VALUES ('m_esp', 'esp.1', 'X', 'H', '2026-09-29T17:00:00.000Z', 'live', 1, 0);
+  `);
+
+  const queuedCount = queueGoalAlerts(db, [
+    { matchId: "m_esp", scoringTeamId: "X", scorerName: "Pione", minute: "12", homeScore: 1, awayScore: 0 },
+  ]);
+
+  const goals = queued(db).filter((r) => r.kind === "goal");
+  const ids = goals.map((r) => r.telegram_id).sort();
+  assert.equal(queuedCount, goals.length, "the return value counts exactly the queued rows");
+  assert.ok(ids.includes("u5"), "a follower of the competition hears its goals without following a club");
+  assert.ok(ids.includes("u6"), "a follower of the scoring club hears it too");
+  assert.equal(ids.filter((id) => id === "u6").length, 1, "club + league follow is deduped to one push");
+  assert.ok(!ids.includes("u7"), "an unrelated league's follower is left alone");
+  assert.ok(!ids.includes("u8"), "a browser guest never enters the queue");
+  assert.equal(
+    goals.find((r) => r.telegram_id === "u5")?.text.includes("GOAL 12'"),
+    true,
+    "goal copy renders for the league follower",
+  );
+
+  // A goal whose match row is gone (retention edge) still fans out to the
+  // scoring club's followers, and never crashes on the missing league.
+  assert.equal(
+    queueGoalAlerts(db, [
+      { matchId: "gone", scoringTeamId: "X", scorerName: "P", minute: "60", homeScore: 2, awayScore: 0 },
+    ]),
+    1,
+    "no match row means no league lookup — the club follower still hears it",
+  );
+  db.close();
+}
+
+/**
  * Accounts with no Telegram chat behind them never enter the queue. Browser
  * guests (`guest:<device>`), username accounts (`pwd:<name>`) and dev-token
  * users (`dev:<id>`) all live in `users` and can follow clubs — but a send to
@@ -421,10 +537,13 @@ export async function runNotificationTests(): Promise<void> {
   testLineupFallbackSignal();
   testPerRecipientLanguage();
   testGoalAlertsCoverInternationalFavorites();
+  testFollowedLeagueAlerts();
+  testFollowedLeagueGoalAlerts();
   testKindColumnBackfill();
   testDeliverabilityFilter();
   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
   console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
+  console.log("  notifications: followed leagues deliver stages + goals, deduped against clubs OK");
   console.log("  notifications: guest/pwd/dev accounts never enter the push queue OK");
 }

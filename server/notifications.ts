@@ -14,6 +14,14 @@
  * — including queueGoalAlerts, the path that serves the international favorites
  * shelf as well as the clubs.
  *
+ * Followers come from two independent sources, unioned per recipient:
+ *  - CLUBS (`favorite_teams`) — one club's fans;
+ *  - LEAGUES (`followed_leagues`) — everyone who wants the whole competition,
+ *    which the matchday producers attach through `matchRecipients` and the goal
+ *    producer through the match's own `league`. A user who follows both a club
+ *    and its competition is deduped by telegram id, so a follow list never
+ *    doubles a push.
+ *
  * Copy is rendered per RECIPIENT from `users.language`, so a user who reads the
  * app in Persian gets Persian pushes (see server/messages.ts for the wording).
  */
@@ -94,19 +102,50 @@ export function teamFollowers(db: DB, teamId: string, kind: PushKind): PushRecip
 }
 
 /**
- * Everyone following EITHER club in a match, deduped — a user who follows both
- * sides gets one push. Keyed by telegram id because the language travels with
- * the recipient rather than the fixture.
+ * Followers of one COMPETITION, with the same opt-out + deliverability gates as
+ * teamFollowers. `league` is an ESPN slug (`eng.1`, `uefa.champions`,
+ * `fifa.world`) and cups/tournaments are ordinary rows in `followed_leagues`,
+ * so a followed cup wakes its followers for its fixtures exactly like a league
+ * does — nothing here knows the difference.
+ */
+export function leagueFollowers(db: DB, league: string, kind: PushKind): PushRecipient[] {
+  if (!league) return [];
+  const column = PREF_COLUMN[kind];
+  const rows = all<{ telegram_id: string; language: string }>(
+    db,
+    `SELECT DISTINCT u.telegram_id, u.language
+     FROM users u
+     JOIN followed_leagues f ON f.user_id = u.id
+     LEFT JOIN user_notification_prefs p ON p.user_id = u.id
+     WHERE f.league = ? AND (p.user_id IS NULL OR p.${column} = 1)
+       AND ${DELIVERABLE}`,
+    [league],
+  );
+  return rows.map((r) => ({ telegramId: r.telegram_id, lang: asPushLang(r.language) }));
+}
+
+/**
+ * Everyone with a claim on a match, deduped by telegram id: followers of EITHER
+ * club, plus followers of the COMPETITION the fixture belongs to (any game in a
+ * followed league or cup, even one whose clubs the user does not follow). A user
+ * who follows both sides — or a club and its league — gets one push.
+ *
+ * Keyed by telegram id because the language travels with the recipient rather
+ * than the fixture.
  */
 export function matchRecipients(db: DB, matchId: string, kind: PushKind): PushRecipient[] {
-  const m = get<{ home_team_id: string; away_team_id: string }>(
+  const m = get<{ home_team_id: string; away_team_id: string; league: string }>(
     db,
-    "SELECT home_team_id, away_team_id FROM matches WHERE id = ?",
+    "SELECT home_team_id, away_team_id, league FROM matches WHERE id = ?",
     [matchId],
   );
   if (!m) return [];
   const byId = new Map<string, PushRecipient>();
-  for (const r of [...teamFollowers(db, m.home_team_id, kind), ...teamFollowers(db, m.away_team_id, kind)]) {
+  for (const r of [
+    ...teamFollowers(db, m.home_team_id, kind),
+    ...teamFollowers(db, m.away_team_id, kind),
+    ...leagueFollowers(db, m.league, kind),
+  ]) {
     byId.set(r.telegramId, r);
   }
   return [...byId.values()];
@@ -134,10 +173,14 @@ export interface GoalAlertInput {
 
 /**
  * Fan out goal alerts to every user following the scoring team — club OR
- * national side. The followers query filters on team ids only, so an
- * international favorite (a league-less team row favorited from the
- * international picker shelf) is notified exactly like a Premier League one:
- * nothing here knows or cares about the club/international split.
+ * national side — plus every follower of the COMPETITION the goal was scored
+ * in. The team side filters on team ids only, so an international favorite (a
+ * league-less team row favorited from the international picker shelf) is
+ * notified exactly like a Premier League one: nothing here knows or cares about
+ * the club/international split. The competition side is the "follow a league,
+ * hear about its games" promise — a follower of `uefa.champions` is woken by a
+ * goal in it even when neither club is theirs, and a user who follows both the
+ * league and the scoring club gets exactly one push.
  *
  * The push preferences are enforced at queue time (here) AND at send time
  * (the bot's drain), both through this module: a user with goals=0 never gets
@@ -159,11 +202,24 @@ export function queueGoalAlerts(db: DB, goals: GoalAlertInput[]): number {
       "SELECT name, short_name FROM teams WHERE id = ?",
       [g.scoringTeamId],
     );
+    // The competition the goal belongs to comes from the stored match row, so
+    // the producer needs no new field from the sync: a league follower is
+    // reached for every fixture the sync files under that slug, cups included.
+    const match = get<{ league: string }>(db, "SELECT league FROM matches WHERE id = ?", [g.matchId]);
     // Copy is rendered per recipient so each follower gets their own language,
     // and the missing-team placeholder lives in messages.ts per language.
     const club = team?.short_name ?? team?.name ?? null;
     const score = `${g.homeScore}-${g.awayScore}`;
-    for (const r of teamFollowers(db, g.scoringTeamId, "goal")) {
+    // Union + dedupe: a user who follows both the scoring club and its league
+    // gets ONE goal alert, not two.
+    const byId = new Map<string, PushRecipient>();
+    for (const r of [
+      ...teamFollowers(db, g.scoringTeamId, "goal"),
+      ...leagueFollowers(db, match?.league ?? "", "goal"),
+    ]) {
+      byId.set(r.telegramId, r);
+    }
+    for (const r of byId.values()) {
       enqueuePush(
         db,
         r.telegramId,

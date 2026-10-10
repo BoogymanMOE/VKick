@@ -9,7 +9,13 @@ import { cx } from "../lib/cx";
 import { Button, Chip, Num, Segmented, TeamBadge } from "../components/ui";
 import { ArrowIcon, CheckIcon, CloseIcon, PencilIcon, StarFilledIcon, TargetIcon } from "../components/icons";
 import { useTeams, useCompetitions } from "../hooks/useApi";
-import { MAX_FAVORITES, MAX_INTERNATIONALS, useFavorites, useFollowedLeagues } from "../hooks/useFavorites";
+import {
+  MAX_FAVORITES,
+  MAX_FOLLOWED_LEAGUES,
+  MAX_INTERNATIONALS,
+  useFavorites,
+  useFollowedLeagues,
+} from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
 import { serverErrorKey } from "../lib/api";
@@ -131,7 +137,7 @@ export default function Onboarding() {
     selectionHaptic();
     if (followed.isFollowing(slug)) {
       followed.unfollow.mutate(slug, { onError });
-    } else if (followed.count < 5) {
+    } else if (followed.count < MAX_FOLLOWED_LEAGUES) {
       followed.follow.mutate(slug, { onError });
     } else {
       haptic("medium");
@@ -433,8 +439,8 @@ export default function Onboarding() {
           </ul>
 
           <div className="mt-3 flex justify-center">
-            <Chip tone={followed.count >= 5 ? "gold" : "volt"}>
-              {t("myTeams.picked", { count: followed.count, max: 5 })}
+            <Chip tone={followed.count >= MAX_FOLLOWED_LEAGUES ? "gold" : "volt"}>
+              {t("myTeams.picked", { count: followed.count, max: MAX_FOLLOWED_LEAGUES })}
             </Chip>
           </div>
         </section>
