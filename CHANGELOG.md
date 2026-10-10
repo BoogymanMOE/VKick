@@ -205,6 +205,28 @@
   always treated as username attempts and shape-checked: bad shapes return
   `BAD_USERNAME` instead of falling through into the Telegram/dev path
   (`missing hash` / `no bot token`) or misreporting `NO_ACCOUNT`.
+- **Toasts dismiss themselves again.** The leave class (`toast-out`) had no CSS
+  rule at all, so the exit animation never ran and its `animationend` — the only
+  thing that removed a toast — never fired either: every toast stayed on screen
+  until a reload, and the Adsgram "Block is not active" error was just the most
+  visible one (three stuck copies was the cap). The animation exists now
+  (`src/index.css`), and the provider also reaps each toast on a timer, so a
+  missing or undelivered animation event can never strand one.
+- **A rejected Adsgram Task block takes itself off the screen.** The card now
+  collapses (returns null) on the SDK's own error events and on an error thrown
+  out of the SDK script or a rejected promise from it, and remembers for the
+  session so a tab switch or route change cannot retry the same rejected block
+  and raise it again. An unrelated page error leaves the placement alone, and a
+  reload retries it, so a fixed block id comes back on its own.
+- **Matchday never shows a wall of empty sections.** A fresh database (before
+  the ESPN sync has filed a fixture) used to render Live, Upcoming and Previous
+  as three empty boxes. The feed now renders one state at a time: a single
+  labelled skeleton list while the first fetch is in flight, one error card if it
+  failed with nothing cached, and one centered empty state — "No matches
+  available right now. Syncing live scores — check back shortly!" with a Sync now
+  action — when the sync has not filled the feed yet. Previous results are always
+  offered and name "No results yet" when opened rather than vanishing, and an
+  empty Upcoming keeps its action too. New copy ships in English and Persian.
 
 ### Added
 

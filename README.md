@@ -97,7 +97,7 @@ Auth (Bearer = Telegram initData, or an `mg_` session token from the username pa
 
 Public leaderboards: `GET /api/leaderboards/global`, `/league/:league`, `/club/:teamId`
 
-Admin (`ADMIN_TELEGRAM_IDS`): `POST /api/admin/sync`, `POST /api/admin/sync-window`, `POST /api/admin/notify`
+Admin (`ADMIN_TELEGRAM_IDS` — the caller's own Telegram id must be in the list, and the call needs a Bearer token): `POST /api/admin/sync` (one scoreboard sweep now — `curl -X POST -H "Authorization: Bearer dev:<your-id>" https://<host>/api/admin/sync` answers `401` without a token, `403` for a non-admin and `{ ok: true }` when the sweep ran), `POST /api/admin/sync-window` (same for an explicit `back`/`forward` day window), `POST /api/admin/notify`
 
 Adsgram webhook (no auth — Adsgram calls it server-to-server): `GET /api/adsgram/reward?userId=…` answers `200 { status: "ok" }` so Adsgram accepts the callback, and logs the userId; no points are credited yet
 

@@ -102,6 +102,13 @@ export default function Matches() {
   // Recent results, newest kickoff first — the sections above sort favorites up.
   const finished = organize(finished0).sort(newestFirst).slice(0, 12);
 
+  // The feed's own states, kept explicit so the screen never renders three
+  // empty sections at once. `feedEmpty` is a fresh deploy before the ESPN sync
+  // has filed a single fixture: the case that made Matchday look broken.
+  const loading = matchesQuery.isLoading;
+  const failed = matchesQuery.isError && matches.length === 0;
+  const feedEmpty = !loading && !failed && matches.length === 0;
+
   // One context per favorite club: live now, else next kickoff, else last
   // result. The anchor club leads the rows.
   const teamRows = useMemo(() => {
@@ -205,6 +212,14 @@ export default function Matches() {
       </ul>
     </CollapsibleSection>
   );
+
+  /* Inline sponsored card (Adsgram Task), below the Upcoming feed and above
+     Previous results: after today's games have had their say, so it can never
+     push the fixtures out of view. Renders nothing unless ADGRAM_ENABLED is
+     "true" and a Task block id is configured — Telegram only, and hidden when
+     nothing fills; see src/lib/ads.ts. One placement per screen, so the same
+     node is reused by the two feed states that show it. */
+  const adSlot = <TaskAdCard />;
 
   return (
     <>
@@ -374,72 +389,122 @@ export default function Matches() {
         ) : null}
 
         {/* General upcoming feed, capped with picks saved so the page stays a
-          glance, not a scroll. Results live in the team rows above. */}
-        <CollapsibleSection
-          id="matches-upcoming"
-          level={2}
-          title={t("matches.upcoming")}
-          count={upcoming0.length}
-          defaultOpen
-        >
-          {matchesQuery.isLoading ? (
+          glance, not a scroll. Results live in the team rows above.
+
+          One state at a time: a single skeleton list while the first fetch is
+          in flight (three sections of "nothing here" during the wait read as
+          "no football today"), a single error card when the fetch failed with
+          nothing cached, a single centered empty state when the sync has not
+          filled the feed yet, and the three sections only once there is data.
+          The sponsored slot rides along in the two states that have an actual
+          feed around it — never under a skeleton or an error. */}
+        {loading ? (
+          <section className="mt-6" aria-busy="true" aria-label={t("matches.loading")}>
+            <SectionHeading title={t("matches.upcoming")} />
             <ul className="space-y-2">
               <MatchCardSkeleton />
+              <MatchCardSkeleton />
+              <MatchCardSkeleton />
             </ul>
-          ) : matchesQuery.isError ? (
+          </section>
+        ) : null}
+
+        {failed ? (
+          <div className="mt-6">
             <ErrorState
               title={t("error.title")}
               hint={t("error.hint")}
               onRetry={() => matchesQuery.refetch()}
             />
-          ) : upcomingShown.length > 0 ? (
-            <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
-              {upcomingShown.map((match, index) => (
-                <MatchCard key={match.id} match={match} index={index} />
-              ))}
-            </ul>
-          ) : (
-            <EmptyState title={t("matches.empty")} hint={t("matches.emptyHint")} />
-          )}
-        </CollapsibleSection>
+          </div>
+        ) : null}
 
-        {/* Inline sponsored card (Adsgram Task), below the Upcoming feed and
-          above Previous results: after today's games have had their say, so it
-          can never push the fixtures out of view. Renders nothing unless
-          ADGRAM_ENABLED is "true" and a Task block id is configured — Telegram
-          only, and hidden when nothing fills; see src/lib/ads.ts. */}
-        <TaskAdCard />
+        {feedEmpty ? (
+          <div className="mt-6">
+            <EmptyState
+              title={t("matches.emptyTitle")}
+              hint={t("matches.emptyFeedHint")}
+              action={
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic("light");
+                    matchesQuery.refetch();
+                  }}
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                >
+                  <RefreshIcon className="h-4 w-4" aria-hidden="true" />
+                  {t("matches.emptyAction")}
+                </button>
+              }
+            />
+          </div>
+        ) : null}
 
-        {/* Previous results beneath the feed: folded away by default so the
-          matchday page leads with what's next; open when the score is wanted.
-          Hidden entirely until there is a result — an always-empty disclosure
-          is noise, not navigation. */}
-        {finished.length > 0 || matchesQuery.isLoading || matchesQuery.isError ? (
-          <CollapsibleSection
-            id="matches-previous"
-            level={2}
-            title={t("matches.previous")}
-            count={finished0.length}
-            defaultOpen={false}
-          >
-            {matchesQuery.isLoading ? (
-              <ul className="space-y-2">
-                <MatchCardSkeleton />
-              </ul>
-            ) : matchesQuery.isError ? (
-              <ErrorState
-                title={t("error.title")}
-                hint={t("error.hint")}
-                onRetry={() => matchesQuery.refetch()}
-              />
-            ) : (
-              <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
-                {finished.map((match, index) => (
-                  <MatchCard key={match.id} match={match} index={index} />
-                ))}
-              </ul>
-            )}
-          </CollapsibleSection>
+        {/* The sponsored slot has to sit between Upcoming and Previous in the
+          ready state, and after the empty state when there is no feed at all. */}
+        {feedEmpty ? adSlot : null}
+
+        {!loading && !failed && !feedEmpty ? (
+          <>
+            <CollapsibleSection
+              id="matches-upcoming"
+              level={2}
+              title={t("matches.upcoming")}
+              count={upcoming0.length}
+              defaultOpen
+            >
+              {upcomingShown.length > 0 ? (
+                <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
+                  {upcomingShown.map((match, index) => (
+                    <MatchCard key={match.id} match={match} index={index} />
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState
+                  title={t("matches.empty")}
+                  hint={t("matches.emptyHint")}
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptic("light");
+                        matchesQuery.refetch();
+                      }}
+                      className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                    >
+                      <RefreshIcon className="h-4 w-4" aria-hidden="true" />
+                      {t("matches.emptyAction")}
+                    </button>
+                  }
+                />
+              )}
+            </CollapsibleSection>
+
+            {adSlot}
+
+            {/* Previous results beneath the feed: folded away by default so the
+              matchday page leads with what's next; open when the score is
+              wanted. Rendered whenever the feed has data so a quiet history is
+              named honestly instead of the section vanishing. */}
+            <CollapsibleSection
+              id="matches-previous"
+              level={2}
+              title={t("matches.previous")}
+              count={finished0.length}
+              defaultOpen={false}
+            >
+              {finished.length > 0 ? (
+                <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
+                  {finished.map((match, index) => (
+                    <MatchCard key={match.id} match={match} index={index} />
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState title={t("matches.previousEmpty")} hint={t("matches.previousEmptyHint")} />
+              )}
+            </CollapsibleSection>
+          </>
         ) : null}
 
         {/* Sync note, not a second refresh button: pull-to-refresh and the

@@ -519,6 +519,23 @@
     }
   }
 
+  /* The leave half of the pair. Without it the exit class had no animation at
+     all, so no `animationend` ever reached the toast's reaper and every toast
+     stayed on screen forever (the stuck-toast bug). */
+  .toast-out {
+    animation: toast-out 260ms var(--ease-out) both;
+  }
+  @keyframes toast-out {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-10px) scale(0.98);
+    }
+  }
+
   /* Signature animation 7 (tail): one pulse per second in the last ten seconds. */
   .tick-panic {
     animation: tick-panic 1s var(--ease-out) infinite;

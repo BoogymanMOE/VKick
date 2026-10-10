@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { cx } from "../lib/cx";
 import { AlertIcon, BallIcon, CloseIcon, RefreshIcon, StarFilledIcon } from "./icons";
@@ -31,18 +31,43 @@ const toneTint: Record<ToastTone, string | undefined> = {
   muted: undefined,
 };
 
+/** How long the copy stays readable before it starts to leave. */
+const DWELL_MS = 3600;
+/** The leave animation's own duration (see `.toast-out` in index.css) — the
+ *  reap timer waits it out so the exit is visible. */
+const LEAVE_MS = 320;
+
 /** App-wide transient alerts: goals, deadline warnings, saved confirmations. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  // Every toast owns two timers; they are cleared on unmount so a hot reload
+  // never sets state on a dead provider.
+  const timers = useRef<number[]>([]);
+  useEffect(
+    () => () => {
+      for (const timer of timers.current) window.clearTimeout(timer);
+      timers.current = [];
+    },
+    [],
+  );
 
   const push = useCallback((toast: Omit<ToastItem, "id">) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setToasts((prev) => [...prev.slice(-2), { ...toast, id }]);
-    window.setTimeout(() => {
-      // Mark leaving rather than remove: the exit animation tells the
-      // animationend handler below when it is actually safe to drop it.
-      setToasts((prev) => prev.map((item) => (item.id === id ? { ...item, leaving: true } : item)));
-    }, 3600);
+    timers.current.push(
+      window.setTimeout(() => {
+        // Mark leaving rather than remove: the exit animation plays first.
+        setToasts((prev) => prev.map((item) => (item.id === id ? { ...item, leaving: true } : item)));
+      }, DWELL_MS),
+      // Belt and braces: reap on a timer as well as on `animationend`. The event
+      // is not guaranteed — a backgrounded webview, an element whose animation
+      // never starts, or a stale class without a keyframes rule all leave the
+      // toast on screen permanently, which is exactly the stuck-toast bug.
+      window.setTimeout(
+        () => setToasts((prev) => prev.filter((item) => item.id !== id)),
+        DWELL_MS + LEAVE_MS,
+      ),
+    );
   }, []);
 
   const value = useMemo(() => ({ push }), [push]);
