@@ -163,7 +163,7 @@ export function TimelineList({
                   {count > 0 ? (
                     <span className="ms-auto inline-flex items-center gap-1 text-[11px] font-bold text-gold">
                       <span aria-hidden="true">💬</span>
-                      <Num>{event.commentCount}</Num>
+                      <Num>{count}</Num>
                     </span>
                   ) : null}
                 </div>
