@@ -785,5 +785,16 @@ export function migrate(db: DatabaseSync): void {
   // run, so Onboarding is never empty on first boot. INSERT OR IGNORE makes it
   // idempotent — the ESPN sync (server/sync/upserts.ts) upsertCoalesces on
   // teams.id, so live data overwrites these labels without clobbering the seed.
-  seedTeams(db);
+  //
+  // NOTE: this call sits at the very end of migrate(), which getDb() runs on
+  // EVERY process boot (there is no "database already exists, skip the seed"
+  // branch). A persistent-disk database created before this seed existed is
+  // therefore seeded on the first deploy after it, not only on a fresh file.
+  // The function logs what it inserted so Render's boot logs can prove it ran.
+  const seeded = seedTeams(db);
+  console.log(
+    seeded > 0
+      ? `[db] team seed inserted ${seeded} missing row(s)`
+      : "[db] team seed: all rows already present (no-op)",
+  );
 }

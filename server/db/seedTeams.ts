@@ -544,13 +544,27 @@ export const SEED_TEAMS: SeedTeam[] = [
  * Seed the static team roster into the teams table. Safe to call on every
  * migrate() — INSERT OR IGNORE makes it idempotent, and a later ESPN sync
  * upsert can update these rows with live data.
+ *
+ * Returns the number of rows actually INSERTED this call (0 on a restart
+ * against an already-seeded database, >0 the first time a row appears). The
+ * caller logs it so a deploy's Render logs show definitively whether the seed
+ * ran, and migrate() runs it on every boot — NOT only when the file is first
+ * created — so a persistent-disk database that predates this logic still gets
+ * the seed on the next deploy.
  */
-export function seedTeams(db: DatabaseSync): void {
+export function seedTeams(db: DatabaseSync): number {
+  console.log("[db] seeding teams...");
   const stmt = db.prepare(
     `INSERT OR IGNORE INTO teams (id, name, short_name, abbreviation, logo_url, color, league)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   );
+  let inserted = 0;
   for (const t of SEED_TEAMS) {
-    stmt.run(t.id, t.name, t.short_name, t.abbreviation, t.logo_url ?? null, t.color, t.league);
+    const res = stmt.run(t.id, t.name, t.short_name, t.abbreviation, t.logo_url ?? null, t.color, t.league);
+    inserted += Number(res.changes ?? 0);
   }
+  console.log("[db] teams seeded:", inserted);
+  const total = Number((db.prepare("SELECT COUNT(*) AS n FROM teams").get() as { n: number }).n);
+  console.log(`[db] teams table now holds ${total} row(s)`);
+  return inserted;
 }
