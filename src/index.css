@@ -415,6 +415,18 @@
     }
   }
 
+  .backdrop-fade-out {
+    animation: backdrop-fade-out var(--t-fast) var(--ease-out) both;
+  }
+  @keyframes backdrop-fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
   .sheet-in {
     animation: sheet-in var(--t-std) var(--ease-out) both;
   }
@@ -426,6 +438,70 @@
     to {
       opacity: 1;
       transform: none;
+    }
+  }
+
+  .sheet-out {
+    animation: sheet-out var(--t-fast) var(--ease-out) both;
+  }
+  @keyframes sheet-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+
+  .fade-swap {
+    animation: fade-swap var(--t-fast) var(--ease-out) both;
+  }
+  @keyframes fade-swap {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  .star-pop {
+    animation: star-pop var(--t-std) var(--ease-pop) both;
+  }
+  @keyframes star-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .list-in {
+    animation: list-in var(--t-std) var(--ease-out) both;
+  }
+  @keyframes list-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .backdrop-fade-out,
+    .sheet-out,
+    .fade-swap,
+    .star-pop,
+    .list-in {
+      animation-duration: 1ms;
     }
   }
 
