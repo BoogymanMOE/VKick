@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
     // Profile and usable anywhere via the global below.
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
-      // The banner-ads kill switch, under the exact name the deploy sets
+      // The ads kill switch, under the exact name the deploy sets
       // (`ADGRAM_ENABLED`). Vite only inlines `VITE_`-prefixed vars on its own,
       // so this is what makes the un-prefixed name work; `VITE_ADGRAM_ENABLED`
       // is read natively as the alternative. Inlined at BUILD time — flipping

@@ -45,6 +45,7 @@ import { ratingsRouter } from "./routes/ratings.js";
 import { leaderboardsRouter } from "./routes/leaderboards.js";
 import { moderationRouter } from "./routes/moderation.js";
 import { errorsRouter } from "./routes/errors.js";
+import { adsgramRouter } from "./routes/adsgram.js";
 import { adminRouter } from "./routes/admin.js";
 import { apiNotFound, apiErrorHandler } from "./http/middleware.js";
 
@@ -115,6 +116,7 @@ app.use(ratingsRouter);
 app.use(leaderboardsRouter);
 app.use(moderationRouter);
 app.use(errorsRouter);
+app.use(adsgramRouter);
 app.use(adminRouter);
 
 // Any /api path that matched no route answers JSON, whatever the method —

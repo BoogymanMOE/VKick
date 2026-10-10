@@ -42,6 +42,7 @@ import { runLegalTests } from "./legal.test.js";
 import { runA11yKeysTests } from "./a11yKeys.test.js";
 import { runModerationTests } from "./moderation.test.js";
 import { runErrorsTests } from "./errors.test.js";
+import { runAdsgramTests } from "./adsgram.test.js";
 
 let failed = 0;
 const groups: Array<[string, () => void | Promise<void>]> = [
@@ -86,6 +87,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["a11yKeys", runA11yKeysTests],
   ["moderation", runModerationTests],
   ["errors", runErrorsTests],
+  ["adsgram", runAdsgramTests],
 ];
 
 for (const [name, run] of groups) {

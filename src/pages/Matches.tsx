@@ -34,7 +34,6 @@ import {
   StarFilledIcon,
 } from "../components/icons";
 import { TaskAdCard } from "../components/TaskAdCard";
-import { AdBanner } from "../components/AdBanner";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { PullIndicator } from "../components/PullToRefresh";
@@ -404,11 +403,12 @@ export default function Matches() {
           )}
         </CollapsibleSection>
 
-        {/* Sponsored banner, below the Upcoming feed: after today's games have
-          had their say, so it can never push the fixtures out of view. Renders
-          nothing unless ADGRAM_ENABLED is "true" and a snippet is pasted into
-          src/components/AdBanner.tsx. */}
-        <AdBanner />
+        {/* Inline sponsored card (Adsgram Task), below the Upcoming feed and
+          above Previous results: after today's games have had their say, so it
+          can never push the fixtures out of view. Renders nothing unless
+          ADGRAM_ENABLED is "true" and a Task block id is configured — Telegram
+          only, and hidden when nothing fills; see src/lib/ads.ts. */}
+        <TaskAdCard />
 
         {/* Previous results beneath the feed: folded away by default so the
           matchday page leads with what's next; open when the score is wanted.
@@ -470,10 +470,6 @@ export default function Matches() {
           </span>
           <ChevronRightIcon className="flex-none text-ink-3" />
         </Link>
-
-        {/* Inline sponsored card (Adsgram Task) — Telegram only, hidden when
-          nothing fills; see src/lib/ads.ts for the whole story. */}
-        <TaskAdCard />
       </div>
     </>
   );

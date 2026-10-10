@@ -7,7 +7,7 @@ declare global {
   const __APP_VERSION__: string;
   /**
    * Injected by vite.config `define` from the plain `ADGRAM_ENABLED` environment
-   * variable — the banner-ads kill switch under the name the deploy sets.
+   * variable — the ads master switch under the name the deploy sets.
    * Inlined at build time; see src/lib/ads.ts.
    */
   const __ADGRAM_ENABLED__: string;

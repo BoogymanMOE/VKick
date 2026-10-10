@@ -208,18 +208,22 @@
 
 ### Added
 
-- **Banner ad slots (`<AdBanner>`) — off by default, awaiting the provider
-  snippet.** Two placements: the end of the Matchday Upcoming feed (after
-  today's games, so nothing is pushed out of view) and the foot of Match detail
-  (below the tab body, timeline and comments). The slot wears the app's own card
-  chrome, labels itself "Sponsored", and is capped at a 468px banner width for
-  desktop. It renders `null` unless `ADGRAM_ENABLED=true` (or
-  `VITE_ADGRAM_ENABLED`; vite.config maps the un-prefixed name into the bundle,
-  and both are inlined at build time so switching them means a rebuild), and it
-  renders nothing at all until the provider SDK is ready — an empty or blocked
-  slot leaves no hollow frame behind. The provider snippet goes in the `TODO`
-  block in `src/components/AdBanner.tsx`; until it is pasted, the slot stays
-  empty and hides itself.
+- **The Adsgram Task card is the only ad unit, behind one switch.** Adsgram
+  ships no banner format, so the `<AdBanner>` slots are gone and every ad now
+  goes through the inline Task card (`src/components/TaskAdCard.tsx`). It renders
+  nothing unless `ADGRAM_ENABLED=true` **and** a `task-…` block id is in
+  `VITE_ADSGRAM_TASK_BLOCK_ID` **and** the app is inside Telegram — three gates,
+  so the web build never loads the SDK. On Matchday it sits below the Upcoming
+  feed and above Previous results, so it can never push the fixtures out of
+  view; on Match detail it stays the last block on the page. Both env names work
+  (`ADGRAM_ENABLED` is mapped in by vite.config, since Vite only inlines
+  `VITE_`-prefixed vars itself; `VITE_ADGRAM_ENABLED` is read natively) and both
+  are inlined at build time, so flipping the switch means a rebuild.
+- **The Adsgram reward webhook is wired.** `GET /api/adsgram/reward?userId=…`
+  answers `200 { status: "ok" }` so Adsgram accepts the Task card's completion
+  callback, and logs the userId so the first real reward is visible in the server
+  log. Nothing is credited yet — that is the next step, once an Adsgram userId can
+  be mapped to an account.
 - **Explicit username registration.** The Login screen has a Sign in / Create
   account switch wired to `POST /api/auth/register` (with guest-upgrade
   merge). Unknown usernames on sign-in stay `NO_ACCOUNT` — never auto-created,

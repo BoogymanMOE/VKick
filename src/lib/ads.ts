@@ -5,34 +5,28 @@
  * registration (impossible inside a Telegram webview) and a payout country
  * Google supports, so the Telegram surface runs Adsgram (docs.adsgram.ai)
  * instead. Their Task format is the only INLINE unit — a native "complete a
- * task, earn a reward" card rendered by the <adsgram-task> web component;
- * their rewarded/interstitial formats are fullscreen and deliberately unused
- * (the product chose passive placements only).
+ * task, earn a reward" card rendered by the <adsgram-task> web component; their
+ * rewarded/interstitial formats are fullscreen and deliberately unused (the
+ * product chose passive placements only), and they ship no banner format at all.
  *
- * Everything here no-ops unless BOTH hold:
- *  - the app runs inside Telegram (only there does the SDK fill), and
- *  - VITE_ADSGRAM_TASK_BLOCK_ID is set (a `task-…` id from partner.adsgram.ai).
- * The web build and any unset deployment never load the SDK — zero bytes,
- * zero requests, zero visual footprint.
+ * Everything here no-ops unless ALL THREE hold:
+ *  - ADGRAM_ENABLED is exactly "true" (the master switch; both spellings below),
+ *  - VITE_ADSGRAM_TASK_BLOCK_ID is set (a `task-…` id from partner.adsgram.ai),
+ *  - the app runs inside Telegram (only there does the SDK fill).
+ * The web build and any unset deployment never load the SDK — zero bytes, zero
+ * requests, zero visual footprint.
  *
  * Adsgram allows exactly ONE Task block per project, so every placement shares
  * one block id and each screen renders at most one card.
- *
- * The BANNER format (`src/components/AdBanner.tsx`) shares the same SDK script
- * but a different switch: `bannerAdsEnabled` below (ADGRAM_ENABLED /
- * VITE_ADGRAM_ENABLED). It is deliberately NOT gated on `isTelegram()` — the
- * banner is a placement the operator turns on explicitly — but note that
- * outside Telegram's webview Adsgram serves nothing, so an enabled banner on
- * the plain web renders an empty slot that hides itself.
  */
 import { isTelegram } from "./telegram";
 
-/** The SDK that registers the <adsgram-task> custom element (and serves banners). */
+/** The SDK that registers the <adsgram-task> custom element. */
 export const TASK_SCRIPT_SRC = "https://sad.adsgram.ai/js/sad.min.js";
 
 /**
- * The banner-ads kill switch, read at BUILD time (Vite inlines both of these,
- * so flipping the value needs a rebuild — it is not a runtime toggle).
+ * The ads master switch, read at BUILD time (Vite inlines both of these, so
+ * flipping the value needs a rebuild — it is not a runtime toggle).
  *
  * Two spellings, one rule — the value must be exactly `true`:
  *  - `ADGRAM_ENABLED` (the name the deploy sets; vite.config maps it into
@@ -40,10 +34,10 @@ export const TASK_SCRIPT_SRC = "https://sad.adsgram.ai/js/sad.min.js";
  *    its own),
  *  - `VITE_ADGRAM_ENABLED` (Vite's native client-visible prefix).
  *
- * Anything else — unset, `""`, `"1"`, `"yes"` — leaves every <AdBanner>
+ * Anything else — unset, `""`, `"false"`, `"1"`, `"yes"` — leaves the Task card
  * rendering null, so ads stay off during testing without touching the code.
  */
-export const bannerAdsEnabled = (() => {
+export const adsEnabled = (() => {
   const raw = `${import.meta.env.VITE_ADGRAM_ENABLED ?? ""}`.trim() || `${__ADGRAM_ENABLED__ ?? ""}`.trim();
   return raw.toLowerCase() === "true";
 })();
@@ -53,7 +47,7 @@ export const taskBlockId = (import.meta.env.VITE_ADSGRAM_TASK_BLOCK_ID ?? "").tr
 
 /** True when the inline task card may render at all. */
 export function taskAdsAvailable(): boolean {
-  return Boolean(taskBlockId) && isTelegram();
+  return adsEnabled && Boolean(taskBlockId) && isTelegram();
 }
 
 let scriptPromise: Promise<void> | null = null;
