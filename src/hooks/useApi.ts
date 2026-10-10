@@ -200,7 +200,7 @@ export function useFavorites() {
   const teams = favoritesQuery.data?.teams ?? [];
   const anchorId = favoritesQuery.data?.anchorId ?? null;
 
-  const ids = teams.map((t) => t.id);
+  const ids = useMemo(() => teams.map((t) => t.id), [teams]);
   const isFavorite = useCallback((teamId: string) => ids.includes(teamId), [ids]);
 
   const add = useMutation({
