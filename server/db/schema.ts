@@ -9,6 +9,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { COMPETITIONS, isCup } from "../espn/types.js";
 import { EXTRA_COMPETITIONS } from "../espn/extra.js";
+import { seedTeams } from "./seedTeams.js";
 
 export function migrate(db: DatabaseSync): void {
   db.exec(`
@@ -777,4 +778,12 @@ export function migrate(db: DatabaseSync): void {
   for (const c of EXTRA_COMPETITIONS) {
     insertCompetition.run(c.slug, c.name, c.kind, 0);
   }
+
+  // Static team seed: clubs from the big-five leagues, UEFA cup participants,
+  // domestic-cup clubs and national sides for international tournaments. Lands a
+  // populated teams table on a fresh deploy long before the ESPN sync loop has
+  // run, so Onboarding is never empty on first boot. INSERT OR IGNORE makes it
+  // idempotent — the ESPN sync (server/sync/upserts.ts) upsertCoalesces on
+  // teams.id, so live data overwrites these labels without clobbering the seed.
+  seedTeams(db);
 }
