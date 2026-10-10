@@ -88,15 +88,22 @@ function favoriteGroups(db: DatabaseSync, userId: number): Array<{ team_id: stri
 function testTeamGroupSql(): void {
   const { db } = tempDb();
 
-  // A domestic club, a cup-only club, and two national teams (a national team
-  // is any side with no league that appears in an international match).
+  // A big-five club, a lower-league club, a cup-only club, a seeded national
+  // side with no match yet, and two national sides with an international match.
   seedTeam(db, "arsenal", "eng.1");
+  seedTeam(db, "twente", "ned.1");
   seedTeam(db, "ajax", "");
+  seedTeam(db, "novak", "");
   seedTeam(db, "brazil", "");
   seedTeam(db, "scotland", "");
   db.prepare(
     `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
      VALUES ('m1', 'fifa.world', 'brazil', 'scotland', '2026-06-11T00:00:00.000Z', 'finished', 2, 1)`,
+  ).run();
+  // A club-cup match makes a league-less club "cup-only", not a national team.
+  db.prepare(
+    `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
+     VALUES ('m2', 'uefa.champions', 'ajax', 'twente', '2026-09-15T00:00:00.000Z', 'finished', 1, 1)`,
   ).run();
 
   db.prepare(`INSERT INTO users (telegram_id, display_name, created_at) VALUES ('u1', 'U1', ?)`).run(
@@ -109,14 +116,18 @@ function testTeamGroupSql(): void {
     ).run(user.id, teamId, new Date().toISOString());
   }
 
-  const rows = favoriteGroups(db, user.id);
-  const byTeam = Object.fromEntries(rows.map((r) => [r.team_id, r.group_key]));
-  assert.equal(byTeam.arsenal, "eng.1", "a domestic club groups under its league slug");
+  const allGroups = db
+    .prepare(`SELECT t.id AS id, ${TEAM_GROUP_SQL} AS group_key FROM teams t`)
+    .all(...TEAM_GROUP_PARAMS) as Array<{ id: string; group_key: string }>;
+  const byTeam = Object.fromEntries(allGroups.map((r) => [r.id, r.group_key]));
+  assert.equal(byTeam.arsenal, "eng.1", "a big-five club groups under its league slug");
+  assert.equal(byTeam.twente, OTHER_GROUP, "a club outside the big five lands in 'other'");
   assert.equal(byTeam.ajax, OTHER_GROUP, "a cup-only club lands in the 'other' shelf");
+  assert.equal(byTeam.novak, INTL_GROUP, "a league-less side with no match yet is a national team");
   assert.equal(byTeam.brazil, INTL_GROUP, "a side seen in an international match is a national team");
 
-  // The cap rule fed by that SQL: 2 club slots + 4 intl slots still free.
-  const groups = rows.map((r) => r.group_key);
+  // The cap rule fed by the favorites query: 2 club slots + 4 intl slots free.
+  const groups = favoriteGroups(db, user.id).map((r) => r.group_key);
   assert.equal(favoriteCapError(groups, "esp.1"), null);
   assert.equal(favoriteCapError(groups, INTL_GROUP), null);
   assert.equal(

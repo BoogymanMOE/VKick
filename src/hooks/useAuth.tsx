@@ -37,7 +37,9 @@ function hasExternalIdentity(): boolean {
   if (!token) return false; // explicit sign-out or production guest — force the Login screen
   // Session tokens are checked via /api/me below; initData and dev:* count as
   // direct identities (server validates them on the /me call anyway).
-  return isSessionToken(token) || token.startsWith("dev:") || Boolean(window.Telegram?.WebApp?.initData);
+  // telegramInitData() also covers init data recovered from the launch URL when
+  // the SDK script was blocked, so a Telegram user is still not bounced to Login.
+  return isSessionToken(token) || token.startsWith("dev:") || Boolean(telegramInitData());
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

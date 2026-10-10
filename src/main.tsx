@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/Toast";
 import { I18nProvider } from "./i18n/I18nProvider";
 import { initTelegram } from "./lib/telegram";
+import { applyTelegramUrlNormalization } from "./lib/telegramUrl";
 import { installErrorReporting } from "./lib/errorReporting";
 import "./index.css";
 
@@ -59,6 +60,12 @@ let mounted = false;
 function mount() {
   if (mounted) return;
   mounted = true;
+  // Normalise the launch URL FIRST, before HashRouter reads it. Telegram
+  // appends init data to the URL (hash canonically, sometimes the path); an
+  // un-normalised hash makes HashRouter treat `tgWebAppData=...` as a route
+  // and render the 404 screen. This runs only after the SDK settled, so
+  // telegram-web-app.js has already parsed and stored the init data.
+  applyTelegramUrlNormalization();
   // The module-level call above ran at parse time, which may predate the SDK
   // settling; repeat it so header colour and ready() see a present SDK.
   try {

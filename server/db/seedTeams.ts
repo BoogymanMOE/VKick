@@ -2,14 +2,17 @@
  * Static team seed — runs inside migrate() so a fresh Render deploy lands with
  * a populated teams table on first boot, before the ESPN sync loop has run.
  *
- * Scope is deliberately narrow — the Top 5 European leagues and nothing else:
- *  - clubs from eng.1, esp.1, ger.1, ita.1, fra.1 (each carries its domestic
- *    league slug; the favorites/picker rule depends on it), and
- *  - national sides in international tournaments (league="", so they land in
- *    the "international" picker group once a match exists for them).
- * Sides from other leagues (Eredivisie, Primeira Liga, …) are NOT seeded: the
- * static picker only offers the big five plus the two catch-alls, and the live
- * sync still widens the catalog beyond them.
+ * Scope:
+ *  - every club from the Top 5 European leagues (eng.1, esp.1, ger.1, ita.1,
+ *    fra.1), each carrying its own slug so it groups under its league tab;
+ *  - a curated set of famous clubs from OUTSIDE the big five (Ajax, Porto,
+ *    Celtic, Galatasaray, …), each carrying its real ESPN slug (ned.1, por.1,
+ *    ukr.1, …) so it groups under the "other" shelf;
+ *  - national sides (league=""), which group as "international".
+ *
+ * The picker only renders the big five plus Other/International, so the
+ * non-big-five slugs above are identifiers, not tabs — the server's grouping
+ * maps them to "other" (see server/db/teamGroups.ts).
  *
  * Every row is copied from the verified ESPN sync data, cross-checked against
  * the bundled-asset manifests: every id resolves to a bundled crest in
@@ -36,7 +39,36 @@ export interface SeedTeam {
   league: string;
 }
 
-/** Big-five domestic clubs + national sides (Top 5 only; see the header). */
+/**
+ * Leagues a famous "rest of the world" seed club carries. Exposed so the tests
+ * can assert the seed never grows a slug outside this list, the big five or "".
+ */
+export const REST_OF_WORLD_LEAGUES = [
+  "aut.1",
+  "bel.1",
+  "bul.1",
+  "cro.1",
+  "cyp.1",
+  "cze.1",
+  "den.1",
+  "gre.1",
+  "hun.1",
+  "isr.1",
+  "ned.1",
+  "nor.1",
+  "pol.1",
+  "por.1",
+  "rou.1",
+  "sco.1",
+  "srb.1",
+  "sui.1",
+  "svk.1",
+  "svn.1",
+  "tur.1",
+  "ukr.1",
+] as const;
+
+/** Big-five clubs + famous rest-of-world clubs + national sides (see header). */
 export const SEED_TEAMS: SeedTeam[] = [
   // ---- Premier League (eng.1) ----
   {
@@ -683,6 +715,449 @@ export const SEED_TEAMS: SeedTeam[] = [
   },
   { id: "170", name: "Troyes", short_name: "Troyes", abbreviation: "TRY", color: "#0000BF", league: "fra.1" },
 
+  // ---- Rest of the World — famous clubs outside the big five (Other tab) ----
+  // ---- aut.1 ----
+  {
+    id: "4411",
+    name: "LASK Linz",
+    short_name: "LASK Linz",
+    abbreviation: "LAS",
+    color: "#FFFFFF",
+    league: "aut.1",
+  },
+  {
+    id: "2790",
+    name: "RB Salzburg",
+    short_name: "RB Salzburg",
+    abbreviation: "SLZ",
+    color: "#D82C3A",
+    league: "aut.1",
+  },
+  {
+    id: "3746",
+    name: "SK Sturm Graz",
+    short_name: "Sturm Graz",
+    abbreviation: "STG",
+    color: "#FFFFFF",
+    league: "aut.1",
+  },
+  // ---- bel.1 ----
+  {
+    id: "441",
+    name: "Anderlecht",
+    short_name: "Anderlecht",
+    abbreviation: "AND",
+    color: "#695196",
+    league: "bel.1",
+  },
+  {
+    id: "570",
+    name: "Club Brugge",
+    short_name: "Club Brugge",
+    abbreviation: "BRU",
+    color: "#0081FF",
+    league: "bel.1",
+  },
+  {
+    id: "3611",
+    name: "KAA Gent",
+    short_name: "KAA Gent",
+    abbreviation: "GENT",
+    color: "#0000FF",
+    league: "bel.1",
+  },
+  {
+    id: "936",
+    name: "Sint-Truidense",
+    short_name: "Sint-Truidense",
+    abbreviation: "STVV",
+    color: "#F8EA2C",
+    league: "bel.1",
+  },
+  {
+    id: "5807",
+    name: "Union St.-Gilloise",
+    short_name: "Union SG",
+    abbreviation: "USG",
+    color: "#FCEE33",
+    league: "bel.1",
+  },
+  // ---- bul.1 ----
+  {
+    id: "10834",
+    name: "CSKA Sofia",
+    short_name: "CSKA Sofia",
+    abbreviation: "CSKA",
+    color: "#C60000",
+    league: "bul.1",
+  },
+  {
+    id: "490",
+    name: "Levski Sofia",
+    short_name: "Levski Sofia",
+    abbreviation: "LEV",
+    color: "#6182CF",
+    league: "bul.1",
+  },
+  // ---- cro.1 ----
+  {
+    id: "597",
+    name: "Dinamo Zagreb",
+    short_name: "Dinamo Zagreb",
+    abbreviation: "DZG",
+    color: "#0000BB",
+    league: "cro.1",
+  },
+  {
+    id: "489",
+    name: "Hajduk Split",
+    short_name: "Hajduk Split",
+    abbreviation: "HAJ",
+    color: "#FFCCCC",
+    league: "cro.1",
+  },
+  // ---- cyp.1 ----
+  {
+    id: "617",
+    name: "Omonia Nicosia",
+    short_name: "Omonia",
+    abbreviation: "OMON",
+    color: "#025719",
+    league: "cyp.1",
+  },
+  { id: "22281", name: "Pafos", short_name: "Pafos", abbreviation: "PAF", color: "#82C0FE", league: "cyp.1" },
+  // ---- cze.1 ----
+  {
+    id: "494",
+    name: "Slavia Prague",
+    short_name: "Slavia Prague",
+    abbreviation: "SLP",
+    color: "#DC1F26",
+    league: "cze.1",
+  },
+  {
+    id: "433",
+    name: "Sparta Prague",
+    short_name: "Sparta",
+    abbreviation: "SPP",
+    color: "#791B29",
+    league: "cze.1",
+  },
+  {
+    id: "11706",
+    name: "Viktoria Plzen",
+    short_name: "Viktoria Plzen",
+    abbreviation: "PLZ",
+    color: "#0000DD",
+    league: "cze.1",
+  },
+  // ---- den.1 ----
+  { id: "7853", name: "AGF", short_name: "AGF", abbreviation: "AGF", color: "#FFFFFF", league: "den.1" },
+  {
+    id: "909",
+    name: "F.C. København",
+    short_name: "København",
+    abbreviation: "KBH",
+    color: "#FFFFFF",
+    league: "den.1",
+  },
+  {
+    id: "572",
+    name: "FC Midtjylland",
+    short_name: "Midtjylland",
+    abbreviation: "MID",
+    color: "#444444",
+    league: "den.1",
+  },
+  {
+    id: "3101",
+    name: "FC Nordsjælland",
+    short_name: "Nordsjælland",
+    abbreviation: "FCN",
+    color: "#CF010E",
+    league: "den.1",
+  },
+  // ---- gre.1 ----
+  {
+    id: "887",
+    name: "AEK Athens",
+    short_name: "AEK Athens",
+    abbreviation: "AEK",
+    color: "#FFFF00",
+    league: "gre.1",
+  },
+  {
+    id: "1010",
+    name: "OFI Crete",
+    short_name: "OFI Crete",
+    abbreviation: "OFI",
+    color: "#FFFFFF",
+    league: "gre.1",
+  },
+  {
+    id: "435",
+    name: "Olympiacos",
+    short_name: "Olympiacos",
+    abbreviation: "OLY",
+    color: "#D01729",
+    league: "gre.1",
+  },
+  {
+    id: "443",
+    name: "Panathinaikos",
+    short_name: "Panathinaikos",
+    abbreviation: "PAO",
+    color: "#2B6A36",
+    league: "gre.1",
+  },
+  // ---- hun.1 ----
+  {
+    id: "622",
+    name: "Ferencvaros",
+    short_name: "Ferencvaros",
+    abbreviation: "FER",
+    color: "#239B56",
+    league: "hun.1",
+  },
+  // ---- isr.1 ----
+  {
+    id: "13083",
+    name: "Hapoel Be'er",
+    short_name: "Hapoel Be'er",
+    abbreviation: "HBE",
+    color: "#FD0000",
+    league: "isr.1",
+  },
+  // ---- ned.1 ----
+  {
+    id: "139",
+    name: "Ajax Amsterdam",
+    short_name: "Ajax",
+    abbreviation: "AJA",
+    color: "#DF1B27",
+    league: "ned.1",
+  },
+  {
+    id: "140",
+    name: "AZ Alkmaar",
+    short_name: "AZ Alkmaar",
+    abbreviation: "AZ",
+    color: "#EF2F24",
+    league: "ned.1",
+  },
+  {
+    id: "152",
+    name: "FC Twente",
+    short_name: "FC Twente",
+    abbreviation: "TWE",
+    color: "#F31522",
+    league: "ned.1",
+  },
+  {
+    id: "142",
+    name: "Feyenoord Rotterdam",
+    short_name: "Feyenoord",
+    abbreviation: "FEY",
+    color: "#EF2F24",
+    league: "ned.1",
+  },
+  {
+    id: "147",
+    name: "NEC Nijmegen",
+    short_name: "NEC",
+    abbreviation: "NEC",
+    color: "#EF2F24",
+    league: "ned.1",
+  },
+  {
+    id: "148",
+    name: "PSV Eindhoven",
+    short_name: "PSV",
+    abbreviation: "PSV",
+    color: "#EF2F24",
+    league: "ned.1",
+  },
+  // ---- nor.1 ----
+  {
+    id: "2980",
+    name: "Bodo/Glimt",
+    short_name: "Bodo/Glimt",
+    abbreviation: "BODO",
+    color: "#FCEE33",
+    league: "nor.1",
+  },
+  {
+    id: "987",
+    name: "Lillestrom",
+    short_name: "Lillestrom",
+    abbreviation: "LSK",
+    color: "#E8E337",
+    league: "nor.1",
+  },
+  {
+    id: "620",
+    name: "SK Brann",
+    short_name: "SK Brann",
+    abbreviation: "SKBR",
+    color: "#FF0000",
+    league: "nor.1",
+  },
+  {
+    id: "510",
+    name: "Viking FK",
+    short_name: "Viking FK",
+    abbreviation: "VIK",
+    color: "#000080",
+    league: "nor.1",
+  },
+  // ---- pol.1 ----
+  {
+    id: "11505",
+    name: "Jagiellonia Bialystok",
+    short_name: "Jagiellonia ",
+    abbreviation: "JAG",
+    color: "#FFED00",
+    league: "pol.1",
+  },
+  {
+    id: "2990",
+    name: "Lech Poznan",
+    short_name: "Lech Poznan",
+    abbreviation: "LECH",
+    color: "#004B92",
+    league: "pol.1",
+  },
+  // ---- por.1 ----
+  {
+    id: "1929",
+    name: "Benfica",
+    short_name: "Benfica",
+    abbreviation: "SLB",
+    color: "#CA281D",
+    league: "por.1",
+  },
+  { id: "2994", name: "Braga", short_name: "Braga", abbreviation: "SCB", color: "#DE1F26", league: "por.1" },
+  {
+    id: "437",
+    name: "FC Porto",
+    short_name: "FC Porto",
+    abbreviation: "FCP",
+    color: "#0000DD",
+    league: "por.1",
+  },
+  {
+    id: "2250",
+    name: "Sporting CP",
+    short_name: "Sporting",
+    abbreviation: "SCP",
+    color: "#008127",
+    league: "por.1",
+  },
+  // ---- rou.1 ----
+  {
+    id: "8089",
+    name: "CSU Craiova",
+    short_name: "CSU Craiova",
+    abbreviation: "UCRA",
+    color: "#88CCEE",
+    league: "rou.1",
+  },
+  // ---- sco.1 ----
+  { id: "256", name: "Celtic", short_name: "Celtic", abbreviation: "CEL", color: "#009921", league: "sco.1" },
+  {
+    id: "262",
+    name: "Heart of Midlothian",
+    short_name: "Hearts",
+    abbreviation: "HOM",
+    color: "#8E003B",
+    league: "sco.1",
+  },
+  // ---- srb.1 ----
+  {
+    id: "2290",
+    name: "Red Star Belgrade",
+    short_name: "Red Star",
+    abbreviation: "RSB",
+    color: "#FF0000",
+    league: "srb.1",
+  },
+  // ---- sui.1 ----
+  {
+    id: "7672",
+    name: "FC Lugano",
+    short_name: "FC Lugano",
+    abbreviation: "LUG",
+    color: "#555555",
+    league: "sui.1",
+  },
+  {
+    id: "3024",
+    name: "FC Thun",
+    short_name: "FC Thun",
+    abbreviation: "THUN",
+    color: "#FF0900",
+    league: "sui.1",
+  },
+  // ---- svk.1 ----
+  {
+    id: "521",
+    name: "Slovan Bratislava",
+    short_name: "S Bratislava",
+    abbreviation: "SLB",
+    color: "#81C0FF",
+    league: "svk.1",
+  },
+  // ---- svn.1 ----
+  {
+    id: "3362",
+    name: "NK Celje",
+    short_name: "NK Celje",
+    abbreviation: "NKC",
+    color: "#000099",
+    league: "svn.1",
+  },
+  // ---- tur.1 ----
+  {
+    id: "1895",
+    name: "Besiktas",
+    short_name: "Besiktas",
+    abbreviation: "BES",
+    color: "#FFFFFF",
+    league: "tur.1",
+  },
+  {
+    id: "436",
+    name: "Fenerbahce",
+    short_name: "Fenerbahce",
+    abbreviation: "FEN",
+    color: "#FFFF00",
+    league: "tur.1",
+  },
+  {
+    id: "432",
+    name: "Galatasaray",
+    short_name: "Galatasaray",
+    abbreviation: "GAL",
+    color: "#AA0031",
+    league: "tur.1",
+  },
+  {
+    id: "997",
+    name: "Trabzonspor",
+    short_name: "Trabzonspor",
+    abbreviation: "TRAB",
+    color: "#5699EB",
+    league: "tur.1",
+  },
+  // ---- ukr.1 ----
+  {
+    id: "493",
+    name: "Shakhtar Donetsk",
+    short_name: "Shakhtar",
+    abbreviation: "SHK",
+    color: "#FF5900",
+    league: "ukr.1",
+  },
   // ---- International tournaments — national sides (league="") ----
   { id: "585", name: "Albania", short_name: "Albania", abbreviation: "ALB", color: "#E70000", league: "" },
   {

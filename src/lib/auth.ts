@@ -15,6 +15,8 @@
  * fallbacks; the next explicit Enter clears it.
  */
 
+import { capturedTelegramInitData } from "./telegramUrl";
+
 const KEY = "matchday.session";
 const EPHEMERAL_KEY = "matchday.session.session";
 const LOGGED_OUT_KEY = "matchday.loggedOut";
@@ -111,10 +113,18 @@ function clearLoggedOut(): void {
   safeSet(localStorage, LOGGED_OUT_KEY, null);
 }
 
-/** The Telegram initData, when the app actually runs inside Telegram. */
+/**
+ * The Telegram initData, when the app actually runs inside Telegram.
+ *
+ * Prefers the SDK's parsed value; falls back to the init data recovered from
+ * the launch URL (see lib/telegramUrl) so a Telegram user is still themselves
+ * when telegram.org is unreachable and the SDK script never loads — which is
+ * exactly the network this app ships to.
+ */
 export function telegramInitData(): string | null {
   const tg = window.Telegram?.WebApp;
-  return typeof tg?.initData === "string" && tg.initData ? tg.initData : null;
+  if (typeof tg?.initData === "string" && tg.initData) return tg.initData;
+  return capturedTelegramInitData();
 }
 
 /**

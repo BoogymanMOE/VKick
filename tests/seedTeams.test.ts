@@ -18,11 +18,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { migrate } from "../server/db/schema.js";
-import { SEED_TEAMS } from "../server/db/seedTeams.js";
+import { REST_OF_WORLD_LEAGUES, SEED_TEAMS } from "../server/db/seedTeams.js";
 import logos from "../src/data/logos.json";
 import colors from "../src/data/team-colors.json";
 
 const BIG_FIVE = new Set(["eng.1", "esp.1", "ger.1", "ita.1", "fra.1"]);
+const ALLOWED_LEAGUES = new Set<string>([...BIG_FIVE, ...REST_OF_WORLD_LEAGUES, ""]);
 const logosById = logos as Record<string, string>;
 const colorsById = colors as Record<string, string>;
 
@@ -34,8 +35,8 @@ function testSeedAgainstManifests(): void {
     seen.add(t.id);
 
     assert.ok(
-      BIG_FIVE.has(t.league) || t.league === "",
-      `${t.id} ${t.name}: league ${JSON.stringify(t.league)} is not a Top-5 slug or ""`,
+      ALLOWED_LEAGUES.has(t.league),
+      `${t.id} ${t.name}: league ${JSON.stringify(t.league)} is not a seeded league slug or ""`,
     );
     assert.ok(t.name.length > 0, `${t.id} has no name`);
     assert.ok(t.abbreviation, `${t.id} ${t.name} has no abbreviation`);
@@ -64,9 +65,16 @@ function testSeedAgainstManifests(): void {
     SEED_TEAMS.some((t) => t.league === "" && t.name === "England"),
     'national sides are seeded with league=""',
   );
+  // Famous rest-of-world clubs fill the Other tab, each under a real slug.
+  const rest = SEED_TEAMS.filter((t) => REST_OF_WORLD_LEAGUES.includes(t.league as never));
+  assert.ok(rest.length >= 45, `expected ~50 rest-of-world clubs, found ${rest.length}`);
   assert.ok(
-    !SEED_TEAMS.some((t) => t.league !== "" && !BIG_FIVE.has(t.league)),
-    "no seed row carries a non-big-five league",
+    rest.some((t) => t.name === "Ajax Amsterdam"),
+    "a named rest-of-world club (Ajax) is seeded",
+  );
+  assert.ok(
+    !SEED_TEAMS.some((t) => t.league !== "" && !ALLOWED_LEAGUES.has(t.league)),
+    "no seed row carries an undeclared league slug",
   );
 }
 
@@ -93,5 +101,5 @@ function testSeedBootsAndIsIdempotent(): void {
 export function runSeedTeamsTests(): void {
   testSeedAgainstManifests();
   testSeedBootsAndIsIdempotent();
-  console.log("  seedTeams: Top-5 scope, manifest colour/crest lockstep, idempotent boot OK");
+  console.log("  seedTeams: scope, manifest colour/crest lockstep, rest-of-world clubs, idempotent boot OK");
 }

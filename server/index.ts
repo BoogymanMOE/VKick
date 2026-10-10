@@ -147,7 +147,13 @@ app.use((req, res, next) => {
   // A MISS on a real file must 404 rather than fall through to the shell —
   // returning index.html with 200 for /assets/whatever.js is what turns a
   // post-deploy stale page into "Unexpected token '<'" instead of a reload.
-  if (/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type("text/plain").send("Not found");
+  // Telegram's init params are the exception: they arrive appended straight
+  // after the path (`/tgWebAppData=...&tgWebAppVersion=7.0`), which would trip
+  // the dot check above and 404 before the bundle ever loads. Serve the shell
+  // so the client-side normaliser (lib/telegramUrl) can lift them out.
+  const telegramLaunchPath = req.path.includes("tgWebApp");
+  if (!telegramLaunchPath && /\.[a-z0-9]+$/i.test(req.path))
+    return res.status(404).type("text/plain").send("Not found");
   return res.sendFile(path.join(ROOT_DIR, "dist", "index.html"), (err) => {
     if (err) next(err);
   });
