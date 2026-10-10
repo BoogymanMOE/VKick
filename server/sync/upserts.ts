@@ -20,6 +20,7 @@ import {
   getSeasonKey,
   type EspnTeamStatsPayload,
 } from "./teamStats.js";
+import { isBlockedTeam, isBlockedTeamId } from "../db/blockedTeams.js";
 import type { NormMatch, NormTeam } from "../espn/types.js";
 
 export interface GoalAlert {
@@ -54,6 +55,8 @@ export function applyScoreboard(db: DB, json: unknown, league: string): void {
   const { teams, matches } = normalizeScoreboard(json, league);
   tx(db, () => {
     for (const t of teams) {
+      // Blocklisted clubs are skipped entirely: no insert, no update.
+      if (isBlockedTeam(t)) continue;
       upsertCoalesce(
         db,
         "teams",
@@ -65,6 +68,10 @@ export function applyScoreboard(db: DB, json: unknown, league: string): void {
       );
     }
     for (const m of matches) {
+      // A fixture involving a blocklisted club is skipped too: its team row was
+      // never written, so the FK on matches.home/away_team_id would reject the
+      // insert and roll back the whole competition's sync.
+      if (isBlockedTeamId(m.home_team_id) || isBlockedTeamId(m.away_team_id)) continue;
       const existing = get<{ status: string; home_score: number | null; away_score: number | null }>(
         db,
         "SELECT status, home_score, away_score FROM matches WHERE id = ?",
@@ -109,6 +116,10 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
   const { home, away } = normalizeSummaryTeams(json);
   const match = normalizeSummaryMatch(json);
   if (!match.id) return { match, goals: [] };
+  // A blocklisted club's match is ignored entirely — see applyScoreboard.
+  if (isBlockedTeamId(match.home_team_id) || isBlockedTeamId(match.away_team_id)) {
+    return { match, goals: [] };
+  }
 
   const prev = get<{
     home_score: number | null;
@@ -121,7 +132,8 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
 
   tx(db, () => {
     for (const t of [home, away]) {
-      if (t)
+      // Blocklisted clubs are skipped entirely: no insert, no update.
+      if (t && !isBlockedTeam(t))
         upsertCoalesce(
           db,
           "teams",
@@ -357,6 +369,8 @@ export function applyStandings(db: DB, json: unknown, league: string, season: st
   const { teams, rows } = normalizeStandings(json, league);
   tx(db, () => {
     for (const t of teams) {
+      // Blocklisted clubs are skipped entirely: no insert, no update.
+      if (isBlockedTeam(t)) continue;
       upsertCoalesce(
         db,
         "teams",
@@ -367,6 +381,8 @@ export function applyStandings(db: DB, json: unknown, league: string, season: st
       );
     }
     for (const r of rows) {
+      // Same FK rule as matches: no team row means no standings row.
+      if (isBlockedTeamId(r.team_id)) continue;
       upsert(
         db,
         "standings",

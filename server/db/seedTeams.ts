@@ -28,6 +28,7 @@
  */
 
 import type { DatabaseSync } from "node:sqlite";
+import { isBlockedTeam } from "./blockedTeams.js";
 
 export interface SeedTeam {
   id: string;
@@ -1485,6 +1486,9 @@ export function seedTeams(db: DatabaseSync): number {
   );
   let inserted = 0;
   for (const t of SEED_TEAMS) {
+    // Defense in depth: a blocklisted club must never be seeded, even if a row
+    // is added to SEED_TEAMS by hand (see server/db/blockedTeams.ts).
+    if (isBlockedTeam(t)) continue;
     const res = stmt.run(t.id, t.name, t.short_name, t.abbreviation, t.logo_url ?? null, t.color, t.league);
     inserted += Number(res.changes ?? 0);
   }

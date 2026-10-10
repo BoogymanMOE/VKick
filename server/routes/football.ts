@@ -6,6 +6,7 @@
  */
 import express from "express";
 import { getDb, all, get } from "../db/index.js";
+import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
 import { isCup } from "../espn/types.js";
 import { competitionCatalog } from "../espn/catalog.js";
 import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
@@ -169,29 +170,32 @@ matchesRouter.get("/api/matches/:id/timeline", (req, res) => {
  */
 matchesRouter.get("/api/teams", (req, res) => {
   const league = req.query.league ? String(req.query.league) : null;
+  // Blocklisted clubs are hidden everywhere the team list is read, so they can
+  // never surface in the picker or a team-scoped screen.
   if (league) {
-    res.json({
-      teams: all(
-        db,
-        "SELECT *, CASE WHEN league != '' THEN league ELSE 'other' END AS group_key FROM teams WHERE league = ? ORDER BY name ASC",
-        [league],
-      ),
-    });
+    const teams = all<{ id: string }>(
+      db,
+      "SELECT *, CASE WHEN league != '' THEN league ELSE 'other' END AS group_key FROM teams WHERE league = ? ORDER BY name ASC",
+      [league],
+    );
+    res.json({ teams: filterOutBlockedTeams(teams) });
     return;
   }
-  const rows = all(
+  const rows = all<{ id: string }>(
     db,
     `SELECT t.*, ${TEAM_GROUP_SQL} AS group_key
      FROM teams t
      ORDER BY t.league ASC, t.name ASC`,
     [...TEAM_GROUP_PARAMS],
   );
-  res.json({ teams: rows });
+  res.json({ teams: filterOutBlockedTeams(rows) });
 });
 
 // A single team with its season stat line.
 matchesRouter.get("/api/teams/:id", (req, res) => {
   const teamId = String(req.params.id);
+  // A blocked club has no team page either — same 404 as any unknown id.
+  if (isBlockedTeamId(teamId)) return bad(res, "not found", 404);
   const team = get(db, "SELECT * FROM teams WHERE id = ?", [teamId]);
   if (!team) return bad(res, "not found", 404);
   const seasonStats = get(
