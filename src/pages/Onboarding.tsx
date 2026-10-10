@@ -85,12 +85,10 @@ export default function Onboarding() {
   const compsQuery = useCompetitions();
   const leagueComps = (compsQuery.data?.competitions ?? []).filter((c) => c.kind === "league");
 
-  // Tabs come from the catalog: the big five, every other league, then the
-  // catch-alls — same list Onboarding's league step uses for following.
-  const pickerGroups = useMemo(
-    () => buildPickerGroups(compsQuery.data?.competitions ?? [], (key) => t(key), localize),
-    [compsQuery.data, t, localize],
-  );
+  // Favorite-team tabs are the big five plus Other/International only — the
+  // picker is a Top-5 surface (see lib/pickerGroups). The league-FOLLOWING
+  // step below still lists every league from the catalog.
+  const pickerGroups = useMemo(() => buildPickerGroups((key) => t(key)), [t]);
 
   const anchorTeam = useMemo(() => allTeams.find((team) => team.id === anchorId), [allTeams, anchorId]);
   const anchorName = useMemo(

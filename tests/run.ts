@@ -9,6 +9,7 @@ import { runFormationTests } from "./formations.test.js";
 import { runNormalizeTests } from "./normalize.test.js";
 import { runPredictionScoreTests } from "./predictionScore.test.js";
 import { runMigrateTests } from "./migrate.test.js";
+import { runSeedTeamsTests } from "./seedTeams.test.js";
 import { runPasswordTests } from "./password.test.js";
 import { runNotificationTests } from "./notifications.test.js";
 import { runUnderstatTests } from "./understat.test.js";
@@ -48,6 +49,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["normalize", runNormalizeTests],
   ["predictionScore", runPredictionScoreTests],
   ["migrate", runMigrateTests],
+  ["seedTeams", runSeedTeamsTests],
   ["password", runPasswordTests],
   ["notifications", runNotificationTests],
   ["understat", runUnderstatTests],

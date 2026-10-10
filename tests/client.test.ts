@@ -56,28 +56,17 @@ function testBreakdownItems(): void {
 
 function testPickerGroups(): void {
   const t = ((key: string) => `T:${key}`) as unknown as (key: StringKey) => string;
-  const localize = (name: string) => name;
-  const groups = buildPickerGroups(
-    [
-      { slug: "eng.1", kind: "league", name: "Premier League" },
-      { slug: "esp.1", kind: "league", name: "LaLiga" },
-      { slug: "ned.1", kind: "league", name: "Eredivisie" },
-      { slug: "eng.fa", kind: "cup", name: "FA Cup" },
-    ],
-    t,
-    localize,
-  );
+  const groups = buildPickerGroups(t);
 
   const values = groups.map((g) => g.value);
   assert.deepEqual(
     values,
-    ["PL", "LL", "SA", "BL", "L1", "ned.1", OTHER_GROUP, INTERNATIONAL_GROUP],
-    "big five first, then other leagues, then the catch-alls",
+    ["PL", "LL", "SA", "BL", "L1", OTHER_GROUP, INTERNATIONAL_GROUP],
+    "the picker is the big five plus the two catch-alls, nothing else",
   );
-  assert.ok(!values.includes("eng.1"), "a big-five comp is skipped by slug, never duplicated");
-  assert.ok(!values.includes("eng.fa"), "cups are not picker league tabs");
-  assert.equal(groups[5]?.label, "Eredivisie", "a promoted league uses its localized name");
-  assert.equal(groups[6]?.label, "T:picker.otherClubs", "the catch-alls stay translated");
+  assert.ok(!values.includes("ned.1"), "a league beyond the big five never gets a picker tab");
+  assert.equal(groups[0]?.label, "T:league.PL", "the big five use their translated aliases");
+  assert.equal(groups[5]?.label, "T:picker.otherClubs", "the catch-alls stay translated");
 }
 
 function testTeamsInGroup(): void {
