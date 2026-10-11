@@ -2,7 +2,7 @@
  * Ads — Anonymous Ads (A-ADS) banner.
  *
  * A-ADS is a lightweight, privacy-friendly ad network that works inside
- * Telegram Mini Apps via a simple iframe snippet. Unlike Adsgram's Task
+ * Telegram Mini Apps via a simple iframe snippet. Unlike legacy ad providers whose only inline unit was a Task card, A-ADS provides a banner-style
  * format (their only inline unit, now retired), A-ADS provides a banner-style
  * placement that fits naturally between feed sections.
  *
@@ -10,7 +10,7 @@
  *  - ADS_ENABLED is exactly "true" (the master switch; both spellings below),
  *  - the app runs inside Telegram (A-ADS fill is optimized for Telegram
  *    webviews; plain browsers also work but we gate on Telegram to match the
- *    original Adsgram policy of Telegram-only monetization).
+ *    original Telegram-only monetization policy).
  *
  * The web build and any unset deployment never load the ad snippet — zero
  * bytes, zero requests, zero visual footprint.
