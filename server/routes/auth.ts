@@ -30,27 +30,19 @@ export const authRouter = express.Router();
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
 
 /* ---------------------------------------------------------------------------
- * TEMP AUTH PROBE — delete this block and its one call site once a real
- * Telegram client has been observed on a device.
- *
- * Off by default (AUTH_PROBE != "1" prints nothing), so production and the
- * test suite stay silent; the call site can stay in place until then.
- *
- * One line per /api/auth/guest call so a phone test is readable at a glance:
- * was initData sent, did it verify, and did the user end up Telegram or a
- * guest.
- *
- * It logs initData KEY NAMES and booleans only — never the initData string,
- * never the hash, never the signature value, never the bot token. Field
- * names are not secrets and are what actually matter here: whether the
- * client sent `signature` decides which check-string algorithm is correct.
+ * Auth probe — logs every guest attempt so Telegram login failures are
+ * visible in production Render logs. Logs initData KEY NAMES and booleans
+ * only — never the initData string, never the hash, never the signature
+ * value, never the bot token. Field names are not secrets and are what
+ * actually matter here: whether the client sent `signature` decides which
+ * check-string algorithm is correct.
  */
 function authProbeGuest(
   initData: string,
   verified: { ok: true } | { ok: false; reason: string } | null,
   outcome: "telegram" | "guest",
 ): void {
-  if (process.env.AUTH_PROBE !== "1") return;
+  // Always log: the user needs to see why Telegram login fails in the Render logs.
   const keys = initData ? [...new URLSearchParams(initData).keys()].sort().join(",") : "";
   const hasSignature = initData ? new URLSearchParams(initData).has("signature") : false;
   const verdict = !initData
@@ -63,7 +55,7 @@ function authProbeGuest(
           ? "pass"
           : `fail(${verified.reason})`;
   console.log(
-    `[auth:guest] PROBE initData=${initData ? "yes" : "no"} verify=${verdict} ` +
+    `[auth:guest] initData=${initData ? "yes" : "no"} verify=${verdict} ` +
       `signature=${hasSignature ? "yes" : "no"} outcome=${outcome} keys=[${keys}]`,
   );
 }
@@ -166,7 +158,8 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
   // This is the key diagnostic for "why am I a guest inside Telegram" — without it
   // we only see successful telegram logins and guest logins with no initData, never
   // the middle case where the client sent initData but the server rejected it.
-  if (initData && !verified?.ok && process.env.AUTH_PROBE === "1") {
+  // Always log: the user needs to see the exact failure reason in Render logs.
+  if (initData && !verified?.ok) {
     console.log(
       `[auth:guest] initData VERIFICATION FAILED reason=${verified?.reason ?? "unknown"} ` +
         `botToken=${botToken() ? "set" : "MISSING"} keys=[${[...new URLSearchParams(initData).keys()].sort().join(",")}]`,

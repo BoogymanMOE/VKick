@@ -103,6 +103,12 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
   if (real.ok) {
     tg = real.user;
   } else {
+    // Always log initData verification failures so the exact reason is visible
+    // in server logs, even when the caller falls through to the dev token path.
+    console.log(
+      `[auth:requireUser] initData VERIFICATION FAILED reason=${real.reason ?? "unknown"} ` +
+        `botToken=${botToken() ? "set" : "MISSING"}`,
+    );
     const dev = verifyDevToken(token, devSecret());
     if (dev.ok) {
       tg = dev.user;

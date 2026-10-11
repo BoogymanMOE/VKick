@@ -96,24 +96,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // login into a guest account with no bot pushes.
       const tg = await waitForTelegram();
       const initData = telegramInitData();
-      if (import.meta.env.DEV) {
-        console.log(
-          `[auth] enterApp tg=${tg ? "present" : "null"} initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
-        );
-      }
+      console.log(
+        `[auth] enterApp tg=${tg ? "present" : "null"} initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
+      );
       const res = await api.guest(getDeviceId(), initData);
-      if (import.meta.env.DEV) {
-        console.log(
-          `[auth] enterApp result mode=${res.mode} token=${res.token.slice(0, 8)}... user=${res.user.display_name}`,
-        );
-      }
+      console.log(
+        `[auth] enterApp result mode=${res.mode} token=${res.token.slice(0, 8)}... user=${res.user.display_name}`,
+      );
+
       if (!res.ok) throw new Error("GUEST_ENTRY_FAILED");
       // Persistent slot either way: entry must survive restarts.
       applyAuthSuccess(res.token, true);
     } catch (err) {
-      if (import.meta.env.DEV) {
-        console.error(`[auth] enterApp failed:`, err);
-      }
+      console.error(`[auth] enterApp failed:`, err);
       enteredRef.current = false; // allow a retry from the Login screen
       throw err;
     } finally {
