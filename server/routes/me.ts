@@ -60,11 +60,18 @@ meRouter.get("/api/me", requireUser, (req, res) => {
   // The language the client last reported, so a fresh device can adopt it
   // rather than guessing from navigator.language.
   const prefs = get<{ language: string }>(db, "SELECT language FROM users WHERE id = ?", [u.id]);
+  // Determine the real auth mode from the user's telegram_id, not from the
+  // request's authMode (which is "session" for any mg_ token). A Telegram user
+  // who entered via /api/auth/guest and now carries a session token is still a
+  // Telegram user — their telegram_id is a numeric Telegram id, not a
+  // guest:<device> or pwd:<username> synthetic id.
+  const authMode: "telegram" | "session" | "dev" =
+    req.authMode === "dev" ? "dev" : /^\d+$/.test(u.telegram_id) ? "telegram" : "session";
   res.json({
     user: { ...u, username: cred?.username ?? null, language: prefs?.language ?? "en" },
     favorites: favCount?.n ?? 0,
     leagues: leagueCount?.n ?? 0,
-    authMode: req.authMode ?? "telegram",
+    authMode,
   });
 });
 

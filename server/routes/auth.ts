@@ -162,6 +162,17 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
   const initData = String(req.body?.initData ?? "");
   const verified = initData && botToken() ? verifyInitData(initData, botToken()) : null;
 
+  // Log why initData verification failed (when initData was sent but didn't verify).
+  // This is the key diagnostic for "why am I a guest inside Telegram" — without it
+  // we only see successful telegram logins and guest logins with no initData, never
+  // the middle case where the client sent initData but the server rejected it.
+  if (initData && !verified?.ok && process.env.AUTH_PROBE === "1") {
+    console.log(
+      `[auth:guest] initData VERIFICATION FAILED reason=${verified?.reason ?? "unknown"} ` +
+        `botToken=${botToken() ? "set" : "MISSING"} keys=[${[...new URLSearchParams(initData).keys()].sort().join(",")}]`,
+    );
+  }
+
   // Telegram identity wins over the guest id, so reopening in the Mini App
   // merges straight into the Telegram account instead of a second profile.
   if (verified?.ok) {
