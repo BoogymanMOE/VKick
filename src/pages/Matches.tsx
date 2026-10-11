@@ -33,7 +33,7 @@ import {
   RefreshIcon,
   StarFilledIcon,
 } from "../components/icons";
-import { TaskAdCard } from "../components/TaskAdCard";
+import { AdBanner } from "../components/AdBanner";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { PullIndicator } from "../components/PullToRefresh";
@@ -213,13 +213,12 @@ export default function Matches() {
     </CollapsibleSection>
   );
 
-  /* Inline sponsored card (Adsgram Task), below the Upcoming feed and above
-     Previous results: after today's games have had their say, so it can never
-     push the fixtures out of view. Renders nothing unless ADGRAM_ENABLED is
-     "true" and a Task block id is configured — Telegram only, and hidden when
-     nothing fills; see src/lib/ads.ts. One placement per screen, so the same
-     node is reused by the two feed states that show it. */
-  const adSlot = <TaskAdCard />;
+  /* Inline sponsored banner (Anonymous Ads / A-ADS), below the Upcoming feed
+     and above Previous results: after today's games have had their say, so it
+     can never push the fixtures out of view. Renders nothing unless
+     ADS_ENABLED is "true"; see src/lib/ads.ts. One placement per screen, so
+     the same node is reused by the two feed states that show it. */
+  const adSlot = <AdBanner />;
 
   return (
     <>

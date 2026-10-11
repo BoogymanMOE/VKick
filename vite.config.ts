@@ -16,11 +16,11 @@ export default defineConfig(({ mode }) => {
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
       // The ads kill switch, under the exact name the deploy sets
-      // (`ADGRAM_ENABLED`). Vite only inlines `VITE_`-prefixed vars on its own,
-      // so this is what makes the un-prefixed name work; `VITE_ADGRAM_ENABLED`
+      // (`ADS_ENABLED`). Vite only inlines `VITE_`-prefixed vars on its own,
+      // so this is what makes the un-prefixed name work; `VITE_ADS_ENABLED`
       // is read natively as the alternative. Inlined at BUILD time — flipping
       // it needs a rebuild. See src/lib/ads.ts.
-      __ADGRAM_ENABLED__: JSON.stringify(env.ADGRAM_ENABLED ?? ""),
+      __ADS_ENABLED__: JSON.stringify(env.ADS_ENABLED ?? ""),
     },
     build: {
       // The app runs in Telegram's webview on low-end Android, which can lag the
