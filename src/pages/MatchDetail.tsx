@@ -37,7 +37,6 @@ import { cx } from "../lib/cx";
 import { api, serverErrorKey, type ApiPlayerRating, type ApiTimelineEvent } from "../lib/api";
 import { TEAM_FALLBACK } from "../lib/colors";
 import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
-import { AdBanner } from "../components/AdBanner";
 import { useAuth } from "../hooks/authContext";
 import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
@@ -299,11 +298,6 @@ export default function MatchDetail() {
           </div>
         </>
       ) : null}
-
-      {/* Inline sponsored banner (Anonymous Ads / A-ADS), last block on the
-          page so it never sits between the user and the match. Renders nothing
-          unless ADS_ENABLED is "true"; see src/lib/ads.ts for the whole story. */}
-      <AdBanner />
 
       {/* The Shot Predictor lives in the Predict tab now (concept v2). */}
     </>

@@ -26,7 +26,6 @@ import { formatClock, formatDayHeader, formatKickoff } from "../lib/format";
 import { LEAGUE_BY_SLUG } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
 import { BallIcon, PlusIcon, RefreshIcon, StarFilledIcon } from "../components/icons";
-import { AdBanner } from "../components/AdBanner";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { PullIndicator } from "../components/PullToRefresh";
@@ -223,8 +222,6 @@ export default function Matches() {
      can never push the fixtures out of view. Renders nothing unless
      ADS_ENABLED is "true"; see src/lib/ads.ts. One placement per screen, so
      the same node is reused by the two feed states that show it. */
-  const adSlot = <AdBanner />;
-
   return (
     <>
       <ConfettiBurst trigger={burst} />
@@ -509,8 +506,6 @@ export default function Matches() {
                 </button>
               )}
             </CollapsibleSection>
-
-            {adSlot}
 
             {/* Previous results beneath the feed: folded away by default so the
               matchday page leads with what's next; open when the score is
