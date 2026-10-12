@@ -1,16 +1,9 @@
 /// <reference types="vite/client" />
-
 export {};
 
 declare global {
   /** Injected by vite.config `define` — the package.json version at build time. */
   const __APP_VERSION__: string;
-  /**
-   * Injected by vite.config `define` from the plain `ADS_ENABLED` environment
-   * variable — the ads master switch under the name the deploy sets.
-   * Inlined at build time; see src/lib/ads.ts.
-   */
-  const __ADS_ENABLED__: string;
 
   interface ImportMetaEnv {
     /** The Vite-native spelling of the same switch (`VITE_ADS_ENABLED`). */

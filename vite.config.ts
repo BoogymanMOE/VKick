@@ -8,19 +8,14 @@ export default defineConfig(({ mode }) => {
   // them explicitly. An empty prefix keeps every key (not just VITE_ ones) —
   // only the value below is exposed to the client, so nothing else leaks.
   // Real environment variables win, which is what a Render build sets.
-  const env = loadEnv(mode, process.cwd(), "");
+  const _env = loadEnv(mode, process.cwd(), "");
   return {
     plugins: [react(), tailwindcss()],
     // Single source of truth for the app version (package.json) — surfaced in
     // Profile and usable anywhere via the global below.
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
-      // The ads kill switch, under the exact name the deploy sets
-      // (`ADS_ENABLED`). Vite only inlines `VITE_`-prefixed vars on its own,
-      // so this is what makes the un-prefixed name work; `VITE_ADS_ENABLED`
-      // is read natively as the alternative. Inlined at BUILD time — flipping
-      // it needs a rebuild. See src/lib/ads.ts.
-      __ADS_ENABLED__: JSON.stringify(env.ADS_ENABLED ?? ""),
+      __ADS_ENABLED__: JSON.stringify(_env.ADS_ENABLED ?? ""),
     },
     build: {
       // The app runs in Telegram's webview on low-end Android, which can lag the

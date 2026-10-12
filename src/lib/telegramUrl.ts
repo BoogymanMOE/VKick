@@ -93,6 +93,10 @@ let capturedInitData: string | null = null;
  * Rewrite the live URL once, on boot. Safe to call more than once (a second
  * call is a no-op because the params are already gone). Never throws into the
  * boot path — a malformed URL must not stop the app from mounting.
+ *
+ * ORDERING IS LOAD-BEARING: this must run BEFORE auth reads initData. main.tsx
+ * mounts on `tg-sdk-settled` and calls this at the top of mount(), so the URL
+ * is cleaned (and the init data is captured) before AuthProvider ever renders.
  */
 export function applyTelegramUrlNormalization(): void {
   if (typeof window === "undefined") return;
@@ -102,6 +106,12 @@ export function applyTelegramUrlNormalization(): void {
     const result = normalizeTelegramUrl(window.location.href, sdkInitData);
     capturedInitData = result.initData;
     if (result.changed) window.history.replaceState(null, "", result.url);
+    console.log("[auth] applyTelegramUrlNormalization:", {
+      sdkInitData: sdkInitData || null,
+      captured: result.initData,
+      changed: result.changed,
+      newUrl: result.url,
+    });
   } catch {
     /* keep booting; the worst case is a 404 screen, not a crash */
   }

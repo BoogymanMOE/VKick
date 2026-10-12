@@ -94,10 +94,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Wait out the SDK before reading initData: older Telegram clients
       // inject telegram-web-app.js late, and racing it turned the Telegram
       // login into a guest account with no bot pushes.
-      const tg = await waitForTelegram();
+      await waitForTelegram();
       const initData = telegramInitData();
+      if (!initData) {
+        console.warn("[auth] enterApp called with no initData");
+      }
       console.log(
-        `[auth] enterApp tg=${tg ? "present" : "null"} initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
+        `[auth] enterApp initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
       );
       const res = await api.guest(getDeviceId(), initData);
       console.log(
