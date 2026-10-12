@@ -22,17 +22,10 @@ import { cx } from "../lib/cx";
 import { useMatches, useFollowedLeagues } from "../hooks/useApi";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
-import { formatClock, formatKickoff } from "../lib/format";
+import { formatClock, formatDayHeader, formatKickoff } from "../lib/format";
 import { LEAGUE_BY_SLUG } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
-import {
-  BallIcon,
-  ChartIcon,
-  ChevronRightIcon,
-  PlusIcon,
-  RefreshIcon,
-  StarFilledIcon,
-} from "../components/icons";
+import { BallIcon, PlusIcon, RefreshIcon, StarFilledIcon } from "../components/icons";
 import { AdBanner } from "../components/AdBanner";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
@@ -91,16 +84,28 @@ export default function Matches() {
   const soonestFirst = (a: Match, b: Match) => +new Date(a.kickoffAt) - +new Date(b.kickoffAt);
   const newestFirst = (a: Match, b: Match) => +new Date(b.kickoffAt) - +new Date(a.kickoffAt);
   const live = organize(live0);
-  // With picks saved, discovery shrinks to a window (the heading count shows
-  // the real total); without picks, it stays full so the app is usable
-  // pre-onboarding. Results live in the team rows — no separate FT section.
-  const capGeneral = favCount > 0 && !league && leagueFilter === null;
   const upcoming = organize(upcoming0).sort(soonestFirst);
-  // Tighter cap on a matchday: with live games on screen the feed should fit
-  // live + your teams in one viewport, and the rest is one disclosure away.
-  const upcomingShown = capGeneral ? upcoming.slice(0, live.length > 0 ? 4 : 6) : upcoming;
+  // Upcoming default view: 6 cards, with a Show more toggle for the rest.
+  const UPCOMING_DEFAULT = 6;
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
+
+  // Group upcoming matches by kickoff day for sticky date headers.
+  const groupedUpcoming = useMemo(() => {
+    const groups: Array<{ day: string; label: string; matches: Match[] }> = [];
+    let currentDay = "";
+    for (const match of upcoming) {
+      const day = formatDayHeader(new Date(match.kickoffAt), locale);
+      if (day !== currentDay) {
+        currentDay = day;
+        groups.push({ day, label: day, matches: [match] });
+      } else {
+        groups[groups.length - 1].matches.push(match);
+      }
+    }
+    return groups;
+  }, [upcoming, locale]);
   // Recent results, newest kickoff first — the sections above sort favorites up.
-  const finished = organize(finished0).sort(newestFirst).slice(0, 12);
+  const finished = organize(finished0).sort(newestFirst).slice(0, 6);
 
   // The feed's own states, kept explicit so the screen never renders three
   // empty sections at once. `feedEmpty` is a fresh deploy before the ESPN sync
@@ -440,9 +445,7 @@ export default function Matches() {
           </div>
         ) : null}
 
-        {/* The sponsored slot has to sit between Upcoming and Previous in the
-          ready state, and after the empty state when there is no feed at all. */}
-        {feedEmpty ? adSlot : null}
+        {/* The sponsored slot sits between Upcoming and Previous in the ready state. */}
 
         {!loading && !failed && !feedEmpty ? (
           <>
@@ -453,10 +456,19 @@ export default function Matches() {
               count={upcoming0.length}
               defaultOpen
             >
-              {upcomingShown.length > 0 ? (
-                <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
-                  {upcomingShown.map((match, index) => (
-                    <MatchCard key={match.id} match={match} index={index} />
+              {groupedUpcoming.length > 0 ? (
+                <ul className="fade-swap">
+                  {groupedUpcoming.map((group) => (
+                    <li key={group.day}>
+                      <div className="sticky top-14 z-10 bg-app/95 backdrop-blur-sm py-1.5">
+                        <p className="label text-ink-3 px-1">{group.label}</p>
+                      </div>
+                      <ul className="space-y-2">
+                        {group.matches.map((match, index) => (
+                          <MatchCard key={match.id} match={match} index={index} />
+                        ))}
+                      </ul>
+                    </li>
                   ))}
                 </ul>
               ) : (
@@ -478,6 +490,24 @@ export default function Matches() {
                   }
                 />
               )}
+              {!showAllUpcoming && upcoming.length > UPCOMING_DEFAULT && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllUpcoming(true)}
+                  className="mt-2 w-full justify-center rounded-full border border-volt bg-surface px-5 py-2 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                >
+                  {t("matches.showMore")}
+                </button>
+              )}
+              {showAllUpcoming && upcoming.length > UPCOMING_DEFAULT && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllUpcoming(false)}
+                  className="mt-2 w-full justify-center rounded-full border border-line bg-surface px-5 py-2 text-xs font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                >
+                  {t("matches.showLess")}
+                </button>
+              )}
             </CollapsibleSection>
 
             {adSlot}
@@ -491,10 +521,10 @@ export default function Matches() {
               level={2}
               title={t("matches.previous")}
               count={finished0.length}
-              defaultOpen={false}
+              defaultOpen
             >
               {finished.length > 0 ? (
-                <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
+                <ul className="space-y-2 fade-swap">
                   {finished.map((match, index) => (
                     <MatchCard key={match.id} match={match} index={index} />
                   ))}
@@ -512,28 +542,6 @@ export default function Matches() {
           {t("matches.hint")}
           {lastSync ? ` · ${t("matches.lastSync", { time: formatClock(lastSync, locale) })}` : ""}
         </p>
-
-        {/* The payoff for every pick: the resolver's own line items, so a "+3"
-          on the boards has a receipt behind it. It used to be reachable only
-          from a row inside Profile, which put the reward end of the loop two
-          taps deep in the wrong tab. */}
-        <Link
-          to="/predictions"
-          className="mt-3 flex items-center gap-2 rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-        >
-          <span
-            className="grid h-8 w-8 flex-none place-items-center rounded-full border border-volt text-volt"
-            style={{ backgroundColor: "color-mix(in srgb, var(--volt) 12%, transparent)" }}
-            aria-hidden="true"
-          >
-            <ChartIcon className="h-4 w-4" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs font-bold text-ink">{t("predictions.title")}</span>
-            <span className="block text-[11px] text-ink-3">{t("predictions.subtitle")}</span>
-          </span>
-          <ChevronRightIcon className="flex-none text-ink-3" />
-        </Link>
       </div>
     </>
   );

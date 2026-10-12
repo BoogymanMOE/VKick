@@ -19,3 +19,24 @@ export function formatKickoffDate(date: Date, locale?: string): string {
     month: "short",
   });
 }
+
+/**
+ * Sticky date header label for grouped upcoming feeds.
+ * Returns "Today" / "Tomorrow" for near dates, or a full weekday + date for
+ * anything further out (e.g. "Saturday, Oct 12"). Pass `fa-IR` under Persian.
+ */
+export function formatDayHeader(date: Date, locale?: string): string {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diff = Math.round((target.getTime() - today.getTime()) / 86400000);
+
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Tomorrow";
+
+  return date.toLocaleDateString(locale, {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+  });
+}
