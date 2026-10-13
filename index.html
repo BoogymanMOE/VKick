@@ -109,8 +109,8 @@
     <script type="module" src="/src/main.tsx"></script>
     <!-- A-ADS (Anonymous Ads) unit, served as RAW HTML on purpose: the A-ADS
          verifier does not run JavaScript, so an ad drawn by the SPA is invisible
-         to it ("Not found"). Being the initial document's own markup, it is NOT
-         gated by ADS_ENABLED — editing this block is the only way to turn it off. -->
+         to it ("Not found"). It is the initial document's own markup, and no
+         environment switch gates it — editing this block is the only way to turn it off. -->
     <div
       id="a-ads"
       style="margin: 20px auto; max-width: 468px; min-height: 100px; position: relative; z-index: 1"

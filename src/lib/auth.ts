@@ -155,9 +155,12 @@ export function currentAuthToken(): string | null {
   const initData = telegramInitData();
   if (initData) return initData;
 
-  if (typeof process !== "undefined" && process.env?.NODE_ENV === "production") {
-    return null;
-  }
+  // Vite replaces `import.meta.env.PROD` with a literal at build time. The old
+  // `process.env.NODE_ENV` form was compiled to `typeof process != "undefined"`
+  // — false in every browser — so production skipped this return and sent the
+  // hardcoded `dev:1` below as its bearer token instead of falling back to null.
+  // Never spell this with `process.env` again; it is not defined client-side.
+  if (import.meta.env.PROD) return null;
 
   const dev = new URLSearchParams(window.location.search).get("devUser");
   return dev ? `dev:${dev}` : `dev:1`;

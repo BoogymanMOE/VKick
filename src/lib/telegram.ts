@@ -56,8 +56,16 @@ declare global {
 
 export const telegram = (): TelegramWebApp | undefined => window.Telegram?.WebApp;
 
-/** True only when actually running inside a Telegram client. */
-export const isTelegram = (): boolean => Boolean(telegram()?.initData !== undefined && telegram());
+/**
+ * True only when Telegram actually handed us signed init data.
+ *
+ * `initData` is an empty STRING — not undefined — whenever telegram-web-app.js
+ * has loaded outside a real Telegram client, which is every plain-browser
+ * visitor (index.html loads the SDK for everyone). Testing `!== undefined`
+ * therefore reported "inside Telegram" to web users and switched on the
+ * Telegram-only copy on the Login screen. No initData means no identity.
+ */
+export const isTelegram = (): boolean => Boolean(telegram()?.initData);
 
 /**
  * Wait for the Mini App environment. The official script tag makes initData

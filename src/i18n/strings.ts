@@ -341,13 +341,12 @@ export const strings = {
       "Your sign-in identity (Telegram or username), display name, language, favorite clubs and leagues, predictions, ratings, comments, notification preferences, invite codes, and the points you earn. Nothing else.",
     "legal.privacy.where.title": "Where it lives",
     "legal.privacy.where.body":
-      "On this app's own server, in a single database. We don't sell or share your data, and the web build loads no third-party analytics or ad tracker.",
+      "On this app's own server, in a single database. We don't sell or share your data.",
     "legal.privacy.espn.title": "Football data",
     "legal.privacy.espn.body":
       "Fixtures, scores, lineups and stats come from ESPN's public API. That data is ESPN's; we only store the copy we need to show it to you.",
     "legal.privacy.ads.title": "Ads",
-    "legal.privacy.ads.body":
-      "Inside Telegram only, a clearly-marked sponsored card may be shown through Adsgram. The web build shows no ads and never loads the ad SDK.",
+    "legal.privacy.ads.body": "This app displays ads provided by A-ADS and Tapsell to support development.",
     "legal.privacy.delete.title": "Deleting your data",
     "legal.privacy.delete.body":
       "Profile → Delete account removes your account and everything in it — favorites, picks, ratings, comments and points — immediately and permanently.",
@@ -901,13 +900,13 @@ export const strings = {
       "هویت ورودت (تلگرام یا نام کاربری)، نام نمایشی، زبان، باشگاه‌ها و لیگ‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها، تنظیمات اعلان، کدهای دعوت و امتیازهایی که می‌گیری. چیز دیگری نه.",
     "legal.privacy.where.title": "کجا نگه داشته می‌شود",
     "legal.privacy.where.body":
-      "روی سرور همین برنامه، در یک پایگاه داده. داده‌ات را نمی‌فروشیم و به اشتراک نمی‌گذاریم و نسخه وب هیچ ابزار تحلیلی یا ردیاب تبلیغاتی شخص ثالثی بار نمی‌کند.",
+      "روی سرور همین برنامه، در یک پایگاه داده. داده‌ات را نمی‌فروشیم و به اشتراک نمی‌گذاریم.",
     "legal.privacy.espn.title": "داده فوتبال",
     "legal.privacy.espn.body":
       "برنامه بازی‌ها، نتایج، ترکیب‌ها و آمار از API عمومی ESPN می‌آید. آن داده مال ESPN است؛ ما فقط نسخه‌ای را نگه می‌داریم که برای نمایش لازم است.",
     "legal.privacy.ads.title": "تبلیغات",
     "legal.privacy.ads.body":
-      "فقط داخل تلگرام، ممکن است یک کارت اسپانسری مشخصاً برچسب‌خورده از طریق Adsgram نمایش داده شود. نسخه وب هیچ تبلیغی نشان نمی‌دهد و کیت تبلیغاتی را بار نمی‌کند.",
+      "این برنامه برای حمایت از توسعه، تبلیغاتی را که A-ADS و Tapsell ارائه می‌دهند نمایش می‌دهد.",
     "legal.privacy.delete.title": "حذف داده‌ها",
     "legal.privacy.delete.body":
       "پروفایل ← حذف حساب، حسابت و همه‌چیز درونش — باشگاه‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها و امتیازها — را فوراً و برای همیشه پاک می‌کند.",

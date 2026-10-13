@@ -1,21 +1,15 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import pkg from "./package.json";
 
-export default defineConfig(({ mode }) => {
-  // `.env` files are not in process.env while this config is evaluated, so load
-  // them explicitly. An empty prefix keeps every key (not just VITE_ ones) —
-  // only the value below is exposed to the client, so nothing else leaks.
-  // Real environment variables win, which is what a Render build sets.
-  const _env = loadEnv(mode, process.cwd(), "");
+export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
     // Single source of truth for the app version (package.json) — surfaced in
     // Profile and usable anywhere via the global below.
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
-      __ADS_ENABLED__: JSON.stringify(_env.ADS_ENABLED ?? ""),
     },
     build: {
       // The app runs in Telegram's webview on low-end Android, which can lag the
