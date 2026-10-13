@@ -98,7 +98,17 @@
     <!-- BEGIN AADS AD UNIT 2458182 -->
     <div
       id="aads-frame"
-      style="margin: 16px auto; max-width: 468px; padding-bottom: 80px; position: relative; z-index: 1"
+      style="
+        position: fixed;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100%;
+        max-width: 468px;
+        z-index: 9999;
+        background: transparent;
+        padding: 8px 0;
+      "
     >
       <iframe
         data-aa="2458182"
@@ -114,6 +124,8 @@
         "
       ></iframe>
     </div>
+    <!-- Spacer so the app's content doesn't hide behind the fixed ad. -->
+    <div style="height: 80px; width: 100%"></div>
     <!-- END AADS AD UNIT 2458182 -->
   </body>
 </html>
