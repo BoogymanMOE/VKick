@@ -119,3 +119,71 @@ export function botNoTeamsText(lang: PushLang): string {
     ? "هنوز باشگاهی انتخاب نکرده‌ای. برنامه را باز کن و تا پنج باشگاه انتخاب کن!"
     : "You haven't picked any clubs yet. Open the app and choose up to five!";
 }
+
+/* ---------------------------------------------------- bot command menu */
+
+/*
+ * The commands Telegram lists behind the "/" button, plus the reply each one
+ * sends. Both live here together so the menu label and the reply can never
+ * drift apart, and so Persian users get Persian in the MENU too: grammy's
+ * setMyCommands takes a language_code, and server/bot/index.ts registers one
+ * list per language — the same per-recipient rule the pushes follow.
+ *
+ * The command names are also the route names of the Mini App
+ * (/#/matches, /#/profile, /#/leaderboards), which is what makes the deep link
+ * one string concatenation instead of a lookup table.
+ */
+
+/** A screen the bot can deep-link into. */
+export type BotPage = "matches" | "profile" | "leaderboards";
+
+export interface BotCommandSpec {
+  command: string;
+  description: string;
+}
+
+/**
+ * The command list registered with Telegram. Descriptions are kept short —
+ * Telegram truncates the menu, and it is a menu, not a pitch.
+ */
+export function botCommandMenu(lang: PushLang): BotCommandSpec[] {
+  if (lang === "fa") {
+    return [
+      { command: "matches", description: "بازی‌های امروز" },
+      { command: "profile", description: "پروفایل شما" },
+      { command: "leaderboards", description: "جدول امتیازها" },
+    ];
+  }
+  return [
+    { command: "matches", description: "View today's fixtures" },
+    { command: "profile", description: "View your profile" },
+    { command: "leaderboards", description: "View the leaderboards" },
+  ];
+}
+
+export interface BotPageCopy {
+  /** The line above the button. */
+  text: string;
+  /** Label of the inline button that opens this page in the Mini App. */
+  button: string;
+}
+
+const BOT_PAGE_COPY: Record<BotPage, Record<PushLang, BotPageCopy>> = {
+  matches: {
+    en: { text: "Tap below to open today's fixtures:", button: "⚽ Open Matches" },
+    fa: { text: "برای دیدن بازی‌های امروز دکمه زیر را بزن:", button: "⚽ باز کردن بازی‌ها" },
+  },
+  profile: {
+    en: { text: "Tap below to open your Profile:", button: "👤 Open Profile" },
+    fa: { text: "برای دیدن پروفایلت دکمه زیر را بزن:", button: "👤 باز کردن پروفایل" },
+  },
+  leaderboards: {
+    en: { text: "Tap below to open the Leaderboards:", button: "🏆 Open Leaderboards" },
+    fa: { text: "برای دیدن جدول امتیازها دکمه زیر را بزن:", button: "🏆 باز کردن جدول امتیازها" },
+  },
+};
+
+/** The reply for one command: a line of copy plus its web_app button label. */
+export function botPageCopy(lang: PushLang, page: BotPage): BotPageCopy {
+  return BOT_PAGE_COPY[page][lang];
+}

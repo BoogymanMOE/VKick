@@ -4,7 +4,17 @@ import { fileURLToPath } from "node:url";
 import { Bot, InlineKeyboard, InputFile } from "grammy";
 import { getDb, all, run, get } from "../db/index.js";
 import { asPushKind, isOptedOut } from "../notifications.js";
-import { asPushLang, botNoAccountText, botNoTeamsText, botStartText, botTeamsHeader } from "../messages.js";
+import {
+  asPushLang,
+  botCommandMenu,
+  botNoAccountText,
+  botNoTeamsText,
+  botPageCopy,
+  botStartText,
+  botTeamsHeader,
+  type BotPage,
+  type PushLang,
+} from "../messages.js";
 import type { GoalAlert } from "../sync/upserts.js";
 
 let bot: Bot | null = null;
@@ -20,10 +30,24 @@ const TELEGRAM_ICON = path.join(
   "telegram-icon.png",
 );
 
-export function startBot(token: string): Bot | null {
-  if (!token) return null;
-  bot = new Bot(token);
+/*
+ * The Mini App screens behind the command menu, in menu order. The names are
+ * deliberately the same ones the app uses for its routes (/matches,
+ * /profile, /leaderboards) and for the commands themselves, so the command
+ * list, the deep links and the router cannot disagree about where a button
+ * lands.
+ */
+const BOT_PAGES: BotPage[] = ["matches", "profile", "leaderboards"];
 
+/**
+ * Every command handler, registered on a bot that is not polling yet.
+ *
+ * Kept separate from startBot so a test can register the handlers on a bot of
+ * its own and dispatch a real update through grammy for real — command
+ * parsing, middleware, the lot. The menu is only worth having if the button it
+ * sends actually carries the deep link, and only grammy can settle that.
+ */
+export function registerHandlers(bot: Bot): void {
   bot.command("start", async (ctx) => {
     const from = ctx.from;
     let lang: "en" | "fa" = "en";
@@ -65,6 +89,18 @@ export function startBot(token: string): Bot | null {
     }
   });
 
+  // Command-menu entries. Each one answers with a single button that opens the
+  // Mini App straight on that screen: tapping /matches in Telegram's menu and
+  // landing on the feed instead would make the menu worse than useless.
+  for (const page of BOT_PAGES) {
+    bot.command(page, async (ctx) => {
+      const copy = botPageCopy(userLang(ctx.from?.id), page);
+      await ctx.reply(copy.text, {
+        reply_markup: new InlineKeyboard().webApp(copy.button, deepLink(page)),
+      });
+    });
+  }
+
   bot.command("myteams", async (ctx) => {
     if (!ctx.from) return;
     const db = getDb();
@@ -96,14 +132,26 @@ export function startBot(token: string): Bot | null {
   bot.catch((err) => {
     console.error("[bot] error:", err.error ?? err);
   });
+}
+
+export function startBot(token: string): Bot | null {
+  if (!token) return null;
+  const instance = new Bot(token);
+  bot = instance;
+  registerHandlers(instance);
 
   // Long-polling: fine for v1 (no public URL needed, works behind NAT).
   // If api.telegram.org is unreachable (VPN needed on some networks), log it
   // clearly and keep the rest of the server running — polling retries on its
   // own once connectivity returns.
-  void bot
+  void instance
     .start({
-      onStart: (me) => console.log(`[bot] @${me.username} polling started`),
+      onStart: (me) => {
+        console.log(`[bot] @${me.username} polling started`);
+        // Reachability is already proven at this point, so a failure here means
+        // the call itself was rejected — not that the network is down.
+        void registerCommands(instance);
+      },
     })
     .catch((err) => {
       console.error(
@@ -115,18 +163,62 @@ export function startBot(token: string): Bot | null {
 
   // Graceful shutdown
   const stop = () => {
-    void bot?.stop();
+    void instance.stop();
     if (drainTimer) clearInterval(drainTimer);
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
 
   startPushDrain();
-  return bot;
+  return instance;
 }
 
 function webAppUrl(): string {
   return process.env.MINI_APP_URL ?? "https://example.com";
+}
+
+/**
+ * Mini App deep link for one screen.
+ *
+ * The SPA is a HashRouter, so the route travels after the `#` and Telegram
+ * opens the app directly on that page. A trailing slash on MINI_APP_URL (which
+ * people do paste) is trimmed — otherwise the link is `...//#/matches`, and
+ * what Telegram does with a doubled slash is not something to find out in
+ * production.
+ */
+export function deepLink(page: BotPage): string {
+  return `${webAppUrl().replace(/\/+$/, "")}/#/${page}`;
+}
+
+/**
+ * The language a user picked in the app, from `users.language`. Defaults to
+ * English for anyone the bot has never met, matching the pushes and /start.
+ * Without this every menu reply would be English regardless of the app's UI.
+ */
+function userLang(telegramId: number | undefined): PushLang {
+  if (telegramId === undefined) return "en";
+  const row = get<{ language: string | null }>(getDb(), "SELECT language FROM users WHERE telegram_id = ?", [
+    String(telegramId),
+  ]);
+  return asPushLang(row?.language);
+}
+
+/**
+ * Register Telegram's command menu (the "/" button), one list per language.
+ * Idempotent, so each boot simply re-asserts it; the call is free and the menu
+ * is the only discoverable entry point besides /start.
+ *
+ * Called from the polling start callback on purpose: registering before the
+ * bot is reachable only earns a connection error on a machine that has to
+ * bring a VPN up first, and the menu is not worth that noise.
+ */
+export async function registerCommands(bot: Bot): Promise<void> {
+  try {
+    await bot.api.setMyCommands(botCommandMenu("en"));
+    await bot.api.setMyCommands(botCommandMenu("fa"), { language_code: "fa" });
+  } catch (err) {
+    console.error(`[bot] could not register the command menu: ${String(err).slice(0, 120)}`);
+  }
 }
 
 /**
