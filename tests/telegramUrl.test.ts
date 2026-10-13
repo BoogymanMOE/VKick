@@ -8,7 +8,9 @@
  * an unrelated query param and never touching a real hash route.
  */
 import { strict as assert } from "node:assert";
+import crypto from "node:crypto";
 import { normalizeTelegramUrl } from "../src/lib/telegramUrl.js";
+import { verifyInitData } from "../server/telegram/verify.js";
 
 /** Telegram init data is a query string that itself is percent-encoded. */
 const INIT = "user=%7B%22id%22%3A1%7D&auth_date=1700000000&hash=abc";
@@ -60,6 +62,104 @@ function testSdkValueWins(): void {
   const out = normalizeTelegramUrl(href, "sdk-parsed-init-data");
   assert.equal(out.initData, "sdk-parsed-init-data", "the SDK's parsed value is authoritative");
   assert.equal(out.url, "https://app.example/", "the URL is still normalised");
+}
+
+/**
+ * `+` preservation.
+ *
+ * Telegram's signed `signature` is base64 and legitimately contains `+`, and a
+ * client that escapes only the structural characters leaves that `+` bare in
+ * the fragment. `URLSearchParams` applies form-encoding rules, so it read the
+ * bare `+` as a SPACE — one flipped byte, but the server HMACs over it, so the
+ * signature check failed and the user was silently downgraded to a guest
+ * account. `decodeURIComponent` never rewrites `+`, which is what Telegram's own
+ * parsing does.
+ */
+const PLUS_INIT =
+  "query_id=AAHdF6IQAAAAAN0XohDhrOrc&user=%7B%22id%22%3A1%7D&auth_date=1700000000&signature=Ab%2BC%2Fd%3D";
+/** The same payload as it arrives when the signature's `+` was left unescaped. */
+const PLUS_INIT_BARE =
+  "query_id=AAHdF6IQAAAAAN0XohDhrOrc&user=%7B%22id%22%3A1%7D&auth_date=1700000000&signature=Ab+C%2Fd%3D";
+
+/**
+ * Encode a payload for the fragment the way the mangling shows up on a device:
+ * the inner `%2B` reaches the fragment as a bare `+` instead of `%2B`/`%252B`.
+ */
+function fragmentWithBarePlus(payload: string): string {
+  return encodeURIComponent(payload).replace(/%252B/g, "+");
+}
+
+function testPlusSurvivesHashForm(): void {
+  const href = `https://app.example/#tgWebAppData=${fragmentWithBarePlus(PLUS_INIT)}&tgWebAppVersion=7.0`;
+  const out = normalizeTelegramUrl(href);
+  assert.equal(out.changed, true, "the hash form is still rewritten");
+  assert.ok(!out.url.includes("+"), "the Telegram fragment is stripped from the URL");
+  assert.equal(out.initData, PLUS_INIT_BARE, "a bare `+` is preserved, not turned into a space");
+}
+
+function testPlusSurvivesQueryForm(): void {
+  const href = `https://app.example/?tgWebAppData=${fragmentWithBarePlus(PLUS_INIT)}&tgWebAppVersion=7.0&devUser=2`;
+  const out = normalizeTelegramUrl(href);
+  assert.equal(out.initData, PLUS_INIT_BARE, "the query form preserves `+`");
+  assert.ok(out.url.includes("devUser=2"), "unrelated params still survive");
+}
+
+function testPlusSurvivesPathForm(): void {
+  const href = `https://app.example/tgWebAppData=${fragmentWithBarePlus(PLUS_INIT)}&tgWebAppVersion=7.0`;
+  const out = normalizeTelegramUrl(href);
+  assert.equal(out.initData, PLUS_INIT_BARE, "the path form preserves `+`");
+  assert.equal(new URL(out.url).pathname, "/", "the mangled path still resets to the root");
+}
+
+/**
+ * The fix must not start decoding twice: Telegram's canonical fragment is
+ * percent-encoded, so `%252B` still has to come back as `%2B` (the init data the
+ * server expects), not as a bare `+`.
+ */
+function testCanonicalPlusDecodesExactlyOnce(): void {
+  const href = `https://app.example/#tgWebAppData=${encodeURIComponent(PLUS_INIT)}&tgWebAppVersion=7.0`;
+  const out = normalizeTelegramUrl(href);
+  assert.equal(out.initData, PLUS_INIT, "a fully-encoded `%252B` decodes to `%2B`");
+}
+
+const BOT_TOKEN = "7000000000:TEST-token-for-the-telegramUrl-suite";
+
+/** Sign a field set the way Telegram documents it (`signature` excluded). */
+function signInitData(fields: Record<string, string>): string {
+  const secret = crypto.createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
+  const dataCheckString = Object.entries(fields)
+    .filter(([key]) => key !== "signature")
+    .map(([key, value]) => `${key}=${value}`)
+    .sort()
+    .join("\n");
+  const hash = crypto.createHmac("sha256", secret).update(dataCheckString).digest("hex");
+  return new URLSearchParams({ ...fields, hash }).toString();
+}
+
+/**
+ * The end the user actually experiences: whatever the URL recovery hands back
+ * has to pass the server's HMAC check. A payload whose base64 signature carries
+ * `+` is signed locally with a throwaway token, then pushed through the exact
+ * launch shapes the Mini App sees. Before the fix the bare-`+` shape failed
+ * here and the user landed on the guest account.
+ */
+function testRecoveredPayloadVerifies(): void {
+  const signed = signInitData({
+    query_id: "AAHdF6IQAAAAAN0XohDhrOrc",
+    user: JSON.stringify({ id: 279058397, first_name: "Ali" }),
+    auth_date: String(Math.floor(Date.now() / 1000)),
+    signature: "Ab+C/d=",
+  });
+  const forms = {
+    canonical: `https://app.example/#tgWebAppData=${encodeURIComponent(signed)}&tgWebAppVersion=7.0`,
+    "bare +": `https://app.example/#tgWebAppData=${fragmentWithBarePlus(signed)}&tgWebAppVersion=7.0`,
+  };
+  for (const [name, href] of Object.entries(forms)) {
+    const out = normalizeTelegramUrl(href);
+    const res = verifyInitData(out.initData ?? "", BOT_TOKEN);
+    assert.ok(res.ok, `${name}: recovered init data must verify (${res.ok ? "" : res.reason})`);
+    assert.equal(res.ok ? res.user.id : 0, 279058397, `${name}: the Telegram user is surfaced`);
+  }
 }
 
 interface FakeBrowserState {
@@ -156,6 +256,13 @@ export async function runTelegramUrlTests(): Promise<void> {
   testStartParamOnly();
   testLeavesRealRoutesAlone();
   testSdkValueWins();
+  testPlusSurvivesHashForm();
+  testPlusSurvivesQueryForm();
+  testPlusSurvivesPathForm();
+  testCanonicalPlusDecodesExactlyOnce();
+  testRecoveredPayloadVerifies();
   await testReloadRecovery();
-  console.log("  telegramUrl: hash/query/path extraction, real-route passthrough + reload recovery OK");
+  console.log(
+    "  telegramUrl: hash/query/path extraction, `+` preserved, server HMAC accepted, real-route passthrough + reload recovery OK",
+  );
 }

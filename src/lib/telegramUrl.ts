@@ -66,6 +66,44 @@ export interface NormalizedTelegramUrl {
 }
 
 /**
+ * Percent-decode one URL component the way Telegram encodes it.
+ *
+ * Deliberately NOT `URLSearchParams`: that applies the
+ * `application/x-www-form-urlencoded` rule that a `+` means a space, and the
+ * init data we pull out of the launch URL is a query string that was ALREADY
+ * percent-encoded once (Telegram encodes each field, then encodes the whole
+ * string again for the fragment). A literal `+` inside a signed field — the
+ * base64 `signature`, or a `user`/`start_param` value that really contains one
+ * — therefore came back as a space, changing the bytes the server HMACs over.
+ * The signature check then fails and the user is silently downgraded to a
+ * guest. `decodeURIComponent` leaves `+` alone, matching Telegram's own parsing.
+ */
+function decodeComponent(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    // A malformed escape (stray `%`). Hand back the raw text instead of
+    // throwing into the boot path; the server rejects it cleanly if bogus.
+    return raw;
+  }
+}
+
+/**
+ * Read a single key out of an `a=b&c=d` string without `URLSearchParams`'
+ * `+` → space rule (see `decodeComponent`). Returns null when the key is absent,
+ * so callers keep their "no value found" fallback.
+ */
+function readParam(raw: string, key: string): string | null {
+  for (const pair of raw.split("&")) {
+    if (!pair) continue;
+    const eq = pair.indexOf("=");
+    if (decodeComponent(eq === -1 ? pair : pair.slice(0, eq)) !== key) continue;
+    return eq === -1 ? "" : decodeComponent(pair.slice(eq + 1));
+  }
+  return null;
+}
+
+/**
  * Pure URL rewrite. `sdkInitData` (from `window.Telegram.WebApp.initData`) wins
  * when non-empty because the SDK is the authoritative parser; otherwise the
  * value is recovered from the URL so auth still works when the SDK script was
@@ -88,7 +126,7 @@ export function normalizeTelegramUrl(href: string, sdkInitData = ""): Normalized
   //    `tgWebAppStartParam` still cannot masquerade as a route.
   const hash = url.hash.replace(/^#/, "");
   if (hash.includes(TG_PARAM_PREFIX)) {
-    recovered = new URLSearchParams(hash).get(INIT_DATA_KEY) ?? recovered;
+    recovered = readParam(hash, INIT_DATA_KEY) ?? recovered;
     url.hash = "";
     changed = true;
   }
@@ -97,7 +135,7 @@ export function normalizeTelegramUrl(href: string, sdkInitData = ""): Normalized
   //    only the Telegram keys so unrelated params (e.g. ?devUser=) survive.
   const searchKeys = [...url.searchParams.keys()];
   if (searchKeys.some((key) => key.startsWith(TG_PARAM_PREFIX))) {
-    recovered = recovered ?? url.searchParams.get(INIT_DATA_KEY);
+    recovered = recovered ?? readParam(url.search.replace(/^\?/, ""), INIT_DATA_KEY);
     for (const key of searchKeys) {
       if (key.startsWith(TG_PARAM_PREFIX)) url.searchParams.delete(key);
     }
@@ -107,7 +145,7 @@ export function normalizeTelegramUrl(href: string, sdkInitData = ""): Normalized
   // 3) Path — the mangled form `/<params>` with no `?`. Parse the leading
   //    segment as a query string and reset the path to the app root.
   if (url.pathname.includes(TG_PARAM_PREFIX)) {
-    recovered = recovered ?? new URLSearchParams(url.pathname.replace(/^\/+/, "")).get(INIT_DATA_KEY);
+    recovered = recovered ?? readParam(url.pathname.replace(/^\/+/, ""), INIT_DATA_KEY);
     url.pathname = "/";
     changed = true;
   }

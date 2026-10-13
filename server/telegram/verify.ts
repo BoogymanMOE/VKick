@@ -35,10 +35,10 @@ const MAX_AGE_SECONDS = 86_400;
  * `auth_date` is REQUIRED: its absence is a rejection, not a skip, and the
  * comparison is constant-time so a probe can't binary-search the digest.
  */
-export function verifyInitData(
-  initData: string,
-  botToken: string,
-): { ok: true; user: TelegramUser } | { ok: false; reason: string } {
+type InitDataVerdict = { ok: true; user: TelegramUser } | { ok: false; reason: string };
+
+/** The HMAC check itself, over one byte-level reading of the payload. */
+function checkInitData(initData: string, botToken: string): InitDataVerdict {
   const params = new URLSearchParams(initData);
   const hash = params.get("hash");
   if (!hash) return { ok: false, reason: "missing hash" };
@@ -82,6 +82,35 @@ export function verifyInitData(
   } catch {
     return { ok: false, reason: "user JSON invalid" };
   }
+}
+
+/**
+ * Verify Telegram WebApp initData, tolerating the one genuine ambiguity in a
+ * query string: `+`.
+ *
+ * Form-encoding says `+` means a space, and `URLSearchParams` applies that rule.
+ * Telegram does not: it encodes each field with `encodeURIComponent`, so a space
+ * travels as `%20` and a real plus as `%2B` — which makes a BARE `+` in
+ * initData a literal `+` (the base64 `signature`, a `start_param`, a name).
+ * A launch URL re-encoded on the way into the webview can hand us exactly that
+ * shape; reading its `+` as a space changes the bytes the HMAC covers and
+ * rejects a genuine login, which is how a signed-in user ends up on a guest
+ * account. (The client side of the same bug lives in src/lib/telegramUrl.ts.)
+ *
+ * So a payload containing `+` is checked under both readings — literal plus
+ * first, then the legacy form-encoded one. Both still require an HMAC that only
+ * the bot token could produce, so this cannot admit a payload Telegram did not
+ * sign; it only stops us disagreeing with Telegram over what `+` means.
+ */
+export function verifyInitData(initData: string, botToken: string): InitDataVerdict {
+  // No `+`, no ambiguity — one reading, exactly as before.
+  if (!initData.includes("+")) return checkInitData(initData, botToken);
+
+  const literalPlus = checkInitData(initData.replace(/\+/g, "%2B"), botToken);
+  if (literalPlus.ok) return literalPlus;
+  // Legacy reading last so its verdict (and its reason string) is what a
+  // payload that fails BOTH readings reports, as it did before.
+  return checkInitData(initData, botToken);
 }
 
 /**

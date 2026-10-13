@@ -125,6 +125,57 @@ function testSignatureExcludedFromCheckString() {
   assert.equal(verifyInitData(legacy, BOT_TOKEN).ok, true, "pre-8.0 payload still verifies");
 }
 
+/**
+ * A bare `+` in the payload.
+ *
+ * Telegram encodes each field with `encodeURIComponent`, so a space travels as
+ * `%20` and a real plus as `%2B` — a BARE `+` in initData therefore means a
+ * literal `+`. `URLSearchParams` alone reads it as a space, which changes the
+ * bytes the HMAC covers; a launch URL re-encoded on its way into the webview
+ * hands over exactly that shape, and the login was rejected as a guest. (The
+ * client half of this is pinned in telegramUrl.test.ts.)
+ */
+function testBarePlusReadings() {
+  const authDate = String(Math.floor(Date.now() / 1000) - 30);
+
+  // `sign` serialises with URLSearchParams, i.e. `+` arrives as `%2B`...
+  const canonical = sign({
+    auth_date: authDate,
+    query_id: "AAHtest",
+    user: '{"id":11,"first_name":"A+B"}',
+    start_param: "a+b",
+  });
+  assert.equal(verifyInitData(canonical, BOT_TOKEN).ok, true, "canonical `%2B` payload verifies");
+
+  // ...so the mangled shape is that same payload with `%2B` worn down to a bare
+  // `+`. It must verify: `+` is a plus, not a space.
+  const bare = canonical.replace(/%2B/g, "+");
+  assert.ok(bare.includes("+"), "the payload really carries a bare `+`");
+  assert.equal(
+    verifyInitData(bare, BOT_TOKEN).ok,
+    true,
+    "a bare `+` in signed fields is a literal plus, not a space",
+  );
+
+  // A bare `+` can also have been a form-encoded space (that is what
+  // URLSearchParams produces). Nothing that verified before may stop verifying.
+  const formEncoded = sign({
+    auth_date: authDate,
+    query_id: "AAHtest",
+    user: '{"id":12,"first_name":"Ali Reza"}',
+  });
+  assert.ok(formEncoded.includes("+"), "the signer form-encodes the space");
+  const spaced = verifyInitData(formEncoded, BOT_TOKEN);
+  assert.equal(spaced.ok, true, "a form-encoded space still verifies");
+  assert.equal(spaced.ok ? spaced.user.first_name : "", "Ali Reza", "the spaced name is decoded as a space");
+
+  // Tampering with a `+`-carrying payload is still rejected by both readings.
+  const tampered = bare.replace("AAHtest", "AAHevil");
+  const bad = verifyInitData(tampered, BOT_TOKEN);
+  assert.equal(bad.ok, false, "tampered `+` payload rejected");
+  assert.equal(bad.ok ? "" : bad.reason, "hash mismatch", "tamper reason preserved");
+}
+
 function testDevToken() {
   assert.deepEqual(verifyDevToken("dev:123", undefined), { ok: false }, "no secret: dev tokens dead");
   assert.ok(verifyDevToken("dev:123", "s").ok, "secret set: dev token accepted");
@@ -139,8 +190,9 @@ export async function runVerifyTests(): Promise<void> {
   testAuthDateRules();
   testMalformedDigests();
   testSignatureExcludedFromCheckString();
+  testBarePlusReadings();
   testDevToken();
   console.log(
-    "  verify: valid/tamper/wrong-token, auth_date required+fresh, bad digests closed, signature excluded, dev tokens OK",
+    "  verify: valid/tamper/wrong-token, auth_date required+fresh, bad digests closed, signature excluded, bare `+` readings, dev tokens OK",
   );
 }
