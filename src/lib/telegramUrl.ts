@@ -177,13 +177,6 @@ export function applyTelegramUrlNormalization(): void {
     capturedInitData = result.initData ?? capturedInitData ?? readStoredInitData();
     if (result.initData) writeStoredInitData(result.initData);
     if (result.changed) window.history.replaceState(null, "", result.url);
-    console.log("[auth] applyTelegramUrlNormalization:", {
-      sdkInitData: sdkInitData || null,
-      fromUrl: result.initData,
-      captured: capturedInitData,
-      changed: result.changed,
-      newUrl: result.url,
-    });
   } catch {
     /* keep booting; the worst case is a 404 screen, not a crash */
   }

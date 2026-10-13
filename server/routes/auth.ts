@@ -29,37 +29,6 @@ export const authRouter = express.Router();
 
 const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
 
-/* ---------------------------------------------------------------------------
- * Auth probe — logs every guest attempt so Telegram login failures are
- * visible in production Render logs. Logs initData KEY NAMES and booleans
- * only — never the initData string, never the hash, never the signature
- * value, never the bot token. Field names are not secrets and are what
- * actually matter here: whether the client sent `signature` decides which
- * check-string algorithm is correct.
- */
-function authProbeGuest(
-  initData: string,
-  verified: { ok: true } | { ok: false; reason: string } | null,
-  outcome: "telegram" | "guest",
-): void {
-  // Always log: the user needs to see why Telegram login fails in the Render logs.
-  const keys = initData ? [...new URLSearchParams(initData).keys()].sort().join(",") : "";
-  const hasSignature = initData ? new URLSearchParams(initData).has("signature") : false;
-  const verdict = !initData
-    ? "no-initData"
-    : !botToken()
-      ? "no-bot-token"
-      : !verified
-        ? "no-verdict"
-        : verified.ok
-          ? "pass"
-          : `fail(${verified.reason})`;
-  console.log(
-    `[auth:guest] initData=${initData ? "yes" : "no"} verify=${verdict} ` +
-      `signature=${hasSignature ? "yes" : "no"} outcome=${outcome} keys=[${keys}]`,
-  );
-}
-
 /**
  * Well-formed scrypt hash of a random secret, used ONLY to equalize login
  * timing for unknown usernames (one scrypt verification either way). It
@@ -178,7 +147,6 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
     // Same device previously used the web guest path: bring its data along.
     mergeIfGuest(req, user);
     const token = issueSession(user.id);
-    authProbeGuest(initData, verified, "telegram"); // TEMP AUTH PROBE
     res.json({ ok: true, mode: "telegram", token, user: publicUser(user) });
     return;
   }
@@ -191,7 +159,6 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
   );
   const user = existing ?? upsertUser(syntheticId, `Guest ${deviceId.slice(0, 4)}`);
   const token = issueSession(user.id);
-  authProbeGuest(initData, verified, "guest"); // TEMP AUTH PROBE
   res.json({ ok: true, mode: "session", token, user: publicUser(user) });
 });
 

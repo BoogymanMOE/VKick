@@ -120,19 +120,11 @@ function clearLoggedOut(): void {
  * the launch URL (see lib/telegramUrl) so a Telegram user is still themselves
  * when telegram.org is unreachable and the SDK script never loads — which is
  * exactly the network this app ships to.
- *
- * Debug: log the full picture (SDK global, SDK initData, URL-captured value)
- * so the Telegram auth bug can be traced in the browser console.
  */
 export function telegramInitData(): string | null {
   const tg = window.Telegram?.WebApp;
   const sdkInitData = typeof tg?.initData === "string" && tg.initData ? tg.initData : undefined;
   const captured = capturedTelegramInitData();
-  console.log("[auth] telegramInitData check:", {
-    hasWebApp: !!tg,
-    sdkInitData: sdkInitData ?? null,
-    captured,
-  });
   if (sdkInitData) return sdkInitData;
   return captured;
 }

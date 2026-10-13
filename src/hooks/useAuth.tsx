@@ -96,17 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // login into a guest account with no bot pushes.
       await waitForTelegram();
       const initData = telegramInitData();
-      if (!initData) {
-        console.warn("[auth] enterApp called with no initData");
-      }
-      console.log(
-        `[auth] enterApp initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
-      );
       const res = await api.guest(getDeviceId(), initData);
-      console.log(
-        `[auth] enterApp result mode=${res.mode} token=${res.token.slice(0, 8)}... user=${res.user.display_name}`,
-      );
-
       if (!res.ok) throw new Error("GUEST_ENTRY_FAILED");
       // Persistent slot either way: entry must survive restarts.
       applyAuthSuccess(res.token, true);

@@ -71,7 +71,6 @@ export async function syncScoreboardWindow(backDays: number, forwardDays: number
         console.error(`[sync] scoreboard ${league} (${off}) FAILED:`, String(err));
       }
     }
-    log(`scoreboard ${league}: window ok`);
   }
   return goals;
 }
