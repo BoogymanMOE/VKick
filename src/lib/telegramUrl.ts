@@ -26,6 +26,35 @@
 const TG_PARAM_PREFIX = "tgWebApp";
 /** The one param auth actually needs. */
 const INIT_DATA_KEY = "tgWebAppData";
+/**
+ * Where the recovered init data is kept so the NEXT load can find it again.
+ *
+ * We rewrite the launch URL to strip the Telegram fragment (HashRouter would
+ * otherwise read it as a route), and Telegram only appends that fragment on the
+ * initial navigation — a reload arrives with it already gone. In the network
+ * this app ships to the SDK script is blocked, so the fragment was the only
+ * copy of the init data; losing it on reload turned a Telegram user back into a
+ * `initData=no` guest. sessionStorage survives the reload and, being tab-scoped
+ * like the ephemeral session token, dies when the Mini App closes.
+ */
+const STORAGE_KEY = "matchday.tgInitData";
+
+/** The init data stored by a previous load, if any (private mode → null). */
+function readStoredInitData(): string | null {
+  try {
+    return sessionStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredInitData(value: string): void {
+  try {
+    sessionStorage.setItem(STORAGE_KEY, value);
+  } catch {
+    /* private mode / quota — the in-memory capture still works for this load */
+  }
+}
 
 export interface NormalizedTelegramUrl {
   /** The URL with any Telegram init params removed. */
@@ -104,11 +133,16 @@ export function applyTelegramUrlNormalization(): void {
     const sdkInitData =
       typeof window.Telegram?.WebApp?.initData === "string" ? window.Telegram.WebApp.initData : "";
     const result = normalizeTelegramUrl(window.location.href, sdkInitData);
-    capturedInitData = result.initData;
+    // Never let a load that carries no fragment (i.e. every reload after the
+    // first, and the case where telegram-web-app.js is blocked) erase the value
+    // a previous load recovered.
+    capturedInitData = result.initData ?? capturedInitData ?? readStoredInitData();
+    if (result.initData) writeStoredInitData(result.initData);
     if (result.changed) window.history.replaceState(null, "", result.url);
     console.log("[auth] applyTelegramUrlNormalization:", {
       sdkInitData: sdkInitData || null,
-      captured: result.initData,
+      fromUrl: result.initData,
+      captured: capturedInitData,
       changed: result.changed,
       newUrl: result.url,
     });
@@ -117,7 +151,11 @@ export function applyTelegramUrlNormalization(): void {
   }
 }
 
-/** Init data recovered from the URL, for when the SDK global is unavailable. */
+/**
+ * Init data recovered from the URL, for when the SDK global is unavailable.
+ * Falls back to the value a previous load stored, so a reload of the Mini App
+ * (the fragment is already gone by then) still authenticates as the user.
+ */
 export function capturedTelegramInitData(): string | null {
-  return capturedInitData;
+  return capturedInitData ?? readStoredInitData();
 }

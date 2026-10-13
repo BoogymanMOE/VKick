@@ -62,12 +62,100 @@ function testSdkValueWins(): void {
   assert.equal(out.url, "https://app.example/", "the URL is still normalised");
 }
 
-export function runTelegramUrlTests(): void {
+interface FakeBrowserState {
+  href: string;
+}
+
+/**
+ * Install the minimal browser globals `applyTelegramUrlNormalization` reads.
+ * Returns a restore function so a suite can never leak a fake `window` into the
+ * next test group.
+ */
+function installFakeBrowser(state: FakeBrowserState, store: Map<string, string>): () => void {
+  const fakeWindow = {
+    Telegram: undefined,
+    get location() {
+      return { href: state.href };
+    },
+    history: {
+      replaceState: (_state: unknown, _title: unknown, url: string) => {
+        state.href = url;
+      },
+    },
+  };
+  const fakeSessionStorage = {
+    getItem: (key: string) => (store.has(key) ? (store.get(key) as string) : null),
+    setItem: (key: string, value: string) => {
+      store.set(key, value);
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+  };
+  const g = globalThis as unknown as Record<string, unknown>;
+  const hadWindow = "window" in g;
+  const prevWindow = g.window;
+  const hadStorage = "sessionStorage" in g;
+  const prevStorage = g.sessionStorage;
+  g.window = fakeWindow;
+  g.sessionStorage = fakeSessionStorage;
+  return () => {
+    if (hadWindow) g.window = prevWindow;
+    else delete g.window;
+    if (hadStorage) g.sessionStorage = prevStorage;
+    else delete g.sessionStorage;
+  };
+}
+
+/**
+ * Reload recovery. The first load strips Telegram's fragment (HashRouter would
+ * otherwise read `tgWebAppData=...` as a route), and when the SDK script is
+ * blocked — Iran — that fragment is the ONLY copy of the init data. A reload
+ * used to arrive with nothing and silently downgrade the user to a guest
+ * (`[auth:guest] initData=no`); the capture is now persisted so it survives.
+ */
+async function testReloadRecovery(): Promise<void> {
+  const store = new Map<string, string>();
+  const state: FakeBrowserState = {
+    href: `https://app.example/#tgWebAppData=${encodeURIComponent(INIT)}&tgWebAppVersion=7.0`,
+  };
+  const restore = installFakeBrowser(state, store);
+  const src = new URL("../src/lib/telegramUrl.ts", import.meta.url).href;
+  try {
+    // First load: fragment present, captured and persisted, URL rewritten.
+    const first = (await import(`${src}?load=1`)) as typeof import("../src/lib/telegramUrl.js");
+    first.applyTelegramUrlNormalization();
+    assert.equal(first.capturedTelegramInitData(), INIT, "the fragment is captured on the first load");
+    assert.equal(state.href, "https://app.example/", "the fragment is stripped from the URL");
+    assert.equal(store.size, 1, "the capture is persisted for a future load");
+
+    // Reload: fresh module state, and the fragment is already gone from the URL.
+    state.href = "https://app.example/#/login";
+    const second = (await import(`${src}?load=2`)) as typeof import("../src/lib/telegramUrl.js");
+    assert.equal(
+      second.capturedTelegramInitData(),
+      INIT,
+      "a reload recovers the persisted init data with no fragment in the URL",
+    );
+    second.applyTelegramUrlNormalization();
+    assert.equal(second.capturedTelegramInitData(), INIT, "normalising on reload keeps the recovered value");
+    assert.equal(
+      state.href,
+      "https://app.example/#/login",
+      "a fragment-less reload leaves the route untouched",
+    );
+  } finally {
+    restore();
+  }
+}
+
+export async function runTelegramUrlTests(): Promise<void> {
   testHashForm();
   testQueryForm();
   testPathForm();
   testStartParamOnly();
   testLeavesRealRoutesAlone();
   testSdkValueWins();
-  console.log("  telegramUrl: hash/query/path init-data extraction + real-route passthrough OK");
+  await testReloadRecovery();
+  console.log("  telegramUrl: hash/query/path extraction, real-route passthrough + reload recovery OK");
 }

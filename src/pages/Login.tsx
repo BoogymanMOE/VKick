@@ -6,54 +6,7 @@ import { useAuth } from "../hooks/authContext";
 import { useI18n } from "../i18n/context";
 import { serverErrorKey } from "../lib/api";
 import { isTelegram, haptic, telegramDisplayName } from "../lib/telegram";
-import { capturedTelegramInitData } from "../lib/telegramUrl";
 import type { StringKey } from "../i18n/strings";
-
-/**
- * TEMPORARY debug aid — remove once the Iran initData/URL-fallback issue is
- * resolved. Dumps what the client can actually see of Telegram's launch data so
- * we can compare it against the server's `[auth:guest] initData=no` log.
- */
-function TelegramDebugDump() {
-  const [dump, setDump] = useState("");
-  useEffect(() => {
-    setDump(
-      JSON.stringify(
-        {
-          href: window.location.href,
-          hash: window.location.hash,
-          search: window.location.search,
-          telegramGlobal: window.Telegram ? "exists" : "undefined",
-          initData: window.Telegram?.WebApp?.initData ?? null,
-          captured: capturedTelegramInitData(),
-        },
-        null,
-        2,
-      ),
-    );
-  }, []);
-  return (
-    <pre
-      style={{
-        margin: 0,
-        padding: 12,
-        background: "#ffffff",
-        color: "#111111",
-        fontSize: 12,
-        fontWeight: "bold",
-        whiteSpace: "pre-wrap",
-        wordBreak: "break-all",
-        zIndex: 50,
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-      }}
-    >
-      {"TELEGRAM DEBUG\n" + dump}
-    </pre>
-  );
-}
 
 /**
  * The entry screen. "Enter" silently creates (or reuses) an account — inside
@@ -135,12 +88,6 @@ export default function Login() {
 
   return (
     <div className="floodlight flex min-h-[100svh] flex-col">
-      {/* Development only. The dump is a `position: fixed` bar across the top
-          of the viewport, so it covered the LanguageToggle header on the first
-          screen every user saw. Gated rather than deleted: eyeballing
-          `capturedTelegramInitData()` locally is still the fastest way to check
-          the Iran URL-fallback path. */}
-      {import.meta.env.DEV ? <TelegramDebugDump /> : null}
       <header className="pad-safe-top">
         <div className="mx-auto flex w-full max-w-[560px] justify-end px-3 py-2">
           <LanguageToggle />
