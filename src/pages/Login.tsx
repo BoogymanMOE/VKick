@@ -6,7 +6,51 @@ import { useAuth } from "../hooks/authContext";
 import { useI18n } from "../i18n/context";
 import { serverErrorKey } from "../lib/api";
 import { isTelegram, haptic, telegramDisplayName } from "../lib/telegram";
+import { capturedTelegramInitData } from "../lib/telegramUrl";
 import type { StringKey } from "../i18n/strings";
+
+/**
+ * TEMPORARY debug aid — remove once the Iran initData/URL-fallback issue is
+ * resolved. Dumps what the client can actually see of Telegram's launch data so
+ * we can compare it against the server's `[auth:guest] initData=no` log.
+ */
+function TelegramDebugDump() {
+  const [dump, setDump] = useState("");
+  useEffect(() => {
+    setDump(
+      JSON.stringify(
+        {
+          href: window.location.href,
+          hash: window.location.hash,
+          search: window.location.search,
+          telegramGlobal: window.Telegram ? "exists" : "undefined",
+          initData: window.Telegram?.WebApp?.initData ?? null,
+          captured: capturedTelegramInitData(),
+        },
+        null,
+        2,
+      ),
+    );
+  }, []);
+  return (
+    <pre
+      style={{
+        margin: 0,
+        padding: 12,
+        background: "#ff0000",
+        color: "#ffff00",
+        fontSize: 12,
+        fontWeight: "bold",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-all",
+        zIndex: 99999,
+        position: "relative",
+      }}
+    >
+      {"TELEGRAM DEBUG\n" + dump}
+    </pre>
+  );
+}
 
 /**
  * The entry screen. "Enter" silently creates (or reuses) an account — inside
@@ -88,6 +132,7 @@ export default function Login() {
 
   return (
     <div className="floodlight flex min-h-[100svh] flex-col">
+      <TelegramDebugDump />
       <header className="pad-safe-top">
         <div className="mx-auto flex w-full max-w-[560px] justify-end px-3 py-2">
           <LanguageToggle />
