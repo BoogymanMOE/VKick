@@ -1,21 +1,22 @@
 import { NavLink } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { haptic } from "../lib/telegram";
-import { BallIcon, ChartIcon, TableIcon, UserIcon, ShirtIcon } from "./icons";
+import { BallIcon, ChartIcon, UserIcon } from "./icons";
 import { cx } from "../lib/cx";
 import type { StringKey } from "../i18n/strings";
 
 /**
- * Matchday leads; My Teams is gone (favorites are picked in onboarding and
- * edited from Profile), so Browse takes its tab slot. Player Stats doesn't
- * consume a tab slot either — it's linked from the Ranks top bar and from a
- * match's Stats tab, both places ranking-curious readers already are.
+ * Three destinations only: Matchday, Ranks, Profile.
+ *
+ * Browse and Table moved off the bar (they were crowding five tabs on a 360px
+ * webview) and now live as quiet shortcuts at the top of the Matchday feed —
+ * see Matches.tsx. Their routes are unchanged, so old links and deep links
+ * still resolve. Player Stats never had a slot either: it is linked from the
+ * Ranks top bar and from a match's Stats tab.
  */
 const tabs: Array<{ to: string; key: StringKey; Icon: typeof BallIcon }> = [
   { to: "/matches", key: "nav.matches", Icon: BallIcon },
   { to: "/leaderboards", key: "nav.board", Icon: ChartIcon },
-  { to: "/browse", key: "nav.browse", Icon: ShirtIcon },
-  { to: "/table", key: "nav.table", Icon: TableIcon },
   { to: "/profile", key: "nav.profile", Icon: UserIcon },
 ];
 

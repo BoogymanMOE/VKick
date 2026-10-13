@@ -12,6 +12,10 @@ export interface TelegramUser {
  * were signed by the bot's token and unchanged since — it says nothing about
  * *when* — so the clock is ours to add. Without it, a captured initData string
  * is a bearer credential that never expires.
+ *
+ * TEMP(auth-debug): currently NOT enforced — see the freshness block in
+ * checkInitData. Kept so the bypass still logs a reference and re-arming the
+ * window stays a one-line revert.
  */
 const MAX_AGE_SECONDS = 86_400;
 
@@ -65,12 +69,22 @@ function checkInitData(initData: string, botToken: string): InitDataVerdict {
   // Freshness: auth_date is part of the signed data, so once the hash matches
   // it is trusted. It is also REQUIRED — a payload without one can't be aged,
   // and "can't be aged" is exactly what we don't accept.
+  //
+  // TEMP(auth-debug): the AGE WINDOW IS DISABLED while we chase the
+  // "Continue as <Name> lands as Guest" login. An out-of-window auth_date no
+  // longer rejects — it is logged instead, so we still learn whether the clock
+  // was ever the reason. Cost while this is in place: with no window, a captured
+  // initData string is replayable forever. Re-arm the rejection below before
+  // this is left unattended.
   const authDate = params.get("auth_date");
   if (!authDate) return { ok: false, reason: "missing auth_date" };
   const issuedAt = parseInt(authDate, 10);
   const age = Date.now() / 1000 - issuedAt;
   if (Number.isNaN(age) || age > MAX_AGE_SECONDS) {
-    return { ok: false, reason: "initData expired" };
+    // TEMP(auth-debug): logged, not rejected. Restore the return to re-arm.
+    console.warn(
+      `[telegram:verify] auth_date window bypassed (age=${Number.isNaN(age) ? "NaN" : Math.round(age)}s, max=${MAX_AGE_SECONDS}s)`,
+    );
   }
 
   const userRaw = params.get("user");

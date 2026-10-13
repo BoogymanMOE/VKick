@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ConfettiBurst } from "../components/Confetti";
-import AdBanner from "../components/AdBanner";
 import { clubContext, opponentOf } from "../lib/clubContext";
 import { MatchCard } from "../components/MatchCard";
 import { MatchCardSkeleton } from "../components/Skeletons";
@@ -26,7 +25,7 @@ import { useI18n } from "../i18n/context";
 import { formatClock, formatDayHeader, formatKickoff } from "../lib/format";
 import { LEAGUE_BY_SLUG } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
-import { BallIcon, PlusIcon, RefreshIcon, StarFilledIcon } from "../components/icons";
+import { BallIcon, PlusIcon, RefreshIcon, ShirtIcon, StarFilledIcon, TableIcon } from "../components/icons";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { PullIndicator } from "../components/PullToRefresh";
@@ -218,11 +217,6 @@ export default function Matches() {
     </CollapsibleSection>
   );
 
-  /* Inline sponsored banner (Anonymous Ads / A-ADS), below the Upcoming feed
-     and above Previous results: after today's games have had their say, so it
-     can never push the fixtures out of view. The banner owns the ADS_ENABLED
-     gate itself (src/components/AdBanner.tsx), so this page only places it:
-     one placement per screen. */
   return (
     <>
       <ConfettiBurst trigger={burst} />
@@ -244,6 +238,33 @@ export default function Matches() {
           </button>
         }
       />
+
+      {/* Browse and Table lost their tab slots in the 3-tab bar, so the feed
+          carries them: two quiet shortcuts, always visible — even when a league
+          deep link scopes the feed and the leagues chip row is hidden — in the
+          same rounded-line affordance as the header's refresh button. */}
+      <div className="mt-3 flex items-center gap-2">
+        <Link
+          to="/browse"
+          onClick={() => haptic("light")}
+          aria-label={t("nav.browse")}
+          title={t("nav.browse")}
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-line px-3 text-xs font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated hover:text-ink"
+        >
+          <ShirtIcon className="h-4 w-4" />
+          {t("nav.browse")}
+        </Link>
+        <Link
+          to="/table"
+          onClick={() => haptic("light")}
+          aria-label={t("nav.table")}
+          title={t("nav.table")}
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-line px-3 text-xs font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated hover:text-ink"
+        >
+          <TableIcon className="h-4 w-4" />
+          {t("nav.table")}
+        </Link>
+      </div>
 
       {/* Everything below sits under the sticky header. The wrapper gives the
           pull-to-refresh marker an anchor so it slides in between header and
@@ -507,8 +528,6 @@ export default function Matches() {
                 </button>
               )}
             </CollapsibleSection>
-
-            <AdBanner />
 
             {/* Previous results beneath the feed: folded away by default so the
               matchday page leads with what's next; open when the score is
