@@ -175,14 +175,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    try {
-      await api.logout();
-    } catch {
-      /* token may already be dead; clearing locally is what matters */
-    }
+    // Fire the revoke request FIRST, while the token is still stored, so the
+    // session row really is deleted — but never make clearing local state wait
+    // on it. Awaiting it first is what made sign-out feel impossible: a stalled
+    // or failing /auth/logout left the user signed in with no way out.
+    // clearSession() marks the sign-out (nothing can silently re-enter), and
+    // the guard below drops the user on /login the moment qc clears.
+    const revoke = api.logout().catch(() => {
+      /* token may already be dead, or the network is; local clearing is what matters */
+    });
     clearSession();
     enteredRef.current = false; // the entry screen must be able to enter again
     qc.clear();
+    await revoke;
   }, [qc]);
 
   const user = useMemo<AuthUser | null>(() => {

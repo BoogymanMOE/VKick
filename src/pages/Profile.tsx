@@ -15,6 +15,20 @@ import { LEGAL_ROUTES } from "../lib/legal";
 import { useLocalState } from "../lib/useLocalState";
 import { haptic, notifyHaptic } from "../lib/telegram";
 
+/**
+ * Reject after `ms` so a request that never settles cannot pin the UI in a
+ * busy state. The underlying fetch is left alone — it may still complete — but
+ * the caller gets an error and can recover.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("REQUEST_TIMEOUT")), ms);
+    }),
+  ]);
+}
+
 export default function Profile() {
   const { t, lang, setLang } = useI18n();
   const { push } = useToast();
@@ -61,13 +75,17 @@ export default function Profile() {
    * Irreversible: the server removes every row the user owns, then we clear
    * the local credential. logout()'s own request 401s (its session row is
    * already gone) and is swallowed — clearing local state is what matters.
+   *
+   * The request is bounded: a stalled DELETE (flaky network, a backend busy
+   * cascading the rows) must not leave the confirm sheet spinning forever with
+   * both of its buttons disabled and no way out.
    */
   const confirmDelete = async () => {
     if (deleteBusy) return;
     setDeleteBusy(true);
     setDeleteError(null);
     try {
-      await api.deleteAccount();
+      await withTimeout(api.deleteAccount(), 20_000);
       notifyHaptic("success");
       await logout();
     } catch (err) {

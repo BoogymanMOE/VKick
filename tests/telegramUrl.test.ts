@@ -124,11 +124,13 @@ function testCanonicalPlusDecodesExactlyOnce(): void {
 
 const BOT_TOKEN = "7000000000:TEST-token-for-the-telegramUrl-suite";
 
-/** Sign a field set the way Telegram documents it (`signature` excluded). */
+/**
+ * Sign a field set the way live Telegram does: `signature` IS part of the
+ * hashed string (see the reading note in server/telegram/verify.ts).
+ */
 function signInitData(fields: Record<string, string>): string {
   const secret = crypto.createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
   const dataCheckString = Object.entries(fields)
-    .filter(([key]) => key !== "signature")
     .map(([key, value]) => `${key}=${value}`)
     .sort()
     .join("\n");
@@ -139,9 +141,10 @@ function signInitData(fields: Record<string, string>): string {
 /**
  * The end the user actually experiences: whatever the URL recovery hands back
  * has to pass the server's HMAC check. A payload whose base64 signature carries
- * `+` is signed locally with a throwaway token, then pushed through the exact
- * launch shapes the Mini App sees. Before the fix the bare-`+` shape failed
- * here and the user landed on the guest account.
+ * `+` is signed locally with a throwaway token (signature folded in, as live
+ * Telegram does), then pushed through the exact launch shapes the Mini App
+ * sees. Both the canonical and the bare-`+` shape must verify — the bare `+`
+ * one used to fail here and land the user on the guest account.
  */
 function testRecoveredPayloadVerifies(): void {
   const signed = signInitData({

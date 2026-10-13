@@ -6,10 +6,11 @@
  * Pins: valid payload passes, tampering fails, wrong token fails, auth_date is
  * required (its age window is TEMP-bypassed for the Guest-login debug — see
  * testAuthDateRules), non-hex digests fail closed (timing-safe path),
- * and Bot API 8.0's `signature` field is EXCLUDED from the check string —
- * payloads signed per the documented algorithm (signature left out of the
- * hashed fields) verify, while payloads that folded signature in fail, which
- * is exactly what old validators did to every current Telegram client.
+ * and BOTH readings of the Bot API 8.0 `signature` ambiguity verify — a
+ * payload whose hash covers `signature` (Telegram's live behaviour, and the
+ * shape that used to be rejected here with `hash mismatch`, downgrading the
+ * user to a Guest) and one whose hash leaves it out. Only the token-derived
+ * HMAC is accepted in either case; a tampered payload still fails both.
  */
 import { strict as assert } from "node:assert";
 import crypto from "node:crypto";
@@ -18,9 +19,10 @@ import { verifyDevToken, verifyInitData } from "../server/telegram/verify.js";
 const BOT_TOKEN = "7000000000:TEST-token-for-the-verify-suite";
 
 /**
- * Sign a query-string of key=value pairs exactly like Telegram documents it.
- * `includeSignatureInCheck` reproduces the old-validator mistake (folding the
- * signature field into the hashed string) to pin its rejection.
+ * Sign a query-string of key=value pairs exactly like Telegram does.
+ * `includeSignatureInCheck` picks which convention `hash` covers: true folds
+ * `signature` into the hashed string (what a live Telegram payload does — see
+ * verify.ts), false leaves it out (the older/third-party convention).
  */
 function sign(
   fields: Record<string, string>,
@@ -102,29 +104,38 @@ function testMalformedDigests() {
   assert.equal(verifyInitData("user=%7B%22id%22%3A1%7D", BOT_TOKEN).ok, false, "no hash at all rejected");
 }
 
-function testSignatureExcludedFromCheckString() {
+function testSignatureReadings() {
   const fields = {
     auth_date: String(Math.floor(Date.now() / 1000) - 30),
     query_id: "AAHtest",
     signature: "dGVzdC1zaWduYXR1cmU",
     user: '{"id":9,"first_name":"Sara"}',
   };
-  // Documented algorithm: the client signs all fields EXCEPT hash and
-  // signature. Our validator must accept exactly that payload.
-  const authentic = sign(fields);
-  const ok = verifyInitData(authentic, BOT_TOKEN);
-  assert.equal(ok.ok, true, "signature-carrying payload (signed per spec) verifies");
+  // Telegram's live behaviour: `signature` rides in the signed string. This is
+  // the payload shape that produced `reason=hash mismatch` with all keys
+  // present and quietly turned the login into a guest account.
+  const included = sign(fields, BOT_TOKEN, true);
+  const ok = verifyInitData(included, BOT_TOKEN);
+  assert.ok(ok.ok, `signature-inclusive payload verifies: ${ok.ok ? "" : ok.reason}`);
+  assert.equal(ok.ok ? ok.user.id : 0, 9, "the Telegram user is surfaced");
+  assert.equal(ok.ok ? ok.user.first_name : "", "Sara", "the name is not mangled");
 
-  // The old-validator mistake: fold signature into the check string. Every
-  // real Bot API 8.0+ payload would fail that way — pin the rejection.
-  const legacyHashed = sign(fields, BOT_TOKEN, true);
-  assert.equal(
-    verifyInitData(legacyHashed, BOT_TOKEN).ok,
-    false,
-    "signature-in-check-string hash mismatches",
-  );
+  // The other convention (signature left out of the hashed fields) must keep
+  // working: dropping it would reject every payload some clients produce.
+  const excluded = sign(fields, BOT_TOKEN, false);
+  assert.ok(verifyInitData(excluded, BOT_TOKEN).ok, "signature-exclusive payload still verifies");
 
-  // A legacy payload WITHOUT the field is unaffected by the exclusion.
+  // Tampering is still rejected under BOTH conventions.
+  for (const [name, payload] of [
+    ["inclusive", included],
+    ["exclusive", excluded],
+  ] as const) {
+    const bad = verifyInitData(payload.replace("Sara", "evil"), BOT_TOKEN);
+    assert.equal(bad.ok, false, `edited ${name} payload rejected`);
+    assert.equal(bad.ok ? "" : bad.reason, "hash mismatch", `${name} tamper reason`);
+  }
+
+  // A payload that never had the field is unaffected by either reading.
   const legacy = sign({
     auth_date: fields.auth_date,
     query_id: fields.query_id,
@@ -197,10 +208,10 @@ export async function runVerifyTests(): Promise<void> {
   testTampering();
   testAuthDateRules();
   testMalformedDigests();
-  testSignatureExcludedFromCheckString();
+  testSignatureReadings();
   testBarePlusReadings();
   testDevToken();
   console.log(
-    "  verify: valid/tamper/wrong-token, auth_date required (age window TEMP-bypassed), bad digests closed, signature excluded, bare `+` readings, dev tokens OK",
+    "  verify: valid/tamper/wrong-token, auth_date required (age window TEMP-bypassed), bad digests closed, both signature readings, bare `+` readings, dev tokens OK",
   );
 }

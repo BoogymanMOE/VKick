@@ -23,31 +23,47 @@ const MAX_AGE_SECONDS = 86_400;
  * Verify Telegram WebApp initData (official algorithm, Bot API 8.0+):
  * secret = HMAC_SHA256(key="WebAppData", message=botToken)
  * hash   = HMAC_SHA256(key=secret,  message=dataCheckString)
- * where dataCheckString is all fields except `hash` and `signature`, sorted,
- * "k=v" joined by \n.
+ * where dataCheckString is the received fields, sorted, "k=v" joined by \n,
+ * with `hash` removed.
  *
- * `signature` (an Ed25519 signature for third-party verification, added in
- * Bot API 8.0) is NOT part of the bot-token HMAC check string. Current
- * Telegram clients attach it to every payload; folding it in makes every
- * authentic login fail. Excluding it is strictly safe: payloads without the
- * field hash identically either way. (Spec: core.telegram.org/bots/webapps
- * "Validating data received via the Mini App"; empirically confirmed against
- * a live bot token — validators that exclude only `hash` reject authentic
- * signature-carrying payloads, which is exactly the failure the TEMP probe
- * was watching for.)
+ * WHICH fields it covers is the one genuinely ambiguous part, because Bot API
+ * 8.0 added `signature` (an Ed25519 signature for third-party verification) to
+ * every payload and the ecosystem split over whether it belongs in the string
+ * that `hash` covers:
+ *
+ *  - Telegram's docs describe the bot-token check as "all received fields"
+ *    minus `hash` — only the THIRD-PARTY Ed25519 path excludes `signature` —
+ *    and a live Desktop payload with a real hash (tdlib/telegram-bot-api#747)
+ *    reproduces only with `signature` INCLUDED. `@tma.js/init-data-node`'s
+ *    validator likewise pops only `hash`.
+ *  - Other validators (and this file, until now) exclude `signature`, and
+ *    reject exactly those payloads.
+ *
+ * Guessing wrong is not a small deal: the payload is authentic either way, the
+ * hash does not match, and the user is silently downgraded to a guest account
+ * with no bot pushes — the "Continue as <Name> lands as Guest" login failure.
+ * So BOTH readings are accepted (see verifyInitData). That is not a weaker
+ * check: each reading still demands an HMAC-SHA256 only the bot token could
+ * produce, so neither can admit a payload Telegram did not sign. It only stops
+ * us disagreeing with a client over which fields Telegram folded in.
  *
  * `auth_date` is REQUIRED: its absence is a rejection, not a skip, and the
  * comparison is constant-time so a probe can't binary-search the digest.
  */
 type InitDataVerdict = { ok: true; user: TelegramUser } | { ok: false; reason: string };
 
-/** The HMAC check itself, over one byte-level reading of the payload. */
-function checkInitData(initData: string, botToken: string): InitDataVerdict {
+/**
+ * The HMAC check itself, over one byte-level reading of the payload.
+ * `excludeSignature` selects the convention for the check string: false folds
+ * `signature` in (Telegram's live behaviour — see the note above), true leaves
+ * it out (the third-party convention some validators copied over).
+ */
+function checkInitData(initData: string, botToken: string, excludeSignature: boolean): InitDataVerdict {
   const params = new URLSearchParams(initData);
   const hash = params.get("hash");
   if (!hash) return { ok: false, reason: "missing hash" };
   params.delete("hash");
-  params.delete("signature");
+  if (excludeSignature) params.delete("signature");
 
   const dataCheckString = [...params.entries()]
     .map(([k, v]) => `${k}=${v}`)
@@ -99,32 +115,41 @@ function checkInitData(initData: string, botToken: string): InitDataVerdict {
 }
 
 /**
- * Verify Telegram WebApp initData, tolerating the one genuine ambiguity in a
- * query string: `+`.
+ * Verify Telegram WebApp initData, tolerating the two genuine ambiguities in a
+ * query string: which fields `hash` covers, and what `+` means.
  *
- * Form-encoding says `+` means a space, and `URLSearchParams` applies that rule.
- * Telegram does not: it encodes each field with `encodeURIComponent`, so a space
- * travels as `%20` and a real plus as `%2B` — which makes a BARE `+` in
- * initData a literal `+` (the base64 `signature`, a `start_param`, a name).
- * A launch URL re-encoded on the way into the webview can hand us exactly that
- * shape; reading its `+` as a space changes the bytes the HMAC covers and
- * rejects a genuine login, which is how a signed-in user ends up on a guest
- * account. (The client side of the same bug lives in src/lib/telegramUrl.ts.)
+ * FIELD SET. `signature` may or may not have been folded into the signed string
+ * depending on the client/validator vintage (see the note above), so both
+ * readings are checked. Nothing else is guessed: either one is a byte-for-byte
+ * HMAC that only the bot token could produce.
  *
- * So a payload containing `+` is checked under both readings — literal plus
- * first, then the legacy form-encoded one. Both still require an HMAC that only
- * the bot token could produce, so this cannot admit a payload Telegram did not
- * sign; it only stops us disagreeing with Telegram over what `+` means.
+ * `+`. Form-encoding says `+` means a space, and `URLSearchParams` applies that
+ * rule. Telegram does not: it encodes each field with `encodeURIComponent`, so
+ * a space travels as `%20` and a real plus as `%2B` — which makes a BARE `+` in
+ * initData a literal `+` (a `start_param`, a name). A launch URL re-encoded on
+ * the way into the webview can hand us exactly that shape; reading its `+` as a
+ * space changes the bytes the HMAC covers and rejects a genuine login, which is
+ * how a signed-in user ends up on a guest account. (The client side of the same
+ * bug lives in src/lib/telegramUrl.ts.) So a payload containing `+` is also
+ * checked under the literal-plus reading, with its `+` rewritten to `%2B`.
+ *
+ * The first failing verdict is what a payload that fails everything reports, so
+ * `missing hash` / `missing auth_date` still surface as themselves.
  */
 export function verifyInitData(initData: string, botToken: string): InitDataVerdict {
-  // No `+`, no ambiguity — one reading, exactly as before.
-  if (!initData.includes("+")) return checkInitData(initData, botToken);
+  // A `+`-free payload has one byte-level reading; a payload carrying a `+`
+  // gets the literal-plus reading as well.
+  const texts = initData.includes("+") ? [initData.replace(/\+/g, "%2B"), initData] : [initData];
 
-  const literalPlus = checkInitData(initData.replace(/\+/g, "%2B"), botToken);
-  if (literalPlus.ok) return literalPlus;
-  // Legacy reading last so its verdict (and its reason string) is what a
-  // payload that fails BOTH readings reports, as it did before.
-  return checkInitData(initData, botToken);
+  let firstFailure: InitDataVerdict | null = null;
+  for (const text of texts) {
+    for (const excludeSignature of [false, true]) {
+      const verdict = checkInitData(text, botToken, excludeSignature);
+      if (verdict.ok) return verdict;
+      firstFailure ??= verdict;
+    }
+  }
+  return firstFailure ?? { ok: false, reason: "hash mismatch" };
 }
 
 /**
