@@ -217,6 +217,7 @@
      mount with `both` fill, so the resting state is fully visible content. */
   .rise-in {
     animation: rise-in 380ms var(--ease-out) both;
+    animation-delay: var(--stagger, 0ms);
   }
   @keyframes rise-in {
     from {
@@ -229,8 +230,13 @@
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    /* The global reduce rule keeps the 1ms duration but not the stagger. */
-    .rise-in {
+    /* Reduced motion gets the content immediately. The delay has to be zeroed
+       as well as the duration: `both` fill would otherwise hold an item at
+       opacity 0 for the accumulated stagger, and the global 1ms rule only
+       shortens the animation, it does not remove the wait. */
+    .rise-in,
+    .timeline-in,
+    .list-in {
       animation-delay: 0ms;
     }
   }
@@ -266,6 +272,7 @@
   /* Signature animation 3: timeline entrance, staggered 40ms. */
   .timeline-in {
     animation: timeline-in var(--t-std) var(--ease-out) both;
+    animation-delay: var(--stagger, 0ms);
   }
   @keyframes timeline-in {
     from {
@@ -483,6 +490,7 @@
 
   .list-in {
     animation: list-in var(--t-std) var(--ease-out) both;
+    animation-delay: var(--stagger, 0ms);
   }
   @keyframes list-in {
     from {

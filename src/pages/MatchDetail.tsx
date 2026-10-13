@@ -302,7 +302,24 @@ export default function MatchDetail() {
 
       {/* The Shot Predictor lives in the Predict tab now (concept v2). */}
 
-      <AdBanner />
+      {/* The ad is the last element on the page and the pick CTA above is
+          `fixed`, so at the bottom of the scroll the two intersect. Reserve the
+          CTA's own band (CTA + tab bar + safe area is ~125px) while that CTA is
+          on screen: an always-on pad would leave dead space on a finished
+          match, where the ad is the only thing left. A covered ad is the exact
+          "partly hidden" rejection A-ADS raised before. */}
+      <div
+        style={{
+          // The CTA's top edge sits ~117px above the viewport bottom plus the
+          // inset it is lifted by; the ad already has ~48px of whitespace under
+          // it (its own my-6 plus main's pb-6). Pad the remainder, and let the
+          // safe-area term ride along so a notched device does not lose the
+          // bottom of the ad to the bar.
+          paddingBottom: showPickCta ? "calc(80px + max(env(safe-area-inset-bottom), 8px))" : undefined,
+        }}
+      >
+        <AdBanner />
+      </div>
     </>
   );
 }

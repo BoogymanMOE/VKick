@@ -5,6 +5,13 @@ declare global {
   /** Injected by vite.config `define` — the package.json version at build time. */
   const __APP_VERSION__: string;
 
+  /**
+   * Injected by vite.config `define` — the build-time ADS_ENABLED switch, as a
+   * string. Only the exact value "true" enables the ad banner; anything else
+   * (unset, "false", "1") leaves it out of the tree entirely.
+   */
+  const __ADS_ENABLED__: string;
+
   interface ImportMetaEnv {
     /** The Vite-native spelling of the same switch (`VITE_ADS_ENABLED`). */
     readonly VITE_ADS_ENABLED?: string;

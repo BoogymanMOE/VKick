@@ -135,7 +135,12 @@ export default function Login() {
 
   return (
     <div className="floodlight flex min-h-[100svh] flex-col">
-      <TelegramDebugDump />
+      {/* Development only. The dump is a `position: fixed` bar across the top
+          of the viewport, so it covered the LanguageToggle header on the first
+          screen every user saw. Gated rather than deleted: eyeballing
+          `capturedTelegramInitData()` locally is still the fastest way to check
+          the Iran URL-fallback path. */}
+      {import.meta.env.DEV ? <TelegramDebugDump /> : null}
       <header className="pad-safe-top">
         <div className="mx-auto flex w-full max-w-[560px] justify-end px-3 py-2">
           <LanguageToggle />

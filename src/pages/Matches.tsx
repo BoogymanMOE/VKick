@@ -220,9 +220,9 @@ export default function Matches() {
 
   /* Inline sponsored banner (Anonymous Ads / A-ADS), below the Upcoming feed
      and above Previous results: after today's games have had their say, so it
-     can never push the fixtures out of view. Renders nothing unless
-     ADS_ENABLED is "true"; see src/lib/ads.ts. One placement per screen, so
-     the same node is reused by the two feed states that show it. */
+     can never push the fixtures out of view. The banner owns the ADS_ENABLED
+     gate itself (src/components/AdBanner.tsx), so this page only places it:
+     one placement per screen. */
   return (
     <>
       <ConfettiBurst trigger={burst} />
@@ -458,7 +458,7 @@ export default function Matches() {
                 <ul className="fade-swap">
                   {groupedUpcoming.map((group) => (
                     <li key={group.day}>
-                      <div className="sticky top-14 z-10 bg-app/95 backdrop-blur-sm py-1.5">
+                      <div className="sticky top-14 z-10 bg-base/95 py-1.5">
                         <p className="label text-ink-3 px-1">{group.label}</p>
                       </div>
                       <ul className="space-y-2">
