@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ConfettiBurst } from "../components/Confetti";
+import AdBanner from "../components/AdBanner";
 import {
   LineupsSkeleton,
   RatingsSkeleton,
@@ -300,6 +301,8 @@ export default function MatchDetail() {
       ) : null}
 
       {/* The Shot Predictor lives in the Predict tab now (concept v2). */}
+
+      <AdBanner />
     </>
   );
 }

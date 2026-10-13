@@ -37,14 +37,17 @@ function TelegramDebugDump() {
       style={{
         margin: 0,
         padding: 12,
-        background: "#ff0000",
-        color: "#ffff00",
+        background: "#ffffff",
+        color: "#111111",
         fontSize: 12,
         fontWeight: "bold",
         whiteSpace: "pre-wrap",
         wordBreak: "break-all",
-        zIndex: 99999,
-        position: "relative",
+        zIndex: 50,
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
       }}
     >
       {"TELEGRAM DEBUG\n" + dump}

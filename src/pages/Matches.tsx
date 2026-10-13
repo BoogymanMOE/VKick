@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ConfettiBurst } from "../components/Confetti";
+import AdBanner from "../components/AdBanner";
 import { clubContext, opponentOf } from "../lib/clubContext";
 import { MatchCard } from "../components/MatchCard";
 import { MatchCardSkeleton } from "../components/Skeletons";
@@ -506,6 +507,8 @@ export default function Matches() {
                 </button>
               )}
             </CollapsibleSection>
+
+            <AdBanner />
 
             {/* Previous results beneath the feed: folded away by default so the
               matchday page leads with what's next; open when the score is
