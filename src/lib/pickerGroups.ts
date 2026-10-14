@@ -27,6 +27,19 @@ import type { StringKey } from "../i18n/strings";
 import type { Team } from "../types";
 import { SLUG_BY_LEAGUE, LEAGUE_BY_SLUG } from "./leagues";
 
+const CUP_COMPETITIONS: Array<{ slug: string; name: string }> = [
+  { slug: "uefa.champions", name: "UEFA Champions League" },
+  { slug: "uefa.europa", name: "UEFA Europa League" },
+  { slug: "uefa.europa.conf", name: "UEFA Conference League" },
+  { slug: "uefa.super_cup", name: "UEFA Super Cup" },
+  { slug: "eng.fa", name: "English FA Cup" },
+  { slug: "eng.league_cup", name: "English Carabao Cup" },
+  { slug: "esp.copa_del_rey", name: "Spanish Copa del Rey" },
+  { slug: "ita.coppa_italia", name: "Coppa Italia" },
+  { slug: "ger.dfb_pokal", name: "German Cup" },
+  { slug: "fra.coupe_de_france", name: "Coupe de France" },
+];
+
 /**
  * The picker tab a cached team row belongs under — the ONE derivation of it.
  *
@@ -112,14 +125,25 @@ export function buildLeagueTabs(
   const bigFive = PICKER_GROUPS.filter((g) => g.key !== OTHER_GROUP && g.key !== INTERNATIONAL_GROUP);
   const aliasBySlug = new Map(Object.entries(SLUG_BY_LEAGUE).map(([slug, alias]) => [slug, alias]));
   const extras = followed.filter((row) => row.kind === "league" && !aliasBySlug.has(row.league));
-  const cups = followed.filter((row) => row.kind === "cup");
   const seen = new Set<string>();
+
+  const followedCups = followed.filter((row) => row.kind === "cup");
+  const catalogCups = CUP_COMPETITIONS.map((c) => ({
+    league: c.slug,
+    name: c.name,
+    kind: "cup" as const,
+  }));
+  const allCups = [
+    ...followedCups,
+    ...catalogCups.filter((c) => !followedCups.some((f) => f.league === c.league)),
+  ];
+
   return [
     ...bigFive.map((g) => ({ value: g.key, label: t(g.label) })),
     ...extras
       .filter((row) => (seen.has(row.league) ? false : (seen.add(row.league), true)))
       .map((row) => ({ value: row.league, label: localize(row.name ?? row.league) })),
-    ...cups
+    ...allCups
       .filter((row) => (seen.has(row.league) ? false : (seen.add(row.league), true)))
       .map((row) => ({ value: row.league, label: localize(row.name ?? row.league) })),
   ];
