@@ -3,7 +3,18 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { telegram } from "../lib/telegram";
 
 /** The tab roots — the back button hides here; Telegram's default close takes over. */
-const ROOTS = new Set(["/matches", "/leaderboards", "/browse", "/table", "/profile"]);
+const ROOTS = new Set([
+  "/matches",
+  "/leaderboards",
+  "/browse",
+  "/table",
+  "/profile",
+  "/onboarding",
+  "/cups",
+  "/ratings",
+  "/predictions",
+  "/stats",
+]);
 
 /**
  * Telegram's Android back button. Without it, pressing back on a detail page

@@ -358,7 +358,12 @@ meRouter.get("/api/me/streak", requireUser, (req, res) => {
     "SELECT current, season_hits, thresholds_paid, streak_active FROM user_streaks WHERE user_id = ?",
     [user.id],
   );
-  const thresholdsPaid = JSON.parse(row?.thresholds_paid ?? "[]") as number[];
+  let thresholdsPaid: number[];
+  try {
+    thresholdsPaid = JSON.parse(row?.thresholds_paid ?? "[]") as number[];
+  } catch {
+    thresholdsPaid = [];
+  }
   const current = row?.current ?? 0;
   const next = STREAK_THRESHOLDS.find((n) => !thresholdsPaid.includes(n)) ?? null;
 

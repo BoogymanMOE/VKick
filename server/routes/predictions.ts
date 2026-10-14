@@ -11,7 +11,6 @@ import {
   LINEUP_GATED,
   isLineupGated,
   lineupPublished,
-  lockWindowFor,
   windowFor,
 } from "../predictions/window.js";
 import { bad, currentUser, requireUser } from "./shared.js";
@@ -88,7 +87,8 @@ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter
   }
 
   const now = new Date();
-  const window = lockWindowFor(mechanic, match.kickoff_at);
+  const published = isLineupPublished(matchId);
+  const window = windowFor(mechanic, match.kickoff_at, published);
 
   // Lock enforcement per mechanic window (prediction-mechanics.md):
   // - lineup locks 2h before kickoff, the rest at kickoff; the sub window is
@@ -97,15 +97,21 @@ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter
     if (match.status !== "scheduled") return bad(res, "LOCKED_MATCH_STARTED");
     if (new Date(window.lockAt).getTime() < now.getTime()) return bad(res, "LOCKED_DEADLINE_PASSED");
   } else {
-    // Sub Predictor window: opens with the lineup (~1h pre-kickoff), open
-    // through scheduled (board prep) + first-half live — LOCKED at halftime
-    // (real status from the sync) and finished. The halftime status is what
-    // makes "editable until half-time" a server rule instead of UI copy.
+    // Sub Predictor window: opens with the lineup, open through scheduled
+    // (board prep) + first-half live — LOCKED at halftime (real status from
+    // the sync) and finished. The halftime status is what makes "editable
+    // until half-time" a server rule instead of UI copy.
     if (match.status === "halftime" || match.status === "finished") {
       return bad(res, "SUB_LOCKED_HALFTIME");
     }
     if (match.status !== "live" && match.status !== "scheduled") return bad(res, "SUB_ONLY_DURING_LIVE");
-    if (match.status === "scheduled" && new Date(window.opensAt ?? "").getTime() > now.getTime()) {
+    // windowFor nulls opensAt once the lineup is published, so the server
+    // agrees with the client: no SUB_NOT_OPEN after publication.
+    if (
+      match.status === "scheduled" &&
+      window.opensAt &&
+      new Date(window.opensAt).getTime() > now.getTime()
+    ) {
       return bad(res, "SUB_NOT_OPEN");
     }
   }
@@ -127,4 +133,4 @@ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter
   res.json({ ok: true, lockAt: window.lockAt, opensAt: window.opensAt });
 });
 
-export { MECHANICS, LINEUP_GATED, lockWindowFor };
+export { MECHANICS, LINEUP_GATED };

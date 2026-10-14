@@ -237,10 +237,16 @@ function loadStreakState(db: DatabaseSync, userId: number): StreakState {
   if (!row) {
     return { current: 0, seasonHits: 0, thresholdsPaid: [], lastMatchId: null, active: 0 };
   }
+  let thresholdsPaid: number[];
+  try {
+    thresholdsPaid = JSON.parse(row.thresholds_paid) as number[];
+  } catch {
+    thresholdsPaid = [];
+  }
   return {
     current: row.current,
     seasonHits: row.season_hits,
-    thresholdsPaid: JSON.parse(row.thresholds_paid) as number[],
+    thresholdsPaid,
     lastMatchId: row.last_match_id,
     active: row.streak_active ? 1 : 0,
   };
