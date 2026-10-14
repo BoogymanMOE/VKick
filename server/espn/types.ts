@@ -271,4 +271,5 @@ export interface NormStandingRow {
   goals_for: number | null;
   goals_against: number | null;
   points: number | null;
+  group_name: string | null;
 }

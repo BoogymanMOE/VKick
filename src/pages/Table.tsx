@@ -4,13 +4,15 @@ import { TopBar } from "../components/TopBar";
 import { RowSkeleton } from "../components/Skeletons";
 import { EmptyState, ErrorState } from "../components/ui";
 import { cx } from "../lib/cx";
-import { Chip, CountUp, Num, SectionHeading, Segmented, TeamBadge } from "../components/ui";
+import { Chip, CountUp, LiveDot, Num, SectionHeading, Segmented, TeamBadge } from "../components/ui";
 import { StarFilledIcon } from "../components/icons";
-import { slugForLeague, useLeagueTabs, useStandings, type StandingRow } from "../hooks/useApi";
+import { slugForLeague, useLeagueTabs, useStandings, useMatches, type StandingRow } from "../hooks/useApi";
+import { isCup } from "../lib/leagues";
 
 type TableView = "actual" | "expected";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
+import type { Match } from "../types";
 
 /**
  * League tables for the synced domestic leagues — straight from the standings.
@@ -109,117 +111,121 @@ export default function Table() {
       </section>
 
       <section className="mt-4">
-        <SectionHeading
-          title={tabLabel(active)}
-          action={
-            standingsQuery.data?.length ? (
-              <span className="text-[11px] text-ink-3">
-                {t("table.gw", { gw: standingsQuery.data[0]?.played ?? 0 })}
-              </span>
-            ) : null
-          }
-        />
-        {standingsQuery.isLoading ? (
-          <RowSkeleton rows={8} />
-        ) : standingsQuery.isError ? (
-          <ErrorState onRetry={() => standingsQuery.refetch()} />
-        ) : rows.length === 0 ? (
-          <EmptyState
-            title={t("table.emptyTitle")}
-            hint={t("table.emptyHint")}
-            action={
-              <Link
-                to="/onboarding"
-                className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-              >
-                {t("table.emptyAction")}
-              </Link>
-            }
-          />
+        {isCup(slug) ? (
+          <CupView slug={slug} rows={rows} />
         ) : (
           <>
-            <Segmented
-              value={view}
-              onChange={setView}
-              className="mb-2"
-              options={
-                hasExpected
-                  ? [
-                      { value: "actual", label: t("table.viewActual") },
-                      { value: "expected", label: t("table.viewExpected") },
-                    ]
-                  : [{ value: "actual", label: t("table.viewActual") }]
+            <SectionHeading
+              title={tabLabel(active)}
+              action={
+                standingsQuery.data?.length ? (
+                  <span className="text-[11px] text-ink-3">
+                    {t("table.gw", { gw: standingsQuery.data[0]?.played ?? 0 })}
+                  </span>
+                ) : null
               }
             />
-
-            {showExpected ? (
-              hasExpected ? (
-                <>
-                  {/* Same shell as the real table so switching views doesn't
-                      move the page: header grid + hairline dividers. */}
-                  <div className="overflow-hidden rounded-card border border-line bg-surface">
-                    <div
-                      aria-hidden="true"
-                      className="grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] gap-1.5 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
-                    >
-                      <span>{t("table.rank")}</span>
-                      <span>{t("table.team")}</span>
-                      <span className="text-end">{t("table.played")}</span>
-                      <span className="text-end">{t("table.xpts")}</span>
-                      <span className="text-end">{t("table.pts")}</span>
-                      <span className="text-end">{t("table.diff")}</span>
-                    </div>
-                    <ul className="divide-y divide-line">
-                      {expectedRows.map((row, index) => (
-                        <ExpectedItem
-                          key={row.team.id}
-                          row={row}
-                          index={index}
-                          rank={row.xpts == null ? null : index + 1}
-                          mine={isFavorite(row.team.id)}
-                        />
-                      ))}
-                    </ul>
-                  </div>
-                  <p className="mt-2 text-[11px] text-ink-3">{t("table.expectedHint")}</p>
-                </>
-              ) : (
-                <EmptyState title={t("table.expectedEmpty")} hint={t("table.expectedEmptyHint")} />
-              )
-            ) : null}
-
-            {view === "actual" ? (
-              <div className="overflow-x-auto">
-                <div className="min-w-[640px] overflow-hidden rounded-card border border-line bg-surface">
-                  <div
-                    aria-hidden="true"
-                    className="grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
+            {standingsQuery.isLoading ? (
+              <RowSkeleton rows={8} />
+            ) : standingsQuery.isError ? (
+              <ErrorState onRetry={() => standingsQuery.refetch()} />
+            ) : rows.length === 0 ? (
+              <EmptyState
+                title={t("table.emptyTitle")}
+                hint={t("table.emptyHint")}
+                action={
+                  <Link
+                    to="/onboarding"
+                    className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
                   >
-                    <span>{t("table.rank")}</span>
-                    <span>{t("table.team")}</span>
-                    <span className="text-end">{t("table.played")}</span>
-                    <span className="text-end">{t("table.w")}</span>
-                    <span className="text-end">{t("table.d")}</span>
-                    <span className="text-end">{t("table.l")}</span>
-                    <span className="text-end">{t("table.gf")}</span>
-                    <span className="text-end">{t("table.ga")}</span>
-                    <span className="text-end">{t("table.gd")}</span>
-                    <span className="text-end">{t("table.pts")}</span>
-                    <span className="text-end">{t("table.form")}</span>
+                    {t("table.emptyAction")}
+                  </Link>
+                }
+              />
+            ) : (
+              <>
+                <Segmented
+                  value={view}
+                  onChange={setView}
+                  className="mb-2"
+                  options={
+                    hasExpected
+                      ? [
+                          { value: "actual", label: t("table.viewActual") },
+                          { value: "expected", label: t("table.viewExpected") },
+                        ]
+                      : [{ value: "actual", label: t("table.viewActual") }]
+                  }
+                />
+
+                {showExpected ? (
+                  hasExpected ? (
+                    <>
+                      <div className="overflow-hidden rounded-card border border-line bg-surface">
+                        <div
+                          aria-hidden="true"
+                          className="grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] gap-1.5 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
+                        >
+                          <span>{t("table.rank")}</span>
+                          <span>{t("table.team")}</span>
+                          <span className="text-end">{t("table.played")}</span>
+                          <span className="text-end">{t("table.xpts")}</span>
+                          <span className="text-end">{t("table.pts")}</span>
+                          <span className="text-end">{t("table.diff")}</span>
+                        </div>
+                        <ul className="divide-y divide-line">
+                          {expectedRows.map((row, index) => (
+                            <ExpectedItem
+                              key={row.team.id}
+                              row={row}
+                              index={index}
+                              rank={row.xpts == null ? null : index + 1}
+                              mine={isFavorite(row.team.id)}
+                            />
+                          ))}
+                        </ul>
+                      </div>
+                      <p className="mt-2 text-[11px] text-ink-3">{t("table.expectedHint")}</p>
+                    </>
+                  ) : (
+                    <EmptyState title={t("table.expectedEmpty")} hint={t("table.expectedEmptyHint")} />
+                  )
+                ) : null}
+
+                {view === "actual" ? (
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[640px] overflow-hidden rounded-card border border-line bg-surface">
+                      <div
+                        aria-hidden="true"
+                        className="grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
+                      >
+                        <span>{t("table.rank")}</span>
+                        <span>{t("table.team")}</span>
+                        <span className="text-end">{t("table.played")}</span>
+                        <span className="text-end">{t("table.w")}</span>
+                        <span className="text-end">{t("table.d")}</span>
+                        <span className="text-end">{t("table.l")}</span>
+                        <span className="text-end">{t("table.gf")}</span>
+                        <span className="text-end">{t("table.ga")}</span>
+                        <span className="text-end">{t("table.gd")}</span>
+                        <span className="text-end">{t("table.pts")}</span>
+                        <span className="text-end">{t("table.form")}</span>
+                      </div>
+                      <ul className="divide-y divide-line">
+                        {rows.map((row, index) => (
+                          <StandingItem
+                            key={row.team.id}
+                            row={row}
+                            index={index}
+                            mine={isFavorite(row.team.id)}
+                          />
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                  <ul className="divide-y divide-line">
-                    {rows.map((row, index) => (
-                      <StandingItem
-                        key={row.team.id}
-                        row={row}
-                        index={index}
-                        mine={isFavorite(row.team.id)}
-                      />
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            ) : null}
+                ) : null}
+              </>
+            )}
           </>
         )}
       </section>
@@ -377,5 +383,122 @@ function ExpectedItem({
         <span className="sr-only"> {t("xg.expected")}</span>
       </span>
     </li>
+  );
+}
+
+function CupView({ slug, rows }: { slug: string; rows: StandingRow[] }) {
+  const { t, localize } = useI18n();
+  const { isFavorite } = useFavorites();
+
+  if (rows.length > 0) {
+    const groups = new Map<string, StandingRow[]>();
+    for (const row of rows) {
+      const key = row.groupName ?? "";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(row);
+    }
+    return (
+      <div className="space-y-4">
+        {Array.from(groups.entries()).map(([groupName, groupRows]) => (
+          <section key={groupName}>
+            <SectionHeading title={localize(groupName)} />
+            <div className="overflow-x-auto">
+              <div className="min-w-[640px] overflow-hidden rounded-card border border-line bg-surface">
+                <div
+                  aria-hidden="true"
+                  className="grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
+                >
+                  <span>{t("table.rank")}</span>
+                  <span>{t("table.team")}</span>
+                  <span className="text-end">{t("table.played")}</span>
+                  <span className="text-end">{t("table.w")}</span>
+                  <span className="text-end">{t("table.d")}</span>
+                  <span className="text-end">{t("table.l")}</span>
+                  <span className="text-end">{t("table.gf")}</span>
+                  <span className="text-end">{t("table.ga")}</span>
+                  <span className="text-end">{t("table.gd")}</span>
+                  <span className="text-end">{t("table.pts")}</span>
+                  <span className="text-end">{t("table.form")}</span>
+                </div>
+                <ul className="divide-y divide-line">
+                  {groupRows.map((row, index) => (
+                    <StandingItem key={row.team.id} row={row} index={index} mine={isFavorite(row.team.id)} />
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  return <KnockoutView slug={slug} />;
+}
+
+function KnockoutView({ slug }: { slug: string }) {
+  const { t, localize } = useI18n();
+  const matchesQuery = useMatches({ league: slug });
+  const matches = matchesQuery.data ?? [];
+  const cupMatches = matches.filter((m) => m.round != null);
+
+  if (matchesQuery.isLoading) {
+    return <RowSkeleton rows={8} />;
+  }
+  if (matchesQuery.isError) {
+    return <ErrorState onRetry={() => matchesQuery.refetch()} />;
+  }
+  if (cupMatches.length === 0) {
+    return <EmptyState title={t("table.emptyTitle")} hint={t("table.emptyHint")} />;
+  }
+
+  const rounds = new Map<string, Match[]>();
+  for (const match of cupMatches) {
+    const key = match.round!;
+    if (!rounds.has(key)) rounds.set(key, []);
+    rounds.get(key)!.push(match);
+  }
+
+  return (
+    <div className="space-y-4">
+      {Array.from(rounds.entries()).map(([round, roundMatches]) => (
+        <section key={round}>
+          <SectionHeading title={localize(round)} />
+          <ul className="space-y-2">
+            {roundMatches.map((match) => (
+              <li key={match.id}>
+                <Link
+                  to={`/match/${match.id}`}
+                  className="flex items-center gap-3 rounded-card border border-line bg-surface px-3 py-2.5 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                >
+                  <div className="flex flex-1 items-center justify-end gap-2">
+                    <TeamBadge team={match.home} size="sm" />
+                    <span className="min-w-0 flex-1 truncate text-right text-sm font-bold text-ink">
+                      {localize(match.home.shortName)}
+                    </span>
+                  </div>
+                  <div className="flex flex-none items-center gap-2">
+                    {match.status === "scheduled" ? (
+                      <span className="text-xs text-ink-3">vs</span>
+                    ) : (
+                      <Num className="text-sm font-bold text-ink">
+                        {match.homeScore ?? 0} - {match.awayScore ?? 0}
+                      </Num>
+                    )}
+                    {match.status === "live" || match.status === "halftime" ? <LiveDot /> : null}
+                  </div>
+                  <div className="flex flex-1 items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+                      {localize(match.away.shortName)}
+                    </span>
+                    <TeamBadge team={match.away} size="sm" />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
   );
 }

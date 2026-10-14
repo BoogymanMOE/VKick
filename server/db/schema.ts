@@ -124,6 +124,7 @@ export function migrate(db: DatabaseSync): void {
       goals_for     INTEGER,
       goals_against INTEGER,
       points        INTEGER,
+      group_name    TEXT,
       PRIMARY KEY (league, season, team_id)
     );
 
@@ -757,6 +758,13 @@ export function migrate(db: DatabaseSync): void {
   }>;
   if (!streakCols.some((c) => c.name === "scope_season")) {
     db.exec("ALTER TABLE user_streaks ADD COLUMN scope_season TEXT NOT NULL DEFAULT '';");
+  }
+
+  const standingsCols = db.prepare("SELECT name FROM pragma_table_info('standings')").all() as Array<{
+    name: string;
+  }>;
+  if (!standingsCols.some((c) => c.name === "group_name")) {
+    db.exec("ALTER TABLE standings ADD COLUMN group_name TEXT;");
   }
 
   // versus_pairs removal (curated Versus pairs never shipped as a mechanic —

@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { fetchScoreboard, fetchStandings, fetchSummary, fetchTeamRoster } from "../espn/client.js";
-import { LEAGUES_ALL, ALL_DOMESTIC, pollWindow, type LeagueSlug } from "../espn/types.js";
+import { LEAGUES_ALL, ALL_DOMESTIC, CUPS, pollWindow, type LeagueSlug } from "../espn/types.js";
 import { getDb, all } from "../db/index.js";
 import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
 import { onMatchFinished } from "../predictions/resolver.js";
@@ -240,7 +240,7 @@ export async function syncRosters(): Promise<void> {
  */
 export async function syncStandings(): Promise<void> {
   const season = currentSeason();
-  for (const league of ALL_DOMESTIC) {
+  for (const league of [...ALL_DOMESTIC, ...CUPS]) {
     try {
       const json = await fetchStandings(league, seasonStartYear(season));
       applyStandings(db, json, league, season);

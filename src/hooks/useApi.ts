@@ -126,6 +126,8 @@ export interface StandingRow {
   xga: number | null;
   /** Last five results, oldest first ("WWDLW"); null before the first match. */
   form: string | null;
+  /** Cup group name (e.g. "Group A"); null for league tables. */
+  groupName: string | null;
 }
 
 export function useStandings(league: string) {
@@ -161,6 +163,7 @@ export function useStandings(league: string) {
         xg: row.xg ?? null,
         xga: row.xga ?? null,
         form: row.form ?? null,
+        groupName: row.group_name ?? null,
       })),
     enabled: Boolean(league),
     staleTime: 5 * 60_000,

@@ -398,6 +398,7 @@ export function applyStandings(db: DB, json: unknown, league: string, season: st
           goals_for: r.goals_for,
           goals_against: r.goals_against,
           points: r.points,
+          group_name: r.group_name ?? null,
         },
         ["league", "season", "team_id"],
       );

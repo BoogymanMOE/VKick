@@ -7,7 +7,7 @@
 import express from "express";
 import { getDb, all, get } from "../db/index.js";
 import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
-import { isCup } from "../espn/types.js";
+
 import { competitionCatalog } from "../espn/catalog.js";
 import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
 import { foldForm, type FormMatchRow } from "../standings/form.js";
@@ -362,14 +362,7 @@ function getSeasonKeyDb(league: string): string {
 
 matchesRouter.get("/api/standings/:league", (req, res) => {
   const league = String(req.params.league);
-  // Cup competitions have no league table (knockout brackets are a later
-  // feature) — an explicit error beats an empty table.
-  if (isCup(league)) return bad(res, "NO_TABLE_FOR_CUP", 404);
   const season = req.query.season ? String(req.query.season) : latestSeason(league);
-  // xPts heads the expected-points view, so it rides along with the table
-  // itself rather than costing a request per club. Left join: only the clubs
-  // Understat actually covers have a row, and the client renders the rest as
-  // "no data" (never an error) — the scraper never sees cups or the long tail.
   const rows = all(
     db,
     `SELECT s.*, t.name, t.short_name, t.abbreviation, t.color, t.logo_url,
@@ -383,10 +376,6 @@ matchesRouter.get("/api/standings/:league", (req, res) => {
      ORDER BY s.rank ASC`,
     [league, season],
   );
-  // Form rides along with the table for the same reason xPts does: it is a
-  // per-row attribute of a table the client already asks for. Folded from our
-  // own finished matches, so it stays right even for clubs the xG scraper
-  // doesn't reach.
   const formRows = all(
     db,
     `SELECT home_team_id, away_team_id, home_score, away_score

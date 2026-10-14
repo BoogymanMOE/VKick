@@ -223,6 +223,7 @@ interface EspnStandingEntry {
 }
 
 interface EspnStandingGroup {
+  name?: string;
   standings?: { entries?: EspnStandingEntry[] };
 }
 
@@ -822,23 +823,21 @@ export function normalizeStandings(
   const rows: NormStandingRow[] = [];
   const payload = raw as EspnStandingsPayload | null | undefined;
 
-  // v2: children[].standings.entries — summary: standings.groups[].standings.entries.
   const children = payload?.children;
   const groups: EspnStandingGroup[] = Array.isArray(children)
     ? children
     : (payload?.standings?.groups ?? (payload?.standings ? [payload.standings] : []));
 
   for (const g of groups) {
+    const groupName = (g as { name?: string }).name ?? null;
     for (const entry of g?.standings?.entries ?? []) {
       const byName: Record<string, number | null> = {};
       for (const s of entry.stats ?? []) {
         byName[String(s.name)] = s.value !== undefined && s.value !== null ? Number(s.value) : null;
       }
-      // v2 puts the id on the team object; summary has it on the entry.
       const teamObj = (typeof entry.team === "object" && entry.team ? entry.team : {}) as EspnTeamRef;
       const teamId = String(teamObj.id ?? entry.id ?? "");
       if (!teamId) continue;
-      // entry.team is a plain string in summary standings ("Manchester City")
       const teamName =
         typeof entry.team === "string" && entry.team
           ? entry.team
@@ -867,6 +866,7 @@ export function normalizeStandings(
         goals_for: byName["pointsFor"] ?? null,
         goals_against: byName["pointsAgainst"] ?? null,
         points: byName["points"] ?? null,
+        group_name: groupName,
       });
     }
   }

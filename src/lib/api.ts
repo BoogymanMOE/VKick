@@ -294,6 +294,7 @@ export interface ApiStanding {
   /** Understat season expected points; null for clubs the scraper misses. */
   xpts?: number | null;
   xg?: number | null;
+  group_name?: string | null;
   xga?: number | null;
   /** Last five results, oldest first, e.g. "WWDLW"; null before a club's first match. */
   form?: string | null;

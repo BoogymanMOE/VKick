@@ -35,3 +35,21 @@ export const SLUG_BY_LEAGUE: Record<LeagueId, string> = {
 export function slugForLeague(idOrSlug: string): string {
   return SLUG_BY_LEAGUE[idOrSlug as LeagueId] ?? idOrSlug;
 }
+
+const CUP_SLUGS = new Set([
+  "uefa.champions",
+  "uefa.europa",
+  "uefa.europa.conf",
+  "uefa.super_cup",
+  "uefa.champions_qual",
+  "eng.fa",
+  "eng.league_cup",
+  "esp.copa_del_rey",
+  "ita.coppa_italia",
+  "ger.dfb_pokal",
+  "fra.coupe_de_france",
+]);
+
+export function isCup(slug: string): boolean {
+  return CUP_SLUGS.has(slug);
+}
