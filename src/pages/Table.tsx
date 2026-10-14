@@ -189,8 +189,8 @@ export default function Table() {
             ) : null}
 
             {view === "actual" ? (
-              <div className="overflow-x-auto rounded-card border border-line bg-surface">
-                <div className="min-w-[640px]">
+              <div className="overflow-x-auto">
+                <div className="min-w-[640px] overflow-hidden rounded-card border border-line bg-surface">
                   <div
                     aria-hidden="true"
                     className="grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
