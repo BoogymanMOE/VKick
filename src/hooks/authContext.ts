@@ -15,6 +15,7 @@ export interface AuthUser {
   displayName: string;
   username: string | null;
   authMode: "session" | "telegram" | "dev";
+  isAdmin: boolean;
 }
 
 export interface AuthContextValue {

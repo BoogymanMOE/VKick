@@ -13,7 +13,7 @@ import { deleteAccountData } from "../db/accountDeletion.js";
 import { POINTS as SCORING_POINTS } from "../scoring/predictionScore.js";
 import { attachPlayerNames } from "../predictions/pickNames.js";
 import { lineupPublished, windowFor } from "../predictions/window.js";
-import { bad, currentUser, requireUser, MAX_LEAGUES } from "./shared.js";
+import { bad, currentUser, requireUser, MAX_LEAGUES, isAdmin } from "./shared.js";
 
 const db = getDb();
 
@@ -68,7 +68,12 @@ meRouter.get("/api/me", requireUser, (req, res) => {
   const authMode: "telegram" | "session" | "dev" =
     req.authMode === "dev" ? "dev" : /^\d+$/.test(u.telegram_id) ? "telegram" : "session";
   res.json({
-    user: { ...u, username: cred?.username ?? null, language: prefs?.language ?? "en" },
+    user: {
+      ...u,
+      username: cred?.username ?? null,
+      language: prefs?.language ?? "en",
+      isAdmin: isAdmin(req),
+    },
     favorites: favCount?.n ?? 0,
     leagues: leagueCount?.n ?? 0,
     authMode,

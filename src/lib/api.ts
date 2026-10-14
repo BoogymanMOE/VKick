@@ -518,11 +518,25 @@ export const api = {
         username?: string | null;
         /** The language last reported by a device (drives bot push copy). */
         language?: "en" | "fa";
+        isAdmin?: boolean;
       };
       favorites: number;
       leagues?: number;
       authMode?: "session" | "telegram" | "dev";
     }>("/me"),
+
+  getAdminStats: () =>
+    request<{
+      stats: { totalUsers: number; totalMatches: number; totalPredictions: number; totalFavorites: number };
+    }>("/admin/stats"),
+
+  adminSync: () => request<{ ok: boolean }>("/admin/sync", { method: "POST" }),
+
+  adminBroadcast: (message: string) =>
+    request<{ ok: boolean; sent: number }>("/admin/broadcast", {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    }),
 
   /** Rename the signed-in user's display name (Profile tab). */
   updateDisplayName: (displayName: string) =>

@@ -327,6 +327,14 @@ export default function Profile() {
         />
       </section>
 
+      {user?.isAdmin ? (
+        <section className="mt-6">
+          <Button variant="ghost" className="w-full" onClick={() => navigate("/admin")}>
+            Admin Dashboard
+          </Button>
+        </section>
+      ) : null}
+
       <section className="mt-6 mb-2">
         <Button variant="ghost" className="w-full text-danger" onClick={signOut}>
           {t("profile.signOut")}

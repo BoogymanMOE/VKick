@@ -3,13 +3,61 @@
  * single-recipient push. Behavior unchanged.
  */
 import express from "express";
-import { getDb, get, run } from "../db/index.js";
+import { getDb, get, run, all } from "../db/index.js";
 import { syncScoreboards, syncScoreboardWindow, syncStandings } from "../sync/service.js";
 import { bad, isAdmin, requireUser } from "./shared.js";
+import { getBot } from "../bot/index.js";
 
 const db = getDb();
 
 export const adminRouter = express.Router();
+
+adminRouter.get("/api/admin/stats", requireUser, (_req, res) => {
+  if (!isAdmin(_req)) return bad(res, "admin only", 403);
+  const users = get<{ n: number }>(db, "SELECT COUNT(*) AS n FROM users");
+  const matches = get<{ n: number }>(db, "SELECT COUNT(*) AS n FROM matches");
+  const predictions = get<{ n: number }>(db, "SELECT COUNT(*) AS n FROM predictions");
+  const favorites = get<{ n: number }>(db, "SELECT COUNT(*) AS n FROM favorite_teams");
+  res.json({
+    stats: {
+      totalUsers: users?.n ?? 0,
+      totalMatches: matches?.n ?? 0,
+      totalPredictions: predictions?.n ?? 0,
+      totalFavorites: favorites?.n ?? 0,
+    },
+  });
+});
+
+adminRouter.post("/api/admin/sync", requireUser, async (_req, res) => {
+  if (!isAdmin(_req)) return bad(res, "admin only", 403);
+  try {
+    await Promise.all([syncScoreboards(), syncStandings()]);
+    res.json({ ok: true });
+  } catch (err) {
+    bad(res, `sync failed: ${String(err).slice(0, 120)}`, 500);
+  }
+});
+
+adminRouter.post("/api/admin/broadcast", requireUser, async (req, res) => {
+  if (!isAdmin(req)) return bad(res, "admin only", 403);
+  const message = String(req.body?.message ?? "").trim();
+  if (!message) return bad(res, "message required");
+  const users = all<{ telegram_id: string }>(
+    db,
+    "SELECT telegram_id FROM users WHERE telegram_id NOT LIKE 'guest:%' AND telegram_id NOT LIKE 'pwd:%' AND telegram_id NOT LIKE 'dev:%'",
+  );
+  let sent = 0;
+  for (const u of users) {
+    try {
+      await getBot()?.api.sendMessage(u.telegram_id, message);
+      sent++;
+      await new Promise((r) => setTimeout(r, 50));
+    } catch {
+      // skip blocked/deactivated users
+    }
+  }
+  res.json({ ok: true, sent });
+});
 
 adminRouter.post("/api/admin/sync", requireUser, (req, res) => {
   if (!isAdmin(req)) return bad(res, "admin only", 403);

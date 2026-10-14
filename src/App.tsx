@@ -19,6 +19,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const PlayerStats = lazy(() => import("./pages/PlayerStats"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Admin = lazy(() => import("./pages/Admin"));
 const Ratings = lazy(() => import("./pages/Ratings"));
 const TeamPage = lazy(() => import("./pages/TeamPage"));
 const Table = lazy(() => import("./pages/Table"));
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="/predictions" element={<Predictions />} />
             <Route path="/stats" element={<PlayerStats />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/admin" element={<Admin />} />
             {/* Legal pages: reachable from Profile and the onboarding footer. */}
             <Route path={LEGAL_ROUTES.privacy} element={<Privacy />} />
             <Route path={LEGAL_ROUTES.terms} element={<Terms />} />

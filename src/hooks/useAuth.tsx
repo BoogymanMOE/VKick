@@ -198,6 +198,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName: u.display_name,
       username: u.username ?? null,
       authMode: meQuery.data.authMode ?? "telegram",
+      isAdmin: u.isAdmin ?? false,
     };
   }, [meQuery.data]);
 

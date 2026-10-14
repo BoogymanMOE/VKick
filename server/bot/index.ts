@@ -20,6 +20,10 @@ import type { GoalAlert } from "../sync/upserts.js";
 let bot: Bot | null = null;
 let drainTimer: NodeJS.Timeout | null = null;
 
+export function getBot(): Bot | null {
+  return bot;
+}
+
 // Brand icon sent as the /start photo — Telegram inline buttons can't carry
 // images, so the button rides on the photo's reply markup instead.
 const TELEGRAM_ICON = path.join(
