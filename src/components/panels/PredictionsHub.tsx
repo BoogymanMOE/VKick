@@ -233,6 +233,16 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
   // with no next step, which is the opposite of a deadline.
   const primaryMechanic = ordered.find((m) => !byMechanic(m) && opensNow(m));
 
+  const kickoffMs = windows.shot_predict ? new Date(windows.shot_predict.lockAt).getTime() : null;
+  const minutesToKickoff = kickoffMs ? (kickoffMs - now) / 60_000 : null;
+  const showLockSoon =
+    matchStatus === "scheduled" &&
+    minutesToKickoff !== null &&
+    minutesToKickoff > 0 &&
+    minutesToKickoff <= 60 &&
+    rows.length < 5;
+  const showHowTo = matchStatus === "scheduled" && rows.length === 0;
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
@@ -240,6 +250,17 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
         {/* The scoring tables live in the app now, not only in scoring-rules.md. */}
         <RulesButton variant="link" />
       </div>
+      {showLockSoon ? (
+        <Card className="border-danger/50 bg-danger/5 p-2.5">
+          <span className="text-[11px] font-bold text-danger animate-pulse">{t("predict.lockSoon")}</span>
+        </Card>
+      ) : null}
+      {showHowTo ? (
+        <Card className="border-volt/40 bg-elevated p-3">
+          <p className="text-xs font-bold text-ink">{t("predict.howToTitle")}</p>
+          <p className="mt-1 text-[11px] text-ink-2">{t("predict.howToBody")}</p>
+        </Card>
+      ) : null}
       {halftime ? (
         <Card className="border-live/40 p-2.5">
           <span className="text-[11px] font-bold text-live">{t("sub.halftimeBanner")}</span>

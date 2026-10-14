@@ -40,6 +40,7 @@ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
 import { useAuth } from "../hooks/authContext";
 import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
+import { useNow } from "../hooks/useNow";
 import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
 import { haptic, notifyHaptic } from "../lib/telegram";
 import type { Team } from "../types";
@@ -97,6 +98,22 @@ export default function MatchDetail() {
     const m = /\d+/.exec(match?.minute_display ?? "");
     return m ? Number(m[0]) : 0;
   }, [match?.minute_display]);
+
+  const now = useNow(30_000);
+
+  const countdownLabel = useMemo(() => {
+    if (!match || match.status !== "scheduled") return null;
+    const ms = new Date(match.kickoff_at).getTime() - now;
+    if (ms <= 0) return null;
+    const totalMinutes = Math.floor(ms / 60_000);
+    if (totalMinutes < 1) return t("predict.startingSoon");
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0) {
+      return t("predict.startsIn", { time: `${hours}h ${minutes}m` });
+    }
+    return t("predict.startsIn", { time: `${minutes}m` });
+  }, [match, now, t]);
 
   // The deadline bar needs the pick count. Same query key as the Predict tab,
   // so this shares its cache instead of costing a second round trip, and it
@@ -205,6 +222,10 @@ export default function MatchDetail() {
               <Chip tone="live">
                 <LiveDot />
                 {t("status.live")} <Num>{currentMinute}&#39;</Num>
+              </Chip>
+            ) : countdownLabel ? (
+              <Chip tone="volt" className="animate-pulse">
+                {countdownLabel}
               </Chip>
             ) : (
               <Chip tone={match.status === "finished" ? "muted" : "volt"}>
