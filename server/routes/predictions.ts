@@ -7,12 +7,7 @@ import express from "express";
 import { getDb, all, get, run } from "../db/index.js";
 import { writeLimiter } from "../auth/rateLimit.js";
 import { validatePayload, type Mechanic } from "../predictions/validate.js";
-import {
-  LINEUP_GATED,
-  isLineupGated,
-  lineupPublished,
-  windowFor,
-} from "../predictions/window.js";
+import { LINEUP_GATED, isLineupGated, lineupPublished, windowFor } from "../predictions/window.js";
 import { bad, currentUser, requireUser } from "./shared.js";
 
 const db = getDb();
