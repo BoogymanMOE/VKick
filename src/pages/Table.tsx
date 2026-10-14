@@ -189,25 +189,35 @@ export default function Table() {
             ) : null}
 
             {view === "actual" ? (
-              /* One bordered table, not a stack of bordered cards: the header
-                 shares the rows' grid so every column lines up, and hairline
-                 dividers carry the rhythm instead of 20 separate borders. */
-              <div className="overflow-hidden rounded-card border border-line bg-surface">
-                <div
-                  aria-hidden="true"
-                  className="grid grid-cols-[1.75rem_1fr_2rem_2.5rem_2.5rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
-                >
-                  <span>{t("table.rank")}</span>
-                  <span>{t("table.team")}</span>
-                  <span className="text-end">{t("table.played")}</span>
-                  <span className="text-end">{t("table.gd")}</span>
-                  <span className="text-end">{t("table.pts")}</span>
+              <div className="overflow-x-auto rounded-card border border-line bg-surface">
+                <div className="min-w-[640px]">
+                  <div
+                    aria-hidden="true"
+                    className="grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
+                  >
+                    <span>{t("table.rank")}</span>
+                    <span>{t("table.team")}</span>
+                    <span className="text-end">{t("table.played")}</span>
+                    <span className="text-end">{t("table.w")}</span>
+                    <span className="text-end">{t("table.d")}</span>
+                    <span className="text-end">{t("table.l")}</span>
+                    <span className="text-end">{t("table.gf")}</span>
+                    <span className="text-end">{t("table.ga")}</span>
+                    <span className="text-end">{t("table.gd")}</span>
+                    <span className="text-end">{t("table.pts")}</span>
+                    <span className="text-end">{t("table.form")}</span>
+                  </div>
+                  <ul className="divide-y divide-line">
+                    {rows.map((row, index) => (
+                      <StandingItem
+                        key={row.team.id}
+                        row={row}
+                        index={index}
+                        mine={isFavorite(row.team.id)}
+                      />
+                    ))}
+                  </ul>
                 </div>
-                <ul className="divide-y divide-line">
-                  {rows.map((row, index) => (
-                    <StandingItem key={row.team.id} row={row} index={index} mine={isFavorite(row.team.id)} />
-                  ))}
-                </ul>
               </div>
             ) : null}
           </>
@@ -218,12 +228,12 @@ export default function Table() {
 }
 
 function StandingItem({ row, index, mine }: { row: StandingRow; index: number; mine: boolean }) {
-  const { t, localize } = useI18n();
+  const { localize } = useI18n();
   const gd = (row.goalsFor ?? 0) - (row.goalsAgainst ?? 0);
   return (
     <li
       className={cx(
-        "list-in relative grid grid-cols-[1.75rem_1fr_2rem_2.5rem_2.5rem] items-center gap-2 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
+        "list-in relative grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] items-center gap-2 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
         mine ? "bg-elevated" : "hover:bg-elevated/60",
       )}
       style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
@@ -242,10 +252,14 @@ function StandingItem({ row, index, mine }: { row: StandingRow; index: number; m
         <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
           {localize(row.team.shortName)}
         </span>
-        {row.form ? <FormStrip form={row.form} /> : null}
         {mine ? <StarFilledIcon className="h-3 w-3 flex-none text-volt" /> : null}
       </Link>
       <Num className="text-end text-xs text-ink-3">{row.played ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">{row.wins ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">{row.draws ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">{row.losses ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">{row.goalsFor ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">{row.goalsAgainst ?? "–"}</Num>
       <Num className={cx("text-end text-xs", gd >= 0 ? "text-ink-2" : "text-ink-3")}>
         {gd > 0 ? `+${gd}` : gd}
       </Num>
@@ -254,7 +268,7 @@ function StandingItem({ row, index, mine }: { row: StandingRow; index: number; m
       ) : (
         <Num className="text-end text-sm text-ink">–</Num>
       )}
-      <span className="sr-only">{t("table.pts")}</span>
+      {row.form ? <FormStrip form={row.form} /> : <span className="text-end text-xs text-ink-3">–</span>}
     </li>
   );
 }
