@@ -47,6 +47,7 @@ import { moderationRouter } from "./routes/moderation.js";
 import { errorsRouter } from "./routes/errors.js";
 import { adsgramRouter } from "./routes/adsgram.js";
 import { adminRouter } from "./routes/admin.js";
+import { liveRouter } from "./routes/live.js";
 import { apiNotFound, apiErrorHandler } from "./http/middleware.js";
 
 const app = express();
@@ -118,6 +119,7 @@ app.use(moderationRouter);
 app.use(errorsRouter);
 app.use(adsgramRouter);
 app.use(adminRouter);
+app.use(liveRouter);
 
 // Any /api path that matched no route answers JSON, whatever the method —
 // before the static/SPA handlers can turn it into an HTML page.

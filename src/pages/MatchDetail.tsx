@@ -43,6 +43,7 @@ import { formatKickoff, formatKickoffDate } from "../lib/format";
 import { useNow } from "../hooks/useNow";
 import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
 import { haptic, notifyHaptic } from "../lib/telegram";
+import { useLiveUpdates } from "../hooks/useLiveUpdates";
 import type { Team } from "../types";
 import type { StringKey } from "../i18n/strings";
 
@@ -54,16 +55,14 @@ export default function MatchDetail() {
   const { t, lang, localize } = useI18n();
   const { user } = useAuth();
   const locale = lang === "fa" ? "fa-IR" : undefined;
+  useLiveUpdates();
 
   const matchQuery = useQuery({
     queryKey: ["match", id],
     queryFn: () => api.getMatch(id),
     enabled: Boolean(id),
-    // 15s for live scores; 60s otherwise. Halting when the tab is hidden (the
-    // refetchInterval function form) keeps a backgrounded webview from
-    // polling forever — reopening the tab refetches immediately.
     refetchInterval: (query) =>
-      query.state.data?.match.status === "live" && !document.hidden ? 15_000 : false,
+      query.state.data?.match.status === "live" && !document.hidden ? 300_000 : false,
     refetchIntervalInBackground: false,
   });
   const match = matchQuery.data?.match;

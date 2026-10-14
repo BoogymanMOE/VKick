@@ -6,6 +6,7 @@ import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAl
 import { onMatchFinished } from "../predictions/resolver.js";
 import { syncAllFavoriteTeamsUnderstat, syncLeagueUnderstatTables } from "./understat.js";
 import { queueGoalAlerts, queueMatchdayAlerts } from "../notifications.js";
+import { broadcast } from "../live/sse.js";
 
 const db = getDb();
 
@@ -351,6 +352,9 @@ export function startSyncLoop(): void {
         try {
           const goals = await syncSummaries();
           queueGoalAlerts(db, goals);
+          for (const g of goals) {
+            broadcast("update", { matchId: g.matchId, type: "goal" });
+          }
           // Matchday reminders read the statuses and formations the summary
           // pass just refreshed — but they only need to run about once a
           // minute even when the live loop is much faster.
@@ -378,7 +382,12 @@ export function startSyncLoop(): void {
       if (pulseRunning) return;
       pulseRunning = true;
       void syncScoreboards()
-        .then((goals) => queueGoalAlerts(db, goals))
+        .then((goals) => {
+          queueGoalAlerts(db, goals);
+          for (const g of goals) {
+            broadcast("update", { matchId: g.matchId, type: "goal" });
+          }
+        })
         .catch((err) => console.error("[sync] live pulse error:", err))
         .finally(() => {
           pulseRunning = false;

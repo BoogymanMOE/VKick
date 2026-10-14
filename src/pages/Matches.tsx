@@ -36,6 +36,7 @@ import {
 } from "../components/icons";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
+import { useLiveUpdates } from "../hooks/useLiveUpdates";
 import { PullIndicator } from "../components/PullToRefresh";
 import type { Match, Team } from "../types";
 
@@ -49,6 +50,7 @@ export default function Matches() {
   const navigate = useNavigate();
   const locale = lang === "fa" ? "fa-IR" : undefined;
   const queryClient = useQueryClient();
+  useLiveUpdates();
 
   // Deep link from Browse: /matches?league=eng.1 narrows the feed to one
   // competition. Absent param = the followed-leagues feed (or everything).

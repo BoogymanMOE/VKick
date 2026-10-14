@@ -85,14 +85,10 @@ export function useMatches(
     queryKey: ["matches", query],
     queryFn: () => api.getMatches(query),
     select: (data) => data.matches.map(matchFromApi),
-    // Poll on a clock that notices liveness. The server's own pulse hits ESPN
-    // every 15s, so a flat 60s client poll made a goal take up to a minute to
-    // reach the one screen that exists to show goals — while with nothing live
-    // there is nothing worth refetching at all.
     refetchInterval: (q) => {
       const live =
         q.state.data?.matches?.some((m) => m.status === "live" || m.status === "halftime") ?? false;
-      return live ? 20_000 : 60_000;
+      return live ? 300_000 : 60_000;
     },
   });
 }
