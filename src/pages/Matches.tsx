@@ -25,7 +25,15 @@ import { useI18n } from "../i18n/context";
 import { formatClock, formatDayHeader, formatKickoff } from "../lib/format";
 import { LEAGUE_BY_SLUG } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
-import { BallIcon, PlusIcon, RefreshIcon, ShirtIcon, StarFilledIcon, TableIcon } from "../components/icons";
+import {
+  BallIcon,
+  PlusIcon,
+  RefreshIcon,
+  ShareIcon,
+  ShirtIcon,
+  StarFilledIcon,
+  TableIcon,
+} from "../components/icons";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { PullIndicator } from "../components/PullToRefresh";
@@ -265,6 +273,24 @@ export default function Matches() {
           {t("nav.table")}
         </Link>
       </div>
+
+      {/* Referral banner — surfaces the invite system from the feed. */}
+      <Link
+        to="/profile"
+        onClick={() => haptic("light")}
+        className="mt-3 flex items-center gap-3 rounded-card border border-volt/40 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+      >
+        <span className="grid h-10 w-10 flex-none place-items-center rounded-full bg-volt/15 text-volt">
+          <ShareIcon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold text-ink">{t("referral.bannerTitle")}</span>
+          <span className="block text-xs text-ink-3">{t("referral.hint")}</span>
+        </span>
+        <span className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-xs font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95">
+          {t("referral.bannerCta")}
+        </span>
+      </Link>
 
       {/* Everything below sits under the sticky header. The wrapper gives the
           pull-to-refresh marker an anchor so it slides in between header and

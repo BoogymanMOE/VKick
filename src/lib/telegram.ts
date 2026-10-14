@@ -141,3 +141,15 @@ export function selectionHaptic(): void {
 export function notifyHaptic(type: "error" | "success" | "warning"): void {
   telegram()?.HapticFeedback?.notificationOccurred(type);
 }
+
+/**
+ * Open the Telegram share sheet for a URL + text. Returns false when the SDK
+ * is unavailable (plain browser), so the caller can fall back to clipboard.
+ */
+export function shareToTelegram(url: string, text: string): boolean {
+  const app = telegram();
+  if (!app?.openTelegramLink) return false;
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+  app.openTelegramLink(shareUrl);
+  return true;
+}

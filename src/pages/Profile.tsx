@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BottomSheet, SheetActions } from "../components/BottomSheet";
 import { TopBar } from "../components/TopBar";
-import { ChevronRightIcon, CloseIcon, PencilIcon } from "../components/icons";
+import { ChevronRightIcon, CloseIcon, PencilIcon, ShareIcon } from "../components/icons";
 import { useToast } from "../components/toastContext";
 import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch } from "../components/ui";
 import { useAuth } from "../hooks/authContext";
@@ -13,7 +13,7 @@ import { api, serverErrorKey } from "../lib/api";
 import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
 import { LEGAL_ROUTES } from "../lib/legal";
 import { useLocalState } from "../lib/useLocalState";
-import { haptic, notifyHaptic } from "../lib/telegram";
+import { haptic, notifyHaptic, shareToTelegram } from "../lib/telegram";
 
 /**
  * Reject after `ms` so a request that never settles cannot pin the UI in a
@@ -494,6 +494,17 @@ function ReferralSection() {
     }
   };
 
+  const share = () => {
+    haptic("light");
+    const code = referral?.code;
+    if (!code) return;
+    const url = `${window.location.origin}?startapp=${code}`;
+    const ok = shareToTelegram(url, t("referral.shareText"));
+    if (!ok) {
+      void copy();
+    }
+  };
+
   const submit = () => {
     const code = codeDraft.trim();
     if (!code || redeeming) return;
@@ -518,6 +529,10 @@ function ReferralSection() {
           </code>
           <Button variant="ghost" onClick={() => void copy()} disabled={!referral}>
             {t("referral.copy")}
+          </Button>
+          <Button variant="ghost" onClick={share} disabled={!referral}>
+            <ShareIcon className="h-4 w-4" />
+            {t("referral.share")}
           </Button>
         </div>
         {referral ? (

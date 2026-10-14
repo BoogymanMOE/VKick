@@ -181,6 +181,14 @@ export const CloseIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Share — the referral "Share to Telegram" action. */
+export const ShareIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} width={18} height={18}>
+    <path d="M12 3l4 4m-4-4L8 7m4-4v13" />
+    <path d="M5 12v7a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0019 19v-7" />
+  </svg>
+);
+
 /** Filled variant, for the "already your anchor club" state. */
 export const StarFilledIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} width={12} height={12} fill="currentColor" strokeWidth={1.2}>
