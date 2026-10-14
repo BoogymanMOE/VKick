@@ -334,6 +334,8 @@ export function startSyncLoop(): void {
   // Initial sweep on boot: populate the feed immediately instead of waiting
   // up to 6 hours for the cron window. Covers 1 day back and 21 days forward.
   void syncScoreboardWindow(1, 21).catch((err) => console.error("[sync] initial window sweep error:", err));
+  console.log("[sync] triggering initial standings sweep on boot...");
+  void syncStandings().catch((err) => console.error("[sync] initial standings sweep error:", err));
 
   // The live loop: summary of live matches every LIVE_SUMMARY_SECONDS.
   // A plain interval (not cron) because the cadence is env-configurable and

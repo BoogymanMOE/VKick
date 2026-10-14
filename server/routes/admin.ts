@@ -4,7 +4,7 @@
  */
 import express from "express";
 import { getDb, get, run } from "../db/index.js";
-import { syncScoreboards, syncScoreboardWindow } from "../sync/service.js";
+import { syncScoreboards, syncScoreboardWindow, syncStandings } from "../sync/service.js";
 import { bad, isAdmin, requireUser } from "./shared.js";
 
 const db = getDb();
@@ -29,6 +29,16 @@ adminRouter.post("/api/admin/sync-window", requireUser, (req, res) => {
   void syncScoreboardWindow(back, fwd)
     .then(() => res.json({ ok: true }))
     .catch((err) => bad(res, `sync failed: ${String(err).slice(0, 120)}`, 500));
+});
+
+adminRouter.post("/api/admin/sync-standings", requireUser, async (_req, res) => {
+  if (!isAdmin(_req)) return bad(res, "admin only", 403);
+  try {
+    await syncStandings();
+    res.json({ ok: true, message: "Standings sync complete" });
+  } catch (err) {
+    bad(res, `sync failed: ${String(err).slice(0, 120)}`, 500);
+  }
 });
 
 adminRouter.post("/api/admin/notify", requireUser, (req, res) => {
