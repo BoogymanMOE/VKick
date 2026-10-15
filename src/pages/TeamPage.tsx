@@ -13,7 +13,7 @@ import {
   TeamBadge,
 } from "../components/ui";
 import { cx } from "../lib/cx";
-import { useSquad, useTeamDetail, useTeamUnderstat } from "../hooks/useApi";
+import { matchFromApi, useSquad, useTeamDetail, useTeamUnderstat } from "../hooks/useApi";
 import type { StringKey } from "../i18n/strings";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { TEAM_FALLBACK } from "../lib/colors";
@@ -116,7 +116,7 @@ export default function TeamPage() {
 
       <section className="panel-in mt-4" key={tab}>
         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
-        {tab === "form" ? <FixturesTab fixtures={fixtures} /> : null}
+        {tab === "form" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
         {tab === "stats" ? <StatsTab stats={seasonStats} /> : null}
         {tab === "xg" ? (
           <XgTab
@@ -194,7 +194,7 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
 
 /* ------------------------------------------------------------ fixtures */
 
-function FixturesTab({ fixtures }: { fixtures: ApiMatch[] }) {
+function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: string }) {
   const { t, lang, localize } = useI18n();
   const prefetchMatch = usePrefetchMatch();
   const locale = lang === "fa" ? "fa-IR" : undefined;
@@ -202,35 +202,66 @@ function FixturesTab({ fixtures }: { fixtures: ApiMatch[] }) {
 
   return (
     <ul className="space-y-2">
-      {fixtures.map((match) => (
-        <li key={match.id} className="flex items-center gap-2 rounded-card border border-line bg-surface p-3">
-          <Num className="w-14 flex-none text-[11px] text-ink-3">
-            {formatKickoff(new Date(match.kickoff_at), locale)}
-          </Num>
-          <Link
-            to={`/match/${match.id}`}
-            onPointerDown={() => prefetchMatch(match.id)}
-            className="min-w-0 flex-1 truncate text-xs font-bold text-ink transition-colors duration-[var(--t-fast)] hover:text-volt"
-          >
-            {localize(match.home_short ?? "")} {t("common.versus")} {localize(match.away_short ?? "")}
-          </Link>
-          {match.status === "finished" ? (
-            <Chip tone="muted" className="flex-none">
-              <Num>
-                {match.home_score ?? 0}–{match.away_score ?? 0}
-              </Num>
-            </Chip>
-          ) : match.status === "live" ? (
-            <Chip tone="live" className="flex-none">
-              <Num>{match.minute_display ?? ""}</Num>
-            </Chip>
-          ) : (
-            <Chip tone="volt" className="flex-none">
-              <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
-            </Chip>
-          )}
-        </li>
-      ))}
+      {fixtures.map((match) => {
+        // One scoreline per fixture: crest, club, the result or the kickoff,
+        // club, crest. The club whose page this is wears volt, so picking your
+        // side out of a neutral fixture list needs no reading.
+        const { home, away } = matchFromApi(match);
+        return (
+          <li key={match.id}>
+            <Link
+              to={`/match/${match.id}`}
+              onPointerDown={() => prefetchMatch(match.id)}
+              aria-label={`${localize(home.shortName)} ${t("common.versus")} ${localize(away.shortName)}`}
+              className="flex items-center justify-between gap-2 rounded-card border border-line bg-surface p-2.5 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+            >
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                <TeamBadge team={home} size="sm" />
+                <span
+                  className={cx(
+                    "min-w-0 truncate text-xs font-bold",
+                    home.id === teamId ? "text-volt" : "text-ink",
+                  )}
+                >
+                  {localize(home.shortName)}
+                </span>
+              </span>
+              <span className="flex-none">
+                {match.status === "finished" ? (
+                  <Chip tone="muted">
+                    <Num>
+                      {match.home_score ?? 0}–{match.away_score ?? 0}
+                    </Num>
+                  </Chip>
+                ) : match.status === "live" ? (
+                  <Chip tone="live">
+                    <Num>{match.minute_display ?? ""}</Num>
+                  </Chip>
+                ) : (
+                  /* Kickoff carries the date AND the time, so a fixture weeks
+                     out is unambiguous at a glance. */
+                  <Chip tone="volt">
+                    <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
+                    {" · "}
+                    <Num>{formatKickoff(new Date(match.kickoff_at), locale)}</Num>
+                  </Chip>
+                )}
+              </span>
+              <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
+                <span
+                  className={cx(
+                    "min-w-0 truncate text-end text-xs font-bold",
+                    away.id === teamId ? "text-volt" : "text-ink",
+                  )}
+                >
+                  {localize(away.shortName)}
+                </span>
+                <TeamBadge team={away} size="sm" />
+              </span>
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -243,26 +274,44 @@ function StatsTab({ stats }: { stats: SeasonStats }) {
   const { t } = useI18n();
   if (!stats) return <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />;
 
-  const rows: Array<{ label: string; value: string }> = [
-    { label: t("statsPage.teams"), value: `${stats.wins}W ${stats.draws}D ${stats.losses}L` },
+  // Two reads instead of one dump: what the side creates, and what it concedes
+  // or controls. The flat list said everything at once and ranked nothing.
+  const attackRows: Array<{ label: string; value: string }> = [
     { label: t("stats.goals"), value: `${stats.goals_for}` },
-    { label: t("stats.conceded"), value: `${stats.goals_against}` },
-    { label: t("stats.possession"), value: `${Math.round(stats.avg_possession)}%` },
-    { label: t("stats.passAccuracy"), value: `${Math.round(stats.avg_pass_accuracy)}%` },
     { label: t("stats.shots"), value: `${stats.total_shots}` },
     { label: t("stats.onTarget"), value: `${stats.total_shots_on_target}` },
     { label: t("stats.corners"), value: `${stats.total_corners}` },
+  ];
+  const controlRows: Array<{ label: string; value: string }> = [
+    { label: t("stats.conceded"), value: `${stats.goals_against}` },
+    { label: t("stats.possession"), value: `${Math.round(stats.avg_possession)}%` },
+    { label: t("stats.passAccuracy"), value: `${Math.round(stats.avg_pass_accuracy)}%` },
     { label: t("stats.fouls"), value: `${stats.total_fouls}` },
   ];
 
   return (
-    <Card className="divide-y divide-line p-0">
-      {rows.map((row) => (
-        <div key={row.label} className="flex items-center justify-between px-3 py-2.5">
-          <span className="text-xs text-ink-2">{row.label}</span>
-          <Num className="text-sm font-bold text-ink">{row.value}</Num>
-        </div>
-      ))}
+    <div className="space-y-4">
+      <StatCard title={t("team.statsAttack")} rows={attackRows} />
+      <StatCard title={t("team.statsDefense")} rows={controlRows} />
+    </div>
+  );
+}
+
+/** One grouped stat sheet: a heading, then label/value rows on a hairline. */
+function StatCard({ title, rows }: { title: string; rows: Array<{ label: string; value: string }> }) {
+  return (
+    <Card className="p-4">
+      <SectionHeading title={title} />
+      <dl className="divide-y divide-line">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-3 py-2.5">
+            <dt className="text-xs text-ink-3">{row.label}</dt>
+            <dd>
+              <Num className="text-base font-bold text-ink">{row.value}</Num>
+            </dd>
+          </div>
+        ))}
+      </dl>
     </Card>
   );
 }

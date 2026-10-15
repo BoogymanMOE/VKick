@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { BottomSheet, SheetActions } from "../components/BottomSheet";
 import { TopBar } from "../components/TopBar";
 import { ChevronRightIcon, CloseIcon, PencilIcon, ShareIcon } from "../components/icons";
 import { useToast } from "../components/toastContext";
-import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch } from "../components/ui";
+import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch, TeamBadge } from "../components/ui";
 import { useAuth } from "../hooks/authContext";
+import { useFavorites } from "../hooks/useFavorites";
 import { useNotificationPrefs, useReferral } from "../hooks/useApi";
 import { LANG_LABEL, type Lang } from "../i18n/strings";
 import { useI18n } from "../i18n/context";
@@ -167,6 +168,7 @@ export default function Profile() {
       <section className="mt-6">
         <SectionHeading title={t("profile.account")} />
         <div className="space-y-2">
+          <FavoriteTeamsStrip />
           <ListRow
             label={t("profile.telegram")}
             hint={viaTelegram ? t("profile.signedIn") : t("profile.linkTelegram")}
@@ -475,6 +477,41 @@ export default function Profile() {
         ) : null}
       </BottomSheet>
     </>
+  );
+}
+
+/* --------------------------------------------------------- favorite teams */
+
+/**
+ * The clubs the user follows, as a scrollable shelf of crest tiles. Profile
+ * used to reach favorites only through the onboarding picker's edit link; the
+ * shelf shows what is actually followed (and is the fastest way back to a club
+ * page) without leaving the hub. Crest + short name only — this is a shortcut,
+ * not the manager.
+ *
+ * Empty renders nothing: a first-run user with no picks gets the edit row
+ * below, not an empty rail.
+ */
+function FavoriteTeamsStrip() {
+  const { localize } = useI18n();
+  const { teams, loading } = useFavorites();
+  if (loading || teams.length === 0) return null;
+
+  return (
+    <ul className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+      {teams.map((team) => (
+        <li key={team.id} className="flex-none">
+          <Link
+            to={`/team/${team.id}`}
+            onClick={() => haptic("light")}
+            className="flex w-[76px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
+          >
+            <TeamBadge team={team} size="sm" />
+            <span className="w-full truncate text-[10px] font-bold text-ink">{localize(team.shortName)}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 
