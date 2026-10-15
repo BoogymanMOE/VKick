@@ -87,12 +87,20 @@ export default function TeamPage() {
         back
       />
 
-      {/* Club header */}
-      <div className="relative mt-3 overflow-hidden rounded-card border border-line bg-surface p-4">
-        <div className="flex items-center gap-3">
-          <TeamBadge team={teamView} size="lg" />
+      {/* Club header: the club's own colour washed across the card from the top
+          corner, so a page opens on the side's identity rather than on generic
+          dark chrome. It is a gradient, never a decorative side stripe, and the
+          crest sits at the hero size — this is the one place the badge leads. */}
+      <div
+        className="relative mt-3 overflow-hidden rounded-card border border-line p-4"
+        style={{
+          background: `linear-gradient(135deg, color-mix(in srgb, ${teamView.color} 30%, transparent) 0%, color-mix(in srgb, ${teamView.color} 10%, transparent) 45%, var(--bg-surface) 100%)`,
+        }}
+      >
+        <div className="flex items-center gap-3.5">
+          <TeamBadge team={teamView} size="xl" />
           <div className="min-w-0">
-            <p className="truncate text-base font-bold text-ink">{localize(team.name)}</p>
+            <p className="truncate text-lg font-bold text-ink">{localize(team.name)}</p>
             <p className="text-xs text-ink-3">
               {squadQuery.data?.coach ? `${t("lineups.coach")}: ${localize(squadQuery.data.coach)} · ` : ""}
               {seasonStats ? t("team.played", { played: seasonStats.played }) : null}

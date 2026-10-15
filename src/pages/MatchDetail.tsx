@@ -262,7 +262,13 @@ export default function MatchDetail() {
 
       <section className="panel-in mt-4" key={tab}>
         {tab === "timeline" ? (
-          <TimelineTab matchId={id} live={live} minute={currentMinute} myUserId={user?.id} />
+          <TimelineTab
+            matchId={id}
+            live={live}
+            minute={currentMinute}
+            myUserId={user?.id}
+            teams={[home, away]}
+          />
         ) : null}
         {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
         {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
@@ -334,11 +340,14 @@ function TimelineTab({
   live,
   minute,
   myUserId,
+  teams,
 }: {
   matchId: string;
   live: boolean;
   minute: number;
   myUserId?: number;
+  /** Both sides, for the timeline markers' club tint. */
+  teams: Array<{ id: string; color: string }>;
 }) {
   const { t } = useI18n();
   const query = useQuery({
@@ -348,6 +357,7 @@ function TimelineTab({
   });
   const events = query.data?.events ?? [];
   const adapted = events.map(adaptTimelineEvent);
+  const teamColor = Object.fromEntries(teams.map((team) => [team.id, team.color]));
 
   // The pinned crowd thread. Loaded alongside the timeline; total count is
   // surfaced in the section header, individual pins render under their event.
@@ -378,7 +388,12 @@ function TimelineTab({
           ) : null
         }
       />
-      <TimelineList events={adapted} comments={comments} liveMinute={live ? minute : undefined} />
+      <TimelineList
+        events={adapted}
+        comments={comments}
+        liveMinute={live ? minute : undefined}
+        teamColor={teamColor}
+      />
 
       <div className="mt-4">
         <SectionHeading title={t("comments.add")} />

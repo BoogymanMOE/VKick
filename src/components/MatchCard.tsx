@@ -55,6 +55,7 @@ export const MatchCard = memo(function MatchCard({
 
   const homeLeading = (match.homeScore ?? 0) > (match.awayScore ?? 0);
   const awayLeading = (match.awayScore ?? 0) > (match.homeScore ?? 0);
+  const isLive = match.status === "live";
 
   return (
     <li className="list-in" style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}>
@@ -66,7 +67,14 @@ export const MatchCard = memo(function MatchCard({
       <div
         className={cx(
           "relative overflow-hidden rounded-card border p-3 transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
-          flash ? "goal-flash border-volt/50 bg-elevated" : "border-line bg-surface",
+          // A goal in flight owns the card; otherwise a live match wears the
+          // cyan halo (see .live-glow), and everything else stays on the
+          // neutral surface so live is the only card that glows.
+          flash
+            ? "goal-flash border-volt/50 bg-elevated"
+            : isLive
+              ? "live-glow bg-surface"
+              : "border-line bg-surface",
         )}
       >
         <Link

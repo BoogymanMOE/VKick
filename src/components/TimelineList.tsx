@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { Comment, TimelineEvent } from "../types";
 import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
-import { BallIcon } from "./icons";
+import { BallIcon, CardIcon, SwapIcon } from "./icons";
 import { cx } from "../lib/cx";
 import { Chip, Num } from "./ui";
 
@@ -16,20 +16,34 @@ const typeKey: Record<TimelineEvent["type"], StringKey> = {
   fulltime: "timeline.fulltime",
 };
 
-// Monochrome marks only: a full-colour emoji breaks the one-meaning-per-colour
-// rule and renders differently on every platform. The ball uses the real icon.
-const typeGlyph: Record<TimelineEvent["type"], ReactNode> = {
-  goal: <BallIcon className="h-3.5 w-3.5" strokeWidth={2} />,
-  card: (
-    <svg viewBox="0 0 12 14" className="h-3.5 w-3" aria-hidden="true">
-      <rect x="1.5" y="1.5" width="9" height="11" rx="1.5" fill="currentColor" transform="rotate(-12 6 7)" />
-    </svg>
-  ),
-  substitution: "⇄",
-  var: "◇",
-  halftime: "‖",
-  fulltime: "■",
-};
+/**
+ * The mark inside an event's marker on the rail — drawn, never emoji. A
+ * full-colour emoji ignores currentColor, renders differently on every
+ * platform and breaks the one-meaning-per-colour rule (design-system.md §3),
+ * so colour does the work the emoji would have: a goal is --volt, a booking
+ * --gold, a sending-off --danger.
+ */
+function eventMark(type: TimelineEvent["type"], description: string): { glyph: ReactNode; tone: string } {
+  switch (type) {
+    case "goal":
+      return { glyph: <BallIcon className="h-4 w-4" strokeWidth={2} />, tone: "text-volt" };
+    case "card":
+      // ESPN folds a red — including a second yellow — into `card`, so its text
+      // is the only signal that the booking emptied the pitch.
+      return {
+        glyph: <CardIcon className="h-4 w-4" />,
+        tone: /\bred card\b|second yellow/i.test(description) ? "text-danger" : "text-gold",
+      };
+    case "substitution":
+      return { glyph: <SwapIcon className="h-4 w-4" />, tone: "text-ink-2" };
+    case "var":
+      return { glyph: "◇", tone: "text-ink-2" };
+    case "halftime":
+      return { glyph: "‖", tone: "text-ink-2" };
+    case "fulltime":
+      return { glyph: "■", tone: "text-ink-2" };
+  }
+}
 
 /**
  * A pinned comment belongs to a minute either directly (minute_seconds) or
@@ -96,6 +110,7 @@ export function TimelineList({
   comments = [],
   liveMinute,
   onOpenClip,
+  teamColor,
 }: {
   events: TimelineEvent[];
   /** Pinned crowd comments, rendered under their event/minute. */
@@ -103,6 +118,11 @@ export function TimelineList({
   liveMinute?: number;
   /** Handler for opening a comment's clip link (validated https by the server). */
   onOpenClip?: (comment: Comment) => void;
+  /**
+   * teamId → club colour. The marker on the rail is tinted with the side that
+   * caused the moment, so a two-column read of who did what needs no names.
+   */
+  teamColor?: Record<string, string>;
 }) {
   const { t, localize } = useI18n();
 
@@ -110,12 +130,14 @@ export function TimelineList({
   const openClip = (comment: Comment) => (onOpenClip ? onOpenClip(comment) : undefined);
 
   return (
-    <ol className="relative space-y-2 ps-4">
-      {/* Vertical timeline rail. */}
-      <span className="absolute inset-y-1 start-[7px] w-px bg-line" aria-hidden="true" />
+    <ol className="relative space-y-3 ps-10">
+      {/* Vertical timeline rail, one continuous line the markers sit on. */}
+      <span className="absolute inset-y-1 start-[13px] w-px bg-line" aria-hidden="true" />
 
       {events.map((event, index) => {
         const isGoal = event.type === "goal";
+        const mark = eventMark(event.type, event.description);
+        const club = event.teamId ? teamColor?.[event.teamId] : undefined;
         const isNewestLive =
           latestSeconds !== null && event.minuteSeconds === latestSeconds && liveMinute !== undefined;
         const next = events[index + 1];
@@ -135,14 +157,26 @@ export function TimelineList({
               className="timeline-in relative"
               style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
             >
-              {/* Node on the rail; goals get the volt fill. */}
+              {/* Marker on the rail: the event's mark over a wash of the club
+                  that caused it. Halftimes and finals have no club, so they
+                  keep the quiet elevated fill. */}
               <span
                 className={cx(
-                  "absolute -start-[13px] top-4 h-[9px] w-[9px] rounded-full border",
-                  isGoal ? "border-volt bg-volt" : "border-line bg-elevated",
+                  "absolute -start-10 top-2.5 grid h-7 w-7 place-items-center rounded-full border bg-elevated",
+                  mark.tone,
                 )}
+                style={
+                  club
+                    ? {
+                        borderColor: `color-mix(in srgb, ${club} 60%, transparent)`,
+                        backgroundColor: `color-mix(in srgb, ${club} 22%, var(--bg-elevated))`,
+                      }
+                    : undefined
+                }
                 aria-hidden="true"
-              />
+              >
+                {mark.glyph}
+              </span>
 
               <div
                 className={cx(
@@ -155,10 +189,7 @@ export function TimelineList({
                   <Num className="grid h-6 min-w-[38px] place-items-center rounded-md border border-line bg-elevated px-1 text-[11px] text-ink-2">
                     {event.minuteDisplay}
                   </Num>
-                  <Chip tone={isGoal ? "volt" : "muted"}>
-                    <span aria-hidden="true">{typeGlyph[event.type]}</span>
-                    {t(typeKey[event.type])}
-                  </Chip>
+                  <Chip tone={isGoal ? "volt" : "muted"}>{t(typeKey[event.type])}</Chip>
                   {/* The crowd thread on this moment — surfaced, not buried. */}
                   {count > 0 ? (
                     <span className="ms-auto inline-flex items-center gap-1 text-[11px] font-bold text-gold">

@@ -164,8 +164,13 @@ export function CollapsibleSection({
  * one fall back to their abbreviation on a club-coloured tile. Both states
  * share one shape so a list of fixtures reads as a single row rhythm.
  */
-export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md" | "lg" }) {
-  const dims = { sm: "h-6 w-6 text-[10px]", md: "h-9 w-9 text-xs", lg: "h-12 w-12 text-sm" }[size];
+export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md" | "lg" | "xl" }) {
+  const dims = {
+    sm: "h-6 w-6 text-[10px]",
+    md: "h-9 w-9 text-xs",
+    lg: "h-12 w-12 text-sm",
+    xl: "h-16 w-16 text-base",
+  }[size];
   const [broken, setBroken] = useState(false);
   const [remoteBroken, setRemoteBroken] = useState(false);
   // Crests that arrive over the network otherwise pop in from nothing; fade

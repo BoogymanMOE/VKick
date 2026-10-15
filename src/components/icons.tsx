@@ -189,6 +189,16 @@ export const ShareIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/**
+ * Booking — the timeline's card mark. Filled with currentColor so the caller
+ * decides which: --gold for a yellow, --danger for a red.
+ */
+export const CardIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} width={13} height={15} stroke="none">
+    <rect x="6.5" y="3.5" width="10" height="14.5" rx="2" fill="currentColor" transform="rotate(-13 12 11)" />
+  </svg>
+);
+
 /** Filled variant, for the "already your anchor club" state. */
 export const StarFilledIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} width={12} height={12} fill="currentColor" strokeWidth={1.2}>

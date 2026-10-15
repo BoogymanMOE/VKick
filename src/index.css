@@ -285,24 +285,66 @@
     }
   }
 
+  /* Live match card: a static cyan halo plus a slow ring pulse, so a live
+     match separates from the scheduled and finished cards at a glance. Only
+     opacity animates (the halo itself is painted once and the inset ring
+     fades in and out), so the pulse stays off the paint-heavy path. */
+  .live-glow {
+    border-color: color-mix(in srgb, var(--live) 60%, transparent);
+    box-shadow: 0 0 18px -6px color-mix(in srgb, var(--live) 70%, transparent);
+  }
+  .live-glow::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 1px var(--live);
+    animation: live-glow 2.4s var(--ease-out) infinite;
+  }
+  @keyframes live-glow {
+    0%,
+    100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .live-glow::after {
+      animation: none;
+      opacity: 0.6;
+    }
+  }
+
   /* --- Shot Plotter ------------------------------------------------------ */
 
   /* The grid is tinted from --pitch but stays quiet: it must read as a pitch,
-     never as a coloured panel competing with the volt pins. */
+     never as a coloured panel competing with the volt pins. On the turf plate
+     the dividing lines go white (a pitch is drawn in white) while the turf
+     itself stays the tint. */
   .plot-cell {
-    border: 1px solid color-mix(in srgb, var(--pitch) 45%, transparent);
-    background: color-mix(in srgb, var(--pitch) 7%, transparent);
+    border: 1px solid color-mix(in srgb, white 14%, transparent);
+    background: color-mix(in srgb, var(--pitch) 10%, transparent);
     transition:
       background-color var(--t-fast) var(--ease-out),
-      border-color var(--t-fast) var(--ease-out);
+      border-color var(--t-fast) var(--ease-out),
+      transform var(--t-fast) var(--ease-pop);
   }
   .plot-cell:hover {
     background: color-mix(in srgb, var(--volt) 12%, transparent);
     border-color: color-mix(in srgb, var(--volt) 45%, transparent);
   }
+  /* Selected: the zone lifts out of the grid and fills with a volt wash. */
   .plot-cell[aria-pressed="true"] {
-    background: color-mix(in srgb, var(--volt) 16%, transparent);
-    border-color: color-mix(in srgb, var(--volt) 60%, transparent);
+    z-index: 1;
+    transform: scale(1.06);
+    background: color-mix(in srgb, var(--volt) 22%, transparent);
+    border-color: color-mix(in srgb, var(--volt) 70%, transparent);
+  }
+  .plot-cell[aria-pressed="true"]:hover {
+    background: color-mix(in srgb, var(--volt) 26%, transparent);
   }
   /* Distinct from :disabled so taps still fire the "locked" notice + haptic. */
   .plot-cell-locked {
