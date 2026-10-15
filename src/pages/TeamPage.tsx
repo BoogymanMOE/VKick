@@ -289,8 +289,28 @@ function StatsTab({ stats }: { stats: SeasonStats }) {
     { label: t("stats.fouls"), value: `${stats.total_fouls}` },
   ];
 
+  // The season in one line. The grouped cards below say what the side does;
+  // only the record says how it went, so it leads the tab rather than hiding
+  // as row one of a list nobody scanned to the bottom of.
+  const record: Array<{ letter: string; value: number }> = [
+    { letter: "W", value: stats.wins },
+    { letter: "D", value: stats.draws },
+    { letter: "L", value: stats.losses },
+  ];
+
   return (
     <div className="space-y-4">
+      <Card className="flex items-center justify-between gap-3 p-4">
+        <span className="label text-ink-3">{t("statsPage.teams")}</span>
+        <span className="flex items-baseline gap-2">
+          {record.map(({ letter, value }) => (
+            <span key={letter} className="flex items-baseline gap-0.5">
+              <Num className="text-lg font-black text-ink">{value}</Num>
+              <span className="label text-ink-3">{letter}</span>
+            </span>
+          ))}
+        </span>
+      </Card>
       <StatCard title={t("team.statsAttack")} rows={attackRows} />
       <StatCard title={t("team.statsDefense")} rows={controlRows} />
     </div>
