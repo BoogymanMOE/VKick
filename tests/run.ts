@@ -30,6 +30,7 @@ import { runRateLimitTests } from "./rateLimit.test.js";
 import { runPredictionsGateTests } from "./predictionsGate.test.js";
 import { runPickSummaryTests } from "./pickSummary.test.js";
 import { runPredictionWindowTests } from "./predictionWindow.test.js";
+import { runPredictionWinTests } from "./predictionWin.test.js";
 import { runOptimisticTests } from "./optimistic.test.js";
 import { runCompetitionsTests } from "./competitions.test.js";
 import { runAnchorRaceTests } from "./anchorRace.test.js";
@@ -76,6 +77,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["predictionsGate", runPredictionsGateTests],
   ["pickSummary", runPickSummaryTests],
   ["predictionWindow", runPredictionWindowTests],
+  ["predictionWin", runPredictionWinTests],
   ["optimistic", runOptimisticTests],
   ["competitions", runCompetitionsTests],
   ["anchorRace", runAnchorRaceTests],

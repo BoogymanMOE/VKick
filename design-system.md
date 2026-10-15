@@ -96,6 +96,11 @@ Only transform + opacity animate (60fps). Respect `prefers-reduced-motion`.
 8. **Skeleton shimmer** — 1.4s gradient sweep on loading cards.
 9. **Live card halo** — live match cards carry a static cyan halo plus a 2.4s ring pulse (`.live-glow`);
    opacity only, so scheduled and finished cards stay flat.
+10. **Toast drop** — a toast slides down from above the header (`.toast-in`) and leaves the same way
+    (`.toast-out`); its tone owns a 4px accent bar on the card's leading edge (`border-s-4`, so it flips
+    in Persian): volt success, danger error, gold evaluation.
+11. **Pull ring** — the feed's refresh indicator is the ball turning inside a volt ring that fills with
+    the drag and closes at the threshold; transform and stroke-dashoffset only, no layout work.
 
 ## 5. Platform notes
 

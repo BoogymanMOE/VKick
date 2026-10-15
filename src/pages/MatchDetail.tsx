@@ -25,6 +25,7 @@ import {
   Button,
   Card,
   Chip,
+  CountUp,
   EmptyState,
   ErrorState,
   LiveDot,
@@ -42,6 +43,7 @@ import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
 import { useNow } from "../hooks/useNow";
 import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
+import { justPaidOut } from "../lib/predictionWin";
 import { haptic, notifyHaptic } from "../lib/telegram";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
 import type { Team } from "../types";
@@ -123,6 +125,22 @@ export default function MatchDetail() {
     enabled: Boolean(id) && match?.status !== "finished",
     staleTime: 0,
   });
+
+  // A pick that just paid off is the one moment this app can celebrate, and the
+  // user is already looking at the match when it resolves. The status map is
+  // what keeps it to a single burst (src/lib/predictionWin.ts): the first
+  // payload of the session only seeds it, so opening an already-resolved match
+  // celebrates nothing, and a row sitting at "correct" never re-fires.
+  const statusRef = useRef<Map<string, string> | null>(null);
+  useEffect(() => {
+    const rows = predictionsQuery.data?.predictions;
+    if (!rows) return;
+    const previous = statusRef.current;
+    statusRef.current = new Map(rows.map((row) => [row.mechanic, row.status]));
+    if (!justPaidOut(previous, rows)) return;
+    setBurst((value) => value + 1);
+    notifyHaptic("success");
+  }, [predictionsQuery.data]);
 
   if (matchQuery.isLoading) {
     return (
@@ -214,9 +232,22 @@ export default function MatchDetail() {
           </div>
 
           <div className="flex flex-col items-center gap-1.5">
-            <Num className="text-[40px] leading-none text-ink">
-              {match.home_score ?? "–"} : {match.away_score ?? "–"}
-            </Num>
+            {/* The score rolls up to its new value when the feed moves, so a
+                goal lands rather than snapping. A side that hasn't played keeps
+                the honest dash (null is not zero). */}
+            <span className="flex items-baseline gap-1">
+              {match.home_score === null ? (
+                <Num className="text-[40px] leading-none text-ink">–</Num>
+              ) : (
+                <CountUp value={match.home_score} className="text-[40px] leading-none text-ink" />
+              )}
+              <Num className="text-[40px] leading-none text-ink">:</Num>
+              {match.away_score === null ? (
+                <Num className="text-[40px] leading-none text-ink">–</Num>
+              ) : (
+                <CountUp value={match.away_score} className="text-[40px] leading-none text-ink" />
+              )}
+            </span>
             {live ? (
               <Chip tone="live">
                 <LiveDot />

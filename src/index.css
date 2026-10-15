@@ -555,13 +555,16 @@
     }
   }
 
+  /* Premium toast: it drops in from above the header and leaves the same way,
+     so a transient alert arrives and goes without a jump cut. Transform +
+     opacity only; -140% clears the safe-area padding the stack sits under. */
   .toast-in {
     animation: toast-in var(--t-std) var(--ease-pop) both;
   }
   @keyframes toast-in {
     from {
       opacity: 0;
-      transform: translateY(-14px) scale(0.96);
+      transform: translateY(-140%) scale(0.96);
     }
     to {
       opacity: 1;
@@ -582,7 +585,7 @@
     }
     to {
       opacity: 0;
-      transform: translateY(-10px) scale(0.98);
+      transform: translateY(-140%) scale(0.98);
     }
   }
 

@@ -17,11 +17,17 @@ const GLYPHS: Record<string, ReactNode> = {
   "⚽": <BallIcon className="h-4 w-4" />,
 };
 
+/*
+ * The tone owns a 4px accent bar on the card's leading edge (`border-s-4`, so
+ * it moves to the right in Persian like everything else) over the 1px tone
+ * border: success volt, error danger, evaluative gold. It is colour + width
+ * only — the toast keeps one tint, one icon and one line of copy.
+ */
 const toneClass: Record<ToastTone, string> = {
-  volt: "border-volt text-volt",
-  gold: "border-gold text-gold",
-  danger: "border-danger text-danger",
-  muted: "border-line text-ink-2",
+  volt: "border-volt border-s-4 text-volt",
+  gold: "border-gold border-s-4 text-gold",
+  danger: "border-danger border-s-4 text-danger",
+  muted: "border-line border-s-4 text-ink-2",
 };
 
 const toneTint: Record<ToastTone, string | undefined> = {
@@ -89,7 +95,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               if (toast.leaving) setToasts((prev) => prev.filter((item) => item.id !== toast.id));
             }}
             className={cx(
-              "flex w-full max-w-[420px] items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold backdrop-blur-md",
+              // A card, not a pill: an accent bar needs a straight leading edge
+              // to sit on. Slides in from above the header and leaves upward
+              // (.toast-in / .toast-out).
+              "flex w-full max-w-[420px] items-center gap-2 rounded-card border px-3 py-2 text-xs font-bold backdrop-blur-md",
               toast.leaving ? "toast-out" : "toast-in",
               toneClass[toast.tone],
             )}
