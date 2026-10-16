@@ -11,10 +11,8 @@ import { TimelineList } from "../components/TimelineList";
 import { TopBar } from "../components/TopBar";
 import { CommentaryPanel } from "../components/panels/CommentaryPanel";
 import { LineupsPanel } from "../components/panels/LineupsPanel";
-import { PredictionsHub } from "../components/panels/PredictionsHub";
 
 import {
-  Button,
   Card,
   Chip,
   CountUp,
@@ -33,14 +31,11 @@ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
 import { useNow } from "../hooks/useNow";
-import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
-import { justPaidOut } from "../lib/predictionWin";
-import { haptic } from "../lib/telegram";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
 import type { Team } from "../types";
 
-type Tab = "timeline" | "predict" | "stats" | "lineups";
-const TABS: Tab[] = ["timeline", "predict", "stats", "lineups"];
+type Tab = "timeline" | "stats" | "lineups";
+const TABS: Tab[] = ["timeline", "stats", "lineups"];
 
 export default function MatchDetail() {
   const { id = "" } = useParams();
@@ -121,31 +116,7 @@ export default function MatchDetail() {
     return t("predict.startsIn", { time: `${minutes}m` });
   }, [match, now, t]);
 
-  // The deadline bar needs the pick count. Same query key as the Predict tab,
-  // so this shares its cache instead of costing a second round trip, and it
-  // warms the tab before the user opens it.
-  const predictionsQuery = useQuery({
-    queryKey: ["predictions", id],
-    queryFn: () => api.getMyPredictions(id),
-    enabled: Boolean(id) && match?.status !== "finished",
-    staleTime: 0,
-  });
 
-  // A pick that just paid off is the one moment this app can celebrate, and the
-  // user is already looking at the match when it resolves. The status map is
-  // what keeps it to a single burst (src/lib/predictionWin.ts): the first
-  // payload of the session only seeds it, so opening an already-resolved match
-  // celebrates nothing, and a row sitting at "correct" never re-fires.
-  const statusRef = useRef<Map<string, string> | null>(null);
-  useEffect(() => {
-    const rows = predictionsQuery.data?.predictions;
-    if (!rows) return;
-    const previous = statusRef.current;
-    statusRef.current = new Map(rows.map((row) => [row.mechanic, row.status]));
-    if (!justPaidOut(previous, rows)) return;
-    setBurst((value) => value + 1);
-
-  }, [predictionsQuery.data]);
 
   if (matchQuery.isLoading) {
     return (
@@ -197,22 +168,7 @@ export default function MatchDetail() {
     color: match.away_color ?? TEAM_FALLBACK,
   };
 
-  // The deadline bar below: shown only while a pick can still be made. An
-  // unpicked mechanic whose lock has already passed is a dead end rather than
-  // an invitation, so the bar reads the same windows the Predict tab renders.
-  const picked = new Set<string>((predictionsQuery.data?.predictions ?? []).map((row) => row.mechanic));
-  const lineupsPublished = predictionsQuery.data?.lineupPublished ?? false;
-  const predictionStatus = (predictionsQuery.data?.matchStatus ?? match.status ?? "scheduled") as MatchStatus;
-  // The Predict tab's own state machine (src/lib/predictionWindow.ts), so the
-  // sticky CTA and the cards can never disagree — it honours the lineup gate
-  // and closes non-Sub mechanics the moment kickoff passes.
-  const pickStillOpen = Object.entries(predictionsQuery.data?.windows ?? {}).some(
-    ([mechanic, w]) =>
-      !picked.has(mechanic) &&
-      isOpen(mechanic as Mechanic, w, { matchStatus: predictionStatus, lineupsPublished }),
-  );
-  const picksMade = predictionsQuery.data?.predictions.length ?? 0;
-  const showPickCta = match.status !== "finished" && tab !== "predict" && pickStillOpen;
+
 
   return (
     <>
@@ -285,9 +241,6 @@ export default function MatchDetail() {
           onChange={setTab}
           options={[
             { value: "timeline", label: t("match.tabTimeline") },
-            // Second, not fourth: predicting is the reason this app exists and
-            // the only one of the five with a deadline.
-            { value: "predict", label: t("predict.hub") },
             { value: "stats", label: t("match.tabStats") },
             { value: "lineups", label: t("match.tabLineups") },
           ]}
@@ -305,40 +258,8 @@ export default function MatchDetail() {
         ) : null}
         {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
         {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
-        {tab === "predict" ? <PredictionsHub matchId={id} /> : null}
       </section>
 
-
-
-      {/* Thumb-zone action for the only thing on this page with a deadline.
-          It floats above the tab bar instead of living at the end of a long
-          scroll, and it disappears the moment the Predict tab is open. The
-          spacer keeps the last row from hiding underneath it. */}
-      {showPickCta ? (
-        <>
-          <div className="h-[180px]" aria-hidden="true" />
-          {/* The CTA sits on top of the tab bar which itself sits on top of the ad slot,
-              so `bottom` is the sum of the TabBar's offset and its own height. */}
-          <div className="fixed inset-x-0 bottom-[calc(56px+var(--ad-slot-h,100px)+max(env(safe-area-inset-bottom),8px))] z-20 border-t border-line bg-base/95">
-            <div className="mx-auto flex w-full max-w-[560px] items-center justify-between gap-3 px-[var(--space-page-x,16px)] py-3">
-              <p className="min-w-0 truncate text-[11px] text-ink-3">
-                {t("predict.picksMade", { count: picksMade, total: 5 })}
-              </p>
-              <Button
-                className="flex-none"
-                onClick={() => {
-                  haptic("light");
-                  setTab("predict");
-                }}
-              >
-                {t("predict.makePicks")}
-              </Button>
-            </div>
-          </div>
-        </>
-      ) : null}
-
-      {/* The Shot Predictor lives in the Predict tab now (concept v2). */}
 
       {/* The A-ADS unit used to be the page's last element here. It is now a
           static iframe in index.html so the no-JS A-ADS verifier can see it. */}

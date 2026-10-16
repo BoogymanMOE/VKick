@@ -3,82 +3,12 @@ export type LeagueSlug = "eng.1" | "esp.1" | "ita.1" | "ger.1" | "fra.1";
 /** The big five domestic leagues — the ones the favorites rule is built on. */
 export const LEAGUES: LeagueSlug[] = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
 
-/**
- * Domestic leagues beyond the big five — EMPTY. Trimmed to top-5 only.
- */
-export const DOMESTIC_EXTRAS: LeagueSlug[] = [];
-
-/** Every competition that owns a league table. */
+/** Every competition that owns a league table (big five only now). */
 export const ALL_DOMESTIC: LeagueSlug[] = [...LEAGUES];
 
-/**
- * Cup competitions — synced alongside the big five for table exemptions only.
- * Trimmed to the competitions the fallen-aways file still tracks (Copa del Rey
- * had FallenAway rows, the rest are legacy). No new cup will be added here.
- */
-export const CUPS: string[] = ["esp.copa_del_rey"];
-
-/**
- * International football: national-team tournaments plus the club world stage.
- * These share the `teams` table with club competitions, but their sides carry
- * no domestic league (see `teamFromCompetitor`), so national teams land in the
- * app's "International" group instead of under a league tab.
- *
- * Every slug here was verified live against ESPN's scoreboard endpoint before
- * being added — a wrong slug fails silently as an empty competition.
- */
-export const INTERNATIONALS: string[] = [
-  "fifa.world",
-  "fifa.cwc",
-  "uefa.euro",
-  "uefa.euroq",
-  "uefa.nations",
-  "fifa.worldq.uefa",
-  "fifa.worldq.conmebol",
-  "conmebol.america",
-  "caf.nations",
-  "concacaf.gold",
-];
-
-/** All domestic leagues + cups + internationals — everything the sync polls. */
-export const LEAGUES_ALL: string[] = [...ALL_DOMESTIC, ...CUPS, ...INTERNATIONALS];
-
-/**
- * Competitions polled on the narrow sweep window instead of the wide one.
- *
- * See `pollWindow`: the international calendars are a handful of fixed
- * matchdays, so a 21-day lookahead for them is almost entirely wasted requests
- * against ESPN's unofficial API. UCL qualifying and the Super Cup are one-off
- * dates for the same reason.
- */
-const NARROW_WINDOW = new Set<string>([...INTERNATIONALS, "uefa.super_cup", "uefa.champions_qual"]);
-
-/**
- * Sweep window (days either side of today) for one competition.
- *
- * This is the knob governing our request budget: the 6-hourly sweep walks
- * every competition DAY BY DAY, so widening the catalog multiplies its call
- * count. The big five and the club cups keep the wide 21-day lookahead that
- * future-fixture browsing and prediction need; the long tail gets a week.
- */
-export function pollWindow(league: string): { back: number; forward: number } {
-  return NARROW_WINDOW.has(league) ? { back: 1, forward: 7 } : { back: 1, forward: 21 };
-}
-
-/**
- * True for every competition WITHOUT a league table — cups and international
- * tournaments alike. It also carries the "this competition does not own a
- * club's domestic league" meaning used by the team upsert, which is what stops
- * a Real Madrid synced from a Champions League scoreboard from claiming
- * uefa.champions as its own league.
- */
-export function isCup(league: string): boolean {
-  return !ALL_DOMESTIC.includes(league as LeagueSlug);
-}
-
-/** Seeded competition labels — the display names users browse by. */
+/** Seeded competition labels — the 5 big-five leagues with display names. */
 export const COMPETITIONS: Array<{
-  slug: string;
+  slug: LeagueSlug;
   name: string;
   kind: "league";
 }> = [
@@ -89,8 +19,28 @@ export const COMPETITIONS: Array<{
   { slug: "fra.1", name: "Ligue 1", kind: "league" },
 ];
 
+/** Cups removed — top-5 leagues only. Empty for consumers that still import it. */
+export const CUPS: LeagueSlug[] = [];
+
+/** Internationals removed — top-5 leagues only. Empty for consumers that still import it. */
+export const INTERNATIONALS: string[] = [];
+
 /**
- * "halftime" is a real status, not a flavour of live: the Sub Predictor's
+ * Cups and internationals removed — top-5 leagues only.
+ * isCup always returns false for the big five.
+ */
+export function isCup(_league: string): boolean {
+  return false;
+}
+
+/**
+ * Sweep window: 21 days forward for all big-five leagues.
+ */
+export function pollWindow(_league: string): { back: number; forward: number } {
+  return { back: 1, forward: 21 };
+}
+
+/** "halftime" is a real status, not a flavour of live: the Sub Predictor's
  * lock rule needs it. ESPN stays state:"in" through the break — the
  * description/shortDetail ("Halftime" / "HT") is the only reliable signal.
  */

@@ -1,4 +1,4 @@
-import { INTERNATIONALS, LEAGUES } from "../espn/types.js";
+import { LEAGUES } from "../espn/types.js";
 
 /**
  * The picker-group vocabulary and the favorites caps, in one place.
@@ -30,33 +30,21 @@ export const MAX_INTERNATIONAL_FAVORITES = 5;
  *
  *  1. a big-five league keeps its slug (the Top-5 picker tabs);
  *  2. any other non-empty league is a club outside the big five → `other`;
- *  3. a side seen in an international-tournament match is a national team;
- *  4. a side with NO matches at all is a national team too — this is the seed's
- *     `league = ''` default, so seeded national sides land in the International
- *     tab on a fresh database before any fixture has been synced, instead of
- *     being stranded in `other`;
- *  5. everything else (a cup-only club, seen only in club competitions) → `other`.
+ *  3. a side with NO matches at all falls into `other` (no national sides
+ *     are seeded anymore, so the international branch is gone);
+ *  4. everything else (a cup-only club, seen only in club competitions) → `other`.
  *
- * Bind TEAM_GROUP_PARAMS (big-five slugs then international slugs) before any
- * other placeholder in the same statement.
+ * Bind TEAM_GROUP_PARAMS (big-five slugs) before any other placeholder in the
+ * same statement.
  */
 export const TEAM_GROUP_SQL = `CASE
     WHEN t.league IN (${LEAGUES.map(() => "?").join(", ")}) THEN t.league
     WHEN t.league != '' THEN '${OTHER_GROUP}'
-    WHEN EXISTS (
-      SELECT 1 FROM matches m
-      WHERE (m.home_team_id = t.id OR m.away_team_id = t.id)
-        AND m.league IN (${INTERNATIONALS.map(() => "?").join(", ")})
-    ) THEN '${INTL_GROUP}'
-    WHEN NOT EXISTS (
-      SELECT 1 FROM matches m2
-      WHERE m2.home_team_id = t.id OR m2.away_team_id = t.id
-    ) THEN '${INTL_GROUP}'
     ELSE '${OTHER_GROUP}'
   END`;
 
 /** Bind values for the placeholders inside TEAM_GROUP_SQL, in order. */
-export const TEAM_GROUP_PARAMS: string[] = [...LEAGUES, ...INTERNATIONALS];
+export const TEAM_GROUP_PARAMS: string[] = [...LEAGUES];
 
 /** True when a group_key is the international (national-team) bucket. */
 export function isInternationalGroup(group: string | null | undefined): boolean {
