@@ -15,7 +15,6 @@ import {
   ErrorState,
   LiveDot,
   Num,
-  SectionHeading,
   TeamBadge,
 } from "../components/ui";
 import { cx } from "../lib/cx";
@@ -42,7 +41,11 @@ import type { Match, Team } from "../types";
 
 /** One chip in the league scope row: same shape, tone flips with the state. */
 const LEAGUE_CHIP =
-  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]";
+  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]";
+
+/** Selected league chip: filled volt pill — the row's one "picked" affordance. */
+const LEAGUE_CHIP_ON = "border-volt bg-volt/15 text-volt";
+const LEAGUE_CHIP_OFF = "border-line text-ink-3";
 
 export default function Matches() {
   const { t, lang, localize } = useI18n();
@@ -276,24 +279,6 @@ export default function Matches() {
         </Link>
       </div>
 
-      {/* Referral banner — surfaces the invite system from the feed. */}
-      <Link
-        to="/profile"
-        onClick={() => haptic("light")}
-        className="mt-3 flex items-center gap-3 rounded-card border border-volt/40 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-      >
-        <span className="grid h-10 w-10 flex-none place-items-center rounded-full bg-volt/15 text-volt">
-          <ShareIcon className="h-5 w-5" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-bold text-ink">{t("referral.bannerTitle")}</span>
-          <span className="block text-xs text-ink-3">{t("referral.hint")}</span>
-        </span>
-        <span className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-xs font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95">
-          {t("referral.bannerCta")}
-        </span>
-      </Link>
-
       {/* Everything below sits under the sticky header. The wrapper gives the
           pull-to-refresh marker an anchor so it slides in between header and
           feed instead of fighting the header for the same band. */}
@@ -315,10 +300,7 @@ export default function Matches() {
                     setLeagueFilter(null);
                   }}
                   aria-pressed={leagueFilter === null}
-                  className={cx(
-                    LEAGUE_CHIP,
-                    leagueFilter === null ? "border-volt text-volt" : "border-line text-ink-3",
-                  )}
+                  className={cx(LEAGUE_CHIP, leagueFilter === null ? LEAGUE_CHIP_ON : LEAGUE_CHIP_OFF)}
                 >
                   {t("browse.all")}
                 </button>
@@ -331,10 +313,7 @@ export default function Matches() {
                       setLeagueFilter(l.league);
                     }}
                     aria-pressed={leagueFilter === l.league}
-                    className={cx(
-                      LEAGUE_CHIP,
-                      leagueFilter === l.league ? "border-volt text-volt" : "border-line text-ink-3",
-                    )}
+                    className={cx(LEAGUE_CHIP, leagueFilter === l.league ? LEAGUE_CHIP_ON : LEAGUE_CHIP_OFF)}
                   >
                     {l.name ?? l.league}
                   </button>
@@ -391,18 +370,15 @@ export default function Matches() {
         {live.length > 0 ? liveSection : null}
 
         {!league && favCount > 0 && teamRows.length > 0 ? (
-          <section className="mt-3">
-            <SectionHeading
-              title={t("matches.myTeams")}
-              action={
-                <Chip tone="volt">
-                  <StarFilledIcon className="me-1 inline-block h-3 w-3 align-[-1px]" />
-                  <Num>{favCount}</Num>
-                </Chip>
-              }
-            />
+          <CollapsibleSection
+            id="matches-my-teams"
+            level={2}
+            title={t("matches.myTeams")}
+            count={favCount}
+            defaultOpen
+          >
             {matchesQuery.isLoading ? (
-              <ul className="space-y-2">
+              <ul className="space-y-2" aria-busy="true">
                 <MatchCardSkeleton />
                 <MatchCardSkeleton />
               </ul>
@@ -419,7 +395,7 @@ export default function Matches() {
                 ))}
               </ul>
             )}
-          </section>
+          </CollapsibleSection>
         ) : null}
 
         {/* No favorites yet: one clear call to pick them. The picks feed above
@@ -449,15 +425,17 @@ export default function Matches() {
           filled the feed yet, and the three sections only once there is data.
           The sponsored slot rides along in the two states that have an actual
           feed around it — never under a skeleton or an error. */}
+        {/* Same collapsible shell as the loaded Upcoming section (same id, so the
+            stored open/closed choice carries across the swap): the header never
+            snaps from a plain heading to a disclosure when data lands. */}
         {loading ? (
-          <section className="mt-6" aria-busy="true" aria-label={t("matches.loading")}>
-            <SectionHeading title={t("matches.upcoming")} />
-            <ul className="space-y-2">
+          <CollapsibleSection id="matches-upcoming" level={2} title={t("matches.upcoming")} defaultOpen>
+            <ul className="space-y-2" aria-busy="true" aria-label={t("matches.loading")}>
               <MatchCardSkeleton />
               <MatchCardSkeleton />
               <MatchCardSkeleton />
             </ul>
-          </section>
+          </CollapsibleSection>
         ) : null}
 
         {failed ? (
@@ -580,6 +558,25 @@ export default function Matches() {
             </CollapsibleSection>
           </>
         ) : null}
+
+        {/* Referral banner — the invite system's only entry on the feed, parked
+          at the foot of the page so it never pushes the live scores down. */}
+        <Link
+          to="/profile"
+          onClick={() => haptic("light")}
+          className="mt-6 flex items-center gap-3 rounded-card border border-volt/40 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+        >
+          <span className="grid h-10 w-10 flex-none place-items-center rounded-full bg-volt/15 text-volt">
+            <ShareIcon className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-ink">{t("referral.bannerTitle")}</span>
+            <span className="block text-xs text-ink-3">{t("referral.hint")}</span>
+          </span>
+          <span className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-xs font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95">
+            {t("referral.bannerCta")}
+          </span>
+        </Link>
 
         {/* Sync note, not a second refresh button: pull-to-refresh and the
           TopBar icon already carry the action, so this line only reports it. */}

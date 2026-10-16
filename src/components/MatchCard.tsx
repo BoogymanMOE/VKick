@@ -66,7 +66,7 @@ export const MatchCard = memo(function MatchCard({
           card scrolling under the header never paints over it. */}
       <div
         className={cx(
-          "relative overflow-hidden rounded-card border p-3 transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
+          "relative overflow-hidden rounded-card border p-2.5 transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
           // A goal in flight owns the card; otherwise a live match wears the
           // cyan halo (see .live-glow), and everything else stays on the
           // neutral surface so live is the only card that glows.
@@ -125,7 +125,7 @@ export const MatchCard = memo(function MatchCard({
           </div>
         </div>
 
-        <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2">
+        <div className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-1.5">
           <span className="text-[11px] text-ink-3">
             {formatKickoff(new Date(match.kickoffAt), lang === "fa" ? "fa-IR" : undefined)}
           </span>
