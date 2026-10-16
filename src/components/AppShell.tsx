@@ -48,12 +48,16 @@ export function AppShell() {
       >
         {t("common.skipToContent")}
       </a>
-      {/* key={pathname} remounts the wrapper per route, replaying the animation. */}
+      {/* key={pathname} remounts the wrapper per route, replaying the animation. 
+          The bottom padding reserves space for BOTH the sticky TabBar (~56px) AND
+          the fixed A-ADS ad slot, so the last match card / league row is never hidden
+          behind the tab bar and ad. */}
       <main
         id="main-content"
         tabIndex={-1}
         key={pathname}
-        className="page-in mx-auto w-full max-w-[560px] flex-1 px-3 pb-6 outline-none"
+        className="page-in mx-auto w-full max-w-[560px] flex-1 px-[var(--space-page-x,16px)] pt-4 outline-none"
+        style={{ paddingBottom: "calc(56px + var(--ad-slot-h, 100px) + max(env(safe-area-inset-bottom), 8px))" }}
       >
         <Suspense
           fallback={

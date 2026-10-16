@@ -256,7 +256,7 @@ export default function Matches() {
           carries them: two quiet shortcuts, always visible — even when a league
           deep link scopes the feed and the leagues chip row is hidden — in the
           same rounded-line affordance as the header's refresh button. */}
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-4 flex items-center gap-2">
         <Link
           to="/browse"
           onClick={() => haptic("light")}
@@ -290,7 +290,7 @@ export default function Matches() {
             and the row is here even with nothing followed so leagues are
             pickable from the feed rather than only during onboarding. */}
         {!league ? (
-          <div className="-mx-3 mt-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
+          <div className="-mx-[var(--space-page-x,16px)] mt-4 flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] pb-1">
             {followed.count > 0 ? (
               <>
                 <button
@@ -341,7 +341,7 @@ export default function Matches() {
         {/* Single-league deep link: name the scope, let the user leave. Without
           this the screen looks like a broken feed when the window is quiet. */}
         {league ? (
-          <div className="mt-3 flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-3 py-2">
+          <div className="mt-4 flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3">
             <p className="min-w-0 truncate text-xs text-ink-2">
               {t("matches.leagueScope", {
                 league: LEAGUE_BY_SLUG[league] ? t(`league.${LEAGUE_BY_SLUG[league]}`) : league,
@@ -401,7 +401,7 @@ export default function Matches() {
         {/* No favorites yet: one clear call to pick them. The picks feed above
           takes over once a team is saved. */}
         {favCount === 0 ? (
-          <Card className="pitch-watermark mt-3 flex items-center justify-between gap-3 p-3">
+          <Card className="pitch-watermark mt-4 flex items-center justify-between gap-3 p-4">
             <div className="min-w-0">
               <p className="text-sm font-bold text-ink">{t("myTeams.empty")}</p>
               <p className="mt-0.5 text-xs text-ink-3">{t("myTeams.hint")}</p>
@@ -486,7 +486,7 @@ export default function Matches() {
                   {groupedUpcoming.map((group) => (
                     <li key={group.day}>
                       <div className="sticky top-14 z-10 bg-base/95 py-1.5">
-                        <p className="label text-ink-3 px-1">{group.label}</p>
+                        <p className="label text-ink-3 px-2">{group.label}</p>
                       </div>
                       <ul className="space-y-2">
                         {group.matches.map((match, index) => (

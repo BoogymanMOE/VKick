@@ -89,14 +89,20 @@ export default function Login() {
   return (
     <div className="floodlight flex min-h-[100svh] flex-col">
       <header className="pad-safe-top">
-        <div className="mx-auto flex w-full max-w-[560px] justify-end px-3 py-2">
+        <div className="mx-auto flex w-full max-w-[560px] justify-end px-[var(--space-page-x,16px)] py-3">
           <LanguageToggle />
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-4 pb-8">
+      {/* The fixed A-ADS ad slot overlaps this screen too (Login sits outside
+          AppShell, so there is no TabBar to offset it). The bottom padding reserves
+          the ad slot height plus safe-area so the legal line stays reachable. */}
+      <main
+        className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-5"
+        style={{ paddingBottom: "calc(40px + var(--ad-slot-h, 100px) + max(env(safe-area-inset-bottom), 8px))" }}
+      >
         {/* Hero: the mark over the wordmark, over the floodlit wash. */}
-        <section className="rise-in px-2 pb-7 text-center">
+        <section className="rise-in px-1 pb-10 text-center">
           <img
             src="/vkick-mark.svg"
             alt=""
@@ -235,12 +241,9 @@ export default function Login() {
               </button>
             </div>
           )}
-        </Card>
-
-        <p
-          className="rise-in mt-5 px-2 text-center text-[11px] leading-relaxed text-ink-3"
-          style={{ "--stagger": "140ms" } as CSSProperties}
-        >
+        </Card>        <p
+          className="rise-in mt-6 px-1 text-center text-[11px] leading-relaxed text-ink-3"
+          style={{ "--stagger": "140ms" } as CSSProperties}>
           {t("auth.legal")}
         </p>
       </main>

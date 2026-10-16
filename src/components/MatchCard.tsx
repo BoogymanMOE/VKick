@@ -66,7 +66,7 @@ export const MatchCard = memo(function MatchCard({
           card scrolling under the header never paints over it. */}
       <div
         className={cx(
-          "relative overflow-hidden rounded-card border p-2.5 transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
+          "relative overflow-hidden rounded-card border p-3 transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
           // A goal in flight owns the card; otherwise a live match wears the
           // cyan halo (see .live-glow), and everything else stays on the
           // neutral surface so live is the only card that glows.

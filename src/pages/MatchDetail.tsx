@@ -352,9 +352,11 @@ export default function MatchDetail() {
           spacer keeps the last row from hiding underneath it. */}
       {showPickCta ? (
         <>
-          <div className="h-16" aria-hidden="true" />
-          <div className="fixed inset-x-0 bottom-[calc(56px+max(env(safe-area-inset-bottom),8px))] z-20 border-t border-line bg-base/95">
-            <div className="mx-auto flex w-full max-w-[560px] items-center justify-between gap-3 px-3 py-2">
+          <div className="h-[180px]" aria-hidden="true" />
+          {/* The CTA sits on top of the tab bar which itself sits on top of the ad slot,
+              so `bottom` is the sum of the TabBar's offset and its own height. */}
+          <div className="fixed inset-x-0 bottom-[calc(56px+var(--ad-slot-h,100px)+max(env(safe-area-inset-bottom),8px))] z-20 border-t border-line bg-base/95">
+            <div className="mx-auto flex w-full max-w-[560px] items-center justify-between gap-3 px-[var(--space-page-x,16px)] py-3">
               <p className="min-w-0 truncate text-[11px] text-ink-3">
                 {t("predict.picksMade", { count: picksMade, total: 5 })}
               </p>

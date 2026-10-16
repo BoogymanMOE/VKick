@@ -26,8 +26,13 @@ export function TabBar() {
   return (
     // 95% opaque, so no backdrop blur — same reasoning as TopBar: the blur was
     // imperceptible but ran on every scroll frame.
-    <nav className="pad-safe-bottom sticky bottom-0 z-20 border-t border-line bg-base/95">
-      <ul className="mx-auto flex w-full max-w-[560px] items-stretch justify-between px-1">
+    // `bottom` is offset by --ad-slot-h so the bar sits ABOVE the fixed A-ADS slot
+    // instead of fighting it for the same strip.
+    <nav
+      className="pad-safe-bottom sticky z-20 border-t border-line bg-base/95"
+      style={{ bottom: "var(--ad-slot-h, 100px)" }}
+    >
+      <ul className="mx-auto flex w-full max-w-[560px] items-stretch justify-between px-2 pt-1">
         {tabs.map(({ to, key, Icon }) => (
           <li key={to} className="flex-1">
             <NavLink

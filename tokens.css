@@ -35,6 +35,17 @@
   --t-slow: 450ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Page gutter — shared horizontal space between content and screen edge.
+     16px from each edge on a 360px webview is the modern mobile norm; the
+     previous 12px (px-3) read as cramped. */
+  --space-page-x: 16px;
+
+  /* A-ADS ad slot — reserved at the very bottom of the viewport, above the
+     iOS home indicator. The TabBar sits on top of this slot and the main
+     content's bottom padding accounts for both, so nothing is ever hidden
+     behind the ad and the ad never overlaps content or the tab bar. */
+  --ad-slot-h: 100px;
 }
 body {
   background: var(--bg-base);

@@ -23,7 +23,9 @@ export function TopBar({
     // still forcing a full-width backdrop read on every scroll frame — exactly
     // the cost the low-end Android target can't afford.
     <header className="pad-safe-top sticky top-0 z-20 border-b border-line bg-base/95">
-      <div className="mx-auto flex w-full max-w-[560px] items-center gap-3 px-3 pb-3">
+      {/* px-[var(--space-page-x)] aligns the header's gutters with the page below
+          and pb-4 gives more breathing room from the content underneath. */}
+      <div className="mx-auto flex w-full max-w-[560px] items-center gap-3 px-[var(--space-page-x,16px)] pb-4 pt-2">
         {back ? (
           <button
             type="button"
