@@ -589,6 +589,24 @@
     }
   }
 
+  /* Landscape phone: 100svh drops hard (a 640px-wide phone in landscape is ~590px
+     tall, vs ~850px portrait), so fixed-height chrome eats the whole screen. Make
+     it usable, not pretty — content can clip, it must not crash the layout. */
+  @media (orientation: landscape) and (max-height: 520px) {
+    :root {
+      --ad-slot-h: 60px;
+    }
+    #boot img {
+      height: 64px;
+    }
+    li[class*="min-h-14"] {
+      min-height: 48px !important;
+    }
+    .min-h-14 {
+      min-height: 48px !important;
+    }
+  }
+
   /* Signature animation 7 (tail): one pulse per second in the last ten seconds. */
   .tick-panic {
     animation: tick-panic 1s var(--ease-out) infinite;

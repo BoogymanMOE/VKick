@@ -77,7 +77,7 @@ export default function Cups() {
 
   return (
     <>
-      <TopBar title={t("cups.title")} subtitle={t("cups.subtitle")} />
+      <TopBar title={t("cups.title")} subtitle={t("cups.subtitle")} back />
 
       {compsQuery.isLoading ? (
         <RowPlaceholder />

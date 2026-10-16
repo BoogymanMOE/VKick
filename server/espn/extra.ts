@@ -22,23 +22,5 @@ export interface ExtraCompetition {
   kind: "league" | "cup" | "tournament";
 }
 
-export const EXTRA_COMPETITIONS: ExtraCompetition[] = [
-  // Domestic leagues. (Eredivisie, Liga Portugal, Süper Lig and the Scottish
-  // Premiership were promoted into COMPETITIONS with real tables — listing them
-  // here too rendered each one twice on Browse, once as "live" and once as
-  // "coming soon". A slug belongs in exactly one of the two lists.)
-  { slug: "eng.2", name: "EFL Championship", kind: "league" },
-  { slug: "usa.1", name: "Major League Soccer", kind: "league" },
-  { slug: "mex.1", name: "Mexican Liga BBVA MX", kind: "league" },
-  { slug: "bra.1", name: "Brazilian Serie A", kind: "league" },
-  { slug: "arg.1", name: "Argentine Liga Profesional", kind: "league" },
-  { slug: "sau.1", name: "Saudi Pro League", kind: "league" },
-  // Continental club cups — outside the catalog for now. (UEFA Super Cup,
-  // UCL qualifying, UEFA Nations League, both World Cup qualifiers and the
-  // FIFA Club World Cup were promoted into the sync; see COMPETITIONS.)
-  { slug: "conmebol.libertadores", name: "CONMEBOL Libertadores", kind: "cup" },
-  { slug: "conmebol.sudamericana", name: "CONMEBOL Sudamericana", kind: "cup" },
-  { slug: "afc.champions", name: "AFC Champions League Elite", kind: "cup" },
-  { slug: "afc.cup", name: "AFC Champions League Two", kind: "cup" },
-  { slug: "concacaf.champions_cup", name: "CONCACAF Champions Cup", kind: "cup" },
-];
+/** Trimmed to the top-5 European leagues only. */
+export const EXTRA_COMPETITIONS: ExtraCompetition[] = [];

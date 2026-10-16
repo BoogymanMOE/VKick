@@ -11,7 +11,7 @@
  */
 import { getDb } from "./db/index.js";
 import { fetchScoreboard, fetchStandings, fetchSummary } from "./espn/client.js";
-import { ALL_DOMESTIC, LEAGUES_ALL, type LeagueSlug } from "./espn/types.js";
+import { LEAGUES, type LeagueSlug } from "./espn/types.js";
 import {
   normalizeScoreboard,
   normalizeSummaryMatch,
@@ -34,7 +34,7 @@ function log(...parts: unknown[]): void {
 async function main(): Promise<void> {
   switch (cmd) {
     case "sync-all": {
-      for (const league of LEAGUES_ALL) {
+      for (const league of LEAGUES) {
         const json = await fetchScoreboard(league);
         if (dryRun) {
           const { matches } = normalizeScoreboard(json, league);
@@ -124,7 +124,7 @@ async function main(): Promise<void> {
  * domestic league in the catalog, not just the big five.
  */
 async function standings(): Promise<void> {
-  for (const league of ALL_DOMESTIC) {
+  for (const league of LEAGUES) {
     try {
       const json = await fetchStandings(league, seasonStartYear());
       const { rows } = normalizeStandings(json, league);

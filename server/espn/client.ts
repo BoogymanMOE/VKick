@@ -1,4 +1,4 @@
-import { LEAGUES_ALL, type LeagueSlug } from "./types.js";
+import { LEAGUES, type LeagueSlug } from "./types.js";
 
 const BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
 
@@ -67,5 +67,5 @@ export async function fetchTeamRoster(league: LeagueSlug, teamId: string): Promi
 }
 
 export function allLeagueSlugs(): LeagueSlug[] {
-  return [...LEAGUES_ALL];
+  return [...LEAGUES];
 }

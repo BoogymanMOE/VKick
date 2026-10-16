@@ -47,7 +47,7 @@ export default function Browse() {
 
   return (
     <>
-      <TopBar title={t("browse.title")} subtitle={t("browse.subtitle")} />
+      <TopBar title={t("browse.title")} subtitle={t("browse.subtitle")} back />
 
       <div
         className="mt-3 grid grid-cols-3 gap-1 rounded-full border border-line bg-surface p-1"

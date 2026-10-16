@@ -11,8 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 const MATCH_SCOPED_KEYS = [
   "match",
   "timeline",
-  "comments",
-  "commentary",
+
   "matchPlayers",
   "ratings",
   "lineups",

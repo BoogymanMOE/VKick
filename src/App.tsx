@@ -17,14 +17,11 @@ const Cups = lazy(() => import("./pages/Cups"));
 const Matches = lazy(() => import("./pages/Matches"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
-const PlayerStats = lazy(() => import("./pages/PlayerStats"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Ratings = lazy(() => import("./pages/Ratings"));
 const TeamPage = lazy(() => import("./pages/TeamPage"));
 const Table = lazy(() => import("./pages/Table"));
-const Leaderboards = lazy(() => import("./pages/Leaderboards"));
-const Predictions = lazy(() => import("./pages/Predictions"));
 const Privacy = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Privacy })));
 const Terms = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Terms })));
 
@@ -59,9 +56,6 @@ export default function App() {
             <Route path="/match/:id/shot-plotter" element={<ShotPlotterRedirect />} />
             <Route path="/ratings" element={<Ratings />} />
             <Route path="/table" element={<Table />} />
-            <Route path="/leaderboards" element={<Leaderboards />} />
-            <Route path="/predictions" element={<Predictions />} />
-            <Route path="/stats" element={<PlayerStats />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<Admin />} />
             {/* Legal pages: reachable from Profile and the onboarding footer. */}

@@ -183,7 +183,7 @@ export default function Profile() {
           <ListRow
             label={t("profile.notifications")}
             hint={
-              serverPrefs.goals || serverPrefs.deadline || serverPrefs.ratings
+              serverPrefs.goals || serverPrefs.deadline
                 ? t("profile.notificationsOn")
                 : t("profile.notificationsOff")
             }
@@ -206,15 +206,7 @@ export default function Profile() {
           />
           {/* The "why did I get X" panel: every pick with the resolver's own
               line items, reachable from where users check their account. */}
-          <ListRow
-            label={t("predictions.title")}
-            hint={t("predictions.subtitle")}
-            onClick={() => {
-              haptic("light");
-              navigate("/predictions");
-            }}
-            right={<ChevronRightIcon className="text-ink-3" />}
-          />
+
         </div>
       </section>
 

@@ -787,12 +787,11 @@ export function migrate(db: DatabaseSync): void {
     insertCompetition.run(c.slug, c.name, c.kind, 0);
   }
 
-  // Static team seed: clubs from the big-five leagues and national sides
-  // (Top 5 only — see server/db/seedTeams.ts). Lands a populated teams table on
-  // a fresh deploy long before the ESPN sync loop has run, so Onboarding is
-  // never empty on first boot. INSERT OR IGNORE makes it
-  // idempotent — the ESPN sync (server/sync/upserts.ts) upsertCoalesces on
-  // teams.id, so live data overwrites these labels without clobbering the seed.
+  // Static team seed: clubs from the big-five leagues only.
+  // Lands a populated teams table on a fresh deploy long before the ESPN sync
+  // loop has run, so Onboarding is never empty on first boot. INSERT OR IGNORE
+  // makes it idempotent — the ESPN sync upserts overwrite these labels without
+  // clobbering the seed.
   //
   // NOTE: this call sits at the very end of migrate(), which getDb() runs on
   // EVERY process boot (there is no "database already exists, skip the seed"

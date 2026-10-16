@@ -55,7 +55,7 @@ export default function Table() {
 
   return (
     <>
-      <TopBar title={t("table.title")} subtitle={t("table.subtitle")} />
+      <TopBar title={t("table.title")} subtitle={t("table.subtitle")} back />
 
       <div className="mt-3">
         <Segmented

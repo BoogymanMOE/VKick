@@ -88,8 +88,9 @@ export function useMatches(
     refetchInterval: (q) => {
       const live =
         q.state.data?.matches?.some((m) => m.status === "live" || m.status === "halftime") ?? false;
-      return live ? 300_000 : 60_000;
+      return live ? 300_000 : false;
     },
+    refetchOnWindowFocus: false,
   });
 }
 

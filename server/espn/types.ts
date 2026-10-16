@@ -1,76 +1,22 @@
-export type LeagueSlug =
-  // Big five domestic leagues
-  | "eng.1"
-  | "esp.1"
-  | "ita.1"
-  | "ger.1"
-  | "fra.1"
-  // Domestic leagues beyond the big five (see DOMESTIC_EXTRAS)
-  | "ned.1"
-  | "por.1"
-  | "tur.1"
-  | "sco.1"
-  | "gre.1"
-  | "bel.1"
-  // UEFA club competitions
-  | "uefa.champions"
-  | "uefa.europa"
-  | "uefa.europa.conf"
-  | "uefa.super_cup"
-  | "uefa.champions_qual"
-  // Domestic cups (the big five's own)
-  | "eng.fa"
-  | "eng.league_cup"
-  | "esp.copa_del_rey"
-  | "ita.coppa_italia"
-  | "ger.dfb_pokal"
-  | "fra.coupe_de_france"
-  // International tournaments — national teams and the club world stage
-  | "fifa.world"
-  | "fifa.cwc"
-  | "uefa.euro"
-  | "uefa.euroq"
-  | "uefa.nations"
-  | "fifa.worldq.uefa"
-  | "fifa.worldq.conmebol"
-  | "conmebol.america"
-  | "caf.nations"
-  | "concacaf.gold";
+export type LeagueSlug = "eng.1" | "esp.1" | "ita.1" | "ger.1" | "fra.1";
 
 /** The big five domestic leagues — the ones the favorites rule is built on. */
 export const LEAGUES: LeagueSlug[] = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
 
 /**
- * Domestic leagues beyond the big five that the catalog carries — real league
- * tables, full fixture sync, predictable matches. Every slug here was verified
- * against ESPN's standings endpoint (they also appear in the crest collection's
- * league folder map). Widening this list is the whole mechanism behind
- * "tables for a followed league outside the big five": the standings sync,
- * the isCup classification, the picker tabs and the stat boards all read the
- * catalog, so an entry here lights up everywhere at once.
+ * Domestic leagues beyond the big five — EMPTY. Trimmed to top-5 only.
  */
-export const DOMESTIC_EXTRAS: LeagueSlug[] = ["ned.1", "por.1", "tur.1", "sco.1", "gre.1", "bel.1"];
+export const DOMESTIC_EXTRAS: LeagueSlug[] = [];
 
 /** Every competition that owns a league table. */
-export const ALL_DOMESTIC: LeagueSlug[] = [...LEAGUES, ...DOMESTIC_EXTRAS];
+export const ALL_DOMESTIC: LeagueSlug[] = [...LEAGUES];
 
 /**
- * Club cup competitions synced alongside the leagues (all confirmed on ESPN).
- * These are the big five's own cups plus the UEFA club competitions.
+ * Cup competitions — synced alongside the big five for table exemptions only.
+ * Trimmed to the competitions the fallen-aways file still tracks (Copa del Rey
+ * had FallenAway rows, the rest are legacy). No new cup will be added here.
  */
-export const CUPS: LeagueSlug[] = [
-  "uefa.champions",
-  "uefa.europa",
-  "uefa.europa.conf",
-  "uefa.super_cup",
-  "uefa.champions_qual",
-  "eng.fa",
-  "eng.league_cup",
-  "esp.copa_del_rey",
-  "ita.coppa_italia",
-  "ger.dfb_pokal",
-  "fra.coupe_de_france",
-];
+export const CUPS: string[] = ["esp.copa_del_rey"];
 
 /**
  * International football: national-team tournaments plus the club world stage.
@@ -81,7 +27,7 @@ export const CUPS: LeagueSlug[] = [
  * Every slug here was verified live against ESPN's scoreboard endpoint before
  * being added — a wrong slug fails silently as an empty competition.
  */
-export const INTERNATIONALS: LeagueSlug[] = [
+export const INTERNATIONALS: string[] = [
   "fifa.world",
   "fifa.cwc",
   "uefa.euro",
@@ -95,7 +41,7 @@ export const INTERNATIONALS: LeagueSlug[] = [
 ];
 
 /** All domestic leagues + cups + internationals — everything the sync polls. */
-export const LEAGUES_ALL: LeagueSlug[] = [...ALL_DOMESTIC, ...CUPS, ...INTERNATIONALS];
+export const LEAGUES_ALL: string[] = [...ALL_DOMESTIC, ...CUPS, ...INTERNATIONALS];
 
 /**
  * Competitions polled on the narrow sweep window instead of the wide one.
@@ -132,45 +78,15 @@ export function isCup(league: string): boolean {
 
 /** Seeded competition labels — the display names users browse by. */
 export const COMPETITIONS: Array<{
-  slug: LeagueSlug;
+  slug: string;
   name: string;
-  kind: "league" | "cup" | "tournament";
+  kind: "league";
 }> = [
   { slug: "eng.1", name: "Premier League", kind: "league" },
   { slug: "esp.1", name: "La Liga", kind: "league" },
   { slug: "ita.1", name: "Serie A", kind: "league" },
   { slug: "ger.1", name: "Bundesliga", kind: "league" },
   { slug: "fra.1", name: "Ligue 1", kind: "league" },
-  // Domestic leagues beyond the big five — full tables, same pipeline.
-  { slug: "ned.1", name: "Eredivisie", kind: "league" },
-  { slug: "por.1", name: "Liga Portugal", kind: "league" },
-  { slug: "tur.1", name: "Türkiye Süper Lig", kind: "league" },
-  { slug: "sco.1", name: "Scottish Premiership", kind: "league" },
-  { slug: "gre.1", name: "Super League Greece", kind: "league" },
-  { slug: "bel.1", name: "Belgian Pro League", kind: "league" },
-  { slug: "uefa.champions", name: "UEFA Champions League", kind: "cup" },
-  { slug: "uefa.europa", name: "UEFA Europa League", kind: "cup" },
-  { slug: "uefa.europa.conf", name: "UEFA Conference League", kind: "cup" },
-  { slug: "uefa.super_cup", name: "UEFA Super Cup", kind: "cup" },
-  { slug: "uefa.champions_qual", name: "UEFA Champions League Qualifying", kind: "cup" },
-  { slug: "eng.fa", name: "English FA Cup", kind: "cup" },
-  { slug: "eng.league_cup", name: "English Carabao Cup", kind: "cup" },
-  { slug: "esp.copa_del_rey", name: "Spanish Copa del Rey", kind: "cup" },
-  { slug: "ita.coppa_italia", name: "Coppa Italia", kind: "cup" },
-  { slug: "ger.dfb_pokal", name: "German Cup", kind: "cup" },
-  { slug: "fra.coupe_de_france", name: "Coupe de France", kind: "cup" },
-  // International tournaments (national teams). `kind: "tournament"` is what
-  // Browse groups separately and what tells the picker these are not clubs.
-  { slug: "fifa.world", name: "FIFA World Cup", kind: "tournament" },
-  { slug: "uefa.euro", name: "UEFA European Championship", kind: "tournament" },
-  { slug: "uefa.euroq", name: "UEFA European Championship Qualifying", kind: "tournament" },
-  { slug: "uefa.nations", name: "UEFA Nations League", kind: "tournament" },
-  { slug: "fifa.worldq.uefa", name: "FIFA World Cup Qualifying — UEFA", kind: "tournament" },
-  { slug: "fifa.worldq.conmebol", name: "FIFA World Cup Qualifying — CONMEBOL", kind: "tournament" },
-  { slug: "conmebol.america", name: "Copa América", kind: "tournament" },
-  { slug: "caf.nations", name: "Africa Cup of Nations", kind: "tournament" },
-  { slug: "concacaf.gold", name: "CONCACAF Gold Cup", kind: "tournament" },
-  { slug: "fifa.cwc", name: "FIFA Club World Cup", kind: "tournament" },
 ];
 
 /**

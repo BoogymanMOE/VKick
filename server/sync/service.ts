@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { fetchScoreboard, fetchStandings, fetchSummary, fetchTeamRoster } from "../espn/client.js";
-import { LEAGUES_ALL, ALL_DOMESTIC, CUPS, pollWindow, type LeagueSlug } from "../espn/types.js";
+import { LEAGUES, pollWindow, type LeagueSlug } from "../espn/types.js";
 import { getDb, all } from "../db/index.js";
 import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
 import { onMatchFinished } from "../predictions/resolver.js";
@@ -44,7 +44,7 @@ export async function syncScoreboards(days = 0): Promise<GoalAlert[]> {
  */
 export async function syncScoreboardWindow(backDays: number, forwardDays: number): Promise<GoalAlert[]> {
   const goals: GoalAlert[] = [];
-  for (const league of LEAGUES_ALL) {
+  for (const league of LEAGUES) {
     const win = pollWindow(league);
     const offsets: number[] = [];
     for (let d = -Math.min(backDays, win.back); d <= Math.min(forwardDays, win.forward); d++) {
@@ -193,6 +193,9 @@ export async function syncSummaries(): Promise<GoalAlert[]> {
  * Predictor had no squad to show for exactly the clubs fans bet on in Europe.
  */
 export async function syncRosters(): Promise<void> {
+  // Only roster big-five clubs: outside leagues are not polled, so no roster
+  // endpoint is called for them. Non-big-five teams keep whatever squad data
+  // they got from a cup/European fixture summary (if any).
   const teams = all<{ id: string; league: string; inferred_league: string; name: string }>(
     db,
     `SELECT t.id, t.league, t.name,
@@ -200,12 +203,13 @@ export async function syncRosters(): Promise<void> {
                       WHERE m.home_team_id = t.id OR m.away_team_id = t.id
                       ORDER BY m.kickoff_at DESC LIMIT 1), '') AS inferred_league
      FROM teams t
+     WHERE t.league IN (${LEAGUES.map(() => "?").join(",")})
+        OR t.inferred_league IN (${LEAGUES.map(() => "?").join(",")})
      ORDER BY t.name ASC`,
+    [...LEAGUES, ...LEAGUES],
   );
   let ok = 0;
   let skipped = 0;
-  // Chunked with pauses: ~100 clubs x 1 call each in one tight loop looked
-  // like an attack to ESPN's rate limiter and got syncs killed mid-run.
   for (const t of teams) {
     const league = (t.league || t.inferred_league) as LeagueSlug;
     if (!league) {
@@ -240,7 +244,7 @@ export async function syncRosters(): Promise<void> {
  */
 export async function syncStandings(): Promise<void> {
   const season = currentSeason();
-  for (const league of [...ALL_DOMESTIC, ...CUPS]) {
+  for (const league of LEAGUES) {
     try {
       const json = await fetchStandings(league, seasonStartYear(season));
       applyStandings(db, json, league, season);

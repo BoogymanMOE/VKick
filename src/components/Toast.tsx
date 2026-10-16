@@ -38,7 +38,12 @@ const toneTint: Record<ToastTone, string | undefined> = {
 };
 
 /** How long the copy stays readable before it starts to leave. */
-const DWELL_MS = 3600;
+const DWELL_MS = {
+  muted: 1500,
+  volt: 2500,
+  gold: 2500,
+  danger: 3000,
+} as const;
 /** The leave animation's own duration (see `.toast-out` in index.css) — the
  *  reap timer waits it out so the exit is visible. */
 const LEAVE_MS = 320;
@@ -64,14 +69,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       window.setTimeout(() => {
         // Mark leaving rather than remove: the exit animation plays first.
         setToasts((prev) => prev.map((item) => (item.id === id ? { ...item, leaving: true } : item)));
-      }, DWELL_MS),
+      }, DWELL_MS[toast.tone] ?? 2500),
       // Belt and braces: reap on a timer as well as on `animationend`. The event
       // is not guaranteed — a backgrounded webview, an element whose animation
       // never starts, or a stale class without a keyframes rule all leave the
       // toast on screen permanently, which is exactly the stuck-toast bug.
       window.setTimeout(
         () => setToasts((prev) => prev.filter((item) => item.id !== id)),
-        DWELL_MS + LEAVE_MS,
+        (DWELL_MS[toast.tone] ?? 2500) + LEAVE_MS,
       ),
     );
   }, []);

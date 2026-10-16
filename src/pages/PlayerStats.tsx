@@ -52,7 +52,7 @@ export default function PlayerStats() {
 
   return (
     <>
-      <TopBar title={t("statsPage.title")} subtitle={t("statsPage.subtitle")} />
+      <TopBar title={t("statsPage.title")} subtitle={t("statsPage.subtitle")} back />
 
       <div className="mt-3">
         <Segmented

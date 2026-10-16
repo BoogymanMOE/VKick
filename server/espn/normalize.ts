@@ -26,7 +26,7 @@ import type {
 import { isCup } from "./types.js";
 
 export type { LeagueSlug } from "./types.js";
-export { LEAGUES, CUPS, LEAGUES_ALL, isCup } from "./types.js";
+export { LEAGUES, CUPS, isCup } from "./types.js";
 
 /* ------------------------------------------------- ESPN payload (structural) */
 
