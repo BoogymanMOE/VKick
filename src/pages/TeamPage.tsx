@@ -8,6 +8,7 @@ import {
   EmptyState,
   ErrorState,
   Num,
+  PlayerAvatar,
   SectionHeading,
   Segmented,
   TeamBadge,
@@ -171,12 +172,18 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
                   key={player.id}
                   className="flex items-center gap-3 rounded-card border border-line bg-surface p-2.5"
                 >
-                  <Num className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-[11px] text-ink-2">
-                    {player.jersey ?? "–"}
-                  </Num>
+                  {/* A face for every squad member: the ESPN headshot where the
+                      feed has one, the player's initials where it doesn't, on
+                      the same footprint either way. */}
+                  <PlayerAvatar name={localize(player.name)} src={player.headshot} size="md" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-bold text-ink">{localize(player.name)}</span>
-                    <span className="text-[11px] text-ink-3">
+                    <span className="flex items-baseline gap-1.5">
+                      <Num className="flex-none text-[10px] font-bold text-ink-3">{player.jersey ?? "–"}</Num>
+                      <span className="min-w-0 truncate text-sm font-bold text-ink">
+                        {localize(player.name)}
+                      </span>
+                    </span>
+                    <span className="block text-[11px] text-ink-3">
                       {player.espnPosition ?? t(`pos.${player.position}`)}
                       {player.appearances ? ` · ${t("team.appearances", { count: player.appearances })}` : ""}
                     </span>

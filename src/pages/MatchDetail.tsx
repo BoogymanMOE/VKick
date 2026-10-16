@@ -19,6 +19,7 @@ import { CommentaryPanel } from "../components/panels/CommentaryPanel";
 import { CommentsSection } from "../components/panels/CommentsPanel";
 import { adaptComments } from "../lib/adaptComments";
 import { LineupsPanel } from "../components/panels/LineupsPanel";
+import { PitchView } from "../components/panels/PitchView";
 import { PredictionsHub } from "../components/panels/PredictionsHub";
 import { ChartIcon, ChevronRightIcon, StarIcon } from "../components/icons";
 import {
@@ -63,12 +64,27 @@ export default function MatchDetail() {
     queryKey: ["match", id],
     queryFn: () => api.getMatch(id),
     enabled: Boolean(id),
+    // 20s while the match is in play: the server's live pulse rewrites the
+    // minute and score straight from ESPN every 15s, so anything slower left
+    // the header showing a clock minutes behind the game (the "not synced with
+    // time" report). Paused when the tab is in the background — a hidden tab
+    // holds the last good payload instead of spending the battery.
     refetchInterval: (query) =>
-      query.state.data?.match.status === "live" && !document.hidden ? 300_000 : false,
+      (query.state.data?.match.status === "live" || query.state.data?.match.status === "halftime") &&
+      !document.hidden
+        ? 20_000
+        : false,
     refetchIntervalInBackground: false,
   });
   const match = matchQuery.data?.match;
   const live = match?.status === "live";
+  /**
+   * Live OR the half-time break. The clock keeps moving INTO the break and the
+   * second half starts from it, so every refresh decision polls on this —
+   * polling on `live` alone left a match frozen on "HT" until the user
+   * touched the screen again.
+   */
+  const inPlay = live || match?.status === "halftime";
   // Competition name for the header: big-five alias, else the catalog name
   // (cups/tournaments), so a cup match never shows a raw "uefa.champions".
   const leagueLabel = useCompetitionLabel(match?.league ?? "");
@@ -295,13 +311,13 @@ export default function MatchDetail() {
         {tab === "timeline" ? (
           <TimelineTab
             matchId={id}
-            live={live}
+            live={inPlay}
             minute={currentMinute}
             myUserId={user?.id}
             teams={[home, away]}
           />
         ) : null}
-        {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
+        {tab === "stats" ? <StatsTab matchId={id} live={inPlay} home={home} away={away} /> : null}
         {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
         {tab === "predict" ? <PredictionsHub matchId={id} /> : null}
         {tab === "ratings" ? <RatingsTab matchId={id} live={live} league={match.league} /> : null}
@@ -384,7 +400,11 @@ function TimelineTab({
   const query = useQuery({
     queryKey: ["timeline", matchId],
     queryFn: () => api.getTimeline(matchId),
-    refetchInterval: live ? 30_000 : false,
+    // 20s in play, and the SSE goal event invalidates this key outright, so a
+    // goal lands within a second of the server seeing it. The poll is the
+    // backstop for everything ESPN doesn't shout about (a corrected minute, a
+    // sub, a card).
+    refetchInterval: live ? 20_000 : false,
   });
   const events = query.data?.events ?? [];
   const adapted = events.map(adaptTimelineEvent);
@@ -424,6 +444,8 @@ function TimelineTab({
         comments={comments}
         liveMinute={live ? minute : undefined}
         teamColor={teamColor}
+        homeTeamId={teams[0]?.id}
+        awayTeamId={teams[1]?.id}
       />
 
       <div className="mt-4">
@@ -456,10 +478,13 @@ function TimelineTab({
 
 function StatsTab({
   matchId,
+  live,
   home,
   away,
 }: {
   matchId: string;
+  /** Refresh the shot plot while the match is in play. */
+  live: boolean;
   home: {
     id: string;
     name: string;
@@ -490,6 +515,8 @@ function StatsTab({
 
   return (
     <div className="space-y-3">
+      <PitchView matchId={matchId} live={live} home={home} away={away} />
+
       <MatchPlayerTable title={home.shortName} color={home.color} rows={homeRows} />
       <MatchPlayerTable title={away.shortName} color={away.color} rows={awayRows} />
       {/* Match stats → season stats: the same cross-link pattern as the
@@ -600,6 +627,12 @@ function LineupsTab({
     name: String(r.full_name),
     position: String(r.position ?? "MID") as "GK" | "DEF" | "MID" | "FWD",
     number: typeof r.jersey_number === "number" ? r.jersey_number : 0,
+    // The pitch is only as good as these three: the face, the granular role
+    // that decides which side of a line a player stands on, and ESPN's slot for
+    // the leaked XIs that carry no role.
+    headshot: typeof r.headshot_url === "string" ? r.headshot_url : null,
+    espnPosition: typeof r.espn_position === "string" ? r.espn_position : null,
+    formationPlace: typeof r.formation_place === "string" ? r.formation_place : null,
   });
   const homeTeam: Team = {
     id: home.id,

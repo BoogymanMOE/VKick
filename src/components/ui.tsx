@@ -301,6 +301,69 @@ export function Num({ children, className }: { children: ReactNode; className?: 
 }
 
 /**
+ * A player's face, in the circle every roster row and pitch slot uses.
+ *
+ * The feed carries an ESPN headshot URL for most players but not all, and a
+ * CDN URL can 404 long after the sync stored it, so both cases fall back to the
+ * player's initials on the same footprint — a roster reads evenly either way,
+ * and a squad with no artwork at all still looks deliberate. The image is
+ * decorative (the name is always rendered next to it) and lazy, since a squad
+ * list is 25 of these.
+ */
+export function PlayerAvatar({
+  name,
+  src,
+  size = "md",
+  className,
+}: {
+  name: string;
+  src?: string | null;
+  size?: "sm" | "md" | "lg";
+  className?: string;
+}) {
+  const [broken, setBroken] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const dims = { sm: "h-8 w-8 text-[10px]", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm" }[size];
+  const photo = src && !broken ? src : null;
+  return (
+    <span
+      className={cx(
+        "relative grid flex-none place-items-center overflow-hidden rounded-full border border-line bg-elevated font-bold text-ink-2",
+        dims,
+        className,
+      )}
+      aria-hidden="true"
+    >
+      {photo ? (
+        <img
+          src={photo}
+          alt=""
+          onError={() => setBroken(true)}
+          onLoad={() => setLoaded(true)}
+          loading="lazy"
+          decoding="async"
+          className={cx(
+            "h-full w-full object-cover transition-opacity duration-[var(--t-fast)] ease-[var(--ease-out)]",
+            loaded ? "opacity-100" : "opacity-0",
+          )}
+        />
+      ) : (
+        initialsOf(name)
+      )}
+    </span>
+  );
+}
+
+/** Up to two initials from a player name — "Cole Palmer" → "CP", "Ronald" → "R". */
+function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  const first = words[0]!.charAt(0);
+  const last = words.length > 1 ? words[words.length - 1]!.charAt(0) : "";
+  return (first + last).toUpperCase();
+}
+
+/**
  * Evaluative (gold) totals count up from zero on mount — season points,
  * standings points, xPts — so a number that just appeared reads as earned
  * rather than snapped in. Integer-only; a reduced-motion user sees the value

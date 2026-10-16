@@ -29,6 +29,26 @@ export function cellCenter(gridX: number, gridY: number): { x: number; y: number
   };
 }
 
+/**
+ * The grid cell an ESPN field position falls in — the inverse of `cellCenter`,
+ * mirroring `cellFromFieldPosition` in server/scoring/shotGrid.ts. This is what
+ * lets the live shot plot drop a real shot into the same 6×4 grid the Shot
+ * Predictor scores against, so "inside left" means the same cell on both
+ * screens. Out-of-range coordinates clamp into the grid instead of escaping it.
+ */
+export function cellFromFieldPosition(
+  fieldPositionX: number,
+  fieldPositionY: number,
+): { gridX: number; gridY: number } {
+  const clamp = (value: number, max: number) => Math.min(max - 1, Math.max(0, value));
+  const x = Math.min(100, Math.max(0, fieldPositionX));
+  const y = Math.min(100, Math.max(0, fieldPositionY));
+  const gridX = clamp(Math.floor(y / (100 / GRID_COLS)), GRID_COLS);
+  const rowsFromOwnEnd = clamp(Math.floor(x / (100 / GRID_ROWS)), GRID_ROWS);
+  // Rows count from the attacking end so the drawing matches the Predictor grid.
+  return { gridX, gridY: GRID_ROWS - 1 - rowsFromOwnEnd };
+}
+
 /** Classify a field position into one of the 6 zones (server parity). */
 export function zoneForFieldPosition(fieldPositionX: number, fieldPositionY: number): ShotZone {
   const x = Math.min(100, Math.max(0, fieldPositionX));

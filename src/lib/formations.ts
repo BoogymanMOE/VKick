@@ -128,6 +128,23 @@ export interface SlotCandidate {
   espnPosition: string | null;
   jersey: number | null;
   unit: Unit;
+  /**
+   * ESPN's 1..11 slot in the formation. Only a tiebreaker: it orders players
+   * inside a line when the feed publishes no granular role (a leaked XI often
+   * arrives as eleven plain "MID"/"DEF" rows), and is ignored otherwise. A
+   * predicted XI has no slot yet, so the field stays optional.
+   */
+  formationPlace?: string | null;
+}
+
+/**
+ * Ordering tiebreaker inside a line: ESPN's formation slot when the feed has
+ * one, else shirt number. Never the reason a player is placed in a line —
+ * that is still the granular role and the unit — only the order among equals.
+ */
+function tieBreak(candidate: SlotCandidate): number {
+  const place = Number.parseInt(String(candidate.formationPlace ?? ""), 10);
+  return Number.isFinite(place) ? place : (candidate.jersey ?? 99);
 }
 
 /**
@@ -192,14 +209,14 @@ const ADVANCED_ROLES = new Set([
   "F-C",
 ]);
 
-/** Left to right on the pitch, then by shirt number. */
-export function orderForLine(candidates: SlotCandidate[]): SlotCandidate[] {
+/** Left to right on the pitch, then by formation slot (or shirt number). */
+export function orderForLine<T extends SlotCandidate>(candidates: T[]): T[] {
   return [...candidates].sort((a, b) => {
     const side =
       SIDE_ORDER[slotRoleFor(a.espnPosition, a.unit).side] -
       SIDE_ORDER[slotRoleFor(b.espnPosition, b.unit).side];
     if (side !== 0) return side;
-    return (a.jersey ?? 99) - (b.jersey ?? 99);
+    return tieBreak(a) - tieBreak(b);
   });
 }
 
@@ -211,18 +228,27 @@ export function orderForLine(candidates: SlotCandidate[]): SlotCandidate[] {
  * and the attacking three what is left. Dealing row by row would hand the same
  * players to both bands.
  */
-export function fillFormation(
+export function fillFormation<T extends SlotCandidate>(
   formationId: string,
-  candidates: SlotCandidate[],
-): Array<Array<SlotCandidate | null>> {
-  const rows = pitchRows(formationId);
-  const slots: Array<Array<SlotCandidate | null>> = rows.map((row) => new Array(row.size).fill(null));
+  candidates: T[],
+): Array<Array<T | null>> {
+  return fillRows(pitchRows(formationId), candidates);
+}
+
+/**
+ * Deal a squad onto an explicit set of pitch rows — `fillFormation` without the
+ * formation catalogue, so a caller that has already resolved the rows (a
+ * published XI whose shape string ESPN did not fill in, see
+ * `pitchRowsFromUnits`) draws through the same placement rules.
+ */
+export function fillRows<T extends SlotCandidate>(rows: PitchRow[], candidates: T[]): Array<Array<T | null>> {
+  const slots: Array<Array<T | null>> = rows.map((row) => new Array(row.size).fill(null));
 
   for (const unit of UNITS) {
     const rowIndexes = rows.map((row, index) => (row.unit === unit ? index : -1)).filter((i) => i >= 0);
     if (rowIndexes.length === 0) continue;
 
-    // Deepest role first, then across the pitch, then shirt number.
+    // Deepest role first, then across the pitch, then formation slot / number.
     const pool = candidates
       .filter((c) => c.unit === unit)
       .sort((a, b) => {
@@ -232,7 +258,7 @@ export function fillFormation(
           SIDE_ORDER[slotRoleFor(a.espnPosition, a.unit).side] -
           SIDE_ORDER[slotRoleFor(b.espnPosition, b.unit).side];
         if (side !== 0) return side;
-        return (a.jersey ?? 99) - (b.jersey ?? 99);
+        return tieBreak(a) - tieBreak(b);
       });
 
     let next = 0;
@@ -272,6 +298,103 @@ export function pitchRows(formationId: string): PitchRow[] {
     ...lines.map((size, index) => ({ unit: units[index + 1], size, goal: false })).reverse(),
     { unit: "GK" as Unit, size: 1, goal: true },
   ];
+}
+
+/** How many players a squad has in each unit. */
+export function unitCounts(candidates: SlotCandidate[]): Record<Unit, number> {
+  const counts: Record<Unit, number> = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
+  for (const c of candidates) counts[c.unit] += 1;
+  return counts;
+}
+
+/**
+ * Coarse units rebalanced against a shape.
+ *
+ * ESPN files wingers and attacking midfielders as MID, so a published 4-3-3
+ * regularly arrives as five midfielders and one forward (LW, ST, RW, CM, CM,
+ * CDM). Dealing that by unit drops the two wide men off the pitch entirely —
+ * they are "extras" in a band that only has three slots. While the shape has
+ * room up front and too many midfielders, the most advanced midfielder is
+ * promoted into the forward band: a winger belongs on the wing of a front
+ * three, which is where the shape puts him.
+ *
+ * Non-destructive and idempotent: an XI that already fits comes back as-is, and
+ * a purely central midfielder is never promoted (only roles that `advanceFor`
+ * already calls advanced move).
+ */
+export function balanceForFormation<T extends SlotCandidate>(formationId: string, candidates: T[]): T[] {
+  const required = requiredUnits(formationId);
+  let out = [...candidates];
+  for (;;) {
+    const counts = unitCounts(out);
+    if (!(counts.MID > required.MID && counts.FWD < required.FWD)) break;
+    let best: T | null = null;
+    let bestAdvance = -1;
+    for (const candidate of out) {
+      if (candidate.unit !== "MID") continue;
+      const advance = advanceFor(candidate.espnPosition);
+      if (advance > bestAdvance) {
+        bestAdvance = advance;
+        best = candidate;
+      }
+    }
+    // Only a genuinely advanced role is promoted — a plain CM stays a CM.
+    if (!best || bestAdvance < 2) break;
+    const promoted = best;
+    out = out.map((candidate) => (candidate === promoted ? ({ ...candidate, unit: "FWD" } as T) : candidate));
+  }
+  return out;
+}
+
+/**
+ * A published XI placed on the pitch: the rows it is drawn on, and who stands
+ * in each slot.
+ */
+export interface PlacedXI<T> {
+  rows: PitchRow[];
+  /** Row-major, one entry per slot; a null slot is a hole in the shape. */
+  slots: Array<Array<T | null>>;
+}
+
+/**
+ * Place a PUBLISHED XI: the team's own shape when the XI fits it after
+ * rebalancing, otherwise one band per unit, sized to what the XI contains.
+ *
+ * The fallback is what keeps the promise that a leaked or partial lineup still
+ * shows every player it has — assuming a 4-3-3 for a five-man midfield is how
+ * two starters went missing.
+ *
+ * Rows and placement come back together on purpose: the rebalance changes the
+ * units, so a caller that took the rows and dealt the original squad itself
+ * would draw the very hole this function exists to close.
+ */
+export function placePublishedXI<T extends SlotCandidate>(formationId: string, candidates: T[]): PlacedXI<T> {
+  const known = isValidFormationId(formationId);
+  const squad = known ? balanceForFormation(formationId, candidates) : candidates;
+  const counts = unitCounts(squad);
+  const required = known ? requiredUnits(formationId) : null;
+  const rows =
+    required && UNITS.every((unit) => counts[unit] === required[unit])
+      ? pitchRows(formationId)
+      : pitchRowsFromUnits(counts);
+  return { rows, slots: fillRows(rows, squad) };
+}
+
+/**
+ * Pitch rows built from what an XI actually contains — the fallback for a
+ * published lineup whose shape ESPN left blank or sent in a form the catalogue
+ * doesn't carry. One row per unit (attack at the top, keeper last), sized to
+ * the squad, so every starter is drawn instead of the extras being dropped as
+ * they would be if a 4-3-3 were assumed for a five-man midfield.
+ */
+export function pitchRowsFromUnits(counts: Record<Unit, number>): PitchRow[] {
+  const rows: PitchRow[] = [];
+  for (const unit of ["FWD", "MID", "DEF"] as Unit[]) {
+    const size = Math.max(0, counts[unit]);
+    if (size > 0) rows.push({ unit, size, goal: false });
+  }
+  if (counts.GK > 0) rows.push({ unit: "GK", size: counts.GK, goal: true });
+  return rows;
 }
 
 /** Squad list order: unit, then across the pitch, then shirt number. */

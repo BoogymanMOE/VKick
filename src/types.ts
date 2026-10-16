@@ -120,6 +120,14 @@ export interface LineupPlayer {
    * predictor builds by hand, which then fall back to shirt-number order.
    */
   espnPosition?: string | null;
+  /**
+   * ESPN's 1..11 slot in the published shape — the tiebreaker that orders a
+   * line when the feed publishes no granular role. Absent for a predicted XI.
+   */
+  formationPlace?: string | null;
+  /** ESPN headshot URL; missing for some players, so every render falls back
+   *  to initials (`PlayerAvatar`). */
+  headshot?: string | null;
   /** Set once the sub predictor resolves. */
   subbedOff?: string;
 }

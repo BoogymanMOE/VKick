@@ -7,6 +7,7 @@
 import { strict as assert } from "node:assert";
 import { GRID_COLS, GRID_ROWS, cellFromFieldPosition, cellCenter } from "../server/scoring/shotGrid.js";
 import { zoneForFieldPosition, SHOT_ZONES } from "../server/scoring/shotZones.js";
+import { cellFromFieldPosition as clientCell } from "../src/lib/zones.js";
 
 type Cell = { gridX: number; gridY: number };
 
@@ -48,6 +49,20 @@ function testCellCenters() {
   assert.ok(far.y > 80, "last column centre near the right edge");
 }
 
+/**
+ * The client mirrors this geometry (`src/lib/zones.ts`), because the live shot
+ * plot drops real ESPN coordinates into the same grid the Shot Predictor is
+ * scored against. A drift here would put a goal in one cell and score the pick
+ * in another, so the two are compared cell-for-cell across the whole range.
+ */
+function testClientParity() {
+  for (let x = -20; x <= 120; x += 2.5) {
+    for (let y = -20; y <= 120; y += 2.5) {
+      assert.deepEqual(clientCell(x, y), cells(x, y), `client grid matches server at (${x},${y})`);
+    }
+  }
+}
+
 /** Zone classification: the box edge and the width thirds (shotZones.ts). */
 function testZones() {
   assert.equal(SHOT_ZONES.length, 6, "exactly six zones");
@@ -69,6 +84,7 @@ export function runShotGridTests(): void {
   testBounds();
   testQuadrants();
   testCellCenters();
+  testClientParity();
   testZones();
-  console.log("  shotGrid: grid mapping, cell centres and zone classification OK");
+  console.log("  shotGrid: grid mapping, client parity, cell centres and zone classification OK");
 }

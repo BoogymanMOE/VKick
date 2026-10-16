@@ -8,15 +8,20 @@ import { strict as assert } from "node:assert";
 import {
   FORMATIONS,
   XI_SIZE,
+  balanceForFormation,
   compareSquad,
   fillFormation,
+  fillRows,
   getFormation,
   isValidFormationId,
   isValidXI,
   lineUnits,
   pitchRows,
+  pitchRowsFromUnits,
+  placePublishedXI,
   requiredUnits,
   slotRoleFor,
+  unitCounts,
   unitTally,
   type SlotCandidate,
   type Unit,
@@ -153,6 +158,15 @@ const c = (id: string, espnPosition: string | null, jersey: number | null, unit:
   unit,
 });
 
+/** Same candidate, but with ESPN's formation slot instead of a shirt number. */
+const p = (id: string, espnPosition: string | null, formationPlace: string, unit: Unit): SlotCandidate => ({
+  id,
+  espnPosition,
+  jersey: null,
+  unit,
+  formationPlace,
+});
+
 /** The pitch draws attack at the top and the keeper's goal at the bottom. */
 function testPitchRows(): void {
   const rows = pitchRows("4-3-3");
@@ -263,6 +277,190 @@ function testFillFormationPlacement(): void {
   );
 }
 
+/**
+ * The published-XI pitch draws from the shape ESPN sent, and from what the XI
+ * actually contains when ESPN sent no usable shape — the fallback exists so a
+ * leaked lineup still renders a full XI instead of an empty pitch.
+ */
+function testDerivedRows(): void {
+  assert.deepEqual(
+    pitchRowsFromUnits({ GK: 1, DEF: 4, MID: 3, FWD: 3 }).map((r) => `${r.unit}${r.size}`),
+    ["FWD3", "MID3", "DEF4", "GK1"],
+    "same draw order as a 4-3-3's own rows",
+  );
+  const fiveMid = pitchRowsFromUnits({ GK: 1, DEF: 4, MID: 5, FWD: 1 });
+  assert.deepEqual(
+    fiveMid.map((r) => `${r.unit}${r.size}`),
+    ["FWD1", "MID5", "DEF4", "GK1"],
+    "a five-man midfield keeps all five in one band",
+  );
+  assert.equal(fiveMid[fiveMid.length - 1].goal, true, "the keeper's row is still the goal line");
+  // A unit nobody plays in simply has no row — never an empty band on the pitch.
+  assert.deepEqual(
+    pitchRowsFromUnits({ GK: 1, DEF: 3, MID: 4, FWD: 0 }).map((r) => r.unit),
+    ["MID", "DEF", "GK"],
+    "no attack row for a squad with no forwards",
+  );
+}
+
+/** fillRows is fillFormation without the catalogue: same placement rules. */
+function testFillRows(): void {
+  const squad = [
+    c("gk", "G", 1, "GK"),
+    c("lb", "LB", 3, "DEF"),
+    c("cb1", "CB", 5, "DEF"),
+    c("rb", "RB", 2, "DEF"),
+    c("cm1", "CM", 8, "MID"),
+    c("cm2", "CM", 6, "MID"),
+    c("cm3", "CM", 10, "MID"),
+    c("st1", "ST", 9, "FWD"),
+    c("st2", "ST", 11, "FWD"),
+    c("st3", "ST", 7, "FWD"),
+  ];
+  const derived = pitchRowsFromUnits(unitCounts(squad));
+  assert.deepEqual(
+    fillRows(derived, squad)
+      .flat()
+      .filter(Boolean)
+      .map((p) => p.id),
+    ["st3", "st1", "st2", "cm2", "cm1", "cm3", "lb", "cb1", "rb", "gk"],
+    "drawn attack to keeper, left to right inside each line",
+  );
+  // Every player lands in exactly one slot.
+  const placed = fillRows(derived, squad).flat().filter(Boolean);
+  assert.equal(new Set(placed.map((x) => x.id)).size, placed.length, "nobody is drawn twice");
+}
+
+/**
+ * A published 4-3-3 arrives from ESPN as five midfielders and one forward —
+ * the wingers wear the MID unit. Drawn as-is, two starters vanish; the shape
+ * rebalance moves the advanced ones up front, where the shape has room.
+ */
+function testPublishedShape(): void {
+  const published433 = [
+    c("gk", "G", 1, "GK"),
+    c("lb", "LB", 3, "DEF"),
+    c("cb1", "CB", 5, "DEF"),
+    c("cb2", "CB", 4, "DEF"),
+    c("rb", "RB", 2, "DEF"),
+    c("cdm", "CDM", 6, "MID"),
+    c("cm1", "CM", 8, "MID"),
+    c("cm2", "CM", 10, "MID"),
+    c("lw", "LW", 11, "MID"),
+    c("rw", "RW", 7, "MID"),
+    c("st", "ST", 9, "FWD"),
+  ];
+
+  const drawn = placePublishedXI("4-3-3", published433);
+  assert.deepEqual(
+    drawn.rows.map((r) => `${r.unit}${r.size}`),
+    ["FWD3", "MID3", "DEF4", "GK1"],
+    "the named shape is used once the units are rebalanced",
+  );
+  const slots = drawn.slots;
+  const placed = slots.flat().filter(Boolean);
+  assert.equal(placed.length, 11, "every starter is on the pitch");
+  assert.deepEqual(
+    slots[0].map((p) => p?.id ?? "-"),
+    ["lw", "st", "rw"],
+    "the wide men stand in the front three, on their own sides",
+  );
+  assert.deepEqual(
+    slots[1].map((p) => p?.id ?? "-"),
+    ["cdm", "cm1", "cm2"],
+    "the central trio keeps the midfield band",
+  );
+
+  // A shape the XI already fits is left alone — no spurious promotions.
+  const balanced = balanceForFormation("4-2-3-1", [
+    c("cdm", "CDM", 6, "MID"),
+    c("cm", "CM", 8, "MID"),
+    c("lw", "LW", 11, "MID"),
+    c("am", "CAM", 10, "MID"),
+    c("rw", "RW", 7, "MID"),
+    c("st", "ST", 9, "FWD"),
+  ]);
+  assert.deepEqual(
+    unitCounts(balanced),
+    { GK: 0, DEF: 0, MID: 5, FWD: 1 },
+    "a 4-2-3-1's five midfielders stay midfielders",
+  );
+
+  // A plain central midfielder is never promoted, however many there are.
+  const allCentral = balanceForFormation("4-3-3", [
+    c("cm1", "CM", 8, "MID"),
+    c("cm2", "CM", 10, "MID"),
+    c("cm3", "CM", 6, "MID"),
+    c("cm4", "CM", 4, "MID"),
+  ]);
+  assert.deepEqual(unitCounts(allCentral).MID, 4, "no winger, nothing promoted");
+}
+
+/** Rows always hold every candidate, whatever the shape says. */
+function testPublishedRowsNeverDrop(): void {
+  for (const shape of ["", "nonsense", "4-3-3", "3-5-2", "4-2-3-1", "5-3-2"]) {
+    const squad = [
+      c("gk", "G", 1, "GK"),
+      c("lb", "LB", 3, "DEF"),
+      c("cb1", "CB", 5, "DEF"),
+      c("cb2", "CB", 4, "DEF"),
+      c("cb3", "CB", 15, "DEF"),
+      c("rb", "RB", 2, "DEF"),
+      c("cdm", "CDM", 6, "MID"),
+      c("cm", "CM", 8, "MID"),
+      c("lm", "LM", 11, "MID"),
+      c("rm", "RM", 7, "MID"),
+      c("st", "ST", 9, "FWD"),
+    ];
+    const counts = unitCounts(squad);
+    const required = requiredUnits("4-3-3");
+    const fitted = balanceForFormation("4-3-3", squad);
+    const drawn = placePublishedXI(shape, squad);
+    // The hand-made squad above never matches a catalogue shape exactly, so the
+    // derived rows are the ones that must survive.
+    assert.equal(
+      drawn.rows.reduce((a, r) => a + r.size, 0),
+      11,
+      `${shape}: 11 slots`,
+    );
+    assert.equal(
+      new Set(
+        drawn.slots
+          .flat()
+          .filter(Boolean)
+          .map((p) => p.id),
+      ).size,
+      11,
+      `${shape}: all eleven placed`,
+    );
+    assert.ok(counts.DEF === 5 && required.DEF === 4, "the fixture really is a mismatch");
+    assert.equal(unitCounts(fitted).DEF, 5, "defenders are never rearranged");
+  }
+}
+
+/** ESPN's formation slot orders a line when the feed has no granular roles. */
+function testFormationPlaceTiebreak(): void {
+  // Four plain defenders, slots 2-5: the slot decides the order, not the shirt.
+  const plain = fillFormation("4-3-3", [
+    p("d1", null, "2", "DEF"),
+    p("d2", null, "3", "DEF"),
+    p("d3", null, "4", "DEF"),
+    p("d4", null, "5", "DEF"),
+  ]);
+  assert.deepEqual(
+    plain[2].map((x) => x?.id ?? "-"),
+    ["d1", "d2", "d3", "d4"],
+    "formation slot is the tiebreaker once the side is resolved",
+  );
+  // A granular role still outranks the slot: the left-back stays left.
+  const mixed = fillFormation("4-3-3", [
+    c("lb", "LB", 66, "DEF"),
+    { ...p("others", null, "2", "DEF"), jersey: 4 },
+    { ...p("other2", null, "3", "DEF"), jersey: 5 },
+  ]);
+  assert.equal(mixed[2][0]?.id, "lb", "a real left-back keeps the left slot");
+}
+
 /** The squad list reads in the same order the pitch does. */
 function testCompareSquad(): void {
   const sorted = [
@@ -289,8 +487,13 @@ export function runFormationTests(): void {
   testUnitTally();
   testSlotRoles();
   testPitchRows();
+  testDerivedRows();
+  testPublishedShape();
+  testPublishedRowsNeverDrop();
   testFillLine();
+  testFillRows();
   testFillFormationPlacement();
+  testFormationPlaceTiebreak();
   testCompareSquad();
   console.log(`  formations: ${FORMATIONS.length} shapes, unit mapping, XI rules, slot placement OK`);
 }

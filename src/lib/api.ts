@@ -658,6 +658,9 @@ export const api = {
         short_name: string | null;
         position: string;
         jersey_number: number | null;
+        /** ESPN headshot URL for the pitch/bench avatars; null for the players
+         *  the feed carries no artwork for (the UI shows initials). */
+        headshot_url: string | null;
         /** ESPN's granular role ("CD-L", "AM-R") — places a player on a side
          *  of their line. Null for feeds that don't publish one. */
         espn_position: string | null;

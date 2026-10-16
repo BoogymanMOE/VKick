@@ -1,10 +1,11 @@
-import { Fragment } from "react";
+import { Fragment, useMemo } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import type { Comment, TimelineEvent } from "../types";
 import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
 import { BallIcon, CardIcon, SwapIcon } from "./icons";
 import { cx } from "../lib/cx";
+import { formatScore, runningScore } from "../lib/timelineScore";
 import { Chip, Num } from "./ui";
 
 const typeKey: Record<TimelineEvent["type"], StringKey> = {
@@ -111,6 +112,8 @@ export function TimelineList({
   liveMinute,
   onOpenClip,
   teamColor,
+  homeTeamId,
+  awayTeamId,
 }: {
   events: TimelineEvent[];
   /** Pinned crowd comments, rendered under their event/minute. */
@@ -123,11 +126,24 @@ export function TimelineList({
    * caused the moment, so a two-column read of who did what needs no names.
    */
   teamColor?: Record<string, string>;
+  /** The match's two sides, so a goal can carry the scoreline it produced. */
+  homeTeamId?: string;
+  awayTeamId?: string;
 }) {
   const { t, localize } = useI18n();
 
   const latestSeconds = liveMinute === undefined ? null : Math.max(...events.map((e) => e.minuteSeconds), 0);
   const openClip = (comment: Comment) => (onOpenClip ? onOpenClip(comment) : undefined);
+
+  // "Goal — Cole Palmer" on its own never said what the goal DID to the match.
+  // The score beside each goal is a prefix count of the timeline's own goals,
+  // credited to the side each event names (src/lib/timelineScore.ts), so a
+  // goal reads "1–0" the moment it lands rather than leaving the reader to
+  // scroll up to the scoreboard.
+  const { byGoal } = useMemo(
+    () => runningScore(events, homeTeamId ?? "", awayTeamId ?? ""),
+    [events, homeTeamId, awayTeamId],
+  );
 
   return (
     <ol className="relative space-y-3 ps-10">
@@ -136,6 +152,7 @@ export function TimelineList({
 
       {events.map((event, index) => {
         const isGoal = event.type === "goal";
+        const goalScore = byGoal.get(event.id);
         const mark = eventMark(event.type, event.description);
         const club = event.teamId ? teamColor?.[event.teamId] : undefined;
         const isNewestLive =
@@ -190,6 +207,11 @@ export function TimelineList({
                     {event.minuteDisplay}
                   </Num>
                   <Chip tone={isGoal ? "volt" : "muted"}>{t(typeKey[event.type])}</Chip>
+                  {/* The scoreline this goal produced. Always home–away, so the
+                      number reads the same whichever side scored it. */}
+                  {goalScore ? (
+                    <Num className="text-sm font-black text-volt">{formatScore(goalScore)}</Num>
+                  ) : null}
                   {/* The crowd thread on this moment — surfaced, not buried. */}
                   {count > 0 ? (
                     <span className="ms-auto inline-flex items-center gap-1 text-[11px] font-bold text-gold">
