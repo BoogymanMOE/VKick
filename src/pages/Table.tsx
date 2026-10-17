@@ -215,35 +215,18 @@ export default function Table() {
                 ) : null}
 
                 {view === "actual" ? (
-                  <div className="overflow-x-auto">
-                    <div className="min-w-[640px] overflow-hidden rounded-card border border-line bg-surface">
-                      <div
-                        aria-hidden="true"
-                        className="grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
-                      >
-                        <span>{t("table.rank")}</span>
-                        <span>{t("table.team")}</span>
-                        <span className="text-end">{t("table.played")}</span>
-                        <span className="text-end">{t("table.w")}</span>
-                        <span className="text-end">{t("table.d")}</span>
-                        <span className="text-end">{t("table.l")}</span>
-                        <span className="text-end">{t("table.gf")}</span>
-                        <span className="text-end">{t("table.ga")}</span>
-                        <span className="text-end">{t("table.gd")}</span>
-                        <span className="text-end">{t("table.pts")}</span>
-                        <span className="text-end">{t("table.form")}</span>
-                      </div>
-                      <ul className="divide-y divide-line">
-                        {rows.map((row, index) => (
-                          <StandingItem
-                            key={row.team.id}
-                            row={row}
-                            index={index}
-                            mine={isFavorite(row.team.id)}
-                          />
-                        ))}
-                      </ul>
-                    </div>
+                  <div className="overflow-hidden rounded-card border border-line bg-surface">
+                    <StandingsHeader />
+                    <ul className="divide-y divide-line">
+                      {rows.map((row, index) => (
+                        <StandingItem
+                          key={row.team.id}
+                          row={row}
+                          index={index}
+                          mine={isFavorite(row.team.id)}
+                        />
+                      ))}
+                    </ul>
                   </div>
                 ) : null}
               </>
@@ -400,13 +383,45 @@ function BrowseContent() {
   );
 }
 
+/**
+ * Six columns — Rank, Team, P, GD, Pts, Form — across a 390px phone. The old
+ * eleven-column grid carried W/D/L and GF/GA too, needed `min-w-[640px]` and
+ * pushed Pts and Form off-screen behind a sideways scroll; those extra figures
+ * live on the club page's Stats tab. The width string must stay ONE complete
+ * literal so Tailwind can see it: 1.5rem rank, flexible team, then 1.75/2/2.25/3rem.
+ */
+const COLS = "grid-cols-[1.5rem_minmax(0,1fr)_1.75rem_2rem_2.25rem_3rem]";
+
+function StandingsHeader() {
+  const { t } = useI18n();
+  return (
+    <div
+      aria-hidden="true"
+      className={cx(
+        "grid",
+        COLS,
+        "gap-2 border-b border-line bg-elevated px-3 py-2 text-xs font-bold text-ink-3",
+      )}
+    >
+      <span>{t("table.rank")}</span>
+      <span>{t("table.team")}</span>
+      <span className="text-end">{t("table.played")}</span>
+      <span className="text-end">{t("table.gd")}</span>
+      <span className="text-end">{t("table.pts")}</span>
+      <span className="text-end">{t("table.form")}</span>
+    </div>
+  );
+}
+
 function StandingItem({ row, index, mine }: { row: StandingRow; index: number; mine: boolean }) {
   const { localize } = useI18n();
   const gd = (row.goalsFor ?? 0) - (row.goalsAgainst ?? 0);
   return (
     <li
       className={cx(
-        "list-in relative grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] items-center gap-2 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
+        "list-in relative grid",
+        COLS,
+        "items-center gap-2 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
         mine ? "bg-elevated" : "hover:bg-elevated/60",
       )}
       style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
@@ -428,11 +443,6 @@ function StandingItem({ row, index, mine }: { row: StandingRow; index: number; m
         {mine ? <StarFilledIcon className="h-3 w-3 flex-none text-volt" /> : null}
       </Link>
       <Num className="text-end text-xs text-ink-3">{row.played ?? "–"}</Num>
-      <Num className="text-end text-xs text-ink-3">{row.wins ?? "–"}</Num>
-      <Num className="text-end text-xs text-ink-3">{row.draws ?? "–"}</Num>
-      <Num className="text-end text-xs text-ink-3">{row.losses ?? "–"}</Num>
-      <Num className="text-end text-xs text-ink-3">{row.goalsFor ?? "–"}</Num>
-      <Num className="text-end text-xs text-ink-3">{row.goalsAgainst ?? "–"}</Num>
       <Num className={cx("text-end text-xs", gd >= 0 ? "text-ink-2" : "text-ink-3")}>
         {gd > 0 ? `+${gd}` : gd}
       </Num>
@@ -464,7 +474,7 @@ function FormStrip({ form }: { form: string }) {
       role="img"
       aria-label={`${t("table.form")}: ${label}`}
       dir="ltr"
-      className="flex flex-none gap-px text-[9px] font-black leading-none"
+      className="flex flex-none gap-0.5 text-[11px] font-black leading-none"
     >
       {results.map((result, index) => (
         <span
@@ -554,7 +564,7 @@ function ExpectedItem({
 }
 
 function CupView({ slug, rows }: { slug: string; rows: StandingRow[] }) {
-  const { t, localize } = useI18n();
+  const { localize } = useI18n();
   const { isFavorite } = useFavorites();
 
   if (rows.length > 0) {
@@ -569,30 +579,13 @@ function CupView({ slug, rows }: { slug: string; rows: StandingRow[] }) {
         {Array.from(groups.entries()).map(([groupName, groupRows]) => (
           <section key={groupName}>
             <SectionHeading title={localize(groupName)} />
-            <div className="overflow-x-auto">
-              <div className="min-w-[640px] overflow-hidden rounded-card border border-line bg-surface">
-                <div
-                  aria-hidden="true"
-                  className="grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
-                >
-                  <span>{t("table.rank")}</span>
-                  <span>{t("table.team")}</span>
-                  <span className="text-end">{t("table.played")}</span>
-                  <span className="text-end">{t("table.w")}</span>
-                  <span className="text-end">{t("table.d")}</span>
-                  <span className="text-end">{t("table.l")}</span>
-                  <span className="text-end">{t("table.gf")}</span>
-                  <span className="text-end">{t("table.ga")}</span>
-                  <span className="text-end">{t("table.gd")}</span>
-                  <span className="text-end">{t("table.pts")}</span>
-                  <span className="text-end">{t("table.form")}</span>
-                </div>
-                <ul className="divide-y divide-line">
-                  {groupRows.map((row, index) => (
-                    <StandingItem key={row.team.id} row={row} index={index} mine={isFavorite(row.team.id)} />
-                  ))}
-                </ul>
-              </div>
+            <div className="overflow-hidden rounded-card border border-line bg-surface">
+              <StandingsHeader />
+              <ul className="divide-y divide-line">
+                {groupRows.map((row, index) => (
+                  <StandingItem key={row.team.id} row={row} index={index} mine={isFavorite(row.team.id)} />
+                ))}
+              </ul>
             </div>
           </section>
         ))}
