@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Bot, InlineKeyboard, InputFile } from "grammy";
 import { getDb, all, run, get } from "../db/index.js";
-import { asPushKind, isOptedOut, shouldSkipPredictionPush } from "../notifications.js";
+import { asPushKind, isOptedOut, shouldSkipPredictionPush, shouldSkipRatingsPush } from "../notifications.js";
 import {
   asPushLang,
   botCommandMenu,
@@ -307,7 +307,11 @@ async function drainPushes(): Promise<void> {
       // mute it is hidden — those rows are retired as sent-without-delivery
       // rather than delivered late if the flag ever comes back.
       const kind = asPushKind(row.kind);
-      if (shouldSkipPredictionPush(kind) || isOptedOut(db, row.telegram_id, kind)) {
+      if (
+        shouldSkipPredictionPush(kind) ||
+        shouldSkipRatingsPush(kind) ||
+        isOptedOut(db, row.telegram_id, kind)
+      ) {
         run(db, "UPDATE bot_push_queue SET sent_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
         continue;
       }

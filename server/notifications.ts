@@ -36,7 +36,7 @@ import {
   type PushLang,
 } from "./messages.js";
 import { lineupPublished } from "./predictions/window.js";
-import { predictionsEnabled } from "./features.js";
+import { predictionsEnabled, ratingsEnabled } from "./features.js";
 
 /** Every kind of push the app sends. Also the dedupe stage for matchday pushes. */
 export type PushKind = "goal" | "lineup" | "lock" | "halftime" | "ratings";
@@ -62,6 +62,16 @@ export function isPredictionPush(kind: PushKind): boolean {
  */
 export function shouldSkipPredictionPush(kind: PushKind): boolean {
   return !predictionsEnabled() && PREDICTION_KINDS.has(kind);
+}
+
+/**
+ * The rating-window push belongs to the (currently hidden) player-ratings
+ * feature. With `RATINGS_ENABLED` off there is nowhere to spend the rating
+ * cards, and the Profile switch that muted it is hidden too — so it is dropped
+ * at the emit site AND at send time, exactly like the prediction kinds.
+ */
+export function shouldSkipRatingsPush(kind: PushKind): boolean {
+  return !ratingsEnabled() && kind === "ratings";
 }
 
 /**
@@ -377,7 +387,7 @@ export function queueMatchdayAlerts(db: DB, now: Date = new Date()): number {
  * same club each get their own wording.
  */
 function emit(db: DB, matchId: string, stage: PushKind, copy: (lang: PushLang) => string): number {
-  if (shouldSkipPredictionPush(stage)) return 0;
+  if (shouldSkipPredictionPush(stage) || shouldSkipRatingsPush(stage)) return 0;
   let sent = 0;
   for (const r of matchRecipients(db, matchId, stage)) {
     if (!claimNotification(db, r.telegramId, matchId, stage)) continue;

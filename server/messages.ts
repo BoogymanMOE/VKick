@@ -18,7 +18,7 @@
  * it here would mean two tables drifting apart. Numbers in interpolated values
  * (scores, minutes) stay Latin too, matching how the app renders scorelines.
  */
-import { predictionsEnabled } from "./features.js";
+import { predictionsEnabled, ratingsEnabled } from "./features.js";
 export type PushLang = "en" | "fa";
 
 /** Anything that isn't `fa` is English — same default as the `users` column. */
@@ -100,16 +100,30 @@ export function ratingsPush(lang: PushLang, v: MatchPushVars): string {
  */
 
 export function botStartText(lang: PushLang): string {
-  // With predictions gated off the welcome must not promise them: the buttons,
-  // tabs and leaderboards it names no longer exist in the app.
-  if (!predictionsEnabled()) {
-    return lang === "fa"
-      ? "به Vkick خوش آمدی! ⚽\n\nباشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، نتایج زنده را ببین، جدول‌ها را نگاه کن و به بازیکنان تأثیرگذار امتیاز بده.\n\nبرای شروع دکمه زیر را بزن."
-      : "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, follow live scores, check every table, and rate the players who mattered most.\n\nTap below to get started.";
+  // Gated features must not be promised in the welcome: with a flag off the
+  // buttons, tabs and screens the copy names do not exist in the app.
+  const predict = predictionsEnabled();
+  const rate = ratingsEnabled();
+
+  if (lang === "fa") {
+    const line = predict
+      ? rate
+        ? "باشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، ترکیب و تعویض و شوت و بازیکن برتر هر بازی را پیش‌بینی کن، در جدول امتیازهای فصل بالا برو و به بازیکنان تأثیرگذار امتیاز بده."
+        : "باشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، ترکیب و تعویض و شوت و بازیکن برتر هر بازی را پیش‌بینی کن و در جدول امتیازهای فصل بالا برو."
+      : rate
+        ? "باشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، نتایج زنده را ببین، جدول‌ها را نگاه کن و به بازیکنان تأثیرگذار امتیاز بده."
+        : "باشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، نتایج زنده را ببین و جدول‌ها را نگاه کن.";
+    return `به Vkick خوش آمدی! ⚽\n\n${line}\n\nبرای شروع دکمه زیر را بزن.`;
   }
-  return lang === "fa"
-    ? "به Vkick خوش آمدی! ⚽\n\nباشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، ترکیب و تعویض و شوت و بازیکن برتر هر بازی را پیش‌بینی کن، در جدول امتیازهای فصل بالا برو و به بازیکنان تأثیرگذار امتیاز بده.\n\nبرای شروع دکمه زیر را بزن."
-    : "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, predict lineups, subs, shots and standout players, climb the season leaderboards, and rate the players who mattered most.\n\nTap below to get started.";
+
+  const line = predict
+    ? rate
+      ? "Follow your favorite clubs and leagues, predict lineups, subs, shots and standout players, climb the season leaderboards, and rate the players who mattered most."
+      : "Follow your favorite clubs and leagues, predict lineups, subs, shots and standout players, and climb the season leaderboards."
+    : rate
+      ? "Follow your favorite clubs and leagues, follow live scores, check every table, and rate the players who mattered most."
+      : "Follow your favorite clubs and leagues, follow live scores and check every table.";
+  return `Welcome to Vkick! ⚽\n\n${line}\n\nTap below to get started.`;
 }
 
 export function botNoAccountText(lang: PushLang): string {

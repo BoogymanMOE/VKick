@@ -22,8 +22,14 @@ import {
   queueGoalAlerts,
   queueMatchdayAlerts,
   shouldSkipPredictionPush,
+  shouldSkipRatingsPush,
 } from "../server/notifications.js";
-import { predictionsEnabled, setPredictionsEnabledForTest } from "../server/features.js";
+import {
+  predictionsEnabled,
+  ratingsEnabled,
+  setPredictionsEnabledForTest,
+  setRatingsEnabledForTest,
+} from "../server/features.js";
 import { asPushLang, botCommandMenu, botStartText } from "../server/messages.js";
 
 /** Fixed clock: the producers take `now`, so every window is deterministic. */
@@ -612,10 +618,60 @@ function testPredictionPushesGatedOff() {
   db.close();
 }
 
+/**
+ * RATINGS_ENABLED=false retires the rating-window push: a finished match queues
+ * nothing, a row already in the queue is skipped at send time, and goal alerts
+ * keep working. Turning the flag back on restores the old behaviour.
+ */
+function testRatingsPushesGatedOff() {
+  const db = tempDb();
+  seed(db);
+  // A finished match inside the 6h rating window is exactly what used to queue
+  // the "rate the players" push.
+  addMatch(db, "m_ft", "finished", minutesFromNow(-120), { home: 2, away: 1 });
+
+  setRatingsEnabledForTest(false);
+  assert.equal(ratingsEnabled(), false, "test seam puts the flag off");
+
+  assert.equal(queueMatchdayAlerts(db, NOW), 0, "flag off queues no rating push");
+  assert.deepEqual(idsOf(db, "ratings"), [], "no rating-window pushes");
+  // Nothing was claimed, so turning the flag back on can still send it.
+  assert.equal(shouldSkipRatingsPush("ratings"), true, "queued ratings rows are skipped when off");
+  assert.equal(shouldSkipRatingsPush("goal"), false, "goal rows are never skipped by the ratings gate");
+
+  const goalsOff = queueGoalAlerts(db, [
+    { matchId: "m_ft", scoringTeamId: "H", scorerName: "Saka", minute: "55", homeScore: 2, awayScore: 1 },
+  ]);
+  assert.equal(goalsOff, 3, "goal alerts still deliver with ratings off");
+  assert.deepEqual(idsOf(db, "goal"), ["u1", "u2", "u3"]);
+
+  // Bot copy: the welcome no longer promises rating players.
+  assert.ok(
+    !/\brat(e|ing)\b|\bratings\b/i.test(botStartText("en")),
+    `welcome must not promise ratings: ${botStartText("en")}`,
+  );
+  assert.ok(
+    !botStartText("fa").includes("امتیاز بده"),
+    `Persian welcome must not promise ratings: ${botStartText("fa")}`,
+  );
+
+  // Flag on: the rating-window push returns for the same fixture.
+  setRatingsEnabledForTest(true);
+  assert.equal(shouldSkipRatingsPush("ratings"), false, "send-time gate opens with the flag on");
+  assert.equal(queueMatchdayAlerts(db, NOW), 3, "flag on queues the rating-window push");
+  assert.deepEqual(idsOf(db, "ratings"), ["u1", "u2", "u3"], "ratings push is back");
+  assert.ok(/\brat(e|ing)\b/i.test(botStartText("en")), "welcome promises ratings again");
+
+  setRatingsEnabledForTest(null);
+  db.close();
+}
+
 export async function runNotificationTests(): Promise<void> {
-  // The legacy-behaviour tests below assert that prediction pushes fire; they
-  // run with the flag on, and testPredictionPushesGatedOff covers the off state.
+  // The legacy-behaviour tests below assert that prediction and rating pushes
+  // fire; they run with both flags on, and the two gated-off tests below cover
+  // the hidden states.
   setPredictionsEnabledForTest(true);
+  setRatingsEnabledForTest(true);
   testDedupeAndBothClubs();
   testPreferenceGates();
   testWindowGates();
@@ -627,10 +683,12 @@ export async function runNotificationTests(): Promise<void> {
   testKindColumnBackfill();
   testDeliverabilityFilter();
   testPredictionPushesGatedOff();
+  testRatingsPushesGatedOff();
   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
   console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
   console.log("  notifications: followed leagues deliver stages + goals, deduped against clubs OK");
   console.log("  notifications: guest/pwd/dev accounts never enter the push queue OK");
   console.log("  notifications: PREDICTIONS_ENABLED gates lineup/lock/halftime, goals+ratings survive OK");
+  console.log("  notifications: RATINGS_ENABLED gates the rating-window push, goals survive OK");
 }
