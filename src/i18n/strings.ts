@@ -173,7 +173,7 @@ export const strings = {
     "profile.notificationsOff": "Off",
     "profile.about": "About",
     "profile.aboutBody":
-      "Follow your clubs and leagues, follow live scores and every table, and rate the players who mattered.",
+      "Follow your clubs and leagues, and catch live scores and every table.",
     "profile.env": "Runtime",
     "common.close": "Close",
     "common.cancel": "Cancel",
@@ -270,7 +270,7 @@ export const strings = {
     "referral.copy": "Copy",
     "referral.copied": "Code copied",
     "referral.share": "Share to Telegram",
-    "referral.shareText": "Join me on Vkick! ⚽ Live scores, tables and player ratings.",
+    "referral.shareText": "Join me on Vkick! ⚽ Live scores, tables and fixtures.",
     "referral.bannerTitle": "Invite friends & earn points!",
     "referral.bannerCta": "Invite",
     "referral.statInvited": "{invited} friend(s) joined",
@@ -328,7 +328,7 @@ export const strings = {
     "profile.notifRatings": "Rating window",
     "profile.notifRatingsHint": "When a match opens for crowd ratings",
     "profile.haptics": "Haptics",
-    "profile.hapticsHint": "Light feedback on pins, ratings and tabs",
+    "profile.hapticsHint": "Light feedback on taps and selections",
     "profile.version": "Version",
     "profile.platformTelegram": "Telegram Mini App",
     "profile.platformWeb": "Web",
@@ -336,7 +336,7 @@ export const strings = {
     "whatsNew.dismiss": "Got it",
     "profile.resetLocal": "Reset local settings",
     "profile.resetDone": "Local data cleared",
-    "profile.resetHint": "Clears pins, ratings, comments and picks on this device",
+    "profile.resetHint": "Clears pins, comments and saved preferences on this device",
     "profile.signedIn": "Signed in via Telegram",
     "profile.linkTelegram": "Open in Telegram to link your account",
     "profile.linked": "Linked",
@@ -354,7 +354,7 @@ export const strings = {
     "profile.deleteHint": "Removes your account and everything in it — permanently",
     "profile.deleteConfirmTitle": "Delete account?",
     "profile.deleteConfirmBody":
-      "This permanently deletes your account, favorites, ratings and comments. It cannot be undone, and the data cannot be recovered.",
+      "This permanently deletes your account, favorites and everything saved in it. It cannot be undone, and the data cannot be recovered.",
     "profile.deleteConfirm": "Delete forever",
     "profile.deleting": "Deleting…",
     "profile.legal": "Legal",
@@ -363,7 +363,7 @@ export const strings = {
     "legal.updated": "Last updated: October 2026",
     "legal.privacy.stored.title": "What we store",
     "legal.privacy.stored.body":
-      "Your sign-in identity (Telegram or username), display name, language, favorite clubs and leagues, player ratings, comments, notification preferences, invite codes, and anything you saved earlier in the app. Nothing else.",
+      "Your sign-in identity (Telegram or username), display name, language, favorite clubs and leagues, any comments and player scores you submitted earlier, notification preferences, invite codes, and anything you saved earlier in the app. Nothing else.",
     "legal.privacy.where.title": "Where it lives",
     "legal.privacy.where.body":
       "On this app's own server, in a single database. We don't sell or share your data.",
@@ -374,18 +374,18 @@ export const strings = {
     "legal.privacy.ads.body": "This app displays ads provided by A-ADS and Tapsell to support development.",
     "legal.privacy.delete.title": "Deleting your data",
     "legal.privacy.delete.body":
-      "Profile → Delete account removes your account and everything in it — favorites, ratings, comments and any earlier activity — immediately and permanently.",
+      "Profile → Delete account removes your account and everything in it — favorites, comments you posted earlier and any earlier activity — immediately and permanently.",
     "legal.privacy.contact.title": "Contact",
     "legal.privacy.contact.body": "Questions or data requests: loslocrian@gmail.com",
     "legal.terms.use.title": "Using the app",
     "legal.terms.use.body":
-      "Vkick is a football companion for following clubs, checking scores and tables, and rating players. Use it as a fan — don't abuse, scrape or automate it.",
+      "Vkick is a football companion for following clubs, checking scores, fixtures and tables. Use it as a fan — don't abuse, scrape or automate it.",
     "legal.terms.content.title": "Your content",
     "legal.terms.content.body":
-      "Comments and ratings you post are yours, but you give us permission to display them in the app. Don't post unlawful, hateful or spam content, and expect reported content to be removed.",
+      "Comments you post are yours, but you give us permission to display them in the app. Don't post unlawful, hateful or spam content, and expect reported content to be removed.",
     "legal.terms.espn.title": "Football data",
     "legal.terms.espn.body":
-      "Scores, fixtures and stats come from ESPN's public API and may be delayed, incomplete or wrong. Ratings are for fun and have no monetary value.",
+      "Scores, fixtures and stats come from ESPN's public API and may be delayed, incomplete or wrong.",
     "legal.terms.ads.title": "Ads",
     "legal.terms.ads.body":
       "Inside Telegram, sponsored cards may appear through Adsgram. They are always labelled as sponsored.",
@@ -431,7 +431,7 @@ export const strings = {
     "auth.createAccount": "Create account",
     "auth.username": "Username",
     "auth.displayName": "Display name",
-    "auth.displayNamePlaceholder": "Shown on comments and ratings",
+    "auth.displayNamePlaceholder": "Shown on your comments",
     "auth.createHint": "No email needed. You'll sign in with this username and password.",
     "auth.password": "Password",
     "auth.passwordPlaceholder": "8 or more characters",
@@ -782,7 +782,7 @@ export const strings = {
     "profile.notificationsOff": "خاموش",
     "profile.about": "درباره",
     "profile.aboutBody":
-      "باشگاه‌ها و لیگ‌هایت را دنبال کن، نتایج زنده و همه جدول‌ها را ببین و به بازیکنان مؤثر امتیاز بده.",
+      "باشگاه‌ها و لیگ‌هایت را دنبال کن و نتایج زنده و همه جدول‌ها را ببین.",
     "profile.env": "محیط اجرا",
     "common.close": "بستن",
     "common.cancel": "انصراف",
@@ -880,7 +880,7 @@ export const strings = {
     "referral.copied": "کد کپی شد",
     "referral.share": "اشتراک در تلگرام",
     "referral.shareText":
-      "من رو در وی‌کیک همراهی کن! ⚽ نتایج زنده، جدول‌ها و امتیاز بازیکنان.",
+      "من رو در وی‌کیک همراهی کن! ⚽ نتایج زنده، جدول‌ها و برنامه بازی‌ها.",
     "referral.bannerTitle": "دعوت دوستان و گرفتن امتیاز!",
     "referral.bannerCta": "دعوت",
     "referral.statInvited": "{invited} دوست پیوست",
@@ -938,7 +938,7 @@ export const strings = {
     "profile.notifRatings": "پنجره امتیازدهی",
     "profile.notifRatingsHint": "وقتی یک بازی برای امتیازدهی باز می‌شود",
     "profile.haptics": "لرزش لمسی",
-    "profile.hapticsHint": "بازخورد لمس روی سنجاق‌ها، امتیازها و تب‌ها",
+    "profile.hapticsHint": "بازخورد لمس کوتاه روی انتخاب‌ها و تب‌ها",
     "profile.version": "نسخه",
     "profile.platformTelegram": "مینی‌اپ تلگرام",
     "profile.platformWeb": "وب",
@@ -946,7 +946,7 @@ export const strings = {
     "whatsNew.dismiss": "روشن است",
     "profile.resetLocal": "بازنشانی تنظیمات محلی",
     "profile.resetDone": "داده‌های محلی پاک شد",
-    "profile.resetHint": "سنجاق‌ها، امتیازها، دیدگاه‌ها و انتخاب‌های این دستگاه را پاک می‌کند",
+    "profile.resetHint": "سنجاق‌ها، دیدگاه‌ها و تنظیمات ذخیره‌شده این دستگاه را پاک می‌کند",
     "profile.signedIn": "ورود با تلگرام",
     "profile.linkTelegram": "برای وصل کردن حسابت، برنامه رو توی تلگرام باز کن",
     "profile.linked": "متصل",
@@ -968,7 +968,7 @@ export const strings = {
     "profile.deleteHint": "حساب و همه محتوای آن برای همیشه پاک می‌شود",
     "profile.deleteConfirmTitle": "حساب حذف شود؟",
     "profile.deleteConfirmBody":
-      "این کار حساب، تیم‌های محبوب، امتیازها و دیدگاه‌هایت را برای همیشه پاک می‌کند. قابل بازگشت نیست و داده‌ها بازیابی نمی‌شوند.",
+      "این کار حساب، تیم‌های محبوب و همه چیز ذخیره‌شده در آن را برای همیشه پاک می‌کند. قابل بازگشت نیست و داده‌ها بازیابی نمی‌شوند.",
     "profile.deleteConfirm": "حذف برای همیشه",
     "profile.deleting": "در حال حذف…",
     "profile.legal": "حقوقی",
@@ -977,7 +977,7 @@ export const strings = {
     "legal.updated": "آخرین به‌روزرسانی: مهر ۱۴۰۵",
     "legal.privacy.stored.title": "چه چیزی ذخیره می‌کنیم",
     "legal.privacy.stored.body":
-      "هویت ورودت (تلگرام یا نام کاربری)، نام نمایشی، زبان، باشگاه‌ها و لیگ‌های محبوب، امتیازهایی که به بازیکنان می‌دهی، دیدگاه‌ها، تنظیمات اعلان، کدهای دعوت و هر چیزی که پیش‌تر در برنامه ذخیره کرده‌ای. چیز دیگری نه.",
+      "هویت ورودت (تلگرام یا نام کاربری)، نام نمایشی، زبان، باشگاه‌ها و لیگ‌های محبوب، دیدگاه‌ها و نمره‌هایی که پیش‌تر به بازیکنان داده‌ای، تنظیمات اعلان، کدهای دعوت و هر چیزی که پیش‌تر در برنامه ذخیره کرده‌ای. چیز دیگری نه.",
     "legal.privacy.where.title": "کجا نگه داشته می‌شود",
     "legal.privacy.where.body":
       "روی سرور همین برنامه، در یک پایگاه داده. داده‌ات را نمی‌فروشیم و به اشتراک نمی‌گذاریم.",
@@ -989,18 +989,18 @@ export const strings = {
       "این برنامه برای حمایت از توسعه، تبلیغاتی را که A-ADS و Tapsell ارائه می‌دهند نمایش می‌دهد.",
     "legal.privacy.delete.title": "حذف داده‌ها",
     "legal.privacy.delete.body":
-      "پروفایل ← حذف حساب، حسابت و همه‌چیز درونش — باشگاه‌های محبوب، امتیازها، دیدگاه‌ها و هر فعالیت قبلی — را فوراً و برای همیشه پاک می‌کند.",
+      "پروفایل ← حذف حساب، حسابت و همه‌چیز درونش — باشگاه‌های محبوب، دیدگاه‌هایت و هر فعالیت قبلی — را فوراً و برای همیشه پاک می‌کند.",
     "legal.privacy.contact.title": "تماس",
     "legal.privacy.contact.body": "پرسش یا درخواست داده: loslocrian@gmail.com",
     "legal.terms.use.title": "استفاده از برنامه",
     "legal.terms.use.body":
-      "وی‌کیک یک همراه فوتبالی برای دنبال‌کردن باشگاه‌ها، دیدن نتایج و جدول‌ها و امتیازدادن به بازیکنان است. مثل یک هوادار از آن استفاده کن — سوءاستفاده، استخراج داده یا خودکارسازی نکن.",
+      "وی‌کیک یک همراه فوتبالی برای دنبال‌کردن باشگاه‌ها و دیدن نتایج، برنامه بازی‌ها و جدول‌هاست. مثل یک هوادار از آن استفاده کن — سوءاستفاده، استخراج داده یا خودکارسازی نکن.",
     "legal.terms.content.title": "محتوای شما",
     "legal.terms.content.body":
-      "دیدگاه‌ها و امتیازهایی که می‌گذاری مال خودت است، اما به ما اجازه می‌دهی آن‌ها را در برنامه نمایش دهیم. محتوای غیرقانونی، نفرت‌پراکن یا اسپم نگذار و بدان محتوای گزارش‌شده حذف می‌شود.",
+      "دیدگاه‌هایی که می‌گذاری مال خودت است، اما به ما اجازه می‌دهی آن‌ها را در برنامه نمایش دهیم. محتوای غیرقانونی، نفرت‌انگیز یا اسپم نگذار و بدان محتوای گزارش‌شده حذف می‌شود.",
     "legal.terms.espn.title": "داده فوتبال",
     "legal.terms.espn.body":
-      "نتایج، برنامه بازی‌ها و آمار از API عمومی ESPN می‌آید و ممکن است با تأخیر، ناقص یا نادرست باشد. امتیازها فقط برای سرگرمی‌اند و ارزش مالی ندارند.",
+      "نتایج، برنامه بازی‌ها و آمار از API عمومی ESPN می‌آید و ممکن است با تأخیر، ناقص یا نادرست باشد.",
     "legal.terms.ads.title": "تبلیغات",
     "legal.terms.ads.body":
       "داخل تلگرام، کارت‌های اسپانسری ممکن است از طریق Adsgram نمایش داده شوند. همیشه با برچسب اسپانسری مشخص می‌شوند.",
@@ -1033,7 +1033,7 @@ export const strings = {
     "auth.createAccount": "ساخت حساب",
     "auth.username": "نام کاربری",
     "auth.displayName": "نام نمایشی",
-    "auth.displayNamePlaceholder": "در دیدگاه‌ها و امتیازها نمایش داده می‌شود",
+    "auth.displayNamePlaceholder": "در دیدگاه‌هایت نمایش داده می‌شود",
     "auth.createHint": "ایمیل لازم نیست. با همین نام کاربری و گذرواژه وارد می‌شوی.",
     "auth.password": "گذرواژه",
     "auth.passwordPlaceholder": "۸ نویسه یا بیشتر",

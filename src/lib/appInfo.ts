@@ -28,8 +28,8 @@ export const WHATS_NEW: ReleaseNote[] = [
     version: "0.1.0",
     date: "2026-09-01",
     lines: [
-      "Vkick is live: follow your clubs, call every match before kickoff,",
-      "rate the players after the whistle, and climb the season boards.",
+      "Vkick is live: follow your clubs, catch every matchday,",
+      "and check every table as the season unfolds.",
     ],
   },
 ];

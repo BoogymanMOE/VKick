@@ -1,7 +1,7 @@
 {
   "name": "Vkick",
   "short_name": "Vkick",
-  "description": "Follow your clubs, check live scores and tables, rate the eye test.",
+  "description": "Follow your clubs, check live scores and tables.",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#081613",
