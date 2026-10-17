@@ -1,0 +1,4266 @@
+VKICK - THE CODE OF EVERY PAGE EXCEPT MATCHDAY
+================================================================================================
+
+Every routed screen of the app except Matches.tsx (the Matchday feed).
+Each section is the complete file, copied verbatim from the project - nothing
+is summarised or retyped. Stack: React 18 + TypeScript, Tailwind v4 over the
+design tokens in tokens.css, TanStack Query for server state, React Router
+(HashRouter, so URLs are /#/table etc.), Express + SQLite behind it.
+
+Contents
+
+   1. Login            src/pages/Login.tsx   /login
+   2. Onboarding       src/pages/Onboarding.tsx   /onboarding
+   3. MatchDetail      src/pages/MatchDetail.tsx   /match/:id
+   4. TeamPage         src/pages/TeamPage.tsx   /team/:id
+   5. Cups             src/pages/Cups.tsx   /cups
+   6. Ratings          src/pages/Ratings.tsx   /ratings
+   7. Table            src/pages/Table.tsx   /table
+   8. Profile          src/pages/Profile.tsx   /profile
+   9. Admin            src/pages/Admin.tsx   /admin
+  10. Privacy + Terms  src/pages/Legal.tsx   /privacy, /terms
+  11. NotFound         src/pages/NotFound.tsx   *
+      -- Routing          src/App.tsx    (how the pages are wired)
+
+================================================================================================
+
+PAGE 1/11  -  Login
+route: /login
+file:  src/pages/Login.tsx  (252 lines)
+================================================================================================
+
+import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { LanguageToggle } from "../components/TopBar";
+import { Button, Card, Segmented } from "../components/ui";
+import { useAuth } from "../hooks/authContext";
+import { useI18n } from "../i18n/context";
+import { serverErrorKey } from "../lib/api";
+import { isTelegram, haptic, telegramDisplayName } from "../lib/telegram";
+import type { StringKey } from "../i18n/strings";
+
+/**
+ * The entry screen. "Enter" silently creates (or reuses) an account — inside
+ * Telegram that's the Telegram identity, on the web a persistent guest
+ * account for this device. Username sign-in and registration (username +
+ * password) sit behind a link for people returning from another device or
+ * creating a roaming account.
+ */
+export default function Login() {
+  const { t } = useI18n();
+  const { user, isLoading, enterApp, loginWithUsername, registerWithUsername } = useAuth();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from ?? "/";
+  const [showUsername, setShowUsername] = useState(false);
+  // Sign-in and registration are explicit, separate modes: an unknown
+  // username on sign-in is NO_ACCOUNT (never auto-created — a typo must not
+  // silently mint a new account).
+  const [mode, setMode] = useState<"signin" | "register">("signin");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [error, setError] = useState<StringKey | null>(null);
+  const [busy, setBusy] = useState(false);
+  // The Telegram profile, read once the SDK is present — the continue button
+  // says who is signing in instead of a generic "Enter".
+  const [tgName, setTgName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isTelegram()) return;
+    void telegramDisplayName().then(setTgName);
+  }, []);
+
+  // Already signed in (session survived a reload): skip the screen.
+  if (user) {
+    return <Navigate to={from} replace />;
+  }
+
+  const enter = async () => {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    haptic("light");
+    try {
+      await enterApp();
+      // Once the user row lands, the `if (user)` branch above redirects to `from`.
+    } catch (err) {
+      // Coded failures (BAD_DEVICE_ID, TOO_MANY_REQUESTS…) map to localized
+      // messages; only truly unexpected throws land on common.error.
+      setError(serverErrorKey(err) as StringKey);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitUsername = async (event: FormEvent) => {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    haptic("light");
+    try {
+      if (mode === "register") {
+        await registerWithUsername(username.trim(), password, displayName.trim(), true);
+      } else {
+        await loginWithUsername(username.trim(), password, true);
+      }
+      // Once the user row lands, the `if (user)` branch above redirects to `from`.
+    } catch (err) {
+      // Server codes (INVALID_CREDENTIALS / USERNAME_TAKEN / BAD_USERNAME /
+      // BAD_PASSWORD…) map to localized inline messages, never the generic
+      // fallback.
+      setError(serverErrorKey(err) as StringKey);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const inputClass =
+    "min-h-12 w-full rounded-card border border-line bg-base px-3.5 text-sm text-ink placeholder:text-ink-3 focus:border-volt focus:outline-none focus:ring-4 focus:ring-[color-mix(in_srgb,var(--volt)_16%,transparent)]";
+
+  return (
+    <div className="floodlight flex min-h-[100svh] flex-col">
+      <header className="pad-safe-top">
+        <div className="mx-auto flex w-full max-w-[560px] justify-end px-[var(--space-page-x,16px)] py-3">
+          <LanguageToggle />
+        </div>
+      </header>
+
+      {/* The fixed A-ADS ad slot overlaps this screen too (Login sits outside
+          AppShell, so there is no TabBar to offset it). The bottom padding reserves
+          the ad slot height plus safe-area so the legal line stays reachable. */}
+      <main
+        className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-5"
+        style={{ paddingBottom: "calc(40px + var(--ad-slot-h, 100px) + max(env(safe-area-inset-bottom), 8px))" }}
+      >
+        {/* Hero: the mark over the wordmark, over the floodlit wash. */}
+        <section className="rise-in px-1 pb-10 text-center">
+          <img
+            src="/vkick-mark.svg"
+            alt=""
+            width={84}
+            height={84}
+            className="mx-auto mb-3 h-16 w-auto sm:h-[84px]"
+          />
+          <h1 className="font-num text-[clamp(2.25rem,11vw,3.25rem)] leading-tight font-black tracking-[-0.03em] text-ink">
+            {t("app.name")}
+          </h1>
+          <p className="mx-auto mt-2 max-w-[34ch] text-sm leading-relaxed text-ink-2">{t("auth.subtitle")}</p>
+        </section>
+
+        <Card className="rise-in p-4 sm:p-5" style={{ "--stagger": "70ms" } as CSSProperties}>
+          {showUsername ? (
+            <form onSubmit={submitUsername} className="space-y-3">
+              <Segmented
+                value={mode}
+                onChange={(next) => {
+                  setMode(next);
+                  setError(null);
+                }}
+                options={[
+                  { value: "signin", label: t("auth.signIn") },
+                  { value: "register", label: t("auth.register") },
+                ]}
+              />
+              <label className="block space-y-1">
+                <span className="label text-ink-2">{t("auth.username")}</span>
+                <input
+                  className={inputClass}
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  dir="ltr"
+                  maxLength={24}
+                  required
+                />
+              </label>
+
+              {mode === "register" ? (
+                <label className="block space-y-1">
+                  <span className="label text-ink-2">{t("auth.displayName")}</span>
+                  <input
+                    className={inputClass}
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    autoComplete="nickname"
+                    dir="auto"
+                    maxLength={40}
+                    placeholder={t("auth.displayNamePlaceholder")}
+                  />
+                </label>
+              ) : null}
+
+              <label className="block space-y-1">
+                <span className="label text-ink-2">{t("auth.password")}</span>
+                <input
+                  className={inputClass}
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={mode === "register" ? "new-password" : "current-password"}
+                  dir="ltr"
+                  maxLength={72}
+                  placeholder={t("auth.passwordPlaceholder")}
+                  required
+                />
+              </label>
+
+              {mode === "register" ? (
+                <p className="px-1 text-[11px] leading-relaxed text-ink-3">{t("auth.createHint")}</p>
+              ) : null}
+
+              {error ? (
+                <p
+                  className="rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
+                  role="alert"
+                >
+                  {t(error)}
+                </p>
+              ) : null}
+
+              <Button type="submit" className="w-full" disabled={busy || isLoading}>
+                {busy ? t("common.loading") : t(mode === "register" ? "auth.createAccount" : "auth.signIn")}
+              </Button>
+              <button
+                type="button"
+                className="inline-flex min-h-11 w-full items-center justify-center text-center label text-ink-3 transition-colors hover:text-volt"
+                onClick={() => {
+                  haptic("light");
+                  setShowUsername(false);
+                  setError(null);
+                }}
+              >
+                {t("auth.backToEnter")}
+              </button>
+            </form>
+          ) : (
+            <div className="space-y-3">
+              {error ? (
+                <p
+                  className="rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
+                  role="alert"
+                >
+                  {t(error)}
+                </p>
+              ) : null}
+
+              <Button className="w-full" onClick={() => void enter()} disabled={busy || isLoading}>
+                {busy || isLoading
+                  ? t("common.loading")
+                  : tgName
+                    ? t("auth.continueAs", { name: tgName })
+                    : t("auth.enter")}
+              </Button>
+
+              {isTelegram() ? (
+                <p className="px-2 text-center text-[11px] leading-relaxed text-ink-3">
+                  {tgName ? t("auth.telegramSignedHint") : t("auth.telegramHint")}
+                </p>
+              ) : null}
+
+              <button
+                type="button"
+                className="inline-flex min-h-11 w-full items-center justify-center text-center label text-ink-3 transition-colors hover:text-volt"
+                onClick={() => {
+                  haptic("light");
+                  setShowUsername(true);
+                  setError(null);
+                }}
+              >
+                {t("auth.haveAccount")}
+              </button>
+            </div>
+          )}
+        </Card>        <p
+          className="rise-in mt-6 px-1 text-center text-[11px] leading-relaxed text-ink-3"
+          style={{ "--stagger": "140ms" } as CSSProperties}>
+          {t("auth.legal")}
+        </p>
+      </main>
+    </div>
+  );
+}
+
+
+PAGE 2/11  -  Onboarding
+route: /onboarding
+file:  src/pages/Onboarding.tsx  (588 lines)
+================================================================================================
+
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { TopBar } from "../components/TopBar";
+import { LegalLinks } from "../components/LegalLinks";
+import { useToast } from "../components/toastContext";
+import { PanelSkeleton } from "../components/Skeletons";
+import { ErrorState, EmptyState } from "../components/ui";
+import { cx } from "../lib/cx";
+import { Button, Chip, Num, Segmented, TeamBadge } from "../components/ui";
+import { ArrowIcon, CheckIcon, CloseIcon, PencilIcon, StarFilledIcon, TargetIcon } from "../components/icons";
+import { useTeams, useCompetitions } from "../hooks/useApi";
+import {
+  MAX_FAVORITES,
+  MAX_FOLLOWED_LEAGUES,
+  MAX_INTERNATIONALS,
+  useFavorites,
+  useFollowedLeagues,
+} from "../hooks/useFavorites";
+import { useI18n } from "../i18n/context";
+import type { StringKey } from "../i18n/strings";
+import { serverErrorKey } from "../lib/api";
+import { haptic, selectionHaptic, notifyHaptic } from "../lib/telegram";
+import { buildPickerGroups, teamsInGroup } from "../lib/pickerGroups";
+
+const TOTAL_STEPS = 3;
+
+/** localStorage flag for the animated intro (separate from the picker gate). */
+const INTRO_KEY = "verdikick.introSeen";
+
+function introSeen() {
+  try {
+    return localStorage.getItem(INTRO_KEY) === "1";
+  } catch {
+    return true; // private mode: never show the intro rather than loop on it
+  }
+}
+
+/** The three ideas, in the order the product teaches them. */
+const SLIDES = [
+  { key: "follow", titleKey: "intro.follow.title", bodyKey: "intro.follow.body", Glyph: StarFilledIcon },
+  { key: "predict", titleKey: "intro.predict.title", bodyKey: "intro.predict.body", Glyph: TargetIcon },
+  { key: "rate", titleKey: "intro.rate.title", bodyKey: "intro.rate.body", Glyph: PencilIcon },
+] as const;
+
+/**
+ * First-run onboarding in the concept's order:
+ *   1. pick the favorite club (the anchor)
+ *   2. pick up to four more clubs
+ *   3. follow up to five leagues
+ * Each step is skippable except the first — the anchor club is the product.
+ */
+export default function Onboarding() {
+  const { t, localize } = useI18n();
+  const { push } = useToast();
+  const navigate = useNavigate();
+  const { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, toggleAndAnchor } =
+    useFavorites();
+  const followed = useFollowedLeagues();
+  const [intro, setIntro] = useState(() => !introSeen());
+  const [step, setStep] = useState(0);
+  const [saved, setSaved] = useState(false);
+
+  const teamsQuery = useTeams();
+  // Stable identity: `groupTeams` and the picker memos below depend on it.
+  const allTeams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data]);
+  const [group, setGroup] = useState<string>("PL");
+  // The tabs reach the cup-only clubs and national teams too, not just the
+  // big five — an onboarding flow that can only pick big-five clubs would
+  // silently make everything else in the catalog unfollowable.
+  const groupTeams = useMemo(() => teamsInGroup(allTeams, group), [allTeams, group]);
+
+  // Team-grid states: loading skeleton, error retry, or empty hint — never a
+  // silent blank grid while the data layer is still warming up or has gone
+  // quiet (fresh deploy, ESPN hiccup, cold cache).
+  function teamGridStates() {
+    if (teamsQuery.isLoading) {
+      return { kind: "loading" as const };
+    }
+    if (teamsQuery.isError) {
+      return {
+        kind: "error" as const,
+        retry: () => teamsQuery.refetch(),
+      };
+    }
+    if (allTeams.length === 0) {
+      return { kind: "empty" as const };
+    }
+    return { kind: "content" as const };
+  }
+
+  const compsQuery = useCompetitions();
+  const leagueComps = (compsQuery.data?.competitions ?? []).filter((c) => c.kind === "league");
+
+  // Favorite-team tabs are the big five plus Other/International only — the
+  // picker is a Top-5 surface (see lib/pickerGroups). The league-FOLLOWING
+  // step below still lists every league from the catalog.
+  const pickerGroups = useMemo(() => buildPickerGroups((key) => t(key)), [t]);
+
+  const anchorTeam = useMemo(() => allTeams.find((team) => team.id === anchorId), [allTeams, anchorId]);
+  const anchorName = useMemo(
+    () => (anchorTeam ? localize(anchorTeam.shortName) : ""),
+    [anchorTeam, localize],
+  );
+
+  function pickClub(team: (typeof allTeams)[number]) {
+    selectionHaptic();
+    if (isFavorite(team.id)) return;
+    // A changed pick un-saves the step: the Save button comes back so the
+    // written confirmation never names a team the user just swapped out.
+    setSaved(false);
+    if (count === 0) {
+      // First pick becomes the anchor automatically — but only AFTER the
+      // follow has persisted (the anchor endpoint 404s otherwise). The
+      // ordering + retry live in toggleAndAnchor / lib/favoriteAnchor.ts.
+      toggleAndAnchor(team);
+      return;
+    }
+    // The caps are per bucket — five clubs plus, separately, five national
+    // teams — so a full club shelf says so without ever blocking the
+    // international tab.
+    const result = toggle(team);
+    if (!result.ok) {
+      haptic("medium");
+      push({
+        text: t(result.reason === "intlCap" ? "myTeams.errIntlCap" : "myTeams.errCap"),
+        tone: "danger",
+        icon: "✕",
+      });
+    }
+  }
+
+  function pickLeague(slug: string) {
+    const onError = (err: unknown) => {
+      haptic("medium");
+      push({ text: t(serverErrorKey(err) as StringKey), tone: "danger", icon: "✕" });
+    };
+    selectionHaptic();
+    if (followed.isFollowing(slug)) {
+      followed.unfollow.mutate(slug, { onError });
+    } else if (followed.count < MAX_FOLLOWED_LEAGUES) {
+      followed.follow.mutate(slug, { onError });
+    } else {
+      haptic("medium");
+    }
+  }
+
+  function finish() {
+    try {
+      localStorage.setItem("verdikick.onboarded", "1");
+    } catch {
+      /* private mode */
+    }
+    notifyHaptic("success");
+    navigate("/matches", { replace: true });
+  }
+
+  /**
+   * Explicit save on the favorite-club step: persists the gate flag so the
+   * Matchday feed scopes to the saved club, and confirms the choice in copy —
+   * the picker alone used to leave “did my pick stick?” unanswered.
+   */
+  function saveFavorite() {
+    try {
+      localStorage.setItem("verdikick.onboarded", "1");
+    } catch {
+      /* private mode */
+    }
+    notifyHaptic("success");
+    setSaved(true);
+  }
+
+  /** Advance a step; leaving the favorite step persists the gate flag. */
+  function advance() {
+    haptic("light");
+    if (step === 0) {
+      try {
+        localStorage.setItem("verdikick.onboarded", "1");
+      } catch {
+        /* private mode */
+      }
+    }
+    setStep((s) => s + 1);
+  }
+
+  function dismissIntro() {
+    try {
+      localStorage.setItem(INTRO_KEY, "1");
+    } catch {
+      /* private mode */
+    }
+    setIntro(false);
+  }
+
+  const canAdvance = (step === 0 && count >= 1) || step === 1 || step === 2;
+
+  if (intro) return <Intro onDone={dismissIntro} />;
+
+  return (
+    <>
+      <TopBar
+        title={t("onboarding.title")}
+        subtitle={t("onboarding.step", { step: step + 1, total: TOTAL_STEPS })}
+      />
+
+      {/* Step dots */}
+      <div className="mt-3 flex justify-center gap-1.5" aria-hidden="true">
+        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+          <span
+            key={i}
+            className={cx(
+              "h-1.5 rounded-full transition-[width,background-color] duration-[var(--t-std)]",
+              i === step ? "w-6 bg-volt" : i < step ? "w-1.5 bg-volt/50" : "w-1.5 bg-line",
+            )}
+          />
+        ))}
+      </div>
+
+      {step === 0 ? (
+        <section className="mt-5 rise-in">
+          <h2 className="text-xl font-extrabold text-ink">{t("onboarding.favoriteTitle")}</h2>
+          <p className="mt-1 text-sm text-ink-2">{t("onboarding.favoriteHint")}</p>
+
+          {/* The pick so far, named and faced: survives tab switches, so the
+              user never has to remember what they tapped two tabs ago. */}
+          {anchorTeam ? (
+            <div
+              className="mt-3 flex items-center gap-2.5 rounded-card border border-gold bg-elevated px-3 py-2.5"
+              role="status"
+            >
+              <TeamBadge team={anchorTeam} size="md" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-ink">{anchorName}</p>
+                <p className="flex items-center gap-1 text-[11px] font-bold text-gold">
+                  <StarFilledIcon className="star-pop h-3 w-3 flex-none" />
+                  {t("onboarding.isFavorite")}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-3">
+            <Segmented value={group} onChange={setGroup} options={pickerGroups} />
+          </div>
+
+          {(() => {
+            const state = teamGridStates();
+            if (state.kind === "loading") {
+              return <PanelSkeleton height={220} />;
+            }
+            if (state.kind === "error") {
+              return (
+                <ErrorState
+                  title={t("onboarding.teamsError")}
+                  hint={t("onboarding.teamsErrorHint")}
+                  onRetry={state.retry}
+                />
+              );
+            }
+            if (state.kind === "empty") {
+              return <EmptyState title={t("onboarding.teamsEmpty")} hint={t("onboarding.teamsEmptyHint")} />;
+            }
+            return (
+              <ul className="mt-3 grid grid-cols-2 gap-2">
+                {groupTeams.map((team) => {
+                  const pickedHere = isFavorite(team.id);
+                  const isAnchor = team.id === anchorId;
+                  return (
+                    <li key={team.id}>
+                      <button
+                        type="button"
+                        onClick={() => pickClub(team)}
+                        className={cx(
+                          "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+                          pickedHere
+                            ? isAnchor
+                              ? "border-gold bg-elevated"
+                              : "border-volt bg-elevated"
+                            : "border-line bg-surface hover:bg-elevated",
+                        )}
+                      >
+                        <TeamBadge team={team} size="sm" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+                          {localize(team.shortName)}
+                        </span>
+                        {isAnchor ? (
+                          <StarFilledIcon className="star-pop h-4 w-4 flex-none text-gold" />
+                        ) : pickedHere ? (
+                          <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" />
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+          })()}
+        </section>
+      ) : null}
+
+      {step === 1 ? (
+        <section className="mt-5 rise-in">
+          <h2 className="text-xl font-extrabold text-ink">{t("onboarding.clubsTitle")}</h2>
+          <p className="mt-1 text-sm text-ink-2">{t("onboarding.clubsHint")}</p>
+
+          {/* Picked clubs so far, removable: the count chip alone makes people
+              back out to fix a mistaken pick. */}
+          {count > 0 ? (
+            <ul className="-mx-3 mt-3 flex gap-2 overflow-x-auto px-3 pb-1">
+              {[...teams]
+                .sort((a, b) => Number(b.id === anchorId) - Number(a.id === anchorId))
+                .map((team) => (
+                  <li key={team.id} className="relative flex-none">
+                    <div className="flex w-[76px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center">
+                      <TeamBadge team={team} size="sm" />
+                      <span className="w-full truncate text-[10px] font-bold text-ink">
+                        {localize(team.shortName)}
+                      </span>
+                    </div>
+                    {team.id === anchorId ? (
+                      <span
+                        className="star-pop absolute -top-1 -start-1 grid h-5 w-5 place-items-center rounded-full border border-gold bg-elevated text-gold"
+                        aria-label={t("onboarding.isFavorite")}
+                      >
+                        <StarFilledIcon className="h-2.5 w-2.5" />
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => pickClub(team)}
+                      aria-label={t("myTeams.removed", { team: localize(team.shortName) })}
+                      className="absolute -top-1 -end-1 grid h-11 w-11 place-items-center rounded-full"
+                    >
+                      <span
+                        className="grid h-5 w-5 place-items-center rounded-full border border-line bg-elevated text-ink-2 transition-colors duration-[var(--t-fast)] hover:border-danger hover:text-danger"
+                        aria-hidden="true"
+                      >
+                        <CloseIcon className="h-2.5 w-2.5" />
+                      </span>
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          ) : null}
+
+          <div className="mt-3">
+            <Segmented value={group} onChange={setGroup} options={pickerGroups} />
+          </div>
+
+          {(() => {
+            const state = teamGridStates();
+            if (state.kind === "loading") {
+              return <PanelSkeleton height={220} />;
+            }
+            if (state.kind === "error") {
+              return (
+                <ErrorState
+                  title={t("onboarding.teamsError")}
+                  hint={t("onboarding.teamsErrorHint")}
+                  onRetry={state.retry}
+                />
+              );
+            }
+            if (state.kind === "empty") {
+              return <EmptyState title={t("onboarding.teamsEmpty")} hint={t("onboarding.teamsEmptyHint")} />;
+            }
+            return (
+              <ul className="mt-3 grid grid-cols-2 gap-2">
+                {groupTeams.map((team) => {
+                  const pickedHere = isFavorite(team.id);
+                  return (
+                    <li key={team.id}>
+                      <button
+                        type="button"
+                        onClick={() => pickClub(team)}
+                        className={cx(
+                          "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+                          pickedHere ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
+                        )}
+                      >
+                        <TeamBadge team={team} size="sm" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+                          {localize(team.shortName)}
+                        </span>
+                        {pickedHere ? (
+                          <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" aria-hidden="true" />
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            );
+          })()}
+
+          {/* Two honest counters, one per shelf: clubs on the left, the
+              optional national-team shelf on the right. */}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <Chip tone={clubCount >= MAX_FAVORITES ? "gold" : "volt"}>
+              {t("myTeams.picked", { count: clubCount, max: MAX_FAVORITES })}
+            </Chip>
+            {intlCount > 0 || clubCount >= MAX_FAVORITES ? (
+              <Chip tone={intlCount >= MAX_INTERNATIONALS ? "gold" : "volt"}>
+                {t("myTeams.pickedIntl", { count: intlCount, max: MAX_INTERNATIONALS })}
+              </Chip>
+            ) : null}
+          </div>
+          <p className="mt-2 text-center text-[11px] text-ink-3">{t("onboarding.intlHint")}</p>
+        </section>
+      ) : null}
+
+      {step === 2 ? (
+        <section className="mt-5 rise-in">
+          <h2 className="text-xl font-extrabold text-ink">{t("onboarding.leaguesTitle")}</h2>
+          <p className="mt-1 text-sm text-ink-2">{t("onboarding.leaguesHint")}</p>
+
+          <ul className="mt-3 space-y-2">
+            {leagueComps.map((comp) => {
+              const following = followed.isFollowing(comp.slug);
+              return (
+                <li key={comp.slug}>
+                  <button
+                    type="button"
+                    onClick={() => pickLeague(comp.slug)}
+                    className={cx(
+                      "flex w-full items-center gap-3 rounded-card border p-3 text-start transition-colors duration-[var(--t-fast)]",
+                      following ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
+                    )}
+                  >
+                    {/* No monogram tile: a single letter next to the full name
+                        reads as doubled text ("PPremier League"). */}
+                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+                      {localize(comp.name)}
+                    </span>
+                    {following ? <Chip tone="volt">{t("leagues.following")}</Chip> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="mt-3 flex justify-center">
+            <Chip tone={followed.count >= MAX_FOLLOWED_LEAGUES ? "gold" : "volt"}>
+              {t("myTeams.picked", { count: followed.count, max: MAX_FOLLOWED_LEAGUES })}
+            </Chip>
+          </div>
+        </section>
+      ) : null}
+
+      {/* Actions. The favorite step (the product's anchor) gets a real Save
+          button with a written confirmation instead of a silent toggle; after
+          saving, the same button becomes Continue so the flow stays one-tap. */}
+      <div className="mt-6 space-y-2 pb-6">
+        {step === 0 && count >= 1 ? (
+          <>
+            {saved ? (
+              <p
+                className="rise-in flex items-center justify-center gap-1.5 rounded-card border border-volt px-3 py-2.5 text-xs font-bold text-volt"
+                role="status"
+              >
+                <CheckIcon className="h-4 w-4 flex-none" />
+                {t("onboarding.favoriteSaved", { team: anchorName })}
+              </p>
+            ) : null}
+            <Button className="w-full" onClick={saved ? advance : saveFavorite}>
+              {t(saved ? "onboarding.next" : "common.save")}
+            </Button>
+          </>
+        ) : null}
+        {canAdvance && step > 0 && step < TOTAL_STEPS - 1 ? (
+          <Button className="w-full" onClick={advance}>
+            {t("onboarding.next")}
+          </Button>
+        ) : null}
+        {step === TOTAL_STEPS - 1 ? (
+          <Button className="w-full" onClick={finish}>
+            {t("onboarding.done")}
+          </Button>
+        ) : null}
+        {step === 0 && count === 0 ? (
+          <button
+            type="button"
+            onClick={finish}
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-full text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
+          >
+            {t("onboarding.skip")}
+          </button>
+        ) : null}
+        {step > 0 ? (
+          <button
+            type="button"
+            onClick={() => setStep((s) => s - 1)}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-full text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
+          >
+            <ArrowIcon className="h-4 w-4" />
+            {t("common.back")}
+          </button>
+        ) : null}
+      </div>
+
+      <LegalLinks className="mt-3" />
+
+      <Num className="sr-only">{step}</Num>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------ intro */
+
+/**
+ * The first-launch intro, now one screen instead of three slides. A first-timer
+ * used to pay six screens (three intro slides, then three picker steps) before
+ * seeing a fixture — on the one app whose whole promise is "open it because a
+ * match is on". The three ideas still get explained, as a single scannable
+ * list, with one "Get started" tap into the picker. Shown once ever (its flag is
+ * separate from the picker's own gate).
+ */
+function Intro({ onDone }: { onDone: () => void }) {
+  const { t } = useI18n();
+
+  return (
+    <div className="pad-safe-top flex min-h-[70vh] flex-col px-3">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => {
+            haptic("light");
+            onDone();
+          }}
+          className="min-h-11 rounded-full px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
+        >
+          {t("intro.skip")}
+        </button>
+      </div>
+
+      <div className="pitch-watermark flex flex-1 flex-col justify-center px-2 py-6">
+        <span
+          className="intro-glyph grid h-20 w-20 place-items-center rounded-card border border-volt/50 bg-elevated text-volt"
+          aria-hidden="true"
+        >
+          <TargetIcon className="h-9 w-9" />
+        </span>
+        {/* The intro has no TopBar, so this brand line is the screen's only
+            heading — h1, not h2, or the document opens at a level down. */}
+        <h1 className="intro-in mt-5 text-2xl font-extrabold text-ink">{t("app.name")}</h1>
+
+        <ul className="intro-in mt-5 space-y-4">
+          {SLIDES.map(({ key, titleKey, bodyKey, Glyph }) => (
+            <li key={key} className="flex items-start gap-3">
+              <span
+                className="grid h-9 w-9 flex-none place-items-center rounded-full border border-volt/50 bg-elevated text-volt"
+                aria-hidden="true"
+              >
+                <Glyph className="h-4 w-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-bold text-ink">{t(titleKey)}</span>
+                <span className="block text-xs leading-relaxed text-ink-2">{t(bodyKey)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="mt-4 space-y-2 pb-6">
+        <Button
+          className="w-full"
+          onClick={() => {
+            haptic("light");
+            onDone();
+          }}
+        >
+          {t("onboarding.next")}
+        </Button>
+        <button
+          type="button"
+          onClick={() => {
+            haptic("light");
+            onDone();
+          }}
+          className="min-h-11 w-full rounded-full text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
+        >
+          {t("intro.skip")}
+        </button>
+        <LegalLinks className="mt-2" />
+      </div>
+    </div>
+  );
+}
+
+
+PAGE 3/11  -  MatchDetail
+route: /match/:id
+file:  src/pages/MatchDetail.tsx  (527 lines)
+================================================================================================
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { ConfettiBurst } from "../components/Confetti";
+import { LineupsSkeleton,
+  ScoreHeroSkeleton,
+  StatsTableSkeleton,
+  TimelineSkeleton,
+} from "../components/Skeletons";
+import { TimelineList } from "../components/TimelineList";
+import { TopBar } from "../components/TopBar";
+import { CommentaryPanel } from "../components/panels/CommentaryPanel";
+import { LineupsPanel } from "../components/panels/LineupsPanel";
+
+import {
+  Card,
+  Chip,
+  CountUp,
+  EmptyState,
+  ErrorState,
+  LiveDot,
+  Num,
+  SectionHeading,
+  Segmented,
+  TeamBadge,
+} from "../components/ui";
+import { cx } from "../lib/cx";
+import { api, type ApiTimelineEvent } from "../lib/api";
+import { TEAM_FALLBACK } from "../lib/colors";
+import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+import { useI18n } from "../i18n/context";
+import { formatKickoff, formatKickoffDate } from "../lib/format";
+import { useNow } from "../hooks/useNow";
+import { useLiveUpdates } from "../hooks/useLiveUpdates";
+import type { Team } from "../types";
+
+type Tab = "timeline" | "stats" | "lineups";
+const TABS: Tab[] = ["timeline", "stats", "lineups"];
+
+export default function MatchDetail() {
+  const { id = "" } = useParams();
+  const { t, lang, localize } = useI18n();
+  const locale = lang === "fa" ? "fa-IR" : undefined;
+  useLiveUpdates();
+
+  const matchQuery = useQuery({
+    queryKey: ["match", id],
+    queryFn: () => api.getMatch(id),
+    enabled: Boolean(id),
+    // 20s while the match is in play: the server's live pulse rewrites the
+    // minute and score straight from ESPN every 15s, so anything slower left
+    // the header showing a clock minutes behind the game (the "not synced with
+    // time" report). Paused when the tab is in the background — a hidden tab
+    // holds the last good payload instead of spending the battery.
+    refetchInterval: (query) =>
+      (query.state.data?.match.status === "live" || query.state.data?.match.status === "halftime") &&
+      !document.hidden
+        ? 20_000
+        : false,
+    refetchIntervalInBackground: false,
+  });
+  const match = matchQuery.data?.match;
+  const live = match?.status === "live";
+  /**
+   * Live OR the half-time break. The clock keeps moving INTO the break and the
+   * second half starts from it, so every refresh decision polls on this —
+   * polling on `live` alone left a match frozen on "HT" until the user
+   * touched the screen again.
+   */
+  const inPlay = live || match?.status === "halftime";
+  // Competition name for the header: big-five alias, else the catalog name
+  // (cups/tournaments), so a cup match never shows a raw "uefa.champions".
+  const leagueLabel = useCompetitionLabel(match?.league ?? "");
+
+  // Tabs live in the URL so a panel is shareable and deep-linkable.
+  const requested = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+  const tab: Tab = requested && TABS.includes(requested) ? requested : "timeline";
+  const setTab = (next: Tab) => {
+    const nextParams = new URLSearchParams(window.location.search);
+    nextParams.set("tab", next);
+    window.history.replaceState(null, "", `${window.location.pathname}?${nextParams.toString()}`);
+  };
+
+  // Goal flash when polling reveals a new score.
+  const [burst, setBurst] = useState(0);
+  const [flashScore, setFlashScore] = useState(false);
+  const scoreRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!match) return;
+    const score = `${match.home_score}-${match.away_score}`;
+    if (scoreRef.current && scoreRef.current !== score && match.home_score !== null) {
+      setBurst((v) => v + 1);
+      setFlashScore(true);            window.setTimeout(() => setFlashScore(false), 1400);
+    }
+    scoreRef.current = score;
+  }, [match?.home_score, match?.away_score, match]);
+
+  const currentMinute = useMemo(() => {
+    const m = /\d+/.exec(match?.minute_display ?? "");
+    return m ? Number(m[0]) : 0;
+  }, [match?.minute_display]);
+
+  const now = useNow(30_000);
+
+  const countdownLabel = useMemo(() => {
+    if (!match || match.status !== "scheduled") return null;
+    const ms = new Date(match.kickoff_at).getTime() - now;
+    if (ms <= 0) return null;
+    const totalMinutes = Math.floor(ms / 60_000);
+    if (totalMinutes < 1) return t("predict.startingSoon");
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    if (hours > 0) {
+      return t("predict.startsIn", { time: `${hours}h ${minutes}m` });
+    }
+    return t("predict.startsIn", { time: `${minutes}m` });
+  }, [match, now, t]);
+
+
+
+  if (matchQuery.isLoading) {
+    return (
+      <>
+        <TopBar title={t("match.summary")} back />
+        <div className="mt-3">
+          <ScoreHeroSkeleton />
+        </div>
+      </>
+    );
+  }
+
+  if (matchQuery.isError) {
+    return (
+      <>
+        <TopBar title={t("match.summary")} back />
+        <div className="mt-4">
+          <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => matchQuery.refetch()} />
+        </div>
+      </>
+    );
+  }
+
+  if (!match) {
+    return (
+      <>
+        <TopBar title={t("match.summary")} back />
+        <div className="mt-4">
+          <EmptyState title={t("matches.empty")} hint={t("matches.emptyHint")} />
+        </div>
+      </>
+    );
+  }
+
+  const home = {
+    id: match.home_team_id,
+    name: match.home_name,
+    shortName: match.home_short ?? match.home_name,
+    abbreviation: match.home_abbr ?? "—",
+    color: match.home_color ?? TEAM_FALLBACK,
+    league: leagueIdOf(match.league) ?? "PL",
+  };
+  const away = {
+    ...home,
+    id: match.away_team_id,
+    name: match.away_name,
+    shortName: match.away_short ?? match.away_name,
+    abbreviation: match.away_abbr ?? "—",
+    color: match.away_color ?? TEAM_FALLBACK,
+  };
+
+
+
+  return (
+    <>
+      <ConfettiBurst trigger={burst} />
+
+      <TopBar title={`${localize(home.shortName)} ${t("common.versus")} ${localize(away.shortName)}`} back />
+
+      {/* Score header */}
+      <div
+        className={cx(
+          "score-hero relative mt-3 overflow-hidden rounded-card border p-4",
+          flashScore ? "goal-flash border-volt/60 bg-elevated" : "border-line",
+        )}
+      >
+        <p className="pb-2 text-center text-[11px] font-bold text-ink-2">
+          {leagueLabel} · {formatKickoff(new Date(match.kickoff_at), locale)}
+        </p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col items-center gap-2">
+            <TeamBadge team={home} size="lg" />
+            <span className="text-xs font-bold text-ink-2">{localize(home.shortName)}</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-1.5">
+            {/* The score rolls up to its new value when the feed moves, so a
+                goal lands rather than snapping. A side that hasn't played keeps
+                the honest dash (null is not zero). */}
+            <span className="flex items-baseline gap-1">
+              {match.home_score === null ? (
+                <Num className="text-[40px] leading-none text-ink">–</Num>
+              ) : (
+                <CountUp value={match.home_score} className="text-[40px] leading-none text-ink" />
+              )}
+              <Num className="text-[40px] leading-none text-ink">:</Num>
+              {match.away_score === null ? (
+                <Num className="text-[40px] leading-none text-ink">–</Num>
+              ) : (
+                <CountUp value={match.away_score} className="text-[40px] leading-none text-ink" />
+              )}
+            </span>
+            {live ? (
+              <Chip tone="live">
+                <LiveDot />
+                {t("status.live")} <Num>{currentMinute}&#39;</Num>
+              </Chip>
+            ) : countdownLabel ? (
+              <Chip tone="volt" className="animate-pulse">
+                {countdownLabel}
+              </Chip>
+            ) : (
+              <Chip tone={match.status === "finished" ? "muted" : "volt"}>
+                {match.status === "finished" ? (
+                  t("status.finished")
+                ) : (
+                  <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
+                )}
+              </Chip>
+            )}
+          </div>
+
+          <div className="flex flex-col items-center gap-2">
+            <TeamBadge team={away} size="lg" />
+            <span className="text-xs font-bold text-ink-2">{localize(away.shortName)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4">          <Segmented
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "timeline", label: t("match.tabTimeline") },
+            { value: "stats", label: t("match.tabStats") },
+            { value: "lineups", label: t("match.tabLineups") },
+          ]}
+        />
+      </div>
+
+      <section className="panel-in mt-4" key={tab}>
+        {tab === "timeline" ? (
+          <TimelineTab
+            matchId={id}
+            live={inPlay}
+            minute={currentMinute}
+            teams={[home, away]}
+          />
+        ) : null}
+        {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
+        {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
+      </section>
+
+
+      {/* The A-ADS unit used to be the page's last element here. It is now a
+          static iframe in index.html so the no-JS A-ADS verifier can see it. */}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------ tabs */
+
+function TimelineTab({
+  matchId,
+  live,
+  minute,
+  teams,
+}: {
+  matchId: string;
+  live: boolean;
+  minute: number;
+  /** Both sides, for the timeline markers' club tint. */
+  teams: Array<{ id: string; color: string }>;
+}) {
+  const { t } = useI18n();
+  const query = useQuery({
+    queryKey: ["timeline", matchId],
+    queryFn: () => api.getTimeline(matchId),
+    refetchInterval: live ? 20_000 : false,
+  });
+  const events = query.data?.events ?? [];
+  const adapted = events.map(adaptTimelineEvent);
+  const teamColor = Object.fromEntries(teams.map((team) => [team.id, team.color]));
+
+  if (query.isLoading) return <TimelineSkeleton rows={4} />;
+  if (query.isError) {
+    return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+  }
+  if (adapted.length === 0) {
+    return <EmptyState title={t("timeline.empty")} hint={t("timeline.emptyHint")} />;
+  }
+
+  return (
+    <>
+      <TimelineList
+        events={adapted}
+        comments={[]}
+        liveMinute={live ? minute : undefined}
+        teamColor={teamColor}
+        homeTeamId={teams[0]?.id}
+        awayTeamId={teams[1]?.id}
+      />
+
+      <div className="mt-4">
+        <SectionHeading title={t("commentary.title")} />
+        <CommentaryPanel
+          lines={adapted.map((e) => ({
+            id: e.id,
+            minuteDisplay: e.minuteDisplay,
+            text: e.description,
+            isKey: e.type === "goal" || e.type === "card" || e.type === "substitution",
+          }))}
+        />
+      </div>
+    </>
+  );
+}
+
+function StatsTab({
+  matchId,
+  home,
+  away,
+}: {
+  matchId: string;
+  home: {
+    id: string;
+    name: string;
+    shortName: string;
+    abbreviation: string;
+    color: string;
+    league: "PL" | "LL" | "SA" | "BL" | "L1";
+  };
+  away: typeof home;
+}) {
+  const { t, localize } = useI18n();
+  const [team, setTeam] = useState<"home" | "away">("home");
+  const query = useQuery({
+    queryKey: ["matchPlayers", matchId],
+    queryFn: () => api.getMatchPlayers(matchId),
+  });
+  const rows = (query.data?.players ?? []) as Array<Record<string, unknown>>;
+
+  if (query.isLoading) return <StatsTableSkeleton />;
+  if (query.isError) {
+    return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+  }
+  if (rows.length === 0) {
+    return <EmptyState title={t("ratings.noneYet")} hint={t("stats.noneHint")} />;
+  }
+
+  const selected = team === "home" ? home : away;
+  const teamRows = rows.filter((r) => r.team_id === selected.id);
+
+  return (
+    <div className="space-y-3">
+      <Segmented
+        value={team}
+        onChange={(v) => setTeam(v as "home" | "away")}
+        options={[
+          { value: "home", label: localize(home.shortName) },
+          { value: "away", label: localize(away.shortName) },
+        ]}
+      />
+
+      <MatchPlayerTable title={selected.shortName} color={selected.color} rows={teamRows} />
+    </div>
+  );
+}
+
+function MatchPlayerTable({
+  title,
+  color,
+  rows,
+}: {
+  title: string;
+  color: string;
+  rows: Array<Record<string, unknown>>;
+}) {
+  const { t, localize } = useI18n();
+  const num = (v: unknown): number => (typeof v === "number" ? v : 0);
+  const str = (v: unknown): string => (typeof v === "string" ? v : "");
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-center gap-2 border-b border-line p-3">
+        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+        <span className="text-sm font-bold text-ink">{title}</span>
+      </div>
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="label text-ink-3">
+            <th className="p-2 text-start font-bold">{t("table.team")}</th>
+            <th className="p-2 text-end font-bold">{t("stats.goals")}</th>
+            <th className="p-2 text-end font-bold">{t("stats.assists")}</th>
+            <th className="p-2 text-end font-bold">{t("stats.shots")}</th>
+            <th className="p-2 text-end font-bold">{t("ratings.points")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={str(r.player_id)} className="border-t border-line">
+              <td className="p-2">
+                <span className="block truncate font-bold text-ink">{localize(str(r.full_name))}</span>
+                <span className="text-[10px] text-ink-3">
+                  {num(r.minutes_played)}&#39; {r.started ? "· XI" : ""}
+                </span>
+              </td>
+              <td className="p-2 text-end">
+                <Num className={num(r.goals) > 0 ? "font-bold text-volt" : "text-ink-2"}>{num(r.goals)}</Num>
+              </td>
+              <td className="p-2 text-end">
+                <Num className={num(r.assists) > 0 ? "font-bold text-gold" : "text-ink-2"}>
+                  {num(r.assists)}
+                </Num>
+              </td>
+              <td className="p-2 text-end text-ink-2">{num(r.shots)}</td>
+              <td className="p-2 text-end">
+                <Num className="font-bold text-ink">{num(r.stat_score)}</Num>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+function LineupsTab({
+  matchId,
+  home,
+  away,
+}: {
+  matchId: string;
+  home: { id: string; shortName: string; color: string };
+  away: { id: string; shortName: string; color: string };
+}) {
+  const { t } = useI18n();
+  const query = useQuery({
+    queryKey: ["lineups", matchId],
+    queryFn: () => api.getLineups(matchId),
+  });
+  const data = query.data;
+  if (query.isLoading) return <LineupsSkeleton />;
+  if (query.isError) {
+    return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+  }
+  if (!data || data.players.length === 0) {
+    return <EmptyState title={t("ratings.noneYet")} hint={t("stats.noneHint")} />;
+  }
+
+  const toPlayer = (r: Record<string, unknown>) => ({
+    id: String(r.player_id),
+    name: String(r.full_name),
+    position: String(r.position ?? "MID") as "GK" | "DEF" | "MID" | "FWD",
+    number: typeof r.jersey_number === "number" ? r.jersey_number : 0,
+    // The pitch is only as good as these three: the face, the granular role
+    // that decides which side of a line a player stands on, and ESPN's slot for
+    // the leaked XIs that carry no role.
+    headshot: typeof r.headshot_url === "string" ? r.headshot_url : null,
+    espnPosition: typeof r.espn_position === "string" ? r.espn_position : null,
+    formationPlace: typeof r.formation_place === "string" ? r.formation_place : null,
+  });
+  const homeTeam: Team = {
+    id: home.id,
+    name: home.shortName,
+    shortName: home.shortName,
+    abbreviation: home.shortName.slice(0, 3),
+    color: home.color,
+    league: "PL",
+  };
+  const awayTeam: Team = {
+    id: away.id,
+    name: away.shortName,
+    shortName: away.shortName,
+    abbreviation: away.shortName.slice(0, 3),
+    color: away.color,
+    league: "PL",
+  };
+  const sidePlayers = (teamId: string) =>
+    data.players
+      .filter((p) => p.team_id === teamId)
+      .map((p) => ({
+        ...toPlayer(p as unknown as Record<string, unknown>),
+        starter: p.started === 1,
+        minutes: p.minutes_played ?? 0,
+      }));
+
+  const homeAll = sidePlayers(home.id);
+  const awayAll = sidePlayers(away.id);
+  const homeLineup = {
+    formation: data.home.formation ?? "—",
+    coach: "",
+    starters: homeAll.filter((p) => p.starter),
+    subs: homeAll.filter((p) => !p.starter && p.minutes > 0),
+  };
+  const awayLineup = {
+    formation: data.away.formation ?? "—",
+    coach: "",
+    starters: awayAll.filter((p) => p.starter),
+    subs: awayAll.filter((p) => !p.starter && p.minutes > 0),
+  };
+
+  return <LineupsPanel home={homeTeam} away={awayTeam} lineups={{ home: homeLineup, away: awayLineup }} />;
+}/* ------------------------------------------------------------ adapters */
+
+function adaptTimelineEvent(e: ApiTimelineEvent) {
+  return {
+    id: String(e.id),
+    minuteDisplay: e.minute_display,
+    minuteSeconds: e.minute_seconds,
+    type: (["goal", "card", "substitution", "var", "halftime", "fulltime"].includes(e.type)
+      ? e.type
+      : "var") as "goal" | "card" | "substitution" | "var" | "halftime" | "fulltime",
+    teamId: e.team_id,
+    description: e.description,
+    participants: e.participants.map((p) => p.name),
+    commentCount: e.comment_count,
+  };
+}
+
+
+PAGE 4/11  -  TeamPage
+route: /team/:id
+file:  src/pages/TeamPage.tsx  (521 lines)
+================================================================================================
+
+import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import { TopBar } from "../components/TopBar";
+import { PanelSkeleton } from "../components/Skeletons";
+import {
+  Card,
+  Chip,
+  EmptyState,
+  ErrorState,
+  Num,
+  PlayerAvatar,
+  SectionHeading,
+  Segmented,
+  TeamBadge,
+} from "../components/ui";
+import { cx } from "../lib/cx";
+import { matchFromApi, useSquad, useTeamDetail, useTeamUnderstat } from "../hooks/useApi";
+import type { StringKey } from "../i18n/strings";
+import { usePrefetchMatch } from "../hooks/usePrefetch";
+import { TEAM_FALLBACK } from "../lib/colors";
+import { useI18n } from "../i18n/context";
+import { formatKickoff, formatKickoffDate } from "../lib/format";
+import type { ApiMatch } from "../lib/api";
+import type { Position } from "../types";
+
+type Tab = "squad" | "form" | "stats" | "xg";
+
+const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
+
+/**
+ * A club's page: full squad (from the weekly roster sync), season stat line and
+ * recent fixtures. Reached by tapping any team in the table or a match card.
+ */
+export default function TeamPage() {
+  const { id = "" } = useParams();
+  const { t, localize } = useI18n();
+
+  const detailQuery = useTeamDetail(id);
+  const squadQuery = useSquad(id);
+
+  const [tab, setTab] = useState<Tab>("squad");
+
+  if (detailQuery.isLoading || !detailQuery.data) {
+    return (
+      <>
+        <TopBar title={t("team.title")} back />
+        <PanelSkeleton height={160} />
+      </>
+    );
+  }
+
+  if (detailQuery.isError) {
+    return (
+      <>
+        <TopBar title={t("team.title")} back />
+        <div className="mt-3">
+          <ErrorState onRetry={() => detailQuery.refetch()} />
+        </div>
+      </>
+    );
+  }
+
+  const { team, seasonStats, fixtures } = detailQuery.data;
+  const leagueId =
+    team.league && ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"].includes(team.league)
+      ? (
+          { "eng.1": "PL", "esp.1": "LL", "ita.1": "SA", "ger.1": "BL", "fra.1": "L1" } as Record<
+            string,
+            "PL" | "LL" | "SA" | "BL" | "L1"
+          >
+        )[team.league]
+      : null;
+
+  const teamView = {
+    id: team.id,
+    name: team.name,
+    shortName: team.short_name ?? team.name,
+    abbreviation: team.abbreviation ?? (team.short_name ?? team.name).slice(0, 3).toUpperCase(),
+    color: team.color ?? TEAM_FALLBACK,
+    league: leagueId ?? "PL",
+  };
+
+  return (
+    <>
+      <TopBar
+        title={localize(teamView.shortName)}
+        subtitle={leagueId ? t(`league.${leagueId}`) : team.league}
+        back
+      />
+
+      {/* Club header: the club's own colour washed across the card from the top
+          corner, so a page opens on the side's identity rather than on generic
+          dark chrome. It is a gradient, never a decorative side stripe, and the
+          crest sits at the hero size — this is the one place the badge leads. */}
+      <div
+        className="relative mt-3 overflow-hidden rounded-card border border-line p-4"
+        style={{
+          background: `linear-gradient(135deg, color-mix(in srgb, ${teamView.color} 30%, transparent) 0%, color-mix(in srgb, ${teamView.color} 10%, transparent) 45%, var(--bg-surface) 100%)`,
+        }}
+      >
+        <div className="flex items-center gap-3.5">
+          <TeamBadge team={teamView} size="xl" />
+          <div className="min-w-0">
+            <p className="truncate text-lg font-bold text-ink">{localize(team.name)}</p>
+            <p className="text-xs text-ink-3">
+              {squadQuery.data?.coach ? `${t("lineups.coach")}: ${localize(squadQuery.data.coach)} · ` : ""}
+              {seasonStats ? t("team.played", { played: seasonStats.played }) : null}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "squad", label: t("team.tabSquad") },
+            { value: "form", label: t("team.tabFixtures") },
+            { value: "stats", label: t("team.tabStats") },
+            { value: "xg", label: t("team.tabXg") },
+          ]}
+        />
+      </div>
+
+      <section className="panel-in mt-4" key={tab}>
+        {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
+        {tab === "form" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
+        {tab === "stats" ? <StatsTab stats={seasonStats} /> : null}
+        {tab === "xg" ? (
+          <XgTab
+            teamId={team.id}
+            played={seasonStats?.played ?? 0}
+            points={seasonStats ? seasonStats.wins * 3 + seasonStats.draws : null}
+          />
+        ) : null}
+      </section>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------ squad */
+
+function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+  const { t, localize } = useI18n();
+  if (squadQuery.isLoading) return <PanelSkeleton height={192} />;
+  if (squadQuery.isError) return <ErrorState onRetry={() => squadQuery.refetch()} />;
+
+  const squad = squadQuery.data;
+  if (!squad || squad.players.length === 0) {
+    return <EmptyState title={t("team.squadEmpty")} hint={t("team.squadEmptyHint")} />;
+  }
+
+  return (
+    <div className="space-y-4">
+      {POS_ORDER.map((pos) => {
+        const group = squad.players.filter((p) => p.position === pos);
+        if (group.length === 0) return null;
+        return (
+          <div key={pos}>
+            <SectionHeading
+              title={t(`pos.${pos}`)}
+              action={
+                <Chip tone="muted">
+                  <Num>{group.length}</Num>
+                </Chip>
+              }
+            />
+            <ul className="space-y-1.5">
+              {group.map((player) => (
+                <li
+                  key={player.id}
+                  className="flex items-center gap-3 rounded-card border border-line bg-surface p-2.5"
+                >
+                  {/* A face for every squad member: the ESPN headshot where the
+                      feed has one, the player's initials where it doesn't, on
+                      the same footprint either way. */}
+                  <PlayerAvatar name={localize(player.name)} src={player.headshot} size="md" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-1.5">
+                      <Num className="flex-none text-[10px] font-bold text-ink-3">{player.jersey ?? "–"}</Num>
+                      <span className="min-w-0 truncate text-sm font-bold text-ink">
+                        {localize(player.name)}
+                      </span>
+                    </span>
+                    <span className="block text-[11px] text-ink-3">
+                      {player.espnPosition ?? t(`pos.${player.position}`)}
+                      {player.appearances ? ` · ${t("team.appearances", { count: player.appearances })}` : ""}
+                    </span>
+                  </span>
+                  <span className="flex-none text-end">
+                    <Num className={cx("text-sm", (player.goals ?? 0) > 0 ? "text-volt" : "text-ink-3")}>
+                      {player.goals ?? 0}
+                    </Num>
+                    <Num className={cx("text-sm", (player.assists ?? 0) > 0 ? "text-gold" : "text-ink-3")}>
+                      {" "}
+                      {player.assists ?? 0}
+                    </Num>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------ fixtures */
+
+function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: string }) {
+  const { t, lang, localize } = useI18n();
+  const prefetchMatch = usePrefetchMatch();
+  const locale = lang === "fa" ? "fa-IR" : undefined;
+  if (fixtures.length === 0) return <EmptyState title={t("team.noFixtures")} />;
+
+  return (
+    <ul className="space-y-2">
+      {fixtures.map((match) => {
+        // One scoreline per fixture: crest, club, the result or the kickoff,
+        // club, crest. The club whose page this is wears volt, so picking your
+        // side out of a neutral fixture list needs no reading.
+        const { home, away } = matchFromApi(match);
+        return (
+          <li key={match.id}>
+            <Link
+              to={`/match/${match.id}`}
+              onPointerDown={() => prefetchMatch(match.id)}
+              aria-label={`${localize(home.shortName)} ${t("common.versus")} ${localize(away.shortName)}`}
+              className="flex items-center justify-between gap-2 rounded-card border border-line bg-surface p-2.5 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+            >
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                <TeamBadge team={home} size="sm" />
+                <span
+                  className={cx(
+                    "min-w-0 truncate text-xs font-bold",
+                    home.id === teamId ? "text-volt" : "text-ink",
+                  )}
+                >
+                  {localize(home.shortName)}
+                </span>
+              </span>
+              <span className="flex-none">
+                {match.status === "finished" ? (
+                  <Chip tone="muted">
+                    <Num>
+                      {match.home_score ?? 0}–{match.away_score ?? 0}
+                    </Num>
+                  </Chip>
+                ) : match.status === "live" ? (
+                  <Chip tone="live">
+                    <Num>{match.minute_display ?? ""}</Num>
+                  </Chip>
+                ) : (
+                  /* Kickoff carries the date AND the time, so a fixture weeks
+                     out is unambiguous at a glance. */
+                  <Chip tone="volt">
+                    <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
+                    {" · "}
+                    <Num>{formatKickoff(new Date(match.kickoff_at), locale)}</Num>
+                  </Chip>
+                )}
+              </span>
+              <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
+                <span
+                  className={cx(
+                    "min-w-0 truncate text-end text-xs font-bold",
+                    away.id === teamId ? "text-volt" : "text-ink",
+                  )}
+                >
+                  {localize(away.shortName)}
+                </span>
+                <TeamBadge team={away} size="sm" />
+              </span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/* ------------------------------------------------------------ season stats */
+
+type SeasonStats = NonNullable<ReturnType<typeof useTeamDetail>["data"]>["seasonStats"];
+
+function StatsTab({ stats }: { stats: SeasonStats }) {
+  const { t } = useI18n();
+  if (!stats) return <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />;
+
+  // Two reads instead of one dump: what the side creates, and what it concedes
+  // or controls. The flat list said everything at once and ranked nothing.
+  const attackRows: Array<{ label: string; value: string }> = [
+    { label: t("stats.goals"), value: `${stats.goals_for}` },
+    { label: t("stats.shots"), value: `${stats.total_shots}` },
+    { label: t("stats.onTarget"), value: `${stats.total_shots_on_target}` },
+    { label: t("stats.corners"), value: `${stats.total_corners}` },
+  ];
+  const controlRows: Array<{ label: string; value: string }> = [
+    { label: t("stats.conceded"), value: `${stats.goals_against}` },
+    { label: t("stats.possession"), value: `${Math.round(stats.avg_possession)}%` },
+    { label: t("stats.passAccuracy"), value: `${Math.round(stats.avg_pass_accuracy)}%` },
+    { label: t("stats.fouls"), value: `${stats.total_fouls}` },
+  ];
+
+  // The season in one line. The grouped cards below say what the side does;
+  // only the record says how it went, so it leads the tab rather than hiding
+  // as row one of a list nobody scanned to the bottom of.
+  const record: Array<{ letter: string; value: number }> = [
+    { letter: "W", value: stats.wins },
+    { letter: "D", value: stats.draws },
+    { letter: "L", value: stats.losses },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <Card className="flex items-center justify-between gap-3 p-4">
+        <span className="label text-ink-3">{t("statsPage.teams")}</span>
+        <span className="flex items-baseline gap-2">
+          {record.map(({ letter, value }) => (
+            <span key={letter} className="flex items-baseline gap-0.5">
+              <Num className="text-lg font-black text-ink">{value}</Num>
+              <span className="label text-ink-3">{letter}</span>
+            </span>
+          ))}
+        </span>
+      </Card>
+      <StatCard title={t("team.statsAttack")} rows={attackRows} />
+      <StatCard title={t("team.statsDefense")} rows={controlRows} />
+    </div>
+  );
+}
+
+/** One grouped stat sheet: a heading, then label/value rows on a hairline. */
+function StatCard({ title, rows }: { title: string; rows: Array<{ label: string; value: string }> }) {
+  return (
+    <Card className="p-4">
+      <SectionHeading title={title} />
+      <dl className="divide-y divide-line">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-center justify-between gap-3 py-2.5">
+            <dt className="text-xs text-ink-3">{row.label}</dt>
+            <dd>
+              <Num className="text-base font-bold text-ink">{row.value}</Num>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------ expected goals */
+
+/** Understat stores these display labels; map them to our own copy. */
+const SITUATION_KEY: Record<string, StringKey> = {
+  "Open play": "xg.sitOpenPlay",
+  "From corner": "xg.sitCorner",
+  "Set piece": "xg.sitSetPiece",
+  "Direct Freekick": "xg.sitFreekick",
+  Penalty: "xg.sitPenalty",
+};
+
+/**
+ * Expected goals, from Understat (a different source to the ESPN stat sheet).
+ * A club's xG against its actual goals is the read that separates a good
+ * attacking side from a lucky one, and the per-type split is the part the
+ * broadcaster graphics never show.
+ *
+ * Empty is a normal outcome, not a failure: the scraper only runs for followed
+ * big-five clubs, so cups and the long tail have nothing here.
+ */
+function XgTab({ teamId, played, points }: { teamId: string; played: number; points: number | null }) {
+  const { t, localize } = useI18n();
+  const query = useTeamUnderstat(teamId);
+
+  if (query.isLoading) return <PanelSkeleton height={192} />;
+  if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
+
+  const teamXg = query.data?.teamStats?.xg ?? null;
+  const teamXga = query.data?.teamStats?.xga ?? null;
+  const expected = query.data?.teamStats?.xpts ?? null;
+  const ppda = query.data?.teamStats?.ppda ?? null;
+  const deep = query.data?.teamStats?.deep ?? null;
+  const situations = query.data?.situations ?? [];
+  const players = [...(query.data?.players ?? [])].sort((a, b) => (b.xg ?? 0) - (a.xg ?? 0));
+
+  if (teamXg == null && situations.length === 0 && players.length === 0) {
+    return <EmptyState title={t("xg.emptyTitle")} hint={t("xg.emptyHint")} />;
+  }
+
+  const fixed = (value: number | null) => (value == null ? "–" : value.toFixed(2));
+  const perMatch = (value: number | null) =>
+    value != null && played > 0 ? (value / played).toFixed(2) : null;
+  // Actual minus expected: the over/under-performance read.
+  const delta = points != null && expected != null ? points - expected : null;
+  const extra = [
+    ppda != null ? { label: t("xg.ppda"), value: ppda.toFixed(2), hint: t("xg.ppdaHint") } : null,
+    deep != null ? { label: t("xg.deep"), value: String(deep), hint: t("xg.deepHint") } : null,
+  ].filter((row): row is { label: string; value: string; hint: string } => row != null);
+  // Scale the bars against the biggest type so they read as shares of the total.
+  const widest = Math.max(0.01, ...situations.map((s) => Math.max(s.xg ?? 0, s.xga ?? 0)));
+
+  return (
+    <div className="space-y-4">
+      <Card className="p-4">
+        <SectionHeading title={t("xg.title")} />
+        <div className="mt-3 grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-[11px] font-semibold text-ink-3">{t("xg.for")}</p>
+            <Num className="text-2xl font-black text-volt">{fixed(teamXg)}</Num>
+            {perMatch(teamXg) ? (
+              <p className="text-[11px] text-ink-3">
+                <Num>{perMatch(teamXg)}</Num> {t("xg.perMatch")}
+              </p>
+            ) : null}
+          </div>
+          <div className="text-end">
+            <p className="text-[11px] font-semibold text-ink-3">{t("xg.against")}</p>
+            <Num className="text-2xl font-black text-ink-2">{fixed(teamXga)}</Num>
+            {perMatch(teamXga) ? (
+              <p className="text-[11px] text-ink-3">
+                <Num>{perMatch(teamXga)}</Num> {t("xg.perMatch")}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        {delta != null ? (
+          <div className="mt-3 flex items-baseline justify-between gap-2 border-t border-line pt-3">
+            <span className="text-xs text-ink-2">{t("xg.points")}</span>
+            <span className="text-[11px] text-ink-3">
+              <Num className="text-sm font-bold text-ink">{points}</Num>
+              {" · "}
+              {t("xg.expected")} <Num className="text-sm font-bold text-gold">{expected?.toFixed(1)}</Num>{" "}
+              <Num className={cx("font-bold", delta >= 0 ? "text-volt" : "text-danger")}>
+                {delta >= 0 ? "+" : ""}
+                {delta.toFixed(1)}
+              </Num>
+            </span>
+          </div>
+        ) : null}
+
+        {extra.length > 0 ? (
+          <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3">
+            {extra.map((row) => (
+              <div key={row.label}>
+                <dt className="text-[11px] font-semibold text-ink-3">{row.label}</dt>
+                <dd>
+                  <Num className="text-sm font-bold text-ink">{row.value}</Num>
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </Card>
+
+      {situations.length > 0 ? (
+        <Card className="p-4">
+          <SectionHeading title={t("xg.situations")} />
+          <p className="mt-1 text-[11px] text-ink-3">{t("xg.situationsHint")}</p>
+          <ul className="mt-3 space-y-3">
+            {situations.map((situation) => {
+              const key = SITUATION_KEY[situation.situation];
+              return (
+                <li key={situation.situation}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-xs text-ink-2">{key ? t(key) : situation.situation}</span>
+                    <span className="text-[11px] text-ink-3">
+                      <Num>{situation.shots ?? 0}</Num> {t("stats.shots")} · <Num>{situation.goals ?? 0}</Num>{" "}
+                      {t("stats.goals")}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-elevated">
+                      <span
+                        className="block h-full rounded-full bg-volt"
+                        style={{ width: `${(((situation.xg ?? 0) / widest) * 100).toFixed(1)}%` }}
+                      />
+                    </span>
+                    <Num className="w-9 flex-none text-end text-[11px] font-bold text-ink">
+                      {fixed(situation.xg ?? 0)}
+                    </Num>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      ) : null}
+
+      {players.length > 0 ? (
+        <Card className="p-0">
+          <div className="px-3 pt-3">
+            <SectionHeading title={t("xg.players")} />
+          </div>
+          <ul className="mt-2 divide-y divide-line">
+            {players.slice(0, 10).map((player) => (
+              <li key={player.id} className="flex items-center gap-3 px-3 py-2">
+                <Num className="grid h-6 w-6 flex-none place-items-center rounded-full bg-elevated text-[10px] text-ink-2">
+                  {player.jersey ?? "–"}
+                </Num>
+                <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">
+                  {localize(player.name)}
+                </span>
+                <span className="flex-none text-[11px] text-ink-3">
+                  <Num className="me-2 text-ink-2">
+                    {t("xg.xa")} {fixed(player.xa ?? 0)}
+                  </Num>
+                  <Num className="font-bold text-volt">{fixed(player.xg ?? 0)}</Num>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="px-3 pb-3 pt-2 text-[11px] text-ink-3">{t("xg.source")}</p>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+
+PAGE 5/11  -  Cups
+route: /cups
+file:  src/pages/Cups.tsx  (384 lines)
+================================================================================================
+
+import { useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { TopBar } from "../components/TopBar";
+import { CompRowSkeleton, MatchCardSkeleton } from "../components/Skeletons";
+import {
+  Chip,
+  CollapsibleSection,
+  EmptyState,
+  ErrorState,
+  LiveDot,
+  Num,
+  SectionHeading,
+  Segmented,
+} from "../components/ui";
+import { buildBracket, type BracketTie } from "../lib/bracket";
+import { useKnockoutCompetitions, useMatches } from "../hooks/useApi";
+import { useI18n } from "../i18n/context";
+import { formatKickoff } from "../lib/format";
+import { haptic } from "../lib/telegram";
+import type { Match } from "../types";
+
+/**
+ * Knockout competitions: live scores and fixtures for the club cups — the three
+ * UEFA competitions, UCL qualifying and the Super Cup, plus the big five's six
+ * domestic cups — and the international tournaments (national teams). Sourced
+ * from the same sync as the leagues and selected on the server's `kind`
+ * (anything that is not a league), so promoting a competition into the catalog
+ * adds it here with no client change. No table here — knockout only.
+ *
+ * A small Cups / International toggle swaps the competition strip, because one
+ * fifteen-item scroller mixing club cups with World Cup qualifying is hard to
+ * find things in. The toggle follows a deep link, so Browse's tournament rows
+ * open straight onto the International tab.
+ */
+export default function Cups() {
+  const { t, localize } = useI18n();
+
+  const compsQuery = useKnockoutCompetitions();
+  const comps = compsQuery.data ?? [];
+  const [searchParams] = useSearchParams();
+  const [picked, setPicked] = useState<string | null>(null);
+  const [kind, setKind] = useState<"cup" | "tournament" | null>(null);
+
+  // Deep link from Browse (?cup=uefa.champions) wins until the user picks one.
+  // Default: the Champions League until the picker loads.
+  const linked = searchParams.get("cup");
+  const active = picked ?? linked ?? comps[0]?.slug ?? "uefa.champions";
+  // The toggle follows whatever competition is active, so Browse's tournament
+  // rows open onto International instead of an empty club-cup strip.
+  const tab = (kind ?? comps.find((c) => c.slug === active)?.kind ?? "cup") as "cup" | "tournament";
+  const visible = comps.filter((c) => c.kind === tab);
+  const matchesQuery = useMatches({ league: active });
+  // Memoized so the identity stays stable across renders: the derived `byRound`
+  // map below depends on it, and a fresh `[]` every render would rebuild it.
+  const matches = useMemo(() => matchesQuery.data ?? [], [matchesQuery.data]);
+
+  const live = matches.filter((m) => m.status === "live");
+  const scheduled = matches.filter((m) => m.status === "scheduled");
+  const finished = matches.filter((m) => m.status === "finished");
+
+  // Bulk expand/collapse for the bracket rounds. null = no override, so every
+  // round uses its own persisted fold state; the control only shows when
+  // there's a bracket, and flips back to null whenever a round is toggled
+  // singly (the override is transient, the per-round choice is the truth).
+  const [roundsOverride, setRoundsOverride] = useState<boolean | null>(null);
+
+  // Knockout structure from the sync's round labels: rounds in play order,
+  // two-legged pairings folded into one tie with an aggregate, winners
+  // inferred (honestly undecided when penalties decided a level tie), and
+  // feeder links connecting each tie back to the round that produced it —
+  // that is what turns five flat fixture lists into one bracket. Cups with
+  // no round data fall back to the status sections below, unchanged.
+  const bracket = useMemo(() => {
+    if (matchesQuery.isLoading || matchesQuery.isError) return { rounds: [], connected: false };
+    return buildBracket(matches);
+  }, [matches, matchesQuery.isLoading, matchesQuery.isError]);
+
+  return (
+    <>
+      <TopBar title={t("cups.title")} subtitle={t("cups.subtitle")} back />
+
+      {compsQuery.isLoading ? (
+        <RowPlaceholder />
+      ) : (
+        <div className="mt-3 space-y-2">
+          <Segmented
+            value={tab}
+            onChange={(next) => {
+              haptic("light");
+              setKind(next);
+              const first = comps.find((c) => c.kind === next);
+              if (first) setPicked(first.slug);
+            }}
+            options={[
+              { value: "cup", label: t("browse.cups") },
+              { value: "tournament", label: t("browse.tournaments") },
+            ]}
+          />
+          <Segmented
+            value={active}
+            onChange={(next) => {
+              haptic("light");
+              setPicked(next);
+            }}
+            options={visible.map((c) => ({ value: c.slug, label: localize(c.name) }))}
+          />
+        </div>
+      )}
+
+      {bracket.rounds.length > 0 ? (
+        /* Round structure when the sync carries it: live first, then the
+           bracket from the first round to the final. */
+        <>
+          {matchesQuery.isLoading ? (
+            <ul className="mt-4 space-y-2">
+              <MatchCardSkeleton />
+            </ul>
+          ) : null}
+          {matchesQuery.isError ? (
+            <div className="mt-4">
+              <ErrorState onRetry={() => matchesQuery.refetch()} />
+            </div>
+          ) : null}
+          {live.length > 0 ? (
+            <section className="mt-4">
+              <SectionHeading
+                title={t("matches.live")}
+                action={
+                  <Chip tone="live">
+                    <LiveDot />
+                    <Num>{live.length}</Num>
+                  </Chip>
+                }
+              />
+              <CupMatchList matches={live} />
+            </section>
+          ) : null}
+          {bracket.rounds.length > 1 ? (
+            // Bulk control for the bracket: folds or unfolds every round at
+            // once. The label names the action ahead — "Expand all" once the
+            // rounds are collapsed, "Collapse all" otherwise.
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("light");
+                  setRoundsOverride((prev) => (prev === null ? false : !prev));
+                }}
+                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-[11px] font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
+              >
+                {roundsOverride === false ? t("common.expandAll") : t("common.collapseAll")}
+              </button>
+            </div>
+          ) : null}
+          {bracket.rounds.map((round) => {
+            const legCount = round.ties.reduce((n, tie) => n + tie.legs.length, 0);
+            return (
+              // Collapsible like the status sections; the fold state keys off
+              // the round label, so collapsing "Qualifying" once keeps it
+              // folded in every cup. Toggling one round releases the bulk
+              // override so the per-round choice is the ongoing truth.
+              <CollapsibleSection
+                key={round.label}
+                id={`cups-round-${roundId(round.label)}`}
+                level={2}
+                title={localize(round.label)}
+                count={legCount}
+                openOverride={roundsOverride === null ? undefined : { open: roundsOverride }}
+                onUserToggle={roundsOverride === null ? undefined : () => setRoundsOverride(null)}
+              >
+                <div className="space-y-2">
+                  {round.ties.map((tie) => (
+                    <TieCard key={tie.key} tie={tie} />
+                  ))}
+                </div>
+              </CollapsibleSection>
+            );
+          })}
+        </>
+      ) : (
+        /* No round labels in the window: the original status sections. */
+        <>
+          <section className="mt-4">
+            <SectionHeading
+              title={t("matches.live")}
+              action={
+                live.length > 0 ? (
+                  <Chip tone="live">
+                    <LiveDot />
+                    <Num>{live.length}</Num>
+                  </Chip>
+                ) : null
+              }
+            />
+            {matchesQuery.isLoading ? (
+              <ul className="space-y-2">
+                <MatchCardSkeleton />
+              </ul>
+            ) : matchesQuery.isError ? (
+              <ErrorState onRetry={() => matchesQuery.refetch()} />
+            ) : live.length > 0 ? (
+              <CupMatchList matches={live} />
+            ) : (
+              <EmptyState
+                title={t("cups.empty")}
+                hint={t("cups.emptyHint")}
+                action={
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      matchesQuery.refetch();
+                    }}
+                    className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                  >
+                    {t("common.retry")}
+                  </button>
+                }
+              />
+            )}
+          </section>
+
+          <section className="mt-6">
+            <SectionHeading title={t("matches.upcoming")} />
+            {scheduled.length > 0 ? (
+              <CupMatchList matches={scheduled} />
+            ) : (
+              <EmptyState title={t("cups.empty")} hint={t("cups.emptyHint")} />
+            )}
+          </section>
+
+          <CollapsibleSection
+            id="cups-finished"
+            level={2}
+            title={t("matches.previous")}
+            count={finished.length}
+          >
+            {finished.length > 0 ? (
+              <CupMatchList matches={finished} />
+            ) : (
+              <EmptyState title={t("cups.empty")} hint={t("cups.emptyHint")} />
+            )}
+          </CollapsibleSection>
+        </>
+      )}
+
+      <p className="mt-6 text-center text-[11px] text-ink-3">{t("cups.noTable")}</p>
+    </>
+  );
+}
+
+/**
+ * Cup fixture row: teams, score/clock, summary link. The whole footer is
+ * the touch surface — the link meets the 44px floor inside it.
+ * In `bare` mode the row drops its own card chrome: a TieCard supplies the
+ * border and the rows become the tie's legs, separated by hairlines.
+ */
+function CupMatchList({ matches, bare = false }: { matches: Match[]; bare?: boolean }) {
+  const { t, lang, localize } = useI18n();
+  return (
+    <ul className={bare ? undefined : "space-y-2"}>
+      {matches.map((match) => (
+        <li
+          key={match.id}
+          className={
+            bare
+              ? "border-t border-line px-3 py-2 first:border-t-0"
+              : "rounded-card border border-line bg-surface p-3"
+          }
+        >
+          <div className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-end text-sm font-bold text-ink">
+              {localize(match.home.shortName)}
+            </span>
+            <span className="flex-none">
+              {match.status === "live" ? (
+                <Chip tone="live">
+                  <LiveDot />
+                  <Num>{match.minute ?? ""}</Num>
+                </Chip>
+              ) : match.status === "finished" ? (
+                <Chip tone="muted">
+                  <Num>
+                    {match.homeScore ?? 0}–{match.awayScore ?? 0}
+                  </Num>
+                </Chip>
+              ) : (
+                <Chip tone="volt">
+                  <Num>{formatKickoff(new Date(match.kickoffAt), lang === "fa" ? "fa-IR" : undefined)}</Num>
+                </Chip>
+              )}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+              {localize(match.away.shortName)}
+            </span>
+          </div>
+          <div className="mt-2 flex min-h-11 items-center justify-end gap-4 border-t border-line pt-1">
+            <Link
+              to={`/match/${match.id}`}
+              className="inline-flex h-11 items-center text-[11px] font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:text-ink"
+            >
+              {t("match.summary")}
+            </Link>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * One tie of the bracket — the node that connects rounds. The card carries
+ * the pairing's aggregate header when the tie spans two legs, the legs
+ * themselves (bare rows), and a footer that states what the data proves:
+ * who advances (an honest "undecided" when penalties decided a level tie)
+ * and which round the participants came from — the visible edge of the tree.
+ * A first-round tie with nothing to say renders as a plain fixture card.
+ */
+function TieCard({ tie }: { tie: BracketTie }) {
+  const { t, localize } = useI18n();
+  const twoLegs = tie.legs.length > 1;
+  const showFooter = twoLegs || tie.winnerId != null || tie.feedRound != null;
+  return (
+    <div className="overflow-hidden rounded-card border border-line bg-surface">
+      {twoLegs ? (
+        <div className="flex items-center gap-2 border-b border-line bg-elevated px-3 py-2">
+          <span className="min-w-0 flex-1 truncate text-end text-xs font-bold text-ink">{tie.homeName}</span>
+          <span className="label flex-none text-ink-3">
+            {t("cups.tieAgg")}{" "}
+            <Num className="text-xs text-ink">
+              {tie.aggHome ?? "–"}–{tie.aggAway ?? "–"}
+            </Num>
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">{tie.awayName}</span>
+        </div>
+      ) : null}
+      <CupMatchList matches={tie.legs} bare />
+      {showFooter ? (
+        <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11px]">
+          {tie.winnerId ? (
+            <span className="min-w-0 truncate font-bold text-volt">
+              <span aria-hidden="true">→ </span>
+              {tie.winnerName}
+              <span className="sr-only"> — {t("cups.winnerAdvances")}</span>
+            </span>
+          ) : (
+            <span className="text-ink-3">{t("cups.tiePending")}</span>
+          )}
+          {tie.feedRound ? (
+            <span className="flex-none text-ink-3">
+              <span aria-hidden="true">← </span>
+              {localize(tie.feedRound)}
+              <span className="sr-only"> — {t("cups.feedsFrom", { round: localize(tie.feedRound) })}</span>
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Stable, DOM-id-safe key for a round label, so its fold state survives
+ * reloads and is shared across cups with the same round naming. Latin labels
+ * slugify ("Quarter-final" → "quarter-final"); anything else (Persian round
+ * names) falls back to a deterministic hash so the id is still valid HTML and
+ * unique.
+ */
+function roundId(label: string): string {
+  const slug = label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (slug) return slug;
+  let hash = 0;
+  for (let i = 0; i < label.length; i += 1) {
+    hash = (hash * 31 + label.charCodeAt(i)) | 0;
+  }
+  return `r${(hash >>> 0).toString(36)}`;
+}
+
+function RowPlaceholder() {
+  return <CompRowSkeleton rows={3} />;
+}
+
+
+PAGE 6/11  -  Ratings
+route: /ratings
+file:  src/pages/Ratings.tsx  (280 lines)
+================================================================================================
+
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { RateSheet } from "../components/panels/RateSheet";
+import { RatingRow } from "../components/RatingRow";
+import { RowSkeleton } from "../components/Skeletons";
+import { TopBar } from "../components/TopBar";
+import { Card, Chip, EmptyState, ErrorState, SectionHeading, Segmented } from "../components/ui";
+import { api, serverErrorKey } from "../lib/api";
+import { TEAM_FALLBACK } from "../lib/colors";
+import { useMatches } from "../hooks/useApi";
+import { useI18n } from "../i18n/context";
+import type { PlayerRating } from "../types";
+import { haptic, notifyHaptic } from "../lib/telegram";
+import { useToast } from "../components/toastContext";
+import type { StringKey } from "../i18n/strings";
+import { useSearchParams, Link } from "react-router-dom";
+
+/**
+ * The eye test across your matches: latest finished (or live) match first,
+ * real crowd ratings beside the stat score. Rating writes go to the server.
+ */
+export default function Ratings() {
+  const { t, localize } = useI18n();
+  const [params, setParams] = useSearchParams();
+  const matchesQuery = useMatches();
+  const matches = matchesQuery.data ?? [];
+
+  // The match whose rating sheet is open (deep-linkable via ?match=).
+  const requested = params.get("match");
+  const openMatchId = requested ?? (matches.find((m) => m.status === "finished") ?? matches[0])?.id ?? "";
+  const openMatch = matches.find((m) => m.id === openMatchId);
+
+  const setMatchParam = (id: string) =>
+    setParams(
+      (prev) => {
+        prev.set("match", id);
+        prev.delete("rate");
+        return prev;
+      },
+      { replace: true },
+    );
+
+  const finished = matches.filter((m) => m.status !== "scheduled").slice(0, 8);
+
+  return (
+    <>
+      <TopBar title={t("ratings.title")} subtitle={t("ratings.subtitle")} />
+
+      {finished.length > 1 ? (
+        <div className="mt-3">
+          <Segmented
+            value={openMatchId}
+            onChange={setMatchParam}
+            options={finished.map((m) => ({
+              value: m.id,
+              label: `${localize(m.home.shortName)}–${localize(m.away.shortName)}`,
+            }))}
+          />
+        </div>
+      ) : null}
+
+      {matchesQuery.isLoading ? (
+        <div className="mt-3">
+          <RowSkeleton rows={6} />
+        </div>
+      ) : !openMatch ? (
+        <div className="mt-3">
+          <EmptyState
+            title={t("ratings.emptyTitle")}
+            hint={t("ratings.emptyHint")}
+            action={
+              <Link
+                to="/matches"
+                className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+              >
+                {t("ratings.emptyAction")}
+              </Link>
+            }
+          />
+        </div>
+      ) : (
+        <MatchRatings matchId={openMatch.id} match={openMatch} league={openMatch.home.league} />
+      )}
+    </>
+  );
+}
+
+function MatchRatings({
+  matchId,
+  match,
+  league,
+}: {
+  matchId: string;
+  match: { status: string; home: { shortName: string }; away: { shortName: string } } | undefined;
+  /** The match's competition (LeagueId or cup slug) for the row's team chip. */
+  league: string;
+}) {
+  const { t, localize } = useI18n();
+  const { push } = useToast();
+  const [params, setParams] = useSearchParams();
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: ["ratings", matchId],
+    queryFn: () => api.getRatings(matchId),
+    refetchInterval: match?.status === "live" ? 30_000 : false,
+  });
+  const players = (query.data?.players ?? []).map((p) => adapt(p, league));
+  // Real histograms straight from crowd_ratings (server GROUP BY); the zero
+  // array is only a brand-new player's honest "no votes yet".
+  const distributions = query.data?.distributions ?? {};
+  const cardsUsed = query.data?.cardsUsed ?? 0;
+  const cardsMax = query.data?.cardsMax ?? 3;
+  const [sort, setSort] = useState<"crowd" | "points" | "divergence">("crowd");
+
+  const sheetFor = players.find((row) => row.playerId === params.get("rate")) ?? null;
+  const setSheetFor = (player: PlayerRating | null) =>
+    setParams(
+      (prev) => {
+        if (player) prev.set("rate", player.playerId);
+        else prev.delete("rate");
+        return prev;
+      },
+      { replace: true },
+    );
+
+  type RatingsData = Awaited<ReturnType<typeof api.getRatings>>;
+
+  const rate = useMutation({
+    mutationFn: (input: { playerId: string; value: number; comment?: string }) =>
+      api.ratePlayer(matchId, input.playerId, input.value, input.comment),
+    // Optimistic: the row shows the user's score the moment they save — no
+    // round-trip wait. Rollback restores the server list on failure.
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: ["ratings", matchId] });
+      const prev = queryClient.getQueryData<RatingsData>(["ratings", matchId]);
+      if (prev) {
+        const target = prev.players.find((p) => p.player_id === input.playerId);
+        const wasNew = target?.my_rating == null;
+        queryClient.setQueryData<RatingsData>(["ratings", matchId], {
+          ...prev,
+          cardsUsed: wasNew ? Math.min(prev.cardsMax, prev.cardsUsed + 1) : prev.cardsUsed,
+          players: prev.players.map((p) =>
+            p.player_id === input.playerId
+              ? {
+                  ...p,
+                  my_rating: input.value,
+                  my_comment: input.comment ?? p.my_comment ?? null,
+                  votes: wasNew ? p.votes + 1 : p.votes,
+                }
+              : p,
+          ),
+        });
+      }
+      return { prev };
+    },
+    onSuccess: () => {
+      // Server truth (crowd average, real vote counts) replaces the optimistic row.
+      void queryClient.invalidateQueries({ queryKey: ["ratings", matchId] });
+    },
+    onError: (err, _input, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(["ratings", matchId], ctx.prev);
+      // e.g. "player did not feature" or the 3-card cap — localized, not raw.
+      notifyHaptic("error");
+      push({ text: t(serverErrorKey(err) as StringKey), tone: "danger", icon: "✕" });
+    },
+  });
+
+  // The whole point of the feature: players the crowd rates highly but who
+  // returned little on the stat sheet, side by side rather than merged.
+  const divergence = (rating: PlayerRating) => (rating.crowdRating ?? 0) - rating.fantasyPoints / 2;
+
+  const rows = [...players].sort((a, b) => {
+    if (sort === "points") return b.fantasyPoints - a.fantasyPoints;
+    if (sort === "divergence") return divergence(b) - divergence(a);
+    return (b.crowdRating ?? 0) - (a.crowdRating ?? 0);
+  });
+
+  if (query.isLoading) return <RowSkeleton rows={6} />;
+  if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
+  if (players.length === 0) return <EmptyState title={t("ratings.noneYet")} hint={t("ratings.noneHint")} />;
+
+  return (
+    <>
+      <Card className="mt-3 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-xs text-ink-2">
+              {localize(match?.home.shortName ?? "")} {t("common.versus")}{" "}
+              {localize(match?.away.shortName ?? "")}
+            </p>
+            <p className="mt-0.5 text-xs text-ink-3">
+              {t("ratings.cards", { used: cardsUsed, max: cardsMax })} · {t("ratings.pickThree")}
+            </p>
+          </div>
+          <Chip tone="gold">{t("ratings.eyeTest")}</Chip>
+        </div>
+      </Card>
+
+      <div className="mt-4">
+        <Segmented
+          value={sort}
+          onChange={setSort}
+          options={[
+            { value: "crowd", label: t("ratings.sortCrowd") },
+            { value: "points", label: t("ratings.sortPoints") },
+            { value: "divergence", label: t("ratings.sortGap") },
+          ]}
+        />
+      </div>
+
+      <section className="mt-4">
+        <SectionHeading
+          title={t("match.tabRatings")}
+          action={<span className="text-[11px] text-ink-3">{t("ratings.tapToRate")}</span>}
+        />
+        <ul className="mt-2 space-y-2">
+          {rows.map((rating, index) => (
+            <RatingRow
+              key={rating.playerId}
+              index={index}
+              rating={rating}
+              team={rating._team}
+              onTap={(player) => {
+                // 3-card cap: block a brand-new card when full, edits stay open.
+                if (cardsUsed >= cardsMax && player.myRating === null) return;
+                setSheetFor(player);
+              }}
+            />
+          ))}
+        </ul>
+      </section>
+
+      {sheetFor ? (
+        <RateSheet
+          rating={sheetFor}
+          open
+          onClose={() => setSheetFor(null)}
+          distribution={distributions[sheetFor.playerId] ?? ZERO_DISTRIBUTION}
+          cardsUsed={cardsUsed}
+          cardsMax={cardsMax}
+          onSave={(playerId, value, comment) => {
+            haptic("medium");
+            rate.mutate({ playerId, value, comment });
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+type Team = import("../types").Team;
+
+function adapt(p: import("../lib/api").ApiPlayerRating, league: string): PlayerRating & { _team: Team } {
+  return {
+    playerId: p.player_id,
+    name: p.name,
+    teamId: p.team_id,
+    position: (p.position ?? "MID") as PlayerRating["position"],
+    fantasyPoints: p.stat_score ?? 0,
+    crowdRating: p.crowd_rating,
+    votes: p.votes ?? 0,
+    myRating: p.my_rating ?? null,
+    myComment: p.my_comment ?? null,
+    latestComment: p.latest_comment ?? null,
+    latestCommentId: p.latest_comment_id ?? null,
+    _team: {
+      id: p.team_id,
+      name: p.team_name ?? "",
+      shortName: p.team_short ?? p.team_name ?? "",
+      abbreviation: (p.team_short ?? "").slice(0, 3) || "—",
+      color: p.team_color ?? TEAM_FALLBACK,
+      // The match's own competition, not a hardcoded default: a cup match's
+      // rating rows no longer masquerade as Premier League sides.
+      league: (league || "PL") as Team["league"],
+    },
+  };
+}
+
+/** Shared "no votes yet" histogram — a stable empty reference, not a render allocation. */
+const ZERO_DISTRIBUTION: number[] = Array.from({ length: 10 }, () => 0);
+
+
+PAGE 7/11  -  Table
+route: /table
+file:  src/pages/Table.tsx  (683 lines)
+================================================================================================
+
+import { useState, useMemo, type CSSProperties } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { TopBar } from "../components/TopBar";
+import { RowSkeleton, CompRowSkeleton } from "../components/Skeletons";
+import { EmptyState, ErrorState, Chip, SectionHeading, TeamBadge, LiveDot, Num, CountUp, Segmented } from "../components/ui";
+import { cx } from "../lib/cx";
+
+import { ChevronRightIcon, StarFilledIcon } from "../components/icons";
+import { slugForLeague, useLeagueTabs, useStandings, useMatches, useCompetitions, type StandingRow } from "../hooks/useApi";
+import { isCup } from "../lib/leagues";
+import { useFavorites } from "../hooks/useFavorites";
+import { useI18n } from "../i18n/context";
+import { haptic } from "../lib/telegram";
+import type { Match } from "../types";
+
+type TableView = "actual" | "expected";
+type BrowseView = "tables" | "browse";
+
+/**
+ * League tables for the synced domestic leagues — straight from the standings.
+ * Your clubs are highlighted in every table, and the summary strip jumps to the
+ * league each of them plays in.
+ */
+export default function Table() {
+  const { t, localize } = useI18n();
+  const { teams: clubs, isFavorite } = useFavorites();
+  const tabs = useLeagueTabs();
+  const [league, setLeague] = useState<string | null>(null);
+  const [view, setView] = useState<TableView>("actual");
+  const [browseView, setBrowseView] = useState<BrowseView>("tables");
+
+  // Default to the league one of your clubs plays in, else the Premier League.
+  // `clubs[].league` is a big-five alias (teamFromApi parks every other side
+  // in "PL"), so the default always lands on a tab that exists.
+  const active = league ?? clubs[0]?.league ?? "PL";
+  const slug = slugForLeague(active);
+  // Tab labels carry the translation: aliases come pre-translated, followed
+  // extras read their catalog name — `league.<slug>` i18n keys don't exist.
+  const tabLabel = (value: string) => tabs.find((tab) => tab.value === value)?.label ?? value;
+  const standingsQuery = useStandings(slug);
+  const rows = standingsQuery.data ?? [];
+
+  // Expected points ride along on the standings payload (one left join
+  // server-side, no extra request), and only the clubs Understat covers have
+  // them — so "no data" is a normal state here, never an error. Understat only
+  // scrapes the big five, so for any other league the Expected tab would open
+  // onto an empty board; in that case the tab is hidden rather than shown
+  // disabled, because a control that can never do anything is worse than an
+  // absent one.
+  const hasExpected = rows.some((row) => row.xpts != null);
+  // Guard the view itself too: if it somehow renders without data (a league
+  // that gains coverage mid-session), fall back to the real table instead of
+  // a grid of dashes.
+  const showExpected = view === "expected" && hasExpected;
+  // Ranked by xPts, with the uncovered clubs parked below in table order
+  // (Array#sort is stable) rather than dropped or given a fake rank.
+  const expectedRows = [...rows].sort((a, b) => (b.xpts ?? -1) - (a.xpts ?? -1));
+
+  return (
+    <>
+      <TopBar title={t("table.title")} subtitle={t("table.subtitle")} back />
+
+      <div className="mt-3">
+        <Segmented
+          value={active}
+          onChange={setLeague}
+          options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
+        />
+      </div>
+
+      {/* Tables / Browse switch */}
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setBrowseView("tables")}
+          className={cx(
+            "min-h-11 rounded-full border px-4 text-sm font-bold transition-colors duration-[var(--t-fast)] active:scale-[0.97]",
+            browseView === "tables"
+              ? "border-volt bg-volt/15 text-volt"
+              : "border-line text-ink-3 hover:bg-elevated",
+          )}
+        >
+          {t("table.view.tables")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setBrowseView("browse")}
+          className={cx(
+            "min-h-11 rounded-full border px-4 text-sm font-bold transition-colors duration-[var(--t-fast)] active:scale-[0.97]",
+            browseView === "browse"
+              ? "border-volt bg-volt/15 text-volt"
+              : "border-line text-ink-3 hover:bg-elevated",
+          )}
+        >
+          {t("table.view.browse")}
+        </button>
+      </div>
+
+      {/* Tables view: standings + your clubs */}
+      {browseView === "tables" && (
+        <>
+          {/* Your clubs across all five leagues, with the position each sits in. */}
+          <section className="mt-4">
+          <SectionHeading
+          title={t("table.myClubs")}
+          action={
+            clubs.length > 0 ? (
+              <Chip tone="volt">
+                <Num>{clubs.length}</Num>
+              </Chip>
+            ) : null
+          }
+        />
+        {clubs.length > 0 ? (
+          <ul className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+            {clubs.map((club) => (
+              <li key={club.id} className="flex-none">
+                <button
+                  type="button"
+                  onClick={() => setLeague(club.league)}
+                  className={cx(
+                    "flex w-[76px] flex-col items-center gap-1 rounded-card border p-2.5 text-center transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+                    club.league === active
+                      ? "border-volt bg-elevated"
+                      : "border-line bg-surface hover:bg-elevated",
+                  )}
+                >
+                  <TeamBadge team={club} size="sm" />
+                  <span className="w-full truncate text-[11px] font-bold text-ink">
+                    {localize(club.shortName)}
+                  </span>
+                  <span className="text-[10px] text-ink-3">{t(`league.${club.league}`)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <Link
+            to="/onboarding"
+            className="block rounded-card border border-dashed border-line px-3 py-4 text-center text-xs text-ink-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+          >
+            {t("table.noClubs")}
+          </Link>
+        )}
+      </section>
+
+          <section className="mt-4">
+        {isCup(slug) ? (
+          <CupView slug={slug} rows={rows} />
+        ) : (
+          <>
+            <SectionHeading
+              title={tabLabel(active)}
+              action={
+                standingsQuery.data?.length ? (
+                  <span className="text-[11px] text-ink-3">
+                    {t("table.gw", { gw: standingsQuery.data[0]?.played ?? 0 })}
+                  </span>
+                ) : null
+              }
+            />
+            {standingsQuery.isLoading ? (
+              <RowSkeleton rows={8} />
+            ) : standingsQuery.isError ? (
+              <ErrorState onRetry={() => standingsQuery.refetch()} />
+            ) : rows.length === 0 ? (
+              <EmptyState
+                title={t("table.emptyTitle")}
+                hint={t("table.emptyHint")}
+                action={
+                  <Link
+                    to="/onboarding"
+                    className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                  >
+                    {t("table.emptyAction")}
+                  </Link>
+                }
+              />
+            ) : (
+              <>
+                <Segmented
+                  value={view}
+                  onChange={setView}
+                  className="mb-2"
+                  options={
+                    hasExpected
+                      ? [
+                          { value: "actual", label: t("table.viewActual") },
+                          { value: "expected", label: t("table.viewExpected") },
+                        ]
+                      : [{ value: "actual", label: t("table.viewActual") }]
+                  }
+                />
+
+                {showExpected ? (
+                  hasExpected ? (
+                    <>
+                      <div className="overflow-hidden rounded-card border border-line bg-surface">
+                        <div
+                          aria-hidden="true"
+                          className="grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] gap-1.5 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
+                        >
+                          <span>{t("table.rank")}</span>
+                          <span>{t("table.team")}</span>
+                          <span className="text-end">{t("table.played")}</span>
+                          <span className="text-end">{t("table.xpts")}</span>
+                          <span className="text-end">{t("table.pts")}</span>
+                          <span className="text-end">{t("table.diff")}</span>
+                        </div>
+                        <ul className="divide-y divide-line">
+                          {expectedRows.map((row, index) => (
+                            <ExpectedItem
+                              key={row.team.id}
+                              row={row}
+                              index={index}
+                              rank={row.xpts == null ? null : index + 1}
+                              mine={isFavorite(row.team.id)}
+                            />
+                          ))}
+                        </ul>
+                      </div>
+                      <p className="mt-2 text-[11px] text-ink-3">{t("table.expectedHint")}</p>
+                    </>
+                  ) : (
+                    <EmptyState title={t("table.expectedEmpty")} hint={t("table.expectedEmptyHint")} />
+                  )
+                ) : null}
+
+                {view === "actual" ? (
+                  <div className="overflow-x-auto">
+                    <div className="min-w-[640px] overflow-hidden rounded-card border border-line bg-surface">
+                      <div
+                        aria-hidden="true"
+                        className="grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
+                      >
+                        <span>{t("table.rank")}</span>
+                        <span>{t("table.team")}</span>
+                        <span className="text-end">{t("table.played")}</span>
+                        <span className="text-end">{t("table.w")}</span>
+                        <span className="text-end">{t("table.d")}</span>
+                        <span className="text-end">{t("table.l")}</span>
+                        <span className="text-end">{t("table.gf")}</span>
+                        <span className="text-end">{t("table.ga")}</span>
+                        <span className="text-end">{t("table.gd")}</span>
+                        <span className="text-end">{t("table.pts")}</span>
+                        <span className="text-end">{t("table.form")}</span>
+                      </div>
+                      <ul className="divide-y divide-line">
+                        {rows.map((row, index) => (
+                          <StandingItem
+                            key={row.team.id}
+                            row={row}
+                            index={index}
+                            mine={isFavorite(row.team.id)}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </>
+        )}
+        </section>
+        </>
+      )}
+
+      {/* Browse view: league browser */}
+      {browseView === "browse" && <BrowseContent />}
+    </>
+  );
+}
+
+/**
+ * Browse view: league/cup/tournament browser, merged from the old Browse page.
+ */
+function BrowseContent() {
+  const { t, localize } = useI18n();
+  const navigate = useNavigate();
+  const query = useCompetitions();
+  const [filter, setFilter] = useState<"all" | "league" | "cup">("all");
+  const groups = useMemo(() => {
+    const comps = query.data?.competitions ?? [];
+    const visible = comps.filter((c) => (filter === "all" ? true : c.kind === filter));
+    return {
+      leagues: visible.filter((c) => c.kind === "league"),
+      cups: visible.filter((c) => c.kind === "cup"),
+      tournaments: visible.filter((c) => c.kind === "tournament"),
+    };
+  }, [query.data, filter]);
+
+  const sections = useMemo(() => [
+    { title: t("browse.leagues"), rows: groups.leagues },
+    { title: t("browse.cups"), rows: groups.cups },
+    ...(groups.tournaments.length > 0 ? [{ title: t("browse.tournaments"), rows: groups.tournaments }] : []),
+  ], [groups]);
+
+  const open = (slug: string, comingSoon: boolean | undefined, kind: string) => {
+    if (comingSoon) return;
+    haptic("light");
+    if (kind === "league") navigate(`/matches?league=${encodeURIComponent(slug)}`);
+    else navigate(`/cups?cup=${encodeURIComponent(slug)}`);
+  };
+
+  return (
+    <>
+      <div
+        className="mt-3 grid grid-cols-3 gap-1 rounded-full border border-line bg-surface p-1"
+        role="tablist"
+      >
+        {(
+          [
+            ["all", "browse.all"],
+            ["league", "browse.leagues"],
+            ["cup", "browse.cups"],
+          ] as const
+        ).map(([value, key]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={filter === value}
+            onClick={() => {
+              haptic("light");
+              setFilter(value);
+            }}
+            className={cx(
+              "min-h-11 rounded-full text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+              filter === value ? "bg-elevated text-volt" : "text-ink-2 hover:text-ink",
+            )}
+          >
+            {t(key)}
+          </button>
+        ))}
+      </div>
+
+      {query.isLoading ? (
+        <div className="mt-4">
+          <CompRowSkeleton rows={6} />
+        </div>
+      ) : (
+        sections.map(
+          ({ title, rows }) =>
+            rows.length > 0 && (
+              <section key={title} className="mt-5 fade-swap">
+                <SectionHeading
+                  title={title}
+                  action={
+                    <Chip tone="muted">
+                      <Num>{rows.length}</Num>
+                    </Chip>
+                  }
+                />
+                <ul className="space-y-2">
+                  {rows.map((comp) => {
+                    const soon = Boolean(comp.comingSoon);
+                    const Wrapper = soon ? "div" : "button";
+                    return (
+                      <li key={comp.slug}>
+                        <Wrapper
+                          {...(soon
+                            ? {}
+                            : {
+                                type: "button" as const,
+                                onClick: () => open(comp.slug, comp.comingSoon, comp.kind),
+                              })}
+                          className={cx(
+                            "flex w-full items-center gap-3 rounded-card border p-3 text-start transition-colors duration-[var(--t-fast)]",
+                            soon
+                              ? "border-dashed border-line bg-transparent opacity-70"
+                              : "border-line bg-surface hover:bg-elevated",
+                          )}
+                        >
+                          <span
+                            className={cx(
+                              "grid h-9 w-9 flex-none place-items-center rounded-full border text-xs font-extrabold",
+                              soon ? "border-line text-ink-3" : "border-volt text-volt",
+                            )}
+                            style={{
+                              backgroundColor: soon
+                                ? undefined
+                                : "color-mix(in srgb, var(--volt) 12%, transparent)",
+                            }}
+                            aria-hidden="true"
+                          >
+                            {comp.name.slice(0, 1)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-bold text-ink">
+                              {localize(comp.name)}
+                            </span>
+                            <span className="block truncate text-[11px] text-ink-3">
+                              {soon ? t("browse.comingSoon") : t("browse.liveScores")}
+                            </span>
+                          </span>
+                          {soon ? (
+                            <Chip tone="muted">{t("browse.soon")}</Chip>
+                          ) : (
+                            <ChevronRightIcon className="text-ink-3" />
+                          )}
+                        </Wrapper>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ),
+        )
+      )}
+    </>
+  );
+}
+
+function StandingItem({ row, index, mine }: { row: StandingRow; index: number; mine: boolean }) {
+  const { localize } = useI18n();
+  const gd = (row.goalsFor ?? 0) - (row.goalsAgainst ?? 0);
+  return (
+    <li
+      className={cx(
+        "list-in relative grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] items-center gap-2 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
+        mine ? "bg-elevated" : "hover:bg-elevated/60",
+      )}
+      style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
+    >
+      <Num className={cx("text-sm", mine ? "text-volt" : index < 3 ? "text-gold" : "text-ink-3")}>
+        {row.rank ?? index + 1}
+      </Num>
+      {/* Stretched link: the <a> sits in the team column (so the grid stays one
+          row), and its ::after covers the whole row — every tap, rank to
+          points, opens the club page, so the row is one 44px+ touch target. */}
+      <Link
+        to={`/team/${row.team.id}`}
+        className="flex min-h-11 min-w-0 items-center gap-2 after:absolute after:inset-0"
+      >
+        <TeamBadge team={row.team} size="sm" />
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+          {localize(row.team.shortName)}
+        </span>
+        {mine ? <StarFilledIcon className="h-3 w-3 flex-none text-volt" /> : null}
+      </Link>
+      <Num className="text-end text-xs text-ink-3">{row.played ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">{row.wins ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">{row.draws ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">{row.losses ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">{row.goalsFor ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">{row.goalsAgainst ?? "–"}</Num>
+      <Num className={cx("text-end text-xs", gd >= 0 ? "text-ink-2" : "text-ink-3")}>
+        {gd > 0 ? `+${gd}` : gd}
+      </Num>
+      {row.points != null ? (
+        <CountUp value={row.points} className="text-end text-sm text-ink" />
+      ) : (
+        <Num className="text-end text-sm text-ink">–</Num>
+      )}
+      {row.form ? <FormStrip form={row.form} /> : <span className="text-end text-xs text-ink-3">–</span>}
+    </li>
+  );
+}
+
+/**
+ * The last five results, oldest first. Letters rather than dots: at this size a
+ * 6px dot is a smudge, and "WWDLW" still fits beside a truncated club name on
+ * the narrowest phone. One image for screen readers, so the label reads as a
+ * sentence instead of five stray letters; `dir="ltr"` keeps the newest result
+ * on the right in Farsi too, where a Latin run would otherwise be reordered.
+ */
+function FormStrip({ form }: { form: string }) {
+  const { t } = useI18n();
+  const results = [...form];
+  const label = results
+    .map((r) => (r === "W" ? t("table.formW") : r === "L" ? t("table.formL") : t("table.formD")))
+    .join(", ");
+  return (
+    <span
+      role="img"
+      aria-label={`${t("table.form")}: ${label}`}
+      dir="ltr"
+      className="flex flex-none gap-px text-[9px] font-black leading-none"
+    >
+      {results.map((result, index) => (
+        <span
+          key={index}
+          className={cx(result === "W" ? "text-pitch" : result === "L" ? "text-danger" : "text-ink-3")}
+        >
+          {result}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * One row of the expected table: what a club's chances were worth set against
+ * what it actually banked. `rank` is null for a club Understat doesn't cover —
+ * it is still listed, unranked and dimmed, because dropping it would quietly
+ * make this look like a different league.
+ */
+function ExpectedItem({
+  row,
+  index,
+  rank,
+  mine,
+}: {
+  row: StandingRow;
+  index: number;
+  rank: number | null;
+  mine: boolean;
+}) {
+  const { t, localize } = useI18n();
+  const expected = row.xpts;
+  const actual = row.points;
+  const delta = expected != null && actual != null ? actual - expected : null;
+  return (
+    <li
+      className={cx(
+        "list-in relative grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] items-center gap-1.5 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
+        mine ? "bg-elevated" : "hover:bg-elevated/60",
+        expected == null && "opacity-55",
+      )}
+      style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
+    >
+      <Num className="text-xs text-ink-3">{rank ?? "–"}</Num>
+      <Link
+        to={`/team/${row.team.id}`}
+        className="flex min-h-11 min-w-0 items-center gap-2 after:absolute after:inset-0"
+      >
+        <TeamBadge team={row.team} size="sm" />
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+          {localize(row.team.shortName)}
+        </span>
+        {mine ? <StarFilledIcon className="h-3 w-3 flex-none text-volt" /> : null}
+      </Link>
+      <Num className="text-end text-xs text-ink-3">{row.played ?? "–"}</Num>
+      {/* The header grid is decorative (aria-hidden, as in the real table), so
+          every figure names itself; the wrappers keep the cell count even. */}
+      <span className="text-end">
+        {expected != null ? (
+          <CountUp value={expected} decimals={1} className="text-xs font-bold text-gold" />
+        ) : (
+          <Num className="text-xs font-bold text-gold">–</Num>
+        )}
+        <span className="sr-only"> {t("table.xpts")}</span>
+      </span>
+      <span className="text-end">
+        {actual != null ? (
+          <CountUp value={actual} className="text-xs text-ink" />
+        ) : (
+          <Num className="text-xs text-ink">–</Num>
+        )}
+        <span className="sr-only"> {t("table.pts")}</span>
+      </span>
+      <span className="text-end">
+        <Num
+          className={cx(
+            "text-xs font-bold",
+            delta == null ? "text-ink-3" : delta >= 0 ? "text-volt" : "text-danger",
+          )}
+        >
+          {delta == null ? "–" : `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}`}
+        </Num>
+        <span className="sr-only"> {t("xg.expected")}</span>
+      </span>
+    </li>
+  );
+}
+
+function CupView({ slug, rows }: { slug: string; rows: StandingRow[] }) {
+  const { t, localize } = useI18n();
+  const { isFavorite } = useFavorites();
+
+  if (rows.length > 0) {
+    const groups = new Map<string, StandingRow[]>();
+    for (const row of rows) {
+      const key = row.groupName ?? "";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(row);
+    }
+    return (
+      <div className="space-y-4">
+        {Array.from(groups.entries()).map(([groupName, groupRows]) => (
+          <section key={groupName}>
+            <SectionHeading title={localize(groupName)} />
+            <div className="overflow-x-auto">
+              <div className="min-w-[640px] overflow-hidden rounded-card border border-line bg-surface">
+                <div
+                  aria-hidden="true"
+                  className="grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
+                >
+                  <span>{t("table.rank")}</span>
+                  <span>{t("table.team")}</span>
+                  <span className="text-end">{t("table.played")}</span>
+                  <span className="text-end">{t("table.w")}</span>
+                  <span className="text-end">{t("table.d")}</span>
+                  <span className="text-end">{t("table.l")}</span>
+                  <span className="text-end">{t("table.gf")}</span>
+                  <span className="text-end">{t("table.ga")}</span>
+                  <span className="text-end">{t("table.gd")}</span>
+                  <span className="text-end">{t("table.pts")}</span>
+                  <span className="text-end">{t("table.form")}</span>
+                </div>
+                <ul className="divide-y divide-line">
+                  {groupRows.map((row, index) => (
+                    <StandingItem key={row.team.id} row={row} index={index} mine={isFavorite(row.team.id)} />
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  return <KnockoutView slug={slug} />;
+}
+
+function KnockoutView({ slug }: { slug: string }) {
+  const { t, localize } = useI18n();
+  const matchesQuery = useMatches({ league: slug });
+  const matches = matchesQuery.data ?? [];
+  const cupMatches = matches.filter((m) => m.round != null);
+
+  if (matchesQuery.isLoading) {
+    return <RowSkeleton rows={8} />;
+  }
+  if (matchesQuery.isError) {
+    return <ErrorState onRetry={() => matchesQuery.refetch()} />;
+  }
+  if (cupMatches.length === 0) {
+    return <EmptyState title={t("table.emptyTitle")} hint={t("table.emptyHint")} />;
+  }
+
+  const rounds = new Map<string, Match[]>();
+  for (const match of cupMatches) {
+    const key = match.round!;
+    if (!rounds.has(key)) rounds.set(key, []);
+    rounds.get(key)!.push(match);
+  }
+
+  return (
+    <div className="space-y-4">
+      {Array.from(rounds.entries()).map(([round, roundMatches]) => (
+        <section key={round}>
+          <SectionHeading title={localize(round)} />
+          <ul className="space-y-2">
+            {roundMatches.map((match) => (
+              <li key={match.id}>
+                <Link
+                  to={`/match/${match.id}`}
+                  className="flex items-center gap-3 rounded-card border border-line bg-surface px-3 py-2.5 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                >
+                  <div className="flex flex-1 items-center justify-end gap-2">
+                    <TeamBadge team={match.home} size="sm" />
+                    <span className="min-w-0 flex-1 truncate text-right text-sm font-bold text-ink">
+                      {localize(match.home.shortName)}
+                    </span>
+                  </div>
+                  <div className="flex flex-none items-center gap-2">
+                    {match.status === "scheduled" ? (
+                      <span className="text-xs text-ink-3">vs</span>
+                    ) : (
+                      <Num className="text-sm font-bold text-ink">
+                        {match.homeScore ?? 0} - {match.awayScore ?? 0}
+                      </Num>
+                    )}
+                    {match.status === "live" || match.status === "halftime" ? <LiveDot /> : null}
+                  </div>
+                  <div className="flex flex-1 items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+                      {localize(match.away.shortName)}
+                    </span>
+                    <TeamBadge team={match.away} size="sm" />
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+
+PAGE 8/11  -  Profile
+route: /profile
+file:  src/pages/Profile.tsx  (636 lines)
+================================================================================================
+
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { BottomSheet, SheetActions } from "../components/BottomSheet";
+import { TopBar, LanguageToggle } from "../components/TopBar";
+import { ChevronRightIcon, CloseIcon, PencilIcon, ShareIcon } from "../components/icons";
+import { useToast } from "../components/toastContext";
+import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch, TeamBadge } from "../components/ui";
+import { useAuth } from "../hooks/authContext";
+import { useFavorites } from "../hooks/useFavorites";
+import { useNotificationPrefs, useReferral } from "../hooks/useApi";
+import { useI18n } from "../i18n/context";
+import { api, serverErrorKey } from "../lib/api";
+import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
+import { LEGAL_ROUTES } from "../lib/legal";
+import { useLocalState } from "../lib/useLocalState";
+import { haptic, notifyHaptic, shareToTelegram } from "../lib/telegram";
+
+/**
+ * Reject after `ms` so a request that never settles cannot pin the UI in a
+ * busy state. The underlying fetch is left alone — it may still complete — but
+ * the caller gets an error and can recover.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error("REQUEST_TIMEOUT")), ms);
+    }),
+  ]);
+}
+
+export default function Profile() {
+  const { t } = useI18n();
+  const { push } = useToast();
+  const { user, logout, updateDisplayName } = useAuth();
+  const navigate = useNavigate();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Rename display name: draft state for the sheet, error mirrors the form
+  // pattern on the Login screen.
+  const [nameOpen, setNameOpen] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [nameBusy, setNameBusy] = useState(false);
+
+  // Delete account: a confirm sheet, an explicit destructive action, and the
+  // busy/error state the form pattern uses everywhere else.
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Push preferences live on the SERVER (user_notification_prefs) — the bot
+  // checks them before sending, so these toggles actually gate sends. Only
+  // the haptics switch stays local (it's a device-side concern).
+  const { prefs, set } = useNotificationPrefs();
+  const serverPrefs = prefs ?? { goals: true, deadline: true, ratings: true };
+  const [hapticsOn, setHapticsOn] = useLocalState<boolean>("matchday.haptics", true);
+
+  const setPref = (key: "goals" | "deadline" | "ratings") => (next: boolean) => {
+    set.mutate({ [key]: next });
+  };
+
+  // Identity comes from the server session (username login or Telegram link).
+  const displayName = user?.displayName || t("profile.guest");
+  const viaTelegram = user?.authMode === "telegram";
+  const viaUsername = user?.authMode === "session" && user.username !== null;
+
+  const signOut = async () => {
+    haptic("medium");
+    await logout();
+    // useAuth's guard takes over and lands the user on /login.
+  };
+
+  /**
+   * Irreversible: the server removes every row the user owns, then we clear
+   * the local credential. logout()'s own request 401s (its session row is
+   * already gone) and is swallowed — clearing local state is what matters.
+   *
+   * The request is bounded: a stalled DELETE (flaky network, a backend busy
+   * cascading the rows) must not leave the confirm sheet spinning forever with
+   * both of its buttons disabled and no way out.
+   */
+  const confirmDelete = async () => {
+    if (deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await withTimeout(api.deleteAccount(), 20_000);
+      notifyHaptic("success");
+      await logout();
+    } catch (err) {
+      notifyHaptic("error");
+      setDeleteError(t(serverErrorKey(err) as never));
+      setDeleteBusy(false);
+    }
+  };
+
+  const openNameEditor = () => {
+    haptic("light");
+    setNameDraft(displayName);
+    setNameError(null);
+    setNameOpen(true);
+  };
+
+  const saveName = async () => {
+    if (nameBusy) return;
+    const next = nameDraft.replace(/\s+/g, " ").trim();
+    if (!next) {
+      notifyHaptic("error");
+      setNameError(t("profile.nameEmpty"));
+      return;
+    }
+    if (next === displayName) {
+      setNameOpen(false);
+      return;
+    }
+    setNameBusy(true);
+    try {
+      await updateDisplayName(next);
+      haptic("medium");
+      push({ text: t("toast.nameSaved"), tone: "volt", icon: "✓" });
+      setNameOpen(false);
+    } catch (err) {
+      notifyHaptic("error");
+      setNameError(t(serverErrorKey(err) as never));
+    } finally {
+      setNameBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <TopBar title={t("profile.title")} />
+
+      <Card className="mt-3 flex items-center gap-3 p-4">
+        <Avatar name={displayName} tone="volt" size="lg" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-bold text-ink">{displayName}</p>
+          <p className="truncate text-xs text-ink-2">
+            {viaUsername && user?.username
+              ? `@${user.username}`
+              : viaTelegram
+                ? t("profile.telegram")
+                : t("profile.browser")}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={openNameEditor}
+          aria-label={t("profile.editName")}
+          title={t("profile.editName")}
+          className="group relative grid h-11 w-11 flex-none place-items-center rounded-full text-ink-2 transition-colors duration-[var(--t-fast)] hover:text-volt"
+        >
+          {/* 36px visual ring on an 44px hit area: the border stays a hairline,
+              the target meets the touch floor. */}
+          <span
+            aria-hidden="true"
+            className="absolute inset-[3px] rounded-full border border-line transition-colors duration-[var(--t-fast)] group-hover:border-volt"
+          />
+          <PencilIcon />
+        </button>
+        <Chip tone={viaTelegram ? "pitch" : "volt"}>
+          {viaTelegram ? t("profile.env") : t("profile.accountChip")}
+        </Chip>
+      </Card>
+
+      <section className="mt-6">
+        <SectionHeading title={t("profile.account")} />
+        <div className="space-y-2">
+          <FavoriteTeamsStrip />
+          <ListRow
+            label={t("profile.telegram")}
+            hint={viaTelegram ? t("profile.signedIn") : t("profile.linkTelegram")}
+            right={
+              viaTelegram ? (
+                <Chip tone="pitch">{t("profile.linked")}</Chip>
+              ) : (
+                <Chip tone="muted">{t("profile.notLinked")}</Chip>
+              )
+            }
+          />
+          <ListRow
+            label={t("profile.notifications")}
+            hint={
+              serverPrefs.goals || serverPrefs.deadline
+                ? t("profile.notificationsOn")
+                : t("profile.notificationsOff")
+            }
+            onClick={() => {
+              haptic("light");
+              setNotificationsOpen(true);
+            }}
+            right={<ChevronRightIcon className="text-ink-3" />}
+          />
+          {/* My Teams is gone; the saved favorite team & leagues are edited
+              in the onboarding picker, reached from here. */}
+          <ListRow
+            label={t("onboarding.favoriteTitle")}
+            hint={t("onboarding.editPicksHint")}
+            onClick={() => {
+              haptic("light");
+              navigate("/onboarding");
+            }}
+            right={<ChevronRightIcon className="text-ink-3" />}
+          />
+          {/* The "why did I get X" panel: every pick with the resolver's own
+              line items, reachable from where users check their account. */}
+
+        </div>
+      </section>
+
+      <ReferralSection />
+
+      <section className="mt-6">
+        <SectionHeading title={t("profile.settings")} />
+        <div className="space-y-2">
+          <ListRow label={t("profile.language")} right={<LanguageToggle />} />
+          <ListRow
+            label={t("profile.haptics")}
+            hint={t("profile.hapticsHint")}
+            onToggle={() => setHapticsOn(!hapticsOn)}
+            right={<Switch checked={hapticsOn} label={t("profile.haptics")} onChange={setHapticsOn} />}
+          />
+          <ListRow
+            label={t("profile.resetLocal")}
+            hint={t("profile.resetHint")}
+            onClick={() => {
+              haptic("medium");
+              try {
+                // Wipe local data but keep the auth keys: the device id (so the
+                // same guest account is waiting when the user comes back) and
+                // the signed-out flag (so this doesn't silently sign them in).
+                const keep = new Set([
+                  "verdikick.deviceId",
+                  "verdikick.loggedOut",
+                  "matchday.deviceId",
+                  "matchday.loggedOut",
+                ]);
+                Object.keys(localStorage)
+                  .filter(
+                    (key) => (key.startsWith("verdikick.") || key.startsWith("matchday.")) && !keep.has(key),
+                  )
+                  .forEach((key) => localStorage.removeItem(key));
+              } catch {
+                /* private mode */
+              }
+              push({ text: t("profile.resetDone"), tone: "danger", icon: "⟲" });
+            }}
+            right={<ChevronRightIcon className="text-ink-3" />}
+          />
+        </div>
+      </section>
+
+      <section className="mt-6">
+        <SectionHeading title={t("profile.about")} />
+        <Card className="space-y-2 p-3">
+          <p className="text-sm text-ink-2">{t("profile.aboutBody")}</p>
+          <div className="flex items-center justify-between border-t border-line pt-2 text-xs text-ink-3">
+            <span>{t("profile.version")}</span>
+            <span>
+              v{APP_VERSION} · {t(viaTelegram ? "profile.platformTelegram" : "profile.platformWeb")}
+            </span>
+          </div>
+        </Card>
+      </section>
+
+      <section className="mt-6">
+        <SectionHeading title={t("profile.legal")} />
+        <div className="space-y-2">
+          <ListRow
+            label={t("legal.privacyTitle")}
+            onClick={() => {
+              haptic("light");
+              navigate(LEGAL_ROUTES.privacy);
+            }}
+            right={<ChevronRightIcon className="text-ink-3" />}
+          />
+          <ListRow
+            label={t("legal.termsTitle")}
+            onClick={() => {
+              haptic("light");
+              navigate(LEGAL_ROUTES.terms);
+            }}
+            right={<ChevronRightIcon className="text-ink-3" />}
+          />
+        </div>
+      </section>
+
+      <WhatsNew />
+
+      <section className="mt-6">
+        <SectionHeading title={t("profile.dangerZone")} />
+        <ListRow
+          label={t("profile.deleteAccount")}
+          hint={t("profile.deleteHint")}
+          onClick={() => {
+            haptic("medium");
+            setDeleteError(null);
+            setDeleteOpen(true);
+          }}
+          right={<ChevronRightIcon className="text-danger" />}
+        />
+      </section>
+
+      {user?.isAdmin ? (
+        <section className="mt-6">
+          <Button variant="ghost" className="w-full" onClick={() => navigate("/admin")}>
+            Admin Dashboard
+          </Button>
+        </section>
+      ) : null}
+
+      <section className="mt-6 mb-2">
+        <Button variant="ghost" className="w-full text-danger" onClick={signOut}>
+          {t("profile.signOut")}
+        </Button>
+      </section>
+
+      <BottomSheet
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        title={t("profile.notifications")}
+        subtitle={t("profile.notificationsSub")}
+        footer={
+          <Button className="w-full" onClick={() => setNotificationsOpen(false)}>
+            {t("common.done")}
+          </Button>
+        }
+      >
+        <div className="space-y-2">
+          <ListRow
+            label={t("profile.notifGoals")}
+            hint={t("profile.notifGoalsHint")}
+            onToggle={() => setPref("goals")(!serverPrefs.goals)}
+            right={
+              <Switch
+                checked={serverPrefs.goals}
+                label={t("profile.notifGoals")}
+                onChange={setPref("goals")}
+              />
+            }
+          />
+          <ListRow
+            label={t("profile.notifDeadline")}
+            hint={t("profile.notifDeadlineHint")}
+            onToggle={() => setPref("deadline")(!serverPrefs.deadline)}
+            right={
+              <Switch
+                checked={serverPrefs.deadline}
+                label={t("profile.notifDeadline")}
+                onChange={setPref("deadline")}
+              />
+            }
+          />
+          <ListRow
+            label={t("profile.notifRatings")}
+            hint={t("profile.notifRatingsHint")}
+            onToggle={() => setPref("ratings")(!serverPrefs.ratings)}
+            right={
+              <Switch
+                checked={serverPrefs.ratings}
+                label={t("profile.notifRatings")}
+                onChange={setPref("ratings")}
+              />
+            }
+          />
+        </div>
+      </BottomSheet>
+
+      <BottomSheet
+        open={nameOpen}
+        onClose={() => setNameOpen(false)}
+        title={t("profile.editName")}
+        subtitle={t("auth.displayNamePlaceholder")}
+        footer={
+          <SheetActions>
+            <Button variant="ghost" className="flex-1" onClick={() => setNameOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button className="flex-1" onClick={() => void saveName()} disabled={nameBusy}>
+              {nameBusy ? t("common.loading") : t("common.save")}
+            </Button>
+          </SheetActions>
+        }
+      >
+        <label className="block space-y-1">
+          <span className="label text-ink-2">{t("auth.displayName")}</span>
+          <input
+            className="min-h-12 w-full rounded-card border border-line bg-surface px-3.5 text-sm text-ink placeholder:text-ink-3 focus:border-volt focus:outline-none focus:ring-4 focus:ring-[color-mix(in_srgb,var(--volt)_16%,transparent)]"
+            value={nameDraft}
+            onChange={(e) => {
+              setNameDraft(e.target.value);
+              setNameError(null);
+            }}
+            maxLength={40}
+            autoComplete="nickname"
+            dir="auto"
+            enterKeyHint="done"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void saveName();
+            }}
+          />
+        </label>
+        {nameError ? (
+          <p
+            className="mt-2 rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
+            role="alert"
+          >
+            {nameError}
+          </p>
+        ) : null}
+      </BottomSheet>
+
+      <BottomSheet
+        open={deleteOpen}
+        onClose={() => {
+          if (!deleteBusy) setDeleteOpen(false);
+        }}
+        title={t("profile.deleteConfirmTitle")}
+        subtitle={t("profile.deleteHint")}
+        footer={
+          <SheetActions>
+            <Button
+              variant="ghost"
+              className="flex-1"
+              onClick={() => setDeleteOpen(false)}
+              disabled={deleteBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              className="flex-1 border border-danger text-danger"
+              variant="ghost"
+              onClick={() => void confirmDelete()}
+              disabled={deleteBusy}
+            >
+              {deleteBusy ? t("profile.deleting") : t("profile.deleteConfirm")}
+            </Button>
+          </SheetActions>
+        }
+      >
+        <p className="text-sm leading-relaxed text-ink-2">{t("profile.deleteConfirmBody")}</p>
+        {deleteError ? (
+          <p
+            className="mt-3 rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
+            role="alert"
+          >
+            {deleteError}
+          </p>
+        ) : null}
+      </BottomSheet>
+    </>
+  );
+}
+
+/* --------------------------------------------------------- favorite teams */
+
+/**
+ * The clubs the user follows, as a scrollable shelf of crest tiles. Profile
+ * used to reach favorites only through the onboarding picker's edit link; the
+ * shelf shows what is actually followed (and is the fastest way back to a club
+ * page) without leaving the hub. Crest + short name only — this is a shortcut,
+ * not the manager.
+ *
+ * Empty renders nothing: a first-run user with no picks gets the edit row
+ * below, not an empty rail.
+ */
+function FavoriteTeamsStrip() {
+  const { localize } = useI18n();
+  const { teams, loading } = useFavorites();
+  if (loading || teams.length === 0) return null;
+
+  return (
+    <ul className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+      {teams.map((team) => (
+        <li key={team.id} className="flex-none">
+          <Link
+            to={`/team/${team.id}`}
+            onClick={() => haptic("light")}
+            className="flex w-[76px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
+          >
+            <TeamBadge team={team} size="sm" />
+            <span className="w-full truncate text-[10px] font-bold text-ink">{localize(team.shortName)}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* ------------------------------------------------------------ referrals */
+
+/**
+ * Invite friends: the share code (copied to clipboard), the honest paid/cap
+ * count, and — until the viewer has redeemed someone's code — the redeem
+ * form. The server owns every rule (one code per user, one redemption per
+ * account, capped rewards); this card only states what the state is.
+ */
+function ReferralSection() {
+  const { t } = useI18n();
+  const { push } = useToast();
+  const { referral, loading, redeem, redeeming } = useReferral();
+  const [codeDraft, setCodeDraft] = useState("");
+
+  const copy = async () => {
+    haptic("light");
+    try {
+      await navigator.clipboard.writeText(referral?.code ?? "");
+      push({ text: t("referral.copied"), tone: "volt", icon: "✓" });
+    } catch {
+      /* clipboard unavailable (private mode) — the code is visible to copy by hand */
+    }
+  };
+
+  const share = () => {
+    haptic("light");
+    const code = referral?.code;
+    if (!code) return;
+    const url = `${window.location.origin}?startapp=${code}`;
+    const ok = shareToTelegram(url, t("referral.shareText"));
+    if (!ok) {
+      void copy();
+    }
+  };
+
+  const submit = () => {
+    const code = codeDraft.trim();
+    if (!code || redeeming) return;
+    redeem.mutate(code, {
+      onSettled: () => setCodeDraft(""),
+    });
+  };
+
+  return (
+    <section className="mt-6">
+      <SectionHeading title={t("referral.title")} />
+      <Card className="space-y-3 p-3">
+        <p className="text-xs text-ink-2">{t("referral.hint")}</p>
+        <div className="flex items-center gap-2">
+          {/* Codes are Latin and typed by hand: always LTR, letterspaced so
+              the 8 characters stay readable at a glance. */}
+          <code
+            dir="ltr"
+            className="min-h-11 flex-1 rounded-card border border-line bg-elevated px-3 py-2.5 text-center text-sm font-black tracking-[0.3em] text-volt"
+          >
+            {loading || !referral ? "· · · · · · · ·" : referral.code}
+          </code>
+          <Button variant="ghost" onClick={() => void copy()} disabled={!referral}>
+            {t("referral.copy")}
+          </Button>
+          <Button variant="ghost" onClick={share} disabled={!referral}>
+            <ShareIcon className="h-4 w-4" />
+            {t("referral.share")}
+          </Button>
+        </div>
+        {referral ? (
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line pt-2 text-xs text-ink-3">
+            <span>{t("referral.statInvited", { invited: referral.invited })}</span>
+            <span>
+              {t("referral.statPaid", { rewarded: referral.rewarded, max: referral.maxPaidInvites })}
+            </span>
+          </div>
+        ) : null}
+        {referral && !referral.youRedeemed ? (
+          <div className="flex gap-2 border-t border-line pt-3">
+            <input
+              dir="ltr"
+              className="min-h-11 min-w-0 flex-1 rounded-card border border-line bg-surface px-3 text-sm font-bold uppercase tracking-widest text-ink placeholder:font-normal placeholder:tracking-normal placeholder:text-ink-3 focus:border-volt focus:outline-none"
+              placeholder={t("referral.redeemPlaceholder")}
+              value={codeDraft}
+              onChange={(e) => setCodeDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submit();
+              }}
+              maxLength={12}
+              autoComplete="off"
+              autoCapitalize="characters"
+              aria-label={t("referral.redeemPlaceholder")}
+            />
+            <Button onClick={submit} disabled={redeeming || !codeDraft.trim()}>
+              {redeeming ? t("common.loading") : t("referral.redeem")}
+            </Button>
+          </div>
+        ) : null}
+      </Card>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------ what's new */
+
+/**
+ * User-facing release notes: a dismissible card at the bottom of Profile,
+ * shown when the latest release hasn't been dismissed yet. Copy is rewritten
+ * from CHANGELOG.md for players (see src/lib/appInfo.ts), never pasted.
+ */
+function WhatsNew() {
+  const { t } = useI18n();
+  const [seenRelease, setSeenRelease] = useLocalState<string>("verdikick.whatsNewSeen", "");
+  const latest = WHATS_NEW[0];
+  if (latest.version === seenRelease) return null;
+
+  return (
+    <section className="mt-6">
+      <SectionHeading title={t("whatsNew.title")} />
+      <Card className="relative p-3">
+        <div className="flex items-center justify-between">
+          <Chip tone="volt">
+            v{latest.version} · {latest.date}
+          </Chip>
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              setSeenRelease(latest.version);
+            }}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
+          >
+            <CloseIcon className="h-3 w-3" />
+            {t("whatsNew.dismiss")}
+          </button>
+        </div>
+        <ul className="mt-2 space-y-1.5">
+          {latest.lines.map((line, i) => (
+            <li key={i} className="flex gap-2 text-xs text-ink-2">
+              <span className="flex-none text-volt" aria-hidden="true">
+                •
+              </span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </section>
+  );
+}
+
+
+PAGE 9/11  -  Admin
+route: /admin
+file:  src/pages/Admin.tsx  (119 lines)
+================================================================================================
+
+import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
+import { TopBar } from "../components/TopBar";
+import { useToast } from "../components/toastContext";
+import { useAuth } from "../hooks/authContext";
+import { api } from "../lib/api";
+import { Button, Card, Num, SectionHeading } from "../components/ui";
+import { haptic } from "../lib/telegram";
+
+interface AdminStats {
+  totalUsers: number;
+  totalMatches: number;
+  totalPredictions: number;
+  totalFavorites: number;
+}
+
+export default function Admin() {
+  const { user } = useAuth();
+  const { push } = useToast();
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [broadcasting, setBroadcasting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!user?.isAdmin) return;
+    void api
+      .getAdminStats()
+      .then((res) => setStats(res.stats))
+      .catch(() => {});
+  }, [user?.isAdmin]);
+
+  if (!user?.isAdmin) return <Navigate to="/matches" replace />;
+
+  const handleSync = async () => {
+    haptic("light");
+    setSyncing(true);
+    try {
+      await api.adminSync();
+      push({ text: "ESPN sync complete", tone: "volt", icon: "✓" });
+    } catch {
+      push({ text: "Sync failed", tone: "danger", icon: "✕" });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleBroadcast = async () => {
+    if (!message.trim() || broadcasting) return;
+    haptic("medium");
+    setBroadcasting(true);
+    try {
+      const res = await api.adminBroadcast(message.trim());
+      push({ text: `Broadcast sent to ${res.sent} users`, tone: "volt", icon: "✓" });
+      setMessage("");
+    } catch {
+      push({ text: "Broadcast failed", tone: "danger", icon: "✕" });
+    } finally {
+      setBroadcasting(false);
+    }
+  };
+
+  return (
+    <>
+      <TopBar title="Admin Dashboard" />
+      <div className="mt-4 space-y-4">
+        <section>
+          <SectionHeading title="Stats" />
+          <div className="grid grid-cols-2 gap-2">
+            <StatCard label="Total Users" value={stats?.totalUsers} />
+            <StatCard label="Total Matches" value={stats?.totalMatches} />
+            <StatCard label="Total Predictions" value={stats?.totalPredictions} />
+            <StatCard label="Total Favorites" value={stats?.totalFavorites} />
+          </div>
+        </section>
+
+        <section>
+          <SectionHeading title="ESPN Sync" />
+          <Card className="space-y-3 p-3">
+            <p className="text-xs text-ink-2">Trigger a full scoreboard + standings sync immediately.</p>
+            <Button onClick={() => void handleSync()} disabled={syncing} className="w-full">
+              {syncing ? "Syncing…" : "Force ESPN Sync"}
+            </Button>
+          </Card>
+        </section>
+
+        <section>
+          <SectionHeading title="Broadcast" />
+          <Card className="space-y-3 p-3">
+            <p className="text-xs text-ink-2">Send a message to all Telegram users.</p>
+            <input
+              className="min-h-11 w-full rounded-card border border-line bg-surface px-3.5 text-sm text-ink placeholder:text-ink-3 focus:border-volt focus:outline-none"
+              placeholder="Message to broadcast…"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              maxLength={4096}
+            />
+            <Button
+              onClick={() => void handleBroadcast()}
+              disabled={broadcasting || !message.trim()}
+              className="w-full"
+            >
+              {broadcasting ? "Sending…" : "Broadcast to All Users"}
+            </Button>
+          </Card>
+        </section>
+      </div>
+    </>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value?: number }) {
+  return (
+    <Card className="p-3">
+      <p className="text-[11px] text-ink-3">{label}</p>
+      <Num className="mt-0.5 text-2xl text-ink">{value !== undefined ? value.toLocaleString() : "—"}</Num>
+    </Card>
+  );
+}
+
+
+PAGE 10/11  -  Privacy + Terms
+route: /privacy, /terms
+file:  src/pages/Legal.tsx  (35 lines)
+================================================================================================
+
+import { TopBar } from "../components/TopBar";
+import { Card } from "../components/ui";
+import { useI18n } from "../i18n/context";
+import { LEGAL_SECTIONS, LEGAL_TITLES, type LegalKind } from "../lib/legal";
+
+/**
+ * One legal document, rendered from the {title, body} list in lib/legal.ts.
+ * Layout is direction-agnostic (logical spacing only), so the same component
+ * is correct in EN (ltr) and FA (rtl) without a branch.
+ */
+export function LegalPage({ kind }: { kind: LegalKind }) {
+  const { t } = useI18n();
+  return (
+    <>
+      <TopBar title={t(LEGAL_TITLES[kind])} />
+      <div className="mt-3 space-y-3 pb-8">
+        {LEGAL_SECTIONS[kind].map((section) => (
+          <Card key={section.title} className="p-4">
+            <h2 className="text-sm font-bold text-ink">{t(section.title)}</h2>
+            <p className="mt-1.5 text-xs leading-relaxed text-ink-2">{t(section.body)}</p>
+          </Card>
+        ))}
+        <p className="px-1 text-[11px] text-ink-3">{t("legal.updated")}</p>
+      </div>
+    </>
+  );
+}
+
+export function Privacy() {
+  return <LegalPage kind="privacy" />;
+}
+
+export function Terms() {
+  return <LegalPage kind="terms" />;
+}
+
+
+PAGE 11/11  -  NotFound
+route: *
+file:  src/pages/NotFound.tsx  (31 lines)
+================================================================================================
+
+import { useLocation } from "react-router-dom";
+import { TopBar } from "../components/TopBar";
+import { Button, Card } from "../components/ui";
+import { useI18n } from "../i18n/context";
+
+/**
+ * Unknown route. The wildcard used to redirect to /browse silently, which hid
+ * broken deep links from the bot and from shared URLs; an explicit screen
+ * makes the mistake visible and gives the user a way back.
+ */
+export default function NotFound() {
+  const { t } = useI18n();
+  const location = useLocation();
+
+  return (
+    <>
+      <TopBar title={t("notFound.title")} back />
+      <Card className="mt-6 flex flex-col items-center p-6 text-center">
+        <p className="font-num text-4xl font-black text-ink-3" aria-hidden="true">
+          404
+        </p>
+        <p className="mt-2 text-sm font-bold text-ink">{t("notFound.body")}</p>
+        <p className="mt-1 break-all text-[11px] text-ink-3">{location.pathname}</p>
+        <Button className="mt-4" onClick={() => window.history.back()}>
+          {t("common.back")}
+        </Button>
+        <p className="mt-3 text-[11px] text-ink-3">{t("notFound.browse")}</p>
+      </Card>
+    </>
+  );
+}
+
+
+APPENDIX  -  Routing (App.tsx)
+file: src/App.tsx  (101 lines)
+This is the routing table the pages above hang off. Matches (the Matchday
+feed) is routed here too, but its page code is intentionally not included.
+================================================================================================
+
+import { lazy } from "react";
+import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { AppShell } from "./components/AppShell";
+import { AuthProvider, RequireAuth } from "./hooks/useAuth";
+import { useFavorites } from "./hooks/useFavorites";
+import { LEGAL_ROUTES } from "./lib/legal";
+
+// Every screen is lazy so the first paint only ships the shell, the auth gate
+// and the route the user actually landed on. On the low-end Android webviews
+// this app targets, that gap is the difference between a fast open and a blank
+// screen. `Login` stays eager: it is the first thing a signed-out client shows.
+import Login from "./pages/Login";
+
+const MatchDetail = lazy(() => import("./pages/MatchDetail"));
+const Cups = lazy(() => import("./pages/Cups"));
+const Matches = lazy(() => import("./pages/Matches"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Admin = lazy(() => import("./pages/Admin"));
+const Ratings = lazy(() => import("./pages/Ratings"));
+const TeamPage = lazy(() => import("./pages/TeamPage"));
+const Table = lazy(() => import("./pages/Table"));
+const Privacy = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Privacy })));
+const Terms = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Terms })));
+
+export default function App() {
+  return (
+    <AuthProvider>
+      {/* The Suspense boundary for lazy pages lives inside AppShell, around the
+          Outlet, so the tab bar stays put while a route chunk loads. */}
+      <Routes>
+        {/* The Login screen sits outside the guarded shell (no tab bar). */}
+        <Route path="/login" element={<Login />} />
+
+        <Route element={<RequireAuth />}>
+          <Route element={<AppShell />}>
+            {/* First run: the concept's onboarding (favorite → clubs → leagues). */}
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/" element={<OnboardingGate />} />
+            <Route path="/matches" element={<Matches />} />
+            <Route path="/cups" element={<Cups />} />
+            <Route path="/match/:id" element={<MatchDetail />} />
+            <Route path="/team/:id" element={<TeamPage />} />
+            {/* My Teams is gone — the onboarding picker is the only place to
+                manage favorites. Old deep links land there. The fantasy Draft
+                route folds in the same way. */}
+            <Route path="/my-teams" element={<Navigate to="/onboarding" replace />} />
+            <Route path="/draft" element={<Navigate to="/onboarding" replace />} />
+            {/* Legacy deep link: the Shot Plotter used to be its own route, then
+                moved into the Predict tab. It rendered MatchDetail bare, which
+                silently opened the Timeline instead — so point it at the tab
+                that actually holds the Shot Predictor. */}
+            <Route path="/match/:id/shot-plotter" element={<ShotPlotterRedirect />} />
+            <Route path="/ratings" element={<Ratings />} />
+            <Route path="/table" element={<Table />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/admin" element={<Admin />} />
+            {/* Legal pages: reachable from Profile and the onboarding footer. */}
+            <Route path={LEGAL_ROUTES.privacy} element={<Privacy />} />
+            <Route path={LEGAL_ROUTES.terms} element={<Terms />} />
+            {/* Unknown path: say so instead of silently redirecting (broken
+                  deep links from the bot become visible). */}
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Route>
+      </Routes>
+    </AuthProvider>
+  );
+}
+
+/**
+ * Legacy `/match/:id/shot-plotter` → `/match/:id?tab=predict`.
+ *
+ * `Navigate` does not interpolate route params (its `to` is a literal string,
+ * so `"/match/:id"` would navigate to a URL containing the characters ":id"),
+ * hence the wrapper that reads the param.
+ */
+function ShotPlotterRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/match/${id}?tab=predict`} replace />;
+}
+
+/**
+ * First-run gate: users with no club picks land on onboarding once; everyone
+ * else goes straight to the matchday feed. A localStorage flag marks the
+ * onboarding as visited so skipping (no picks) doesn't loop back to it.
+ */
+function OnboardingGate() {
+  const { teams, loading } = useFavorites();
+  const seen = (() => {
+    try {
+      return localStorage.getItem("verdikick.onboarded") === "1";
+    } catch {
+      return false;
+    }
+  })();
+  if (loading) return null;
+  if (teams.length === 0 && !seen) return <Navigate to="/onboarding" replace />;
+  return <Navigate to="/matches" replace />;
+}

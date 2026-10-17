@@ -39,6 +39,10 @@ yarn-error.log*
 # local scratch dirs (ui screenshots, temp files)
 .tmp/
 .ui-shots/
+# generated share folder: screenshots of every screen + the code document
+# (scripts/pages-demo.mjs, scripts/pages-code.mjs). Keep it ignored like the
+# other screenshot output; delete the line if you want to commit the album.
+demo/
 
 # exported git-history bundle from the legacy nested repo
 *.bundle
