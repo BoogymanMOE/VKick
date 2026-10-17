@@ -204,6 +204,7 @@ build either way, only distribution differs.
 - **Health check** is `GET /health` (503 if the DB stops answering, so the check can actually fail).
 - **Secrets live in the dashboard**, not in `render.yaml`: `TELEGRAM_BOT_TOKEN`, `MINI_APP_URL`, optionally `ADMIN_TELEGRAM_IDS`.
 - **`NODE_ENV=production` refuses to boot while `DEV_AUTH_SECRET` is set** — that key turns `dev:<id>` tokens into any user's identity. Unset it before deploying.
+- **`PREDICTIONS_ENABLED` is off by default.** The prediction UI is hidden in the app (its own switch is `PREDICTIONS_ENABLED` in `src/lib/features.ts`); the server-side twin in `server/features.ts` reads this env var and stops the prediction-lifecycle pushes (lineup drop, pre-kickoff lock, half-time lock) being queued or sent, and hides the leaderboards command and welcome copy that promise predictions. Set `PREDICTIONS_ENABLED=true` to bring all of it back.
 - After the first deploy, point BotFather's Mini App URL (and `MINI_APP_URL`) at the service's `https://` URL.
 
 ## Backups

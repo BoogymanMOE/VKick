@@ -17,6 +17,7 @@ import { strict as assert } from "node:assert";
 import { Bot } from "grammy";
 import { deepLink, registerCommands, registerHandlers } from "../server/bot/index.js";
 import { botCommandMenu, botPageCopy, type BotPage } from "../server/messages.js";
+import { setPredictionsEnabledForTest } from "../server/features.js";
 
 const PAGES: BotPage[] = ["matches", "profile", "leaderboards"];
 const LANGS = ["en", "fa"] as const;
@@ -107,6 +108,11 @@ async function withMiniAppUrl(url: string | undefined, fn: () => void | Promise<
 }
 
 export async function runBotMenuTests(): Promise<void> {
+  // The prediction surfaces are feature-flagged off in the product right now;
+  // this suite exercises the full menu, so it runs with the flag on and checks
+  // the off state separately at the end.
+  setPredictionsEnabledForTest(true);
+
   // The menu Telegram shows: exactly the three commands, described for a user
   // reading the "/" list.
   assert.deepEqual(
@@ -211,5 +217,21 @@ export async function runBotMenuTests(): Promise<void> {
     }
   });
 
+  // With predictions off, the leaderboards command is not registered at all —
+  // its screen is a prediction surface and the app no longer routes it.
+  setPredictionsEnabledForTest(false);
+  assert.deepEqual(
+    botCommandMenu("en").map((c) => c.command),
+    ["matches", "profile"],
+    "leaderboards command is hidden while predictions are off",
+  );
+  assert.deepEqual(
+    botCommandMenu("fa").map((c) => c.command),
+    ["matches", "profile"],
+    "Persian menu hides it too",
+  );
+  setPredictionsEnabledForTest(null);
+
   console.log("  botMenu: /matches /profile /leaderboards menu + hash deep links OK");
+  console.log("  botMenu: leaderboards hidden while PREDICTIONS_ENABLED is off OK");
 }

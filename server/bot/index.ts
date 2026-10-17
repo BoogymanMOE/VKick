@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Bot, InlineKeyboard, InputFile } from "grammy";
 import { getDb, all, run, get } from "../db/index.js";
-import { asPushKind, isOptedOut } from "../notifications.js";
+import { asPushKind, isOptedOut, shouldSkipPredictionPush } from "../notifications.js";
 import {
   asPushLang,
   botCommandMenu,
@@ -15,6 +15,7 @@ import {
   type BotPage,
   type PushLang,
 } from "../messages.js";
+import { predictionsEnabled } from "../features.js";
 import type { GoalAlert } from "../sync/upserts.js";
 
 let bot: Bot | null = null;
@@ -41,7 +42,14 @@ const TELEGRAM_ICON = path.join(
  * list, the deep links and the router cannot disagree about where a button
  * lands.
  */
-const BOT_PAGES: BotPage[] = ["matches", "profile", "leaderboards"];
+/**
+ * The deep-link pages behind the command menu, in menu order. A function, not a
+ * constant: the leaderboards screen is a prediction surface, so the list has to
+ * follow the flag rather than the moment this module was imported.
+ */
+function botPages(): BotPage[] {
+  return predictionsEnabled() ? ["matches", "profile", "leaderboards"] : ["matches", "profile"];
+}
 
 /**
  * Every command handler, registered on a bot that is not polling yet.
@@ -96,7 +104,7 @@ export function registerHandlers(bot: Bot): void {
   // Command-menu entries. Each one answers with a single button that opens the
   // Mini App straight on that screen: tapping /matches in Telegram's menu and
   // landing on the feed instead would make the menu worse than useless.
-  for (const page of BOT_PAGES) {
+  for (const page of botPages()) {
     bot.command(page, async (ctx) => {
       const copy = botPageCopy(userLang(ctx.from?.id), page);
       await ctx.reply(copy.text, {
@@ -293,7 +301,13 @@ async function drainPushes(): Promise<void> {
       // still stops the send. Each kind is checked against its own Profile
       // switch, so muting goal alerts leaves lock reminders intact. Opt-outs are
       // skipped, not failed.
-      if (isOptedOut(db, row.telegram_id, asPushKind(row.kind))) {
+      //
+      // The flag gate comes first: with predictions off there is no screen to
+      // act on a lineup/lock/half-time reminder, and the switch that used to
+      // mute it is hidden — those rows are retired as sent-without-delivery
+      // rather than delivered late if the flag ever comes back.
+      const kind = asPushKind(row.kind);
+      if (shouldSkipPredictionPush(kind) || isOptedOut(db, row.telegram_id, kind)) {
         run(db, "UPDATE bot_push_queue SET sent_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
         continue;
       }

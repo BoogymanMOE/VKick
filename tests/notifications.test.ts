@@ -16,8 +16,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { migrate } from "../server/db/schema.js";
-import { asPushKind, isOptedOut, queueGoalAlerts, queueMatchdayAlerts } from "../server/notifications.js";
-import { asPushLang } from "../server/messages.js";
+import {
+  asPushKind,
+  isOptedOut,
+  queueGoalAlerts,
+  queueMatchdayAlerts,
+  shouldSkipPredictionPush,
+} from "../server/notifications.js";
+import { predictionsEnabled, setPredictionsEnabledForTest } from "../server/features.js";
+import { asPushLang, botCommandMenu, botStartText } from "../server/messages.js";
 
 /** Fixed clock: the producers take `now`, so every window is deterministic. */
 const NOW = new Date("2026-09-29T18:00:00.000Z");
@@ -530,7 +537,85 @@ function testDeliverabilityFilter() {
   db.close();
 }
 
+/**
+ * PREDICTIONS_ENABLED=false retires the prediction lifecycle entirely: no
+ * lineup/lock/half-time push is queued, a row already in the queue is skipped
+ * at send time, and goal + ratings pushes keep working. Turning the flag back on
+ * restores the old behaviour, which the tests above run under.
+ */
+function testPredictionPushesGatedOff() {
+  const db = tempDb();
+  seed(db);
+  // One match in each prediction window: lineup published ~90 min out, lock
+  // window at 30 min, and a match at half-time (the sub-board lock).
+  addMatch(db, "m_lu", "scheduled", minutesFromNow(90), { lineup: true });
+  addMatch(db, "m_lock", "scheduled", minutesFromNow(30));
+  addMatch(db, "m_ht", "halftime", minutesFromNow(-50), { home: 1, away: 0 });
+  // …plus a finished match for ratings and a scorer for goals.
+  addMatch(db, "m_ft", "finished", minutesFromNow(-120), { home: 2, away: 1 });
+
+  setPredictionsEnabledForTest(false);
+  assert.equal(predictionsEnabled(), false, "test seam puts the flag off");
+
+  // The finished fixture still produces its ratings push, so the sweep is not
+  // silent — what must be missing is every prediction-lifecycle kind.
+  assert.equal(queueMatchdayAlerts(db, NOW), 3, "flag off queues only the ratings push");
+  assert.deepEqual(idsOf(db, "lineup"), [], "no lineup pushes");
+  assert.deepEqual(idsOf(db, "lock"), [], "no lock pushes");
+  assert.deepEqual(idsOf(db, "halftime"), [], "no half-time pushes");
+  // Nothing was even claimed, so turning the flag back on can still send them.
+  assert.deepEqual(idsOf(db, "ratings"), ["u1", "u2", "u3"], "ratings pushes still go out");
+
+  const goalsOff = queueGoalAlerts(db, [
+    { matchId: "m_ft", scoringTeamId: "H", scorerName: "Saka", minute: "55", homeScore: 2, awayScore: 1 },
+  ]);
+  assert.equal(goalsOff, 3, "goal alerts still deliver with predictions off");
+  assert.deepEqual(idsOf(db, "goal"), ["u1", "u2", "u3"]);
+
+  // Send-time gate: rows queued BEFORE the flag flipped (a previous deploy, or
+  // the queue being filled while the flag was on) must not be delivered.
+  assert.equal(shouldSkipPredictionPush("lineup"), true, "queued lineup rows are skipped when off");
+  assert.equal(shouldSkipPredictionPush("lock"), true, "queued lock rows are skipped when off");
+  assert.equal(shouldSkipPredictionPush("halftime"), true, "queued half-time rows are skipped when off");
+  assert.equal(shouldSkipPredictionPush("goal"), false, "goal rows are never skipped");
+  assert.equal(shouldSkipPredictionPush("ratings"), false, "ratings rows are never skipped");
+
+  // Bot copy: no leaderboards command, and the welcome stops promising predictions.
+  assert.deepEqual(
+    botCommandMenu("en").map((c) => c.command),
+    ["matches", "profile"],
+    "leaderboards command hidden while predictions are off",
+  );
+  assert.ok(
+    !/predict|leaderboard/i.test(botStartText("en")),
+    `welcome must not promise predictions: ${botStartText("en")}`,
+  );
+  assert.ok(
+    botStartText("fa").includes("نتایج زنده"),
+    "Persian welcome reworded too",
+  );
+
+  // Flag on: the old behaviour returns for the same fixtures.
+  setPredictionsEnabledForTest(true);
+  assert.ok(queueMatchdayAlerts(db, NOW) > 0, "flag on queues the prediction lifecycle again");
+  assert.deepEqual(idsOf(db, "lineup"), ["u1", "u2", "u3"], "lineup push is back");
+  assert.deepEqual(idsOf(db, "lock"), ["u1", "u2", "u3"], "lock push is back");
+  assert.deepEqual(idsOf(db, "halftime"), ["u1", "u2", "u3"], "half-time push is back");
+  assert.equal(shouldSkipPredictionPush("lineup"), false, "send-time gate opens with the flag on");
+  assert.ok(
+    botCommandMenu("en").some((c) => c.command === "leaderboards"),
+    "leaderboards command returns",
+  );
+  assert.ok(/predict lineups/.test(botStartText("en")), "original welcome returns");
+
+  setPredictionsEnabledForTest(null);
+  db.close();
+}
+
 export async function runNotificationTests(): Promise<void> {
+  // The legacy-behaviour tests below assert that prediction pushes fire; they
+  // run with the flag on, and testPredictionPushesGatedOff covers the off state.
+  setPredictionsEnabledForTest(true);
   testDedupeAndBothClubs();
   testPreferenceGates();
   testWindowGates();
@@ -541,9 +626,11 @@ export async function runNotificationTests(): Promise<void> {
   testFollowedLeagueGoalAlerts();
   testKindColumnBackfill();
   testDeliverabilityFilter();
+  testPredictionPushesGatedOff();
   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
   console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
   console.log("  notifications: followed leagues deliver stages + goals, deduped against clubs OK");
   console.log("  notifications: guest/pwd/dev accounts never enter the push queue OK");
+  console.log("  notifications: PREDICTIONS_ENABLED gates lineup/lock/halftime, goals+ratings survive OK");
 }

@@ -36,9 +36,33 @@ import {
   type PushLang,
 } from "./messages.js";
 import { lineupPublished } from "./predictions/window.js";
+import { predictionsEnabled } from "./features.js";
 
 /** Every kind of push the app sends. Also the dedupe stage for matchday pushes. */
 export type PushKind = "goal" | "lineup" | "lock" | "halftime" | "ratings";
+
+/**
+ * The prediction-lifecycle stages: the lineup drop, the last call before the
+ * picks lock, and the half-time sub-board lock. With `PREDICTIONS_ENABLED` off
+ * there is no prediction UI, so these pushes would be instructions for
+ * something the user cannot do — and the deadline switch that muted them is
+ * hidden too, making them unstoppable. Gated at BOTH ends: nothing new is
+ * queued, and rows queued before the deploy are dropped at send time.
+ */
+const PREDICTION_KINDS = new Set<PushKind>(["lineup", "lock", "halftime"]);
+
+/** True when this kind is part of the (currently hidden) prediction lifecycle. */
+export function isPredictionPush(kind: PushKind): boolean {
+  return PREDICTION_KINDS.has(kind);
+}
+
+/**
+ * Send-time gate for one queued row. Mirrors the emit-time gate so a row
+ * written before the flag was turned off never goes out.
+ */
+export function shouldSkipPredictionPush(kind: PushKind): boolean {
+  return !predictionsEnabled() && PREDICTION_KINDS.has(kind);
+}
 
 /**
  * Which Profile switch owns each kind. `deadline` covers the whole prediction
@@ -353,6 +377,7 @@ export function queueMatchdayAlerts(db: DB, now: Date = new Date()): number {
  * same club each get their own wording.
  */
 function emit(db: DB, matchId: string, stage: PushKind, copy: (lang: PushLang) => string): number {
+  if (shouldSkipPredictionPush(stage)) return 0;
   let sent = 0;
   for (const r of matchRecipients(db, matchId, stage)) {
     if (!claimNotification(db, r.telegramId, matchId, stage)) continue;

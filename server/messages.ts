@@ -18,6 +18,7 @@
  * it here would mean two tables drifting apart. Numbers in interpolated values
  * (scores, minutes) stay Latin too, matching how the app renders scorelines.
  */
+import { predictionsEnabled } from "./features.js";
 export type PushLang = "en" | "fa";
 
 /** Anything that isn't `fa` is English — same default as the `users` column. */
@@ -99,6 +100,13 @@ export function ratingsPush(lang: PushLang, v: MatchPushVars): string {
  */
 
 export function botStartText(lang: PushLang): string {
+  // With predictions gated off the welcome must not promise them: the buttons,
+  // tabs and leaderboards it names no longer exist in the app.
+  if (!predictionsEnabled()) {
+    return lang === "fa"
+      ? "به Vkick خوش آمدی! ⚽\n\nباشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، نتایج زنده را ببین، جدول‌ها را نگاه کن و به بازیکنان تأثیرگذار امتیاز بده.\n\nبرای شروع دکمه زیر را بزن."
+      : "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, follow live scores, check every table, and rate the players who mattered most.\n\nTap below to get started.";
+  }
   return lang === "fa"
     ? "به Vkick خوش آمدی! ⚽\n\nباشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، ترکیب و تعویض و شوت و بازیکن برتر هر بازی را پیش‌بینی کن، در جدول امتیازهای فصل بالا برو و به بازیکنان تأثیرگذار امتیاز بده.\n\nبرای شروع دکمه زیر را بزن."
     : "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, predict lineups, subs, shots and standout players, climb the season leaderboards, and rate the players who mattered most.\n\nTap below to get started.";
@@ -147,18 +155,21 @@ export interface BotCommandSpec {
  * Telegram truncates the menu, and it is a menu, not a pitch.
  */
 export function botCommandMenu(lang: PushLang): BotCommandSpec[] {
-  if (lang === "fa") {
-    return [
-      { command: "matches", description: "بازی‌های امروز" },
-      { command: "profile", description: "پروفایل شما" },
-      { command: "leaderboards", description: "جدول امتیازها" },
-    ];
-  }
-  return [
-    { command: "matches", description: "View today's fixtures" },
-    { command: "profile", description: "View your profile" },
-    { command: "leaderboards", description: "View the leaderboards" },
-  ];
+  const menu =
+    lang === "fa"
+      ? [
+          { command: "matches", description: "بازی‌های امروز" },
+          { command: "profile", description: "پروفایل شما" },
+          { command: "leaderboards", description: "جدول امتیازها" },
+        ]
+      : [
+          { command: "matches", description: "View today's fixtures" },
+          { command: "profile", description: "View your profile" },
+          { command: "leaderboards", description: "View the leaderboards" },
+        ];
+  // The leaderboards are a prediction surface: with the flag off the command
+  // would open a screen the app no longer routes.
+  return predictionsEnabled() ? menu : menu.filter((c) => c.command !== "leaderboards");
 }
 
 export interface BotPageCopy {
