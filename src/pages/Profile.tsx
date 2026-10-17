@@ -11,7 +11,7 @@ import { useNotificationPrefs, useReferral } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
 import { api, serverErrorKey } from "../lib/api";
 import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
-import { PREDICTIONS_ENABLED } from "../lib/features";
+import { PREDICTIONS_ENABLED, RATINGS_ENABLED } from "../lib/features";
 import { LEGAL_ROUTES } from "../lib/legal";
 import { useLocalState } from "../lib/useLocalState";
 import { haptic, notifyHaptic, shareToTelegram } from "../lib/telegram";
@@ -184,7 +184,7 @@ export default function Profile() {
             label={t("profile.notifications")}
             hint={
               serverPrefs.goals ||
-              serverPrefs.ratings ||
+              (RATINGS_ENABLED && serverPrefs.ratings) ||
               (PREDICTIONS_ENABLED && serverPrefs.deadline)
                 ? t("profile.notificationsOn")
                 : t("profile.notificationsOff")
@@ -357,18 +357,22 @@ export default function Profile() {
               }
             />
           ) : null}
-          <ListRow
-            label={t("profile.notifRatings")}
-            hint={t("profile.notifRatingsHint")}
-            onToggle={() => setPref("ratings")(!serverPrefs.ratings)}
-            right={
-              <Switch
-                checked={serverPrefs.ratings}
-                label={t("profile.notifRatings")}
-                onChange={setPref("ratings")}
-              />
-            }
-          />
+          {/* The rating-window push is gated off, so its switch is too —
+              leaving it would promise a notification nothing can send. */}
+          {RATINGS_ENABLED ? (
+            <ListRow
+              label={t("profile.notifRatings")}
+              hint={t("profile.notifRatingsHint")}
+              onToggle={() => setPref("ratings")(!serverPrefs.ratings)}
+              right={
+                <Switch
+                  checked={serverPrefs.ratings}
+                  label={t("profile.notifRatings")}
+                  onChange={setPref("ratings")}
+                />
+              }
+            />
+          ) : null}
         </div>
       </BottomSheet>
 

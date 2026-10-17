@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { AuthProvider, RequireAuth } from "./hooks/useAuth";
 import { useFavorites } from "./hooks/useFavorites";
+import { RATINGS_ENABLED } from "./lib/features";
 import { LEGAL_ROUTES } from "./lib/legal";
 
 // Every screen is lazy so the first paint only ships the shell, the auth gate
@@ -53,7 +54,10 @@ export default function App() {
                 MatchDetail, so it silently landed on Timeline — legacy links
                 now open the match summary itself. */}
             <Route path="/match/:id/shot-plotter" element={<ShotPlotterRedirect />} />
-            <Route path="/ratings" element={<Ratings />} />
+            {/* Ratings are off for now: the lazy import stays (it is only
+                fetched when this still-rendered route is reached), and legacy
+                deep links land on the feed instead of a missing screen. */}
+            <Route path="/ratings" element={RATINGS_ENABLED ? <Ratings /> : <Navigate to="/matches" replace />} />
             <Route path="/table" element={<Table />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<Admin />} />

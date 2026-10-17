@@ -21,7 +21,7 @@ import type { StringKey } from "../i18n/strings";
 import { serverErrorKey } from "../lib/api";
 import { haptic, selectionHaptic, notifyHaptic } from "../lib/telegram";
 import { buildPickerGroups, teamsInGroup } from "../lib/pickerGroups";
-import { PREDICTIONS_ENABLED } from "../lib/features";
+import { PREDICTIONS_ENABLED, RATINGS_ENABLED } from "../lib/features";
 
 const TOTAL_STEPS = 3;
 
@@ -43,9 +43,12 @@ const ALL_SLIDES = [
   { key: "rate", titleKey: "intro.rate.title", bodyKey: "intro.rate.body", Glyph: PencilIcon },
 ] as const;
 
-// Predictions are off for now: the slide stays in the repo and comes back with
-// the flag. Only the list is filtered — its copy and glyph are untouched.
-const SLIDES = ALL_SLIDES.filter((slide) => PREDICTIONS_ENABLED || slide.key !== "predict");
+// Predictions and ratings are off for now: each slide stays in the repo and
+// comes back with its flag. Only the list is filtered — copy and glyph are
+// untouched.
+const SLIDES = ALL_SLIDES.filter(
+  (s) => (PREDICTIONS_ENABLED || s.key !== "predict") && (RATINGS_ENABLED || s.key !== "rate"),
+);
 
 /**
  * First-run onboarding in the concept's order:
@@ -61,7 +64,18 @@ export default function Onboarding() {
   const { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, toggleAndAnchor } =
     useFavorites();
   const followed = useFollowedLeagues();
-  const [intro, setIntro] = useState(() => !introSeen());
+  const [intro, setIntro] = useState(() => {
+    if (SLIDES.length >= 2) return !introSeen();
+    // With a single idea left the intro is a screen that explains one thing and
+    // asks for a tap: skip it, but still mark it seen so nothing reappears when
+    // a flag is turned back on and the list grows.
+    try {
+      localStorage.setItem(INTRO_KEY, "1");
+    } catch {
+      /* private mode */
+    }
+    return false;
+  });
   const [step, setStep] = useState(0);
   const [saved, setSaved] = useState(false);
 

@@ -29,6 +29,7 @@ import { api, type ApiTimelineEvent } from "../lib/api";
 import { TEAM_FALLBACK } from "../lib/colors";
 import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
+import { RATINGS_ENABLED } from "../lib/features";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
 import { useNow } from "../hooks/useNow";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
@@ -365,7 +366,7 @@ function StatsTab({
     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
   }
   if (rows.length === 0) {
-    return <EmptyState title={t("ratings.noneYet")} hint={t("stats.noneHint")} />;
+    return <EmptyState title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
   }
 
   const selected = team === "home" ? home : away;
@@ -412,7 +413,12 @@ function MatchPlayerTable({
             <th className="p-2 text-end font-bold">{t("stats.goals")}</th>
             <th className="p-2 text-end font-bold">{t("stats.assists")}</th>
             <th className="p-2 text-end font-bold">{t("stats.shots")}</th>
-            <th className="p-2 text-end font-bold">{t("ratings.points")}</th>
+            {/* The points-style stat score is the ratings feature's number;
+                with the flag off the column is gone and the remaining four
+                share its width (the table is already w-full). */}
+            {RATINGS_ENABLED ? (
+              <th className="p-2 text-end font-bold">{t("ratings.points")}</th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -433,9 +439,11 @@ function MatchPlayerTable({
                 </Num>
               </td>
               <td className="p-2 text-end text-ink-2">{num(r.shots)}</td>
-              <td className="p-2 text-end">
-                <Num className="font-bold text-ink">{num(r.stat_score)}</Num>
-              </td>
+              {RATINGS_ENABLED ? (
+                <td className="p-2 text-end">
+                  <Num className="font-bold text-ink">{num(r.stat_score)}</Num>
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>
@@ -464,7 +472,7 @@ function LineupsTab({
     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
   }
   if (!data || data.players.length === 0) {
-    return <EmptyState title={t("ratings.noneYet")} hint={t("stats.noneHint")} />;
+    return <EmptyState title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
   }
 
   const toPlayer = (r: Record<string, unknown>) => ({
