@@ -21,6 +21,7 @@ import type { StringKey } from "../i18n/strings";
 import { serverErrorKey } from "../lib/api";
 import { haptic, selectionHaptic, notifyHaptic } from "../lib/telegram";
 import { buildPickerGroups, teamsInGroup } from "../lib/pickerGroups";
+import { PREDICTIONS_ENABLED } from "../lib/features";
 
 const TOTAL_STEPS = 3;
 
@@ -35,12 +36,16 @@ function introSeen() {
   }
 }
 
-/** The three ideas, in the order the product teaches them. */
-const SLIDES = [
+/** The ideas, in the order the product teaches them. */
+const ALL_SLIDES = [
   { key: "follow", titleKey: "intro.follow.title", bodyKey: "intro.follow.body", Glyph: StarFilledIcon },
   { key: "predict", titleKey: "intro.predict.title", bodyKey: "intro.predict.body", Glyph: TargetIcon },
   { key: "rate", titleKey: "intro.rate.title", bodyKey: "intro.rate.body", Glyph: PencilIcon },
 ] as const;
+
+// Predictions are off for now: the slide stays in the repo and comes back with
+// the flag. Only the list is filtered — its copy and glyph are untouched.
+const SLIDES = ALL_SLIDES.filter((slide) => PREDICTIONS_ENABLED || slide.key !== "predict");
 
 /**
  * First-run onboarding in the concept's order:
@@ -510,8 +515,9 @@ export default function Onboarding() {
  * The first-launch intro, now one screen instead of three slides. A first-timer
  * used to pay six screens (three intro slides, then three picker steps) before
  * seeing a fixture — on the one app whose whole promise is "open it because a
- * match is on". The three ideas still get explained, as a single scannable
- * list, with one "Get started" tap into the picker. Shown once ever (its flag is
+ * match is on". The ideas still get explained, as a single scannable list, with
+ * one "Get started" tap into the picker (the top-right Skip is the only other
+ * exit; the duplicate bottom Skip is gone). Shown once ever (its flag is
  * separate from the picker's own gate).
  */
 function Intro({ onDone }: { onDone: () => void }) {
@@ -537,7 +543,11 @@ function Intro({ onDone }: { onDone: () => void }) {
           className="intro-glyph grid h-20 w-20 place-items-center rounded-card border border-volt/50 bg-elevated text-volt"
           aria-hidden="true"
         >
-          <TargetIcon className="h-9 w-9" />
+          {PREDICTIONS_ENABLED ? (
+            <TargetIcon className="h-9 w-9" />
+          ) : (
+            <StarFilledIcon className="h-9 w-9" />
+          )}
         </span>
         {/* The intro has no TopBar, so this brand line is the screen's only
             heading — h1, not h2, or the document opens at a level down. */}
@@ -571,16 +581,6 @@ function Intro({ onDone }: { onDone: () => void }) {
         >
           {t("onboarding.next")}
         </Button>
-        <button
-          type="button"
-          onClick={() => {
-            haptic("light");
-            onDone();
-          }}
-          className="min-h-11 w-full rounded-full text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
-        >
-          {t("intro.skip")}
-        </button>
         <LegalLinks className="mt-2" />
       </div>
     </div>

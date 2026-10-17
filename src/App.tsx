@@ -48,9 +48,10 @@ export default function App() {
             <Route path="/my-teams" element={<Navigate to="/onboarding" replace />} />
             <Route path="/draft" element={<Navigate to="/onboarding" replace />} />
             {/* Legacy deep link: the Shot Plotter used to be its own route, then
-                moved into the Predict tab. It rendered MatchDetail bare, which
-                silently opened the Timeline instead — so point it at the tab
-                that actually holds the Shot Predictor. */}
+                moved into the Predict tab, and predictions are off for now. The
+                old redirect target (?tab=predict) no longer exists in
+                MatchDetail, so it silently landed on Timeline — legacy links
+                now open the match summary itself. */}
             <Route path="/match/:id/shot-plotter" element={<ShotPlotterRedirect />} />
             <Route path="/ratings" element={<Ratings />} />
             <Route path="/table" element={<Table />} />
@@ -70,7 +71,9 @@ export default function App() {
 }
 
 /**
- * Legacy `/match/:id/shot-plotter` → `/match/:id?tab=predict`.
+ * Legacy `/match/:id/shot-plotter` → `/match/:id` (the match summary).
+ * The Shot Plotter has no tab of its own while predictions are gated off, so
+ * the old deep link opens the match on its default Timeline tab.
  *
  * `Navigate` does not interpolate route params (its `to` is a literal string,
  * so `"/match/:id"` would navigate to a URL containing the characters ":id"),
@@ -78,7 +81,7 @@ export default function App() {
  */
 function ShotPlotterRedirect() {
   const { id } = useParams();
-  return <Navigate to={`/match/${id}?tab=predict`} replace />;
+  return <Navigate to={`/match/${id}`} replace />;
 }
 
 /**

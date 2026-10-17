@@ -4,6 +4,7 @@ import { TopBar } from "../components/TopBar";
 import { useToast } from "../components/toastContext";
 import { useAuth } from "../hooks/authContext";
 import { api } from "../lib/api";
+import { PREDICTIONS_ENABLED } from "../lib/features";
 import { Button, Card, Num, SectionHeading } from "../components/ui";
 import { haptic } from "../lib/telegram";
 
@@ -69,7 +70,9 @@ export default function Admin() {
           <div className="grid grid-cols-2 gap-2">
             <StatCard label="Total Users" value={stats?.totalUsers} />
             <StatCard label="Total Matches" value={stats?.totalMatches} />
-            <StatCard label="Total Predictions" value={stats?.totalPredictions} />
+            {PREDICTIONS_ENABLED ? (
+              <StatCard label="Total Predictions" value={stats?.totalPredictions} />
+            ) : null}
             <StatCard label="Total Favorites" value={stats?.totalFavorites} />
           </div>
         </section>
