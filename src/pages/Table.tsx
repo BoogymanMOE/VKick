@@ -58,43 +58,31 @@ export default function Table() {
 
   return (
     <>
-      <TopBar title={t("table.title")} subtitle={t("table.subtitle")} back />
+      <TopBar title={t("table.title")} subtitle={t("table.subtitle")} />
 
+      {/* Tables / Browse is the FIRST control on the page, and the league chips
+          live only inside the Tables view — otherwise the chips sit above a
+          Browse list and look like they should filter it, but cannot. */}
       <div className="mt-3">
         <Segmented
-          value={active}
-          onChange={setLeague}
-          options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
+          value={browseView}
+          onChange={setBrowseView}
+          options={[
+            { value: "tables", label: t("table.view.tables") },
+            { value: "browse", label: t("table.view.browse") },
+          ]}
         />
       </div>
 
-      {/* Tables / Browse switch */}
-      <div className="mt-3 flex gap-2">
-        <button
-          type="button"
-          onClick={() => setBrowseView("tables")}
-          className={cx(
-            "min-h-11 rounded-full border px-4 text-sm font-bold transition-colors duration-[var(--t-fast)] active:scale-[0.97]",
-            browseView === "tables"
-              ? "border-volt bg-volt/15 text-volt"
-              : "border-line text-ink-3 hover:bg-elevated",
-          )}
-        >
-          {t("table.view.tables")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setBrowseView("browse")}
-          className={cx(
-            "min-h-11 rounded-full border px-4 text-sm font-bold transition-colors duration-[var(--t-fast)] active:scale-[0.97]",
-            browseView === "browse"
-              ? "border-volt bg-volt/15 text-volt"
-              : "border-line text-ink-3 hover:bg-elevated",
-          )}
-        >
-          {t("table.view.browse")}
-        </button>
-      </div>
+      {browseView === "tables" && (
+        <div className="mt-3">
+          <Segmented
+            value={active}
+            onChange={setLeague}
+            options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
+          />
+        </div>
+      )}
 
       {/* Tables view: standings + your clubs */}
       {browseView === "tables" && (
