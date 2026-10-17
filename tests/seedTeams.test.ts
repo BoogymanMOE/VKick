@@ -2,9 +2,10 @@
  * The static team seed is the favorites picker's floor, so two things must
  * stay true or the picker silently shows the wrong crest/name:
  *
- *  1. Scope: every row is either a big-five club or a national side
- *     (league=""). A stray Eredivisie/Primeira row would reappear in the
- *     picker even though its league no longer gets a tab.
+ *  1. Scope: every row is a big-five club (eng.1, esp.1, ger.1, ita.1, fra.1).
+ *     The catalog was trimmed to the top 5, so a rest-of-world club or a
+ *     national side (league="") reappearing here would put a team in the
+ *     picker that no league tab can hold.
  *  2. Assets: every id has a bundled crest (src/data/logos.json) or an explicit
  *     remote logo_url, and its colour matches src/data/team-colors.json — the
  *     reference data the seed was cross-checked against.
@@ -18,12 +19,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { migrate } from "../server/db/schema.js";
-import { REST_OF_WORLD_LEAGUES, SEED_TEAMS } from "../server/db/seedTeams.js";
+import * as seedModule from "../server/db/seedTeams.js";
+import { SEED_TEAMS } from "../server/db/seedTeams.js";
 import logos from "../src/data/logos.json";
 import colors from "../src/data/team-colors.json";
 
-const BIG_FIVE = new Set(["eng.1", "esp.1", "ger.1", "ita.1", "fra.1"]);
-const ALLOWED_LEAGUES = new Set<string>([...BIG_FIVE, ...REST_OF_WORLD_LEAGUES, ""]);
+/** The catalog's whole scope now: the top 5 European leagues, and nothing else. */
+const BIG_FIVE_LEAGUES = ["eng.1", "esp.1", "ger.1", "ita.1", "fra.1"] as const;
+const BIG_FIVE = new Set<string>(BIG_FIVE_LEAGUES);
 const logosById = logos as Record<string, string>;
 const colorsById = colors as Record<string, string>;
 
@@ -35,8 +38,8 @@ function testSeedAgainstManifests(): void {
     seen.add(t.id);
 
     assert.ok(
-      ALLOWED_LEAGUES.has(t.league),
-      `${t.id} ${t.name}: league ${JSON.stringify(t.league)} is not a seeded league slug or ""`,
+      BIG_FIVE.has(t.league),
+      `${t.id} ${t.name}: league ${JSON.stringify(t.league)} is outside the big five (the trimmed catalog is top-5 clubs only)`,
     );
     assert.ok(t.name.length > 0, `${t.id} has no name`);
     assert.ok(t.abbreviation, `${t.id} ${t.name} has no abbreviation`);
@@ -55,26 +58,30 @@ function testSeedAgainstManifests(): void {
     );
   }
 
-  for (const slug of BIG_FIVE) {
+  for (const slug of BIG_FIVE_LEAGUES) {
     assert.ok(
       SEED_TEAMS.some((t) => t.league === slug),
       `${slug} has no seeded clubs`,
     );
   }
-  assert.ok(
-    SEED_TEAMS.some((t) => t.league === "" && t.name === "England"),
-    'national sides are seeded with league=""',
+
+  // The trimmed catalog's own boundary, not just its contents: no national
+  // sides (league="") and no rest-of-world shelf are seeded any more, and the
+  // `REST_OF_WORLD_LEAGUES` export that used to describe that shelf is gone.
+  // A reintroduced export would silently widen the scope again, so this is the
+  // assertion that keeps the trim from drifting back.
+  assert.equal(
+    SEED_TEAMS.filter((t) => t.league === "").length,
+    0,
+    'national sides (league="") are out of the trimmed catalog',
   );
-  // Famous rest-of-world clubs fill the Other tab, each under a real slug.
-  const rest = SEED_TEAMS.filter((t) => REST_OF_WORLD_LEAGUES.includes(t.league as never));
-  assert.ok(rest.length >= 45, `expected ~50 rest-of-world clubs, found ${rest.length}`);
   assert.ok(
-    rest.some((t) => t.name === "Ajax Amsterdam"),
-    "a named rest-of-world club (Ajax) is seeded",
+    !("REST_OF_WORLD_LEAGUES" in seedModule),
+    "REST_OF_WORLD_LEAGUES must stay removed — the catalog is top-5 only",
   );
   assert.ok(
-    !SEED_TEAMS.some((t) => t.league !== "" && !ALLOWED_LEAGUES.has(t.league)),
-    "no seed row carries an undeclared league slug",
+    SEED_TEAMS.every((t) => BIG_FIVE.has(t.league)),
+    "no seed row carries a league slug outside the big five",
   );
 }
 
@@ -101,5 +108,5 @@ function testSeedBootsAndIsIdempotent(): void {
 export function runSeedTeamsTests(): void {
   testSeedAgainstManifests();
   testSeedBootsAndIsIdempotent();
-  console.log("  seedTeams: scope, manifest colour/crest lockstep, rest-of-world clubs, idempotent boot OK");
+  console.log("  seedTeams: top-5 scope, manifest colour/crest lockstep, idempotent boot OK");
 }

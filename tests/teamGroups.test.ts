@@ -2,9 +2,17 @@
  * Favorites caps per picker group — the rule that lets users follow up to
  * five national teams ON TOP of their five clubs ("only if they want").
  * The pure rule function is checked against mixed/unknown groups, and the
- * SQL that classifies a team (club / international / cup-only) runs against
+ * SQL that classifies a team (big-five slug / club shelf) runs against
  * real temp-file SQLite so the cap bucket and the picker tab stay the same
  * thing (server/db/teamGroups.ts is the single source of both).
+ *
+ * The catalog was trimmed to the top-5 leagues, so the SQL no longer has an
+ * `international` branch: no national sides are seeded and nothing polls an
+ * international competition, so every non-big-five side — league-less,
+ * cup-only, or seen in a `fifa.world` fixture — is a club-shelf row. The
+ * cap rule still supports the international bucket (favoritesCap /
+ * favoriteCapError stay exercised below); it just cannot be reached from the
+ * classification any more, and the assertion at the end pins that.
  */
 import { strict as assert } from "node:assert";
 import { DatabaseSync } from "node:sqlite";
@@ -88,8 +96,8 @@ function favoriteGroups(db: DatabaseSync, userId: number): Array<{ team_id: stri
 function testTeamGroupSql(): void {
   const { db } = tempDb();
 
-  // A big-five club, a lower-league club, a cup-only club, a seeded national
-  // side with no match yet, and two national sides with an international match.
+  // A big-five club, a lower-league club, a cup-only club, a league-less side
+  // with no match yet, and two league-less sides in an international fixture.
   seedTeam(db, "arsenal", "eng.1");
   seedTeam(db, "twente", "ned.1");
   seedTeam(db, "ajax", "");
@@ -123,11 +131,25 @@ function testTeamGroupSql(): void {
   assert.equal(byTeam.arsenal, "eng.1", "a big-five club groups under its league slug");
   assert.equal(byTeam.twente, OTHER_GROUP, "a club outside the big five lands in 'other'");
   assert.equal(byTeam.ajax, OTHER_GROUP, "a cup-only club lands in the 'other' shelf");
-  assert.equal(byTeam.novak, INTL_GROUP, "a league-less side with no match yet is a national team");
-  assert.equal(byTeam.brazil, INTL_GROUP, "a side seen in an international match is a national team");
+  assert.equal(byTeam.novak, OTHER_GROUP, "a league-less side with no match yet is a club-shelf row");
+  assert.equal(
+    byTeam.brazil,
+    OTHER_GROUP,
+    "even a side seen in a `fifa.world` fixture is a club-shelf row — the SQL has no international branch",
+  );
+  assert.equal(byTeam.scotland, OTHER_GROUP, "and so is its opponent");
+  // The trimmed boundary: nothing can be classified into the international
+  // bucket any more, so a picker tab backed only by that bucket would be empty.
+  assert.ok(
+    !Object.values(byTeam).includes(INTL_GROUP),
+    "no side classifies as international after the top-5 trim",
+  );
 
-  // The cap rule fed by the favorites query: 2 club slots + 4 intl slots free.
+  // The cap rule fed by the favorites query: three club-shelf rows, so two
+  // club slots stay free (and the whole international shelf is free — the query
+  // cannot fill it any more, which is the point of the assertion above).
   const groups = favoriteGroups(db, user.id).map((r) => r.group_key);
+  assert.equal(groups.length, 3, "the query returns one group per followed side");
   assert.equal(favoriteCapError(groups, "esp.1"), null);
   assert.equal(favoriteCapError(groups, INTL_GROUP), null);
   assert.equal(
@@ -135,8 +157,10 @@ function testTeamGroupSql(): void {
     "MAX_CLUBS",
     "the fifth club fills the club shelf",
   );
+  // The intl shelf is unreachable from the classification now, but the rule that
+  // guards it still has to hold: the client keeps the bucket vocabulary.
   assert.equal(
-    favoriteCapError([...groups, INTL_GROUP, INTL_GROUP, INTL_GROUP, INTL_GROUP], INTL_GROUP),
+    favoriteCapError([INTL_GROUP, INTL_GROUP, INTL_GROUP, INTL_GROUP, INTL_GROUP], INTL_GROUP),
     "MAX_INTERNATIONALS",
     "the fifth national team fills the intl shelf",
   );

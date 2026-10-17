@@ -1,23 +1,45 @@
 /**
  * The Browse competitions catalog. Bootstrap data with one hard rule: a slug
  * the sync has promoted must appear exactly once, and anything marked
- * `comingSoon: false` must actually be polled (`LEAGUES_ALL`).
+ * `comingSoon: false` must actually be polled (`LEAGUES`).
  *
  * This is the regression test for a real bug — `ned.1`, `por.1`, `tur.1` and
  * `sco.1` sat in both COMPETITIONS and EXTRA_COMPETITIONS, so Browse rendered
  * each one twice under a duplicate React key, once as "live scores" and once as
  * "not in your feed yet".
+ *
+ * The catalog was then trimmed to the top-5 European leagues: `LEAGUES_ALL`
+ * (the union of synced + incoming) is gone, `EXTRA_COMPETITIONS`, `CUPS` and
+ * `INTERNATIONALS` are empty, and `isCup` is false everywhere. The assertions
+ * below pin that boundary so the trim cannot drift back one slug at a time.
  */
 import { strict as assert } from "node:assert";
 import { competitionCatalog } from "../server/espn/catalog.js";
-import { COMPETITIONS, LEAGUES_ALL } from "../server/espn/types.js";
+import { COMPETITIONS, CUPS, INTERNATIONALS, LEAGUES, isCup } from "../server/espn/types.js";
 import { EXTRA_COMPETITIONS } from "../server/espn/extra.js";
+
+const BIG_FIVE = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
 
 function testCatalogHasNoDuplicates(): void {
   const catalog = competitionCatalog();
   const slugs = catalog.map((c) => c.slug);
   const unique = new Set(slugs);
   assert.equal(unique.size, slugs.length, "no slug is listed twice");
+}
+
+/** The catalog is exactly the big five, all of them live and all with a table. */
+function testCatalogIsExactlyTheBigFive(): void {
+  const catalog = competitionCatalog();
+  assert.deepEqual(
+    [...catalog.map((c) => c.slug)].sort(),
+    [...BIG_FIVE].sort(),
+    "the catalog holds the big five and nothing else",
+  );
+  for (const entry of catalog) {
+    assert.equal(entry.comingSoon, false, `${entry.slug} is polled, so it is not coming-soon`);
+    assert.equal(entry.hasTable, true, `${entry.slug} is a league, so it owns a table`);
+    assert.equal(entry.kind, "league", `${entry.slug} is a league`);
+  }
 }
 
 /** The source lists themselves are disjoint — the rule that prevents the bug. */
@@ -33,9 +55,10 @@ function testSourceListsAreDisjoint(): void {
 
 /** Everything the catalog advertises as synced is really in the polled set. */
 function testSyncedEntriesArePolled(): void {
-  const polled = new Set<string>(LEAGUES_ALL);
+  const polled = new Set<string>(LEAGUES);
   const missing = COMPETITIONS.filter((c) => !polled.has(c.slug)).map((c) => c.slug);
-  assert.deepEqual(missing, [], `live competitions not in LEAGUES_ALL: ${missing.join(", ")}`);
+  assert.deepEqual(missing, [], `live competitions not in LEAGUES: ${missing.join(", ")}`);
+  assert.equal(new Set(LEAGUES).size, LEAGUES.length, "the polled set lists no league twice");
 }
 
 /** Extras are browse-only: never advertised as synced, never with a table. */
@@ -49,10 +72,22 @@ function testExtrasAreComingSoon(): void {
   }
 }
 
+/** The trimmed-away scope stays trimmed: no extras, no cups, no internationals. */
+function testTrimmedScopeStaysRemoved(): void {
+  assert.deepEqual(EXTRA_COMPETITIONS, [], "the browse-only extras shelf is empty");
+  assert.deepEqual(CUPS, [], "cups are out of the catalog");
+  assert.deepEqual(INTERNATIONALS, [], "internationals are out of the catalog");
+  for (const slug of [...BIG_FIVE, "uefa.champions", "eng.fa", "fifa.world"]) {
+    assert.equal(isCup(slug), false, `${slug} must not be treated as a cup`);
+  }
+}
+
 export function runCompetitionsTests(): void {
   testCatalogHasNoDuplicates();
+  testCatalogIsExactlyTheBigFive();
   testSourceListsAreDisjoint();
   testSyncedEntriesArePolled();
   testExtrasAreComingSoon();
-  console.log("  competitions: no duplicate slugs, candidates polled, extras browse-only OK");
+  testTrimmedScopeStaysRemoved();
+  console.log("  competitions: big-five-only catalog, no duplicate slugs, nothing polled missing OK");
 }
