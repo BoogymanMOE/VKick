@@ -73,14 +73,10 @@
      Vazirmatn at 11px is also below the Persian reading floor, so the one rule
      that flips the case lifts the size too. */
   html[lang="fa"] .label {
-    text-transform: none;
-    letter-spacing: 0;
     font-size: 12px;
   }
-  /* Section headings keep their Latin size: the floor is about micro-copy
-     legibility, not about flattening the hierarchy between the two locales. */
   html[lang="fa"] .label-lg {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   /* Persian floor: Vazirmatn at 9-11px is unreadable, so every micro-size
@@ -106,13 +102,17 @@
      this instead of hand-rolling 10px/11px + uppercase + tracking at each site.
      Colour stays a utility so the muted/strong distinction is explicit. */
   .label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
   }
   .label-lg {
-    font-size: 13px;
+    font-size: 14px;
+  }
+
+  /* Score displays forced LTR for Persian compatibility */
+  .num-display, [class*="score"], [class*="mid"] {
+    direction: ltr;
+    unicode-bidi: isolate;
   }
 
   /* Safe-area padding helpers — Telegram headers, iPhone home indicator, etc. */
@@ -172,6 +172,15 @@
     100% {
       transform: scale(2.6);
       opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .live-dot,
+    .live-dot::before,
+    .live-dot::after {
+      animation: none;
+      border-color: var(--live);
     }
   }
 

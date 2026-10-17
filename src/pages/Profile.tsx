@@ -1,14 +1,13 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { BottomSheet, SheetActions } from "../components/BottomSheet";
-import { TopBar } from "../components/TopBar";
+import { TopBar, LanguageToggle } from "../components/TopBar";
 import { ChevronRightIcon, CloseIcon, PencilIcon, ShareIcon } from "../components/icons";
 import { useToast } from "../components/toastContext";
 import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch, TeamBadge } from "../components/ui";
 import { useAuth } from "../hooks/authContext";
 import { useFavorites } from "../hooks/useFavorites";
 import { useNotificationPrefs, useReferral } from "../hooks/useApi";
-import { LANG_LABEL, type Lang } from "../i18n/strings";
 import { useI18n } from "../i18n/context";
 import { api, serverErrorKey } from "../lib/api";
 import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
@@ -31,7 +30,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export default function Profile() {
-  const { t, lang, setLang } = useI18n();
+  const { t } = useI18n();
   const { push } = useToast();
   const { user, logout, updateDisplayName } = useAuth();
   const navigate = useNavigate();
@@ -210,30 +209,12 @@ export default function Profile() {
         </div>
       </section>
 
-      <section className="mt-6">
-        <SectionHeading title={t("profile.language")} />
-        <div className="flex gap-2">
-          {(Object.keys(LANG_LABEL) as Lang[]).map((code) => (
-            <Button
-              key={code}
-              variant={lang === code ? "primary" : "ghost"}
-              className="flex-1"
-              onClick={() => {
-                haptic("light");
-                setLang(code);
-              }}
-            >
-              {LANG_LABEL[code]}
-            </Button>
-          ))}
-        </div>
-      </section>
-
       <ReferralSection />
 
       <section className="mt-6">
         <SectionHeading title={t("profile.settings")} />
         <div className="space-y-2">
+          <ListRow label={t("profile.language")} right={<LanguageToggle />} />
           <ListRow
             label={t("profile.haptics")}
             hint={t("profile.hapticsHint")}

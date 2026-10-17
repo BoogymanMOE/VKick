@@ -1,18 +1,20 @@
-import { useState, type CSSProperties } from "react";
-import { Link } from "react-router-dom";
+import { useState, useMemo, type CSSProperties } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
-import { RowSkeleton } from "../components/Skeletons";
-import { EmptyState, ErrorState } from "../components/ui";
+import { RowSkeleton, CompRowSkeleton } from "../components/Skeletons";
+import { EmptyState, ErrorState, Chip, SectionHeading, TeamBadge, LiveDot, Num, CountUp, Segmented } from "../components/ui";
 import { cx } from "../lib/cx";
-import { Chip, CountUp, LiveDot, Num, SectionHeading, Segmented, TeamBadge } from "../components/ui";
-import { StarFilledIcon } from "../components/icons";
-import { slugForLeague, useLeagueTabs, useStandings, useMatches, type StandingRow } from "../hooks/useApi";
-import { isCup } from "../lib/leagues";
 
-type TableView = "actual" | "expected";
+import { ChevronRightIcon, StarFilledIcon } from "../components/icons";
+import { slugForLeague, useLeagueTabs, useStandings, useMatches, useCompetitions, type StandingRow } from "../hooks/useApi";
+import { isCup } from "../lib/leagues";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
+import { haptic } from "../lib/telegram";
 import type { Match } from "../types";
+
+type TableView = "actual" | "expected";
+type BrowseView = "tables" | "browse";
 
 /**
  * League tables for the synced domestic leagues — straight from the standings.
@@ -25,6 +27,7 @@ export default function Table() {
   const tabs = useLeagueTabs();
   const [league, setLeague] = useState<string | null>(null);
   const [view, setView] = useState<TableView>("actual");
+  const [browseView, setBrowseView] = useState<BrowseView>("tables");
 
   // Default to the league one of your clubs plays in, else the Premier League.
   // `clubs[].league` is a big-five alias (teamFromApi parks every other side
@@ -65,9 +68,40 @@ export default function Table() {
         />
       </div>
 
-      {/* Your clubs across all five leagues, with the position each sits in. */}
-      <section className="mt-4">
-        <SectionHeading
+      {/* Tables / Browse switch */}
+      <div className="mt-3 flex gap-2">
+        <button
+          type="button"
+          onClick={() => setBrowseView("tables")}
+          className={cx(
+            "min-h-11 rounded-full border px-4 text-sm font-bold transition-colors duration-[var(--t-fast)] active:scale-[0.97]",
+            browseView === "tables"
+              ? "border-volt bg-volt/15 text-volt"
+              : "border-line text-ink-3 hover:bg-elevated",
+          )}
+        >
+          {t("table.view.tables")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setBrowseView("browse")}
+          className={cx(
+            "min-h-11 rounded-full border px-4 text-sm font-bold transition-colors duration-[var(--t-fast)] active:scale-[0.97]",
+            browseView === "browse"
+              ? "border-volt bg-volt/15 text-volt"
+              : "border-line text-ink-3 hover:bg-elevated",
+          )}
+        >
+          {t("table.view.browse")}
+        </button>
+      </div>
+
+      {/* Tables view: standings + your clubs */}
+      {browseView === "tables" && (
+        <>
+          {/* Your clubs across all five leagues, with the position each sits in. */}
+          <section className="mt-4">
+          <SectionHeading
           title={t("table.myClubs")}
           action={
             clubs.length > 0 ? (
@@ -110,7 +144,7 @@ export default function Table() {
         )}
       </section>
 
-      <section className="mt-4">
+          <section className="mt-4">
         {isCup(slug) ? (
           <CupView slug={slug} rows={rows} />
         ) : (
@@ -228,7 +262,152 @@ export default function Table() {
             )}
           </>
         )}
-      </section>
+        </section>
+        </>
+      )}
+
+      {/* Browse view: league browser */}
+      {browseView === "browse" && <BrowseContent />}
+    </>
+  );
+}
+
+/**
+ * Browse view: league/cup/tournament browser, merged from the old Browse page.
+ */
+function BrowseContent() {
+  const { t, localize } = useI18n();
+  const navigate = useNavigate();
+  const query = useCompetitions();
+  const [filter, setFilter] = useState<"all" | "league" | "cup">("all");
+  const groups = useMemo(() => {
+    const comps = query.data?.competitions ?? [];
+    const visible = comps.filter((c) => (filter === "all" ? true : c.kind === filter));
+    return {
+      leagues: visible.filter((c) => c.kind === "league"),
+      cups: visible.filter((c) => c.kind === "cup"),
+      tournaments: visible.filter((c) => c.kind === "tournament"),
+    };
+  }, [query.data, filter]);
+
+  const sections = useMemo(() => [
+    { title: t("browse.leagues"), rows: groups.leagues },
+    { title: t("browse.cups"), rows: groups.cups },
+    ...(groups.tournaments.length > 0 ? [{ title: t("browse.tournaments"), rows: groups.tournaments }] : []),
+  ], [groups]);
+
+  const open = (slug: string, comingSoon: boolean | undefined, kind: string) => {
+    if (comingSoon) return;
+    haptic("light");
+    if (kind === "league") navigate(`/matches?league=${encodeURIComponent(slug)}`);
+    else navigate(`/cups?cup=${encodeURIComponent(slug)}`);
+  };
+
+  return (
+    <>
+      <div
+        className="mt-3 grid grid-cols-3 gap-1 rounded-full border border-line bg-surface p-1"
+        role="tablist"
+      >
+        {(
+          [
+            ["all", "browse.all"],
+            ["league", "browse.leagues"],
+            ["cup", "browse.cups"],
+          ] as const
+        ).map(([value, key]) => (
+          <button
+            key={value}
+            type="button"
+            role="tab"
+            aria-selected={filter === value}
+            onClick={() => {
+              haptic("light");
+              setFilter(value);
+            }}
+            className={cx(
+              "min-h-11 rounded-full text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+              filter === value ? "bg-elevated text-volt" : "text-ink-2 hover:text-ink",
+            )}
+          >
+            {t(key)}
+          </button>
+        ))}
+      </div>
+
+      {query.isLoading ? (
+        <div className="mt-4">
+          <CompRowSkeleton rows={6} />
+        </div>
+      ) : (
+        sections.map(
+          ({ title, rows }) =>
+            rows.length > 0 && (
+              <section key={title} className="mt-5 fade-swap">
+                <SectionHeading
+                  title={title}
+                  action={
+                    <Chip tone="muted">
+                      <Num>{rows.length}</Num>
+                    </Chip>
+                  }
+                />
+                <ul className="space-y-2">
+                  {rows.map((comp) => {
+                    const soon = Boolean(comp.comingSoon);
+                    const Wrapper = soon ? "div" : "button";
+                    return (
+                      <li key={comp.slug}>
+                        <Wrapper
+                          {...(soon
+                            ? {}
+                            : {
+                                type: "button" as const,
+                                onClick: () => open(comp.slug, comp.comingSoon, comp.kind),
+                              })}
+                          className={cx(
+                            "flex w-full items-center gap-3 rounded-card border p-3 text-start transition-colors duration-[var(--t-fast)]",
+                            soon
+                              ? "border-dashed border-line bg-transparent opacity-70"
+                              : "border-line bg-surface hover:bg-elevated",
+                          )}
+                        >
+                          <span
+                            className={cx(
+                              "grid h-9 w-9 flex-none place-items-center rounded-full border text-xs font-extrabold",
+                              soon ? "border-line text-ink-3" : "border-volt text-volt",
+                            )}
+                            style={{
+                              backgroundColor: soon
+                                ? undefined
+                                : "color-mix(in srgb, var(--volt) 12%, transparent)",
+                            }}
+                            aria-hidden="true"
+                          >
+                            {comp.name.slice(0, 1)}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-bold text-ink">
+                              {localize(comp.name)}
+                            </span>
+                            <span className="block truncate text-[11px] text-ink-3">
+                              {soon ? t("browse.comingSoon") : t("browse.liveScores")}
+                            </span>
+                          </span>
+                          {soon ? (
+                            <Chip tone="muted">{t("browse.soon")}</Chip>
+                          ) : (
+                            <ChevronRightIcon className="text-ink-3" />
+                          )}
+                        </Wrapper>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ),
+        )
+      )}
     </>
   );
 }

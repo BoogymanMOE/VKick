@@ -117,49 +117,6 @@
          this slot (its sticky bottom offsets by the same height) and the main
          content's bottom padding accounts for both, so the ad never overlaps
          content or the tab bar, and A-ADS sees a fully visible unit. -->
-    <div
-      id="a-ads"
-      style="
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        z-index: 5;
-        height: var(--ad-slot-h, 100px);
-        background: var(--bg-base, #081613);
-        border-top: 1px solid var(--border-subtle, #1e3b34);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 8px 8px max(env(safe-area-inset-bottom), 8px);
-      "
-    >
-      <div
-        style="
-          max-width: 468px;
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-        "
-      >
-        <iframe
-          data-aa="2458182"
-          src="//acceptable.a-ads.com/2458182/?size=Adaptive"
-          style="
-            border: 0;
-            padding: 0;
-            margin: 0;
-            display: block;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-          "
-          title="Advertisement"
-        ></iframe>
-      </div>
-    </div>
+
   </body>
 </html>

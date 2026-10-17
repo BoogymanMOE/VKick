@@ -57,7 +57,7 @@ export function AppShell() {
         tabIndex={-1}
         key={pathname}
         className="page-in mx-auto w-full max-w-[560px] flex-1 px-[var(--space-page-x,16px)] pt-4 outline-none"
-        style={{ paddingBottom: "calc(56px + var(--ad-slot-h, 100px) + max(env(safe-area-inset-bottom), 8px))" }}
+        style={{ paddingBottom: "calc(56px + max(env(safe-area-inset-bottom), 8px))" }}
       >
         <Suspense
           fallback={

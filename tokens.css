@@ -20,7 +20,7 @@
 
   /* accents — strict semantics */
   --volt: #1fbfa0; /* primary actions, your predictions, goal flash (broadcast teal) */
-  --live: #35e0bc; /* LIVE state only — dot, pulse, live timeline (brighter teal) */
+  --live: #ff5a4d; /* LIVE state only — dot, pulse, live timeline (coral red) */
   --gold: #f2b705; /* crowd ratings, points, bonus — evaluative amber */
   --danger: #ff4d5e; /* errors, wrong, red cards */
   --pitch: #23a066; /* turf: positive chips, shot plotter grid (tinted, never dominant) */
@@ -41,11 +41,6 @@
      previous 12px (px-3) read as cramped. */
   --space-page-x: 16px;
 
-  /* A-ADS ad slot — reserved at the very bottom of the viewport, above the
-     iOS home indicator. The TabBar sits on top of this slot and the main
-     content's bottom padding accounts for both, so nothing is ever hidden
-     behind the ad and the ad never overlaps content or the tab bar. */
-  --ad-slot-h: 100px;
 }
 body {
   background: var(--bg-base);

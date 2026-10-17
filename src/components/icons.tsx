@@ -199,6 +199,15 @@ export const CardIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Tables / list view icon — three horizontal lines. */
+export const ListIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <line x1="4" x2="20" y1="6" y2="6" />
+    <line x1="4" x2="20" y1="12" y2="12" />
+    <line x1="4" x2="20" y1="18" y2="18" />
+  </svg>
+);
+
 /** Filled variant, for the "already your anchor club" state. */
 export const StarFilledIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} width={12} height={12} fill="currentColor" strokeWidth={1.2}>

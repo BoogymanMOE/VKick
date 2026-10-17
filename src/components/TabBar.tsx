@@ -1,35 +1,27 @@
 import { NavLink } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { haptic } from "../lib/telegram";
-import { BallIcon, UserIcon } from "./icons";
+import { BallIcon, ListIcon, UserIcon } from "./icons";
 import { cx } from "../lib/cx";
 import type { StringKey } from "../i18n/strings";
 
 /**
- * Two destinations only: Matchday, Profile.
- *
- * Browse and Table moved off the bar (they were crowding five tabs on a 360px
- * webview) and now live as quiet shortcuts at the top of the Matchday feed —
- * see Matches.tsx. Their routes are unchanged, so old links and deep links
- * still resolve. Player Stats never had a slot either: it is linked from a
- * match's Stats tab.
+ * Three tabs: Matches, Tables, Profile. Browse is now inside Tables.
  */
 const tabs: Array<{ to: string; key: StringKey; Icon: typeof BallIcon }> = [
   { to: "/matches", key: "nav.matches", Icon: BallIcon },
+  { to: "/table", key: "nav.table", Icon: ListIcon },
   { to: "/profile", key: "nav.profile", Icon: UserIcon },
 ];
 
 export function TabBar() {
   const { t } = useI18n();
 
-  return (
-    // 95% opaque, so no backdrop blur — same reasoning as TopBar: the blur was
+  return (      // 95% opaque, so no backdrop blur — same reasoning as TopBar: the blur was
     // imperceptible but ran on every scroll frame.
-    // `bottom` is offset by --ad-slot-h so the bar sits ABOVE the fixed A-ADS slot
-    // instead of fighting it for the same strip.
+    // Ad is now inline and scrolls with content, so TabBar sits at the very bottom.
     <nav
       className="pad-safe-bottom sticky z-20 border-t border-line bg-base/95"
-      style={{ bottom: "var(--ad-slot-h, 100px)" }}
     >
       <ul className="mx-auto flex w-full max-w-[560px] items-stretch justify-between px-2 pt-1">
         {tabs.map(({ to, key, Icon }) => (

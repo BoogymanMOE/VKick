@@ -1,27 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ConfettiBurst } from "../components/Confetti";
-import { clubContext, opponentOf } from "../lib/clubContext";
 import { MatchCard } from "../components/MatchCard";
-import { MatchCardSkeleton } from "../components/Skeletons";
 import { TopBar } from "../components/TopBar";
 import { useToast } from "../components/toastContext";
-import {
-  Card,
-  Chip,
-  CollapsibleSection,
-  EmptyState,
-  ErrorState,
-  LiveDot,
-  Num,
-  TeamBadge,
-} from "../components/ui";
+import { Card } from "../components/ui";
 import { cx } from "../lib/cx";
 import { useMatches, useFollowedLeagues } from "../hooks/useApi";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
-import { formatClock, formatDayHeader, formatKickoff } from "../lib/format";
+import { formatClock } from "../lib/format";
 import { LEAGUE_BY_SLUG } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
 import {
@@ -29,15 +19,14 @@ import {
   PlusIcon,
   RefreshIcon,
   ShareIcon,
-  ShirtIcon,
-  StarFilledIcon,
-  TableIcon,
 } from "../components/icons";
+import { DateStrip } from "../components/DateStrip";
+import { InlineAd } from "../components/InlineAd";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
 import { PullIndicator } from "../components/PullToRefresh";
-import type { Match, Team } from "../types";
+import type { Match } from "../types";
 
 /** One chip in the league scope row: same shape, tone flips with the state. */
 const LEAGUE_CHIP =
@@ -59,7 +48,7 @@ export default function Matches() {
   // competition. Absent param = the followed-leagues feed (or everything).
   const [searchParams] = useSearchParams();
   const league = searchParams.get("league") ?? undefined;
-  const { teams: favTeams, anchorId, count: favCount, isFavorite } = useFavorites();
+  const { count: favCount, isFavorite } = useFavorites();
   const followed = useFollowedLeagues();
 
   // Followed leagues narrow the default feed when set; the deep-link param
@@ -70,75 +59,31 @@ export default function Matches() {
   const matchesQuery = useMatches({ league: activeLeague });
   const matches = matchesQuery.data ?? [];
 
-  // The team rows read the unfiltered feed so a favorite club's fixture shows
-  // even when the league chips narrow the page (same query key when both are
-  // unfiltered, so react-query fetches once).
-  const allMatchesQuery = useMatches();
-  const allMatches = useMemo(() => allMatchesQuery.data ?? [], [allMatchesQuery.data]);
-
   // The Favorite Leagues sheet. Local to the feed (not a route) so opening and
   // closing it never loses the scroll position or the selected league chip.
   const [leaguesOpen, setLeaguesOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
-  const [flashId, setFlashId] = useState<string | null>(null);
   const [burst, setBurst] = useState(0);
 
-  const live0 = matches.filter((m) => m.status === "live");
-  const upcoming0 = matches.filter((m) => m.status === "scheduled");
-  const finished0 = matches.filter((m) => m.status === "finished");
+  // Date strip: 5 day chips, today selected by default.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [selectedDay, setSelectedDay] = useState<Date>(today);
+  
+  // Filter matches by selected day (compare kickoff date).
+  const selectedDateStr = selectedDay.toISOString().slice(0, 10);
+  const dayMatches = useMemo(() => {
+    return matches.filter((m) => {
+      const kickoff = new Date(m.kickoffAt);
+      const kickoffStr = kickoff.toISOString().slice(0, 10);
+      return kickoffStr === selectedDateStr;
+    });
+  }, [matches, selectedDateStr]);
+  
   const inMyTeams = (match: Match) => isFavorite(match.home.id) || isFavorite(match.away.id);
-  // Favorite clubs sort to the top of each section.
-  const organize = (list: Match[]) => [...list].sort((a, b) => Number(inMyTeams(b)) - Number(inMyTeams(a)));
-  // Soonest / newest kickoff first. The server already returns its window in
-  // that order, but each section re-sorts explicitly so the screen never
-  // depends on the API's ordering (favorites sort stably on top of these).
-  const soonestFirst = (a: Match, b: Match) => +new Date(a.kickoffAt) - +new Date(b.kickoffAt);
-  const newestFirst = (a: Match, b: Match) => +new Date(b.kickoffAt) - +new Date(a.kickoffAt);
-  const live = organize(live0);
-  const upcoming = organize(upcoming0).sort(soonestFirst);
-  // Upcoming default view: 6 cards, with a Show more toggle for the rest.
-  const UPCOMING_DEFAULT = 6;
-  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
-
-  // Group upcoming matches by kickoff day for sticky date headers.
-  const groupedUpcoming = useMemo(() => {
-    const groups: Array<{ day: string; label: string; matches: Match[] }> = [];
-    let currentDay = "";
-    for (const match of upcoming) {
-      const day = formatDayHeader(new Date(match.kickoffAt), locale);
-      if (day !== currentDay) {
-        currentDay = day;
-        groups.push({ day, label: day, matches: [match] });
-      } else {
-        groups[groups.length - 1].matches.push(match);
-      }
-    }
-    return groups;
-  }, [upcoming, locale]);
-  // Recent results, newest kickoff first — the sections above sort favorites up.
-  const finished = organize(finished0).sort(newestFirst).slice(0, 6);
-
-  // The feed's own states, kept explicit so the screen never renders three
-  // empty sections at once. `feedEmpty` is a fresh deploy before the ESPN sync
-  // has filed a single fixture: the case that made Matchday look broken.
-  const loading = matchesQuery.isLoading;
-  const failed = matchesQuery.isError && matches.length === 0;
-  const feedEmpty = !loading && !failed && matches.length === 0;
-
-  // One context per favorite club: live now, else next kickoff, else last
-  // result. The anchor club leads the rows.
-  const teamRows = useMemo(() => {
-    // A fixture the Live section already carries is dropped here. The same
-    // game printed twice on one screen reads as two games, and the rows are
-    // meant to answer "what's next for my clubs", not repeat what is on now
-    // (PRODUCT.md rule 1: the live moment gets the stage to itself).
-    const liveIds = new Set(live.map((match) => match.id));
-    return [...favTeams]
-      .sort((a, b) => Number(b.id === anchorId) - Number(a.id === anchorId))
-      .map((team) => ({ team, context: clubContext(team.id, allMatches) }))
-      .filter(({ context }) => !(context.live && liveIds.has(context.live.id)));
-  }, [favTeams, anchorId, allMatches, live]);
+  const myTeamsMatches = useMemo(() => dayMatches.filter(inMyTeams), [dayMatches]);
+  const otherMatches = useMemo(() => dayMatches.filter((m) => !inMyTeams(m)), [dayMatches]);
 
   // Goal detection: when a refetch brings a new score for a match, fire the
   // volt sweep + toast. The server polls ESPN every minute; this picks that up.
@@ -163,7 +108,6 @@ export default function Matches() {
       if (prev && prev !== score && score !== "–-–") {
         const match = matchesQuery.data.find((m) => m.id === id);
         if (match) {
-          setFlashId(id);
           setBurst((value) => value + 1);
           notifyHaptic("success");
           push({
@@ -171,7 +115,6 @@ export default function Matches() {
             tone: "volt",
             icon: <BallIcon className="h-4 w-4" />,
           });
-          window.setTimeout(() => setFlashId(null), 1400);
         }
       }
     }
@@ -200,90 +143,21 @@ export default function Matches() {
   // only path.
   const pull = usePullToRefresh(refresh, !refreshing);
 
-  // PRODUCT.md rule 1: the live moment leads the screen. Collapsible so a
-  // quiet matchday can be folded away to leave more room for the feed below;
-  // the pulsing dot keeps the folded header honest while games are running.
-  const liveSection = (
-    <CollapsibleSection
-      id="matches-live"
-      level={2}
-      title={t("matches.live")}
-      count={live.length}
-      collapsedBadge={
-        live.length > 0 ? (
-          <Chip tone="live">
-            <LiveDot />
-            <Num>{live.length}</Num>
-          </Chip>
-        ) : null
-      }
-    >
-      {/* The section only mounts when a game is actually running (see the
-          render site), so a skeleton or an empty state inside it could never
-          fire: while the feed loads there is simply no Live section yet, and
-          a quiet matchday gets no header at all. */}
-      <ul className="space-y-2">
-        {live.map((match, index) => (
-          <MatchCard key={match.id} match={match} flash={flashId === match.id} index={index} />
-        ))}
-      </ul>
-    </CollapsibleSection>
-  );
-
   return (
     <>
-      <ConfettiBurst trigger={burst} />
-
-      <TopBar
+      <ConfettiBurst trigger={burst} />          <TopBar
         title={t("matches.title")}
-        subtitle={t("matches.subtitle")}
-        right={
-          <button
-            type="button"
-            onClick={refresh}
-            aria-label={t("matches.refresh")}
-            className={cx(
-              "grid h-11 w-11 flex-none place-items-center rounded-full border border-line text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated hover:text-ink",
-              refreshing && "animate-spin",
-            )}
-          >
-            <RefreshIcon />
-          </button>
-        }
+        subtitle={new Date().toLocaleDateString(lang === "fa" ? "fa-IR" : undefined, { weekday: "short", day: "numeric", month: "short" })}
       />
-
-      {/* Browse and Table lost their tab slots in the 3-tab bar, so the feed
-          carries them: two quiet shortcuts, always visible — even when a league
-          deep link scopes the feed and the leagues chip row is hidden — in the
-          same rounded-line affordance as the header's refresh button. */}
-      <div className="mt-4 flex items-center gap-2">
-        <Link
-          to="/browse"
-          onClick={() => haptic("light")}
-          aria-label={t("nav.browse")}
-          title={t("nav.browse")}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-line px-3 text-xs font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated hover:text-ink"
-        >
-          <ShirtIcon className="h-4 w-4" />
-          {t("nav.browse")}
-        </Link>
-        <Link
-          to="/table"
-          onClick={() => haptic("light")}
-          aria-label={t("nav.table")}
-          title={t("nav.table")}
-          className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-line px-3 text-xs font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated hover:text-ink"
-        >
-          <TableIcon className="h-4 w-4" />
-          {t("nav.table")}
-        </Link>
-      </div>
 
       {/* Everything below sits under the sticky header. The wrapper gives the
           pull-to-refresh marker an anchor so it slides in between header and
           feed instead of fighting the header for the same band. */}
       <div className="relative">
         <PullIndicator pull={pull} />
+
+        {/* Date strip: 5 day chips. Today is teal-filled and selected by default. */}
+        <DateStrip selected={selectedDay} onSelect={setSelectedDay} />
 
         {/* Favorite leagues — the start page's own way in. One tap re-scopes
             the whole feed (concept pillar 1); the last chip opens the picker,
@@ -367,39 +241,39 @@ export default function Matches() {
           first thing on screen, above every other block. Collapsible so a quiet
           matchday can fold it away; the pulsing badge keeps the folded header
           honest while games are running. */}
-        {live.length > 0 ? liveSection : null}
+        {/* My teams group: matches where a favorite team is playing */}
+        {favCount > 0 && myTeamsMatches.length > 0 && (
+          <section className="mt-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[12px]" aria-hidden="true">★</span>
+              <h2 className="text-[13px] font-bold text-ink-2">{t("matches.myTeams")}</h2>
+            </div>
+            <ul className="space-y-2">
+              {myTeamsMatches.map((match, index) => (
+                <MatchCard key={match.id} match={match} index={index} />
+              ))}
+            </ul>
+          </section>
+        )}
 
-        {!league && favCount > 0 && teamRows.length > 0 ? (
-          <CollapsibleSection
-            id="matches-my-teams"
-            level={2}
-            title={t("matches.myTeams")}
-            count={favCount}
-            defaultOpen
-          >
-            {matchesQuery.isLoading ? (
-              <ul className="space-y-2" aria-busy="true">
-                <MatchCardSkeleton />
-                <MatchCardSkeleton />
-              </ul>
-            ) : matchesQuery.isError ? (
-              <ErrorState
-                title={t("error.title")}
-                hint={t("error.hint")}
-                onRetry={() => matchesQuery.refetch()}
-              />
-            ) : (
-              <ul className="space-y-2 fade-swap">
-                {teamRows.map(({ team, context }) => (
-                  <TeamRow key={team.id} team={team} context={context} anchored={team.id === anchorId} />
-                ))}
-              </ul>
-            )}
-          </CollapsibleSection>
-        ) : null}
+        {/* Inline ad between groups */}
+        {favCount > 0 && myTeamsMatches.length > 0 && otherMatches.length > 0 && (
+          <InlineAd />
+        )}
 
-        {/* No favorites yet: one clear call to pick them. The picks feed above
-          takes over once a team is saved. */}
+        {/* Other matches group */}
+        {otherMatches.length > 0 && (
+          <section className="mt-4">
+            <h2 className="text-[13px] font-bold text-ink-2 mb-2">{t("matches.otherMatches")}</h2>
+            <ul className="space-y-2">
+              {otherMatches.map((match, index) => (
+                <MatchCard key={match.id} match={match} index={index} />
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {/* No favorites yet */}
         {favCount === 0 ? (
           <Card className="pitch-watermark mt-4 flex items-center justify-between gap-3 p-4">
             <div className="min-w-0">
@@ -414,151 +288,6 @@ export default function Matches() {
             </Link>
           </Card>
         ) : null}
-
-        {/* General upcoming feed, capped with picks saved so the page stays a
-          glance, not a scroll. Results live in the team rows above.
-
-          One state at a time: a single skeleton list while the first fetch is
-          in flight (three sections of "nothing here" during the wait read as
-          "no football today"), a single error card when the fetch failed with
-          nothing cached, a single centered empty state when the sync has not
-          filled the feed yet, and the three sections only once there is data.
-          The sponsored slot rides along in the two states that have an actual
-          feed around it — never under a skeleton or an error. */}
-        {/* Same collapsible shell as the loaded Upcoming section (same id, so the
-            stored open/closed choice carries across the swap): the header never
-            snaps from a plain heading to a disclosure when data lands. */}
-        {loading ? (
-          <CollapsibleSection id="matches-upcoming" level={2} title={t("matches.upcoming")} defaultOpen>
-            <ul className="space-y-2" aria-busy="true" aria-label={t("matches.loading")}>
-              <MatchCardSkeleton />
-              <MatchCardSkeleton />
-              <MatchCardSkeleton />
-            </ul>
-          </CollapsibleSection>
-        ) : null}
-
-        {failed ? (
-          <div className="mt-6">
-            <ErrorState
-              title={t("error.title")}
-              hint={t("error.hint")}
-              onRetry={() => matchesQuery.refetch()}
-            />
-          </div>
-        ) : null}
-
-        {feedEmpty ? (
-          <div className="mt-6">
-            <EmptyState
-              title={t("matches.emptyTitle")}
-              hint={t("matches.emptyFeedHint")}
-              action={
-                <button
-                  type="button"
-                  onClick={() => {
-                    haptic("light");
-                    matchesQuery.refetch();
-                  }}
-                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-                >
-                  <RefreshIcon className="h-4 w-4" aria-hidden="true" />
-                  {t("matches.emptyAction")}
-                </button>
-              }
-            />
-          </div>
-        ) : null}
-
-        {/* The sponsored slot sits between Upcoming and Previous in the ready state. */}
-
-        {!loading && !failed && !feedEmpty ? (
-          <>
-            <CollapsibleSection
-              id="matches-upcoming"
-              level={2}
-              title={t("matches.upcoming")}
-              count={upcoming0.length}
-              defaultOpen
-            >
-              {groupedUpcoming.length > 0 ? (
-                <ul className="fade-swap">
-                  {groupedUpcoming.map((group) => (
-                    <li key={group.day}>
-                      <div className="sticky top-14 z-10 bg-base/95 py-1.5">
-                        <p className="label text-ink-3 px-2">{group.label}</p>
-                      </div>
-                      <ul className="space-y-2">
-                        {group.matches.map((match, index) => (
-                          <MatchCard key={match.id} match={match} index={index} />
-                        ))}
-                      </ul>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <EmptyState
-                  title={t("matches.empty")}
-                  hint={t("matches.emptyHint")}
-                  action={
-                    <button
-                      type="button"
-                      onClick={() => {
-                        haptic("light");
-                        matchesQuery.refetch();
-                      }}
-                      className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-                    >
-                      <RefreshIcon className="h-4 w-4" aria-hidden="true" />
-                      {t("matches.emptyAction")}
-                    </button>
-                  }
-                />
-              )}
-              {!showAllUpcoming && upcoming.length > UPCOMING_DEFAULT && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllUpcoming(true)}
-                  className="mt-2 w-full justify-center rounded-full border border-volt bg-surface px-5 py-2 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-                >
-                  {t("matches.showMore")}
-                </button>
-              )}
-              {showAllUpcoming && upcoming.length > UPCOMING_DEFAULT && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllUpcoming(false)}
-                  className="mt-2 w-full justify-center rounded-full border border-line bg-surface px-5 py-2 text-xs font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-                >
-                  {t("matches.showLess")}
-                </button>
-              )}
-            </CollapsibleSection>
-
-            {/* Previous results beneath the feed: folded away by default so the
-              matchday page leads with what's next; open when the score is
-              wanted. Rendered whenever the feed has data so a quiet history is
-              named honestly instead of the section vanishing. */}
-            <CollapsibleSection
-              id="matches-previous"
-              level={2}
-              title={t("matches.previous")}
-              count={finished0.length}
-              defaultOpen
-            >
-              {finished.length > 0 ? (
-                <ul className="space-y-2 fade-swap">
-                  {finished.map((match, index) => (
-                    <MatchCard key={match.id} match={match} index={index} />
-                  ))}
-                </ul>
-              ) : (
-                <EmptyState title={t("matches.previousEmpty")} hint={t("matches.previousEmptyHint")} />
-              )}
-            </CollapsibleSection>
-          </>
-        ) : null}
-
         {/* Referral banner — the invite system's only entry on the feed, parked
           at the foot of the page so it never pushes the live scores down. */}
         <Link
@@ -589,97 +318,3 @@ export default function Matches() {
   );
 }
 
-/* ------------------------------------------------------------ team rows */
-
-/**
- * One row per favorite club — the entire "what are my teams doing" answer in
- * a single glance: live score with minute, else next kickoff, else the last
- * result. Full-width row (the compact tile strip wasted a whole band and
- * still needed a second tap to see anything), anchor club marked with gold.
- */
-function TeamRow({
-  team,
-  context,
-  anchored,
-}: {
-  team: Team;
-  context: ReturnType<typeof clubContext>;
-  anchored: boolean;
-}) {
-  const { t, lang, localize } = useI18n();
-  const locale = lang === "fa" ? "fa-IR" : undefined;
-  const { live, next, last } = context;
-
-  let state: ReactNode;
-  let meta: ReactNode;
-  if (live) {
-    const goalsFor = live.home.id === team.id ? live.homeScore : live.awayScore;
-    const goalsAgainst = live.home.id === team.id ? live.awayScore : live.homeScore;
-    state = (
-      <span className="inline-flex items-center gap-1.5 text-live">
-        <LiveDot />
-        <Num className="text-lg">
-          {goalsFor}–{goalsAgainst}
-        </Num>
-        <span className="text-[10px] font-normal text-ink-3">{live.minute}</span>
-      </span>
-    );
-    meta = <span className="text-[11px] text-ink-3">{t("matches.live")}</span>;
-  } else if (next) {
-    state = (
-      <span className="flex items-center gap-2">
-        <TeamBadge team={next.home.id === team.id ? next.away : next.home} size="sm" />
-        <span className="text-xs font-bold text-ink-2">
-          {t("myTeams.vsOpp", { opp: localize(opponentOf(team.id, next).shortName) })}
-        </span>
-      </span>
-    );
-    meta = <span className="text-[11px] text-ink-3">{formatKickoff(new Date(next.kickoffAt), locale)}</span>;
-  } else if (last) {
-    const forTeam = (m: Match) => (m.home.id === team.id ? m.homeScore : m.awayScore) ?? 0;
-    const againstTeam = (m: Match) => (m.home.id === team.id ? m.awayScore : m.homeScore) ?? 0;
-    const won = forTeam(last) > againstTeam(last);
-    state = (
-      <Num className={cx("text-lg", won ? "text-pitch" : "text-ink-2")}>
-        {forTeam(last)}–{againstTeam(last)}
-      </Num>
-    );
-    meta = <span className="text-[11px] text-ink-3">{t("status.finished")}</span>;
-  } else {
-    state = <span className="text-xs text-ink-3">{t("matches.noMatch")}</span>;
-    meta = null;
-  }
-
-  const target = live ?? next ?? last;
-  return (
-    <li>
-      {target ? (
-        <Link
-          to={`/match/${target.id}`}
-          className={cx(
-            "flex min-h-14 items-center gap-3 rounded-card border bg-surface p-2.5 transition-colors duration-[var(--t-fast)] hover:bg-elevated",
-            anchored ? "border-gold/60" : "border-line",
-          )}
-        >
-          <TeamBadge team={team} size="md" />
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1.5">
-              <span className="truncate text-sm font-bold text-ink">{localize(team.shortName)}</span>
-              {anchored ? <StarFilledIcon className="h-3 w-3 flex-none text-gold" /> : null}
-            </span>
-            {meta}
-          </span>
-          {state}
-        </Link>
-      ) : (
-        <div className="flex min-h-14 items-center gap-3 rounded-card border border-line bg-surface p-2.5">
-          <TeamBadge team={team} size="md" />
-          <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
-            {localize(team.shortName)}
-          </span>
-          {state}
-        </div>
-      )}
-    </li>
-  );
-}

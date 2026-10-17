@@ -45,11 +45,8 @@ export function TopBar({
 
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-bold text-ink">{title}</h1>
-          {subtitle ? <p className="truncate text-xs text-ink-2">{subtitle}</p> : null}
-        </div>
-
+          {subtitle ? <p className="truncate text-xs text-ink-2">{subtitle}</p> : null}      </div>
         {right}
-        <LanguageToggle />
       </div>
     </header>
   );

@@ -11,7 +11,6 @@ import { LEGAL_ROUTES } from "./lib/legal";
 // screen. `Login` stays eager: it is the first thing a signed-out client shows.
 import Login from "./pages/Login";
 
-const Browse = lazy(() => import("./pages/Browse"));
 const MatchDetail = lazy(() => import("./pages/MatchDetail"));
 const Cups = lazy(() => import("./pages/Cups"));
 const Matches = lazy(() => import("./pages/Matches"));
@@ -39,7 +38,6 @@ export default function App() {
             {/* First run: the concept's onboarding (favorite → clubs → leagues). */}
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/" element={<OnboardingGate />} />
-            <Route path="/browse" element={<Browse />} />
             <Route path="/matches" element={<Matches />} />
             <Route path="/cups" element={<Cups />} />
             <Route path="/match/:id" element={<MatchDetail />} />

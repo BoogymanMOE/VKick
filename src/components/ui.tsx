@@ -191,18 +191,19 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
   return (
     <span
       className={cx(
-        "grid flex-none place-items-center font-num font-extrabold",
+        "grid flex-none place-items-center font-num font-extrabold rounded-md border",
         dims,
-        !hasArt && "rounded-md border",
       )}
       style={
-        hasArt
-          ? undefined
-          : {
-              borderColor: `color-mix(in srgb, ${team.color} 55%, transparent)`,
-              backgroundColor: `color-mix(in srgb, ${team.color} 18%, transparent)`,
-              color: "var(--text-primary)",
-            }
+        {
+          borderColor: hasArt
+            ? "rgba(255,255,255,0.18)"
+            : `color-mix(in srgb, ${team.color} 55%, transparent)`,
+          backgroundColor: hasArt
+            ? undefined
+            : `color-mix(in srgb, ${team.color} 18%, transparent)`,
+          color: "var(--text-primary)",
+        }
       }
       aria-hidden="true"
     >
