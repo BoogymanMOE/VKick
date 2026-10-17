@@ -40,22 +40,27 @@ export default function TeamPage() {
 
   const [tab, setTab] = useState<Tab>("squad");
 
-  if (detailQuery.isLoading || !detailQuery.data) {
-    return (
-      <>
-        <TopBar title={t("team.title")} back />
-        <PanelSkeleton height={160} />
-      </>
-    );
-  }
-
-  if (detailQuery.isError) {
+  // Error BEFORE the loading check: `data` is undefined when the request
+  // fails, so a `isLoading || !data` branch placed first would swallow the error
+  // and leave the skeleton on screen forever. `!detailQuery.data` on the error
+  // branch is deliberate — a failed background refetch keeps the data already
+  // on screen instead of replacing a good page with an error card.
+  if (detailQuery.isError && !detailQuery.data) {
     return (
       <>
         <TopBar title={t("team.title")} back />
         <div className="mt-3">
           <ErrorState onRetry={() => detailQuery.refetch()} />
         </div>
+      </>
+    );
+  }
+
+  if (detailQuery.isLoading || !detailQuery.data) {
+    return (
+      <>
+        <TopBar title={t("team.title")} back />
+        <PanelSkeleton height={160} />
       </>
     );
   }
