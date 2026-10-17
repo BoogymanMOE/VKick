@@ -41,6 +41,9 @@ export interface Match {
   home: Team;
   away: Team;
   kickoffAt: string;
+  /** Real competition slug ("eng.1", "uefa.champions") — the competition label
+   *  source. `home.league` is only a big-five alias and says "PL" for cups. */
+  league: string;
   status: MatchStatus;
   homeScore: number | null;
   awayScore: number | null;

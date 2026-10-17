@@ -37,6 +37,7 @@ function match(opts: {
     home: opts.home,
     away: opts.away,
     kickoffAt: opts.kickoff,
+    league: "eng.1",
     status: opts.status ?? "finished",
     homeScore: opts.homeScore ?? null,
     awayScore: opts.awayScore ?? null,

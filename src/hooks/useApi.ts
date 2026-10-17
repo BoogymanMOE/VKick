@@ -61,6 +61,7 @@ export function matchFromApi(m: ApiMatch): Match {
     home,
     away,
     kickoffAt: m.kickoff_at,
+    league: m.league,
     status,
     homeScore: m.home_score,
     awayScore: m.away_score,
