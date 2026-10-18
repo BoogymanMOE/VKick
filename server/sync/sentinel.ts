@@ -98,7 +98,7 @@ export function syncHealthSnapshot(db: DB, now: Date = new Date()): SyncHealthSn
   );
   const perLeague = all<LeagueSyncRow>(
     db,
-    `SELECT league, MAX(last_synced_at) AS t
+    `SELECT league, MAX(last_synced_at) AS lastSyncedAt
      FROM matches WHERE last_synced_at IS NOT NULL GROUP BY league ORDER BY league ASC`,
   );
 
