@@ -379,7 +379,13 @@ function StatsTab({
   }
 
   const selected = team === "home" ? home : away;
-  const teamRows = rows.filter((r) => r.team_id === selected.id);
+  // A substitute who never came on is a row of zeros, not a player — hide them.
+  const teamRows = rows.filter(
+    (r) => r.team_id === selected.id && (r.started || Number(r.minutes_played) > 0),
+  );
+  if (teamRows.length === 0) {
+    return <EmptyState title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
+  }
 
   return (
     <div className="space-y-3">
@@ -412,13 +418,19 @@ function MatchPlayerTable({
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex items-center gap-2 border-b border-line p-3">
-        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} aria-hidden="true" />
+        {/* The ring keeps a black (or near-black) club colour visible on the dark
+            background — a bare dot in the club's own colour can vanish. */}
+        <span
+          className="h-2.5 w-2.5 rounded-full ring-1 ring-ink-3"
+          style={{ backgroundColor: color }}
+          aria-hidden="true"
+        />
         <span className="text-sm font-bold text-ink">{title}</span>
       </div>
       <table className="w-full text-xs">
         <thead>
           <tr className="label text-ink-3">
-            <th className="p-2 text-start font-bold">{t("table.team")}</th>
+            <th className="p-2 text-start font-bold">{t("stats.player")}</th>
             <th className="p-2 text-end font-bold">{t("stats.goals")}</th>
             <th className="p-2 text-end font-bold">{t("stats.assists")}</th>
             <th className="p-2 text-end font-bold">{t("stats.shots")}</th>
