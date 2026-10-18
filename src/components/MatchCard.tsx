@@ -4,7 +4,7 @@ import type { Match } from "../types";
 import { useI18n } from "../i18n/context";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { useCompetitionLabel } from "../hooks/useApi";
-import { formatKickoff } from "../lib/format";
+import { formatClock, formatKickoff } from "../lib/format";
 import { LiveDot, Num, TeamBadge } from "./ui";
 
 /**
@@ -28,10 +28,12 @@ export const MatchCard = memo(function MatchCard({
   // labelled every Champions League card "Premier League".
   const competition = useCompetitionLabel(match.league);
 
-  const isHalftime = match.status === "halftime";
+  // The adapter folds `halftime` into `live` for the feed's sections, so the
+  // raw status can no longer tell a break from a running match — `isHalftime`
+  // carries the real value through.
+  const isHalftime = match.isHalftime === true;
   // Half-time is a neutral pause, not a running match: only `live` gets the red
-  // dot and live tint. (The adapter folds halftime into "live" for the feed, so
-  // this is the defensive branch for data that still carries the real status.)
+  // dot and live tint.
   const isLive = match.status === "live";
   const isFinished = match.status === "finished";
   const hasScore = isLive || isHalftime || isFinished;
@@ -83,15 +85,23 @@ export const MatchCard = memo(function MatchCard({
         dir={lang === "fa" ? "rtl" : "ltr"}
         className="block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2"
         style={{
-          borderColor: isLive ? "color-mix(in srgb, var(--live) 60%, transparent)" : "var(--line)",
+          // Red for a running match, amber for the break, neutral otherwise —
+          // a feed of a dozen half-time cards must not read as a dozen alarms.
+          borderColor: isLive
+            ? "color-mix(in srgb, var(--live) 60%, transparent)"
+            : isHalftime
+              ? "color-mix(in srgb, var(--gold) 50%, transparent)"
+              : "var(--line)",
           backgroundImage: isLive
             ? "linear-gradient(180deg, color-mix(in srgb, var(--live) 8%, transparent) 0%, transparent 50%)"
-            : undefined,
+            : isHalftime
+              ? "linear-gradient(180deg, color-mix(in srgb, var(--gold) 8%, transparent) 0%, transparent 50%)"
+              : undefined,
         }}
       >
         <p className="mb-2 truncate text-xs font-bold text-ink-3">{meta}</p>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center gap-2">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
           <div className="flex min-w-0 flex-col items-start gap-1.5">
             <TeamBadge team={match.home} />
             <span className="line-clamp-2 break-words text-sm font-bold leading-tight text-ink">{home}</span>
@@ -104,7 +114,11 @@ export const MatchCard = memo(function MatchCard({
                 {homeScore}–{awayScore}
               </span>
             ) : (
-              <span className="text-xl font-bold text-ink-2">{kickoff}</span>
+              // Time only: the date strip above already names the day, and a
+              // weekday+time in a fixed column wraps to three lines.
+              <span className="whitespace-nowrap text-xl font-bold text-ink-2">
+                {formatClock(new Date(match.kickoffAt), locale)}
+              </span>
             )}
             {isLive ? (
               <span className="flex items-center gap-1 text-xs font-bold text-[color:var(--live)]">
@@ -112,8 +126,8 @@ export const MatchCard = memo(function MatchCard({
                 <Num>{minuteLabel}</Num>
               </span>
             ) : isHalftime ? (
-              // Neutral (muted), not the live red: a break is not a goal.
-              <span className="text-xs font-bold text-ink-3">{minuteLabel}</span>
+              // Half-time is a neutral pause, not a live goal — amber, no dot.
+              <span className="text-xs font-bold text-gold">{minuteLabel}</span>
             ) : isFinished ? (
               <span className="text-xs text-ink-3">{t("status.finished")}</span>
             ) : null}

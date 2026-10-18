@@ -45,6 +45,12 @@ export interface Match {
    *  source. `home.league` is only a big-five alias and says "PL" for cups. */
   league: string;
   status: MatchStatus;
+  /**
+   * True when the real server status was `halftime`. The adapter folds that
+   * into `live` for the feed's sections, so screens that must distinguish a
+   * break from a running match read this flag instead of `status`.
+   */
+  isHalftime?: boolean;
   homeScore: number | null;
   awayScore: number | null;
   minute: string | null;

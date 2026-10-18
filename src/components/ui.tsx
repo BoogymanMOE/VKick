@@ -188,6 +188,9 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
   const crest = broken ? null : crestSources(team.id);
   const remote = !crest && !remoteBroken ? (team.logoUrl ?? null) : null;
   const hasArt = Boolean(crest || remote);
+  // The abbreviation is the last resort, so it must never itself be blank — a
+  // team with no ESPN abbreviation falls back to the first letters of its name.
+  const abbreviation = team.abbreviation?.trim() || team.shortName.slice(0, 3).toUpperCase();
   return (
     <span
       className={cx(
@@ -231,7 +234,7 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
           className={crestImgClass}
         />
       ) : (
-        team.abbreviation
+        abbreviation
       )}
     </span>
   );

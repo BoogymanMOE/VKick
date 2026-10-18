@@ -63,6 +63,8 @@ export function matchFromApi(m: ApiMatch): Match {
     kickoffAt: m.kickoff_at,
     league: m.league,
     status,
+    // Preserve the real half-time flag: the status is folded into "live" below.
+    isHalftime: m.status === "halftime",
     homeScore: m.home_score,
     awayScore: m.away_score,
     minute: m.minute_display,
