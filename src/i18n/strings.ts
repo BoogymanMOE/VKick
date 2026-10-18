@@ -181,6 +181,10 @@ export const strings = {
     "deadline.locked": "Locked",
     "matches.refresh": "Refresh",
     "matches.lastSync": "Updated {time}",
+    // The server's sync ledger, not the browser's fetch time: sync can lag
+    // behind a successful fetch, and the footer line must not paper over that.
+    "matches.dataAsOf": "Data as of {time}",
+    "matches.syncDelayed": "Data is delayed — scores may be behind",
     "matches.hint": "Live scores refresh every 30–60s",
     "match.tabTimeline": "Timeline",
     "match.tabStats": "Stats",
@@ -791,6 +795,8 @@ export const strings = {
     "deadline.locked": "قفل شد",
     "matches.refresh": "به‌روزرسانی",
     "matches.lastSync": "به‌روزرسانی {time}",
+    "matches.dataAsOf": "داده‌ها تا {time}",
+    "matches.syncDelayed": "داده‌ها به‌تاخیر افتاده — نتایج ممکن است عقب باشند",
     "matches.hint": "نتایج زنده هر ۳۰ تا ۶۰ ثانیه به‌روز می‌شود",
     "match.tabTimeline": "رویدادها",
     "match.tabStats": "آمار",

@@ -445,6 +445,23 @@ export function useCompetitions() {
 }
 
 /**
+ * How fresh the SERVER's football data is (the sync sentinel's ledger):
+ * polled every couple of minutes from the feed so the footer line shows the
+ * truth — the fetch succeeded, but the data behind it may still be stale.
+ * Cheap (one small SQL snapshot), unauthenticated, and deliberately NOT
+ * refetched on focus (it would fight the feed's own refetches for no gain).
+ */
+export function useSyncHealth() {
+  return useQuery({
+    queryKey: ["sync-health"],
+    queryFn: () => api.getSyncHealth(),
+    staleTime: 2 * 60_000,
+    refetchInterval: 2 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
  * Knockout competitions for the Cups picker: the club cups AND the
  * international tournaments (both have no table). Selection is on the server's
  * `kind`, so promoting a competition into the catalog adds it here with no

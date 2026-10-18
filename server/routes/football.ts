@@ -14,6 +14,9 @@ import { foldForm, type FormMatchRow } from "../standings/form.js";
 import { buildFeedQuery } from "../matches/feed.js";
 import { currentSeasonLabel } from "../scoring/ledger.js";
 import { bad, requireUser } from "./shared.js";
+// Sync freshness for the ops surface: the client shows "data as of <time>"
+// rather than silently serving yesterday's football.
+import { syncHealthSnapshot } from "../sync/sentinel.js";
 
 const db = getDb();
 
@@ -48,6 +51,16 @@ function matchWithTeams(id: string): unknown {
 /** All competitions: synced ones plus extra ESPN ones marked coming-soon. */
 matchesRouter.get("/api/competitions", (_req, res) => {
   res.json({ competitions: competitionCatalog() });
+});
+
+/**
+ * Sync freshness for the feed's "data as of" line (and any ops dashboard).
+ * Public like the feed routes: it carries only ledger dates and league slugs.
+ * The staleness judgement (is this old enough to surface?) belongs to the
+ * client, which knows its own render context.
+ */
+matchesRouter.get("/api/health/sync", (_req, res) => {
+  res.json(syncHealthSnapshot(db));
 });
 
 /* ------------------------------------------------------------ matches */

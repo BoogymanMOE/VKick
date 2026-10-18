@@ -692,6 +692,24 @@ export const api = {
 
   getCompetitions: () => request<{ competitions: ApiCompetition[] }>("/competitions"),
 
+  /**
+   * Sync freshness from the server's sentinel (/api/health/sync): the feed's
+   * "data as of" line is the SERVER's sync ledger, not the browser's fetch
+   * time — the two disagree the moment the sync loop lags behind the UI.
+   */
+  getSyncHealth: () =>
+    request<{
+      latestLastSyncedAt: string | null;
+      staleLive: number;
+      liveCount: number;
+      scheduledCount: number;
+      finishedCount: number;
+      perLeague: { league: string; lastSyncedAt: string | null }[];
+      quietFollowedLeagues: string[];
+      lastOkSyncAt: string | null;
+      consecutiveFailures: number;
+    }>("/health/sync"),
+
   getStandings: (league: string) =>
     request<{ season: string; standings: ApiStanding[] }>(`/standings/${encodeURIComponent(league)}`),
 

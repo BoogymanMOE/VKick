@@ -7,6 +7,14 @@ import { onMatchFinished } from "../predictions/resolver.js";
 import { syncAllFavoriteTeamsUnderstat, syncLeagueUnderstatTables } from "./understat.js";
 import { queueGoalAlerts, queueMatchdayAlerts } from "../notifications.js";
 import { broadcast } from "../live/sse.js";
+// Sentinel: the loop's own failure detector — every pass below records its
+// outcome here, and the hourly check turns a dead loop or stale live matches
+// into one cooldown-gated alert (console at minimum, Telegram when wired).
+import {
+  checkAndAlert,
+  recordSyncPassFail,
+  recordSyncPassOk,
+} from "./sentinel.js";
 
 const db = getDb();
 
@@ -369,7 +377,9 @@ export function startSyncLoop(): void {
             const matchday = queueMatchdayAlerts(db);
             if (matchday > 0) log(`matchday pushes queued: ${matchday}`);
           }
+          recordSyncPassOk();
         } catch (err) {
+          recordSyncPassFail();
           console.error("[sync] live loop error:", err);
         } finally {
           summariesRunning = false;
@@ -393,8 +403,12 @@ export function startSyncLoop(): void {
           for (const g of goals) {
             broadcast("update", { matchId: g.matchId, type: "goal" });
           }
+          recordSyncPassOk();
         })
-        .catch((err) => console.error("[sync] live pulse error:", err))
+        .catch((err) => {
+          recordSyncPassFail();
+          console.error("[sync] live pulse error:", err);
+        })
         .finally(() => {
           pulseRunning = false;
         });
@@ -413,7 +427,11 @@ export function startSyncLoop(): void {
     }
     scoreboardsRunning = true;
     void syncScoreboards()
-      .catch((err) => console.error("[sync] scoreboard loop error:", err))
+      .then(() => recordSyncPassOk())
+      .catch((err) => {
+        recordSyncPassFail();
+        console.error("[sync] scoreboard loop error:", err);
+      })
       .finally(() => {
         scoreboardsRunning = false;
       });
@@ -437,7 +455,11 @@ export function startSyncLoop(): void {
     }
     windowRunning = true;
     void syncScoreboardWindow(1, 21)
-      .catch((err) => console.error("[sync] window loop error:", err))
+      .then(() => recordSyncPassOk())
+      .catch((err) => {
+        recordSyncPassFail();
+        console.error("[sync] window loop error:", err);
+      })
       .finally(() => {
         windowRunning = false;
       });
@@ -447,6 +469,33 @@ export function startSyncLoop(): void {
   // Moved to 4:30am to avoid overlap with Understat at 5am.
   cron.schedule("30 4 * * 2", () => {
     void syncRosters().catch((err) => console.error("[sync] roster loop error:", err));
+  });
+
+  // Hourly: the staleness heartbeat. A dead loop or live matches far past
+  // their sync window is the one failure the app's users FEEL and no error
+  // SURFACE shows — this turns it into a message (Telegram when ALERT_CHAT_ID
+  // and the bot token are both set, the server log otherwise), water-falled to
+  // at most one alert per cooldown inside checkAndAlert.
+  cron.schedule("5 * * * *", () => {
+    const chatId = (process.env.ALERT_CHAT_ID ?? "").trim();
+    try {
+      const check = checkAndAlert(db, (text) => {
+        console.error(`[sentinel] ALERT: ${text}`);
+        if (!chatId) return;
+        void (async () => {
+          try {
+            const { getBot } = await import("../bot/index.js");
+            const b = getBot();
+            if (b) await b.api.sendMessage(chatId, text);
+          } catch (err) {
+            console.error("[sentinel] telegram alert failed:", String(err).slice(0, 120));
+          }
+        })();
+      });
+      if (check.problem && !check.alerted) log(`sentinel (cooldown) — ${check.problem}`);
+    } catch (err) {
+      console.error("[sentinel] check failed:", String(err).slice(0, 200));
+    }
   });
 
   // Weekly: Understat xG/xA/shot situations per favorite team.

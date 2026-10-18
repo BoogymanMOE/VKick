@@ -9,7 +9,7 @@ import { Card, EmptyState, ErrorState } from "../components/ui";
 import { MatchCardSkeleton } from "../components/Skeletons";
 import { useNow } from "../hooks/useNow";
 import { cx } from "../lib/cx";
-import { useMatches, useFollowedLeagues } from "../hooks/useApi";
+import { useMatches, useFollowedLeagues, useSyncHealth } from "../hooks/useApi";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
 import { formatClock } from "../lib/format";
@@ -124,6 +124,17 @@ export default function Matches() {
       .sort((a, b) => a.getTime() - b.getTime());
     return later[0] ? startOfDay(later[0]) : null;
   }, [matches, selectedKey]);
+
+  // The server's sync ledger (the sentinel's snapshot), polled on a slow loop:
+  // the footer's data-age line tells the truth about the DATA, not just about
+  // the last browser fetch — sync can lag behind a 200-OK, and "silently
+  // quiet" is the one failure a live-score feed must never have.
+  const syncHealth = useSyncHealth();
+  const serverSyncedAt = syncHealth.data?.latestLastSyncedAt
+    ? new Date(syncHealth.data.latestLastSyncedAt)
+    : null;
+  const syncAt = serverSyncedAt ?? (lastSync as Date | null);
+  const syncStale = syncAt ? Date.now() - syncAt.getTime() > 30 * 60_000 : false;
 
   // No data AND an error: an error over cached matches would replace a usable
   // feed, so the error card is reserved for the cold-failure case.
@@ -397,7 +408,13 @@ export default function Matches() {
           TopBar icon already carry the action, so this line only reports it. */}
         <p className="mt-6 text-center text-[11px] text-ink-3">
           {t("matches.hint")}
-          {lastSync ? ` · ${t("matches.lastSync", { time: formatClock(lastSync, locale) })}` : ""}
+          {syncStale
+            ? ` · ${t("matches.syncDelayed")}`
+            : syncAt
+              ? ` · ${t("matches.dataAsOf", { time: formatClock(syncAt, locale) })}`
+              : lastSync
+                ? ` · ${t("matches.lastSync", { time: formatClock(lastSync, locale) })}`
+                : ""}
         </p>
       </div>
     </>
