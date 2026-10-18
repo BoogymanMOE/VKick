@@ -30,6 +30,13 @@ type Tab = "squad" | "fixtures" | "season" | "xg";
 
 const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
 
+/** English ordinal suffix: 1st, 2nd, 3rd, 4th … 11th/12th/13th … 21st. */
+function ordinal(rank: number): string {
+  const mod100 = rank % 100;
+  const suffix = mod100 >= 11 && mod100 <= 13 ? "th" : (["th", "st", "nd", "rd"][rank % 10] ?? "th");
+  return `${rank}${suffix}`;
+}
+
 /**
  * A club's page: full squad (from the weekly roster sync), season stat line and
  * recent fixtures. Reached by tapping any team in the table or a match card.
@@ -74,7 +81,10 @@ export default function TeamPage() {
     );
   }
 
-  const { team, seasonStats, fixtures } = detailQuery.data;
+  const { team, seasonStats, standing, fixtures } = detailQuery.data;
+  // Persian reads every number in the Persian script; English keeps the ordinal.
+  const num = (value: number | string) => (lang === "fa" ? toFaDigits(value) : String(value));
+  const positionLabel = (rank: number) => (lang === "fa" ? `${toFaDigits(rank)}م` : ordinal(rank));
   const leagueId =
     team.league && ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"].includes(team.league)
       ? (
@@ -116,11 +126,23 @@ export default function TeamPage() {
       >
         <div className="flex items-center gap-3.5">
           <TeamBadge team={teamView} size="xl" />
+          {/* The club's name stays in the top bar; this card is the league line —
+              competition, matches played, position and points. */}
           <div className="min-w-0">
-            <p className="truncate text-lg font-bold text-ink">{localize(team.name)}</p>
             <p className="text-xs text-ink-3">
-              {squadQuery.data?.coach ? `${t("lineups.coach")}: ${localize(squadQuery.data.coach)} · ` : ""}
-              {seasonStats ? t("team.played", { played: seasonStats.played }) : null}
+              <span className="font-bold text-ink">{teamLeagueLabel}</span>
+              {seasonStats
+                ? ` · ${t(
+                    seasonStats.played === 1
+                      ? "team.matchesPlayedOne"
+                      : "team.matchesPlayedMany",
+                    { played: num(seasonStats.played) },
+                  )}`
+                : ""}
+              {standing?.rank ? ` · ${positionLabel(standing.rank)}` : ""}
+              {standing?.points != null
+                ? ` · ${t("team.points", { points: num(standing.points) })}`
+                : ""}
             </p>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { haptic } from "../lib/telegram";
 import { BallIcon, ListIcon, UserIcon } from "./icons";
@@ -16,6 +16,10 @@ const tabs: Array<{ to: string; key: StringKey; Icon: typeof BallIcon }> = [
 
 export function TabBar() {
   const { t } = useI18n();
+  const { pathname } = useLocation();
+  // A team sub-page belongs to no top-level tab: highlighting one would claim a
+  // section the user has drilled out of.
+  const isTeamSubPage = pathname.startsWith("/team/");
 
   return (      // 95% opaque, so no backdrop blur — same reasoning as TopBar: the blur was
     // imperceptible but ran on every scroll frame.
@@ -32,33 +36,40 @@ export function TabBar() {
               className={({ isActive }) =>
                 cx(
                   "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-bold transition-[color,background-color] duration-[var(--t-fast)]",
-                  isActive ? "bg-elevated/70 text-volt" : "text-ink-3 hover:text-ink-2",
+                  // Inactive tabs sit at secondary, not muted: "available but
+                  // not selected", never "disabled".
+                  isActive && !isTeamSubPage
+                    ? "bg-elevated/70 text-volt"
+                    : "text-ink-2 hover:text-ink",
                 )
               }
             >
-              {({ isActive }) => (
-                <>
-                  {/* Shape cue, not just colour: a colour-blind user (or one
-                      in grayscale) reads "you are here" from this bar even
-                      when the volt text is indistinguishable. aria-current on
-                      the link already carries it for screen readers. */}
-                  <span
-                    aria-hidden="true"
-                    className={cx(
-                      "absolute top-0.5 h-[3px] w-6 rounded-full bg-volt transition-opacity duration-[var(--t-fast)]",
-                      isActive ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <Icon
-                    strokeWidth={isActive ? 2.2 : 1.8}
-                    className={cx(
-                      "transition-transform duration-[var(--t-fast)]",
-                      isActive && "tab-pop scale-105",
-                    )}
-                  />
-                  <span className="truncate">{t(key)}</span>
-                </>
-              )}
+              {({ isActive }) => {
+                const active = isActive && !isTeamSubPage;
+                return (
+                  <>
+                    {/* Shape cue, not just colour: a colour-blind user (or one
+                        in grayscale) reads "you are here" from this bar even
+                        when the volt text is indistinguishable. aria-current on
+                        the link already carries it for screen readers. */}
+                    <span
+                      aria-hidden="true"
+                      className={cx(
+                        "absolute top-0.5 h-[3px] w-6 rounded-full bg-volt transition-opacity duration-[var(--t-fast)]",
+                        active ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    <Icon
+                      strokeWidth={active ? 2.2 : 1.8}
+                      className={cx(
+                        "transition-transform duration-[var(--t-fast)]",
+                        active && "tab-pop scale-105",
+                      )}
+                    />
+                    <span className="truncate">{t(key)}</span>
+                  </>
+                );
+              }}
             </NavLink>
           </li>
         ))}

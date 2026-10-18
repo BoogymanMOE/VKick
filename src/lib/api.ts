@@ -571,6 +571,7 @@ export const api = {
     request<{
       team: ApiTeam;
       seasonStats: ApiTeamSeasonStats | null;
+      standing: { rank: number | null; points: number | null } | null;
       fixtures: ApiMatch[];
     }>(`/teams/${encodeURIComponent(id)}`),
 

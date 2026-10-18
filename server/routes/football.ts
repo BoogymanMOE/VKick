@@ -248,6 +248,16 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
     `SELECT * FROM team_season_stats WHERE team_id = ? ORDER BY season DESC LIMIT 1`,
     [teamId],
   );
+  // The info card's one-line summary needs the league-table position and points;
+  // team_season_stats carries the record but no rank, so the row comes from
+  // standings (latest season the club has a row in).
+  const standing = get<{ rank: number | null; points: number | null }>(
+    db,
+    `SELECT rank, points FROM standings
+     WHERE team_id = ? AND season = (SELECT MAX(season) FROM standings WHERE team_id = ?)
+     LIMIT 1`,
+    [teamId, teamId],
+  );
   // Results (latest 7) then upcoming fixtures (soonest 7). One DESC query
   // filled the list with the whole rest-of-season backlog instead of the
   // games nearest the club's next kickoff.
@@ -270,7 +280,7 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
   // Same flat shape the client already consumes; newest results first,
   // then upcoming in chronological order.
   const fixtures = [...played.slice().reverse(), ...upcoming];
-  res.json({ team, seasonStats: seasonStats ?? null, fixtures });
+  res.json({ team, seasonStats: seasonStats ?? null, standing: standing ?? null, fixtures });
 });
 
 /** Full squad for one club, position-grouped and shirt-number ordered. */
