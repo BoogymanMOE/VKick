@@ -40,7 +40,7 @@ export const teamNamesFa: Record<string, string> = {
   "Bournemouth": "بورن‌موت",
   "Brighton": "برایتن",
   "C Palace": "کریستل پالاس",
-  "Coventry": "کونولتی",
+  "Coventry": "کاونتری",
   "Hull": "هال",
   "Ipswich": "ایپ‌سویچ",
   "Leeds": "لیدز",
