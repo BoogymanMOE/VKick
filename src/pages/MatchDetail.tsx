@@ -191,7 +191,9 @@ export default function MatchDetail() {
     <>
       <ConfettiBurst trigger={burst} />
 
-      <TopBar title={`${localize(home.shortName)} ${t("common.versus")} ${localize(away.shortName)}`} back />
+      {/* The scoreboard below already names both sides; a "Home vs Away" title
+          from two long names scrambles the bidi run and truncates in Persian. */}
+      <TopBar title={t("match.summary")} subtitle={leagueLabel} back />
 
       {/* Score header */}
       <div
