@@ -54,8 +54,8 @@ export const COMPETITION_NAMES: Record<string, { en: string; fa: string }> = {
   "tur.1": { en: "Süper Lig", fa: "سوپرلیگ ترکیه" },
   "por.1": { en: "Primeira Liga", fa: "لیگ پرتغال" },
   "gre.1": { en: "Super League Greece", fa: "سوپر لیگ یونان" },
-  "sco.1": { en: "Scottish Premiership", fa: "دوره اسکاتلند" },
-  "bel.1": { en: "Belgian Pro League", fa: "لیگ برزیل 프로" },
+  "sco.1": { en: "Scottish Premiership", fa: "لیگ برتر اسکاتلند" },
+  "bel.1": { en: "Belgian Pro League", fa: "لیگ برتر بلژیک" },
 };
 
 /** Last resort for unknown slugs: never show the raw code. */
