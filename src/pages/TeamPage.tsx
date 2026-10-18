@@ -171,6 +171,21 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
 
   return (
     <div className="space-y-4">
+      {/* The squad rows carry colour-coded numbers with no key; a colour-blind
+          reader cannot tell goals from assists. The legend names both. */}
+      <div
+        className="flex items-center gap-3 text-[11px] font-bold"
+        style={{ padding: "8px 0", borderBottom: "1px solid var(--border-subtle)" }}
+      >
+        <span className="flex items-center gap-1" style={{ color: "var(--volt)" }}>
+          <span aria-hidden="true">⚽</span>
+          {t("team.stats.goals")}
+        </span>
+        <span className="flex items-center gap-1" style={{ color: "var(--gold)" }}>
+          <span aria-hidden="true">🅰️</span>
+          {t("team.stats.assists")}
+        </span>
+      </div>
       {POS_ORDER.map((pos) => {
         const group = squad.players.filter((p) => p.position === pos);
         if (group.length === 0) return null;
