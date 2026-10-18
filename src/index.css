@@ -146,6 +146,27 @@
     justify-content: flex-end;
   }
 
+  /* Collapsible position group: the grid-rows trick animates height (1fr → 0fr)
+     without measuring the list, and the inner clip keeps folded rows out of the
+     layout. `fr` interpolation is supported in the evergreen browsers this
+     ships to; where it is not, the fold simply snaps. */
+  .squad-collapse {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition:
+      grid-template-rows 220ms var(--ease-out),
+      opacity 220ms var(--ease-out);
+  }
+  .squad-collapse[data-collapsed="true"] {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .squad-collapse-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+
   /* "night match under floodlights" texture: pitch lines at 4% opacity. */
   .pitch-watermark {
     position: relative;

@@ -14,10 +14,12 @@ import {
   TeamBadge,
 } from "../components/ui";
 import { cx } from "../lib/cx";
-import { matchFromApi, useSquad, useTeamDetail, useTeamUnderstat } from "../hooks/useApi";
+import { matchFromApi, useSquad, useTeamDetail, useTeamUnderstat, type SquadRow } from "../hooks/useApi";
 import type { StringKey } from "../i18n/strings";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { TEAM_FALLBACK } from "../lib/colors";
+import { useLocalState } from "../lib/useLocalState";
+import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
 import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate, toFaDigits } from "../lib/format";
 import type { ApiMatch } from "../lib/api";
@@ -156,7 +158,7 @@ export default function TeamPage() {
 /* ------------------------------------------------------------ squad */
 
 function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
-  const { t, lang, dir, localize } = useI18n();
+  const { t, lang } = useI18n();
   if (squadQuery.isLoading) return <PanelSkeleton height={192} />;
   if (squadQuery.isError) return <ErrorState onRetry={() => squadQuery.refetch()} />;
 
@@ -189,61 +191,103 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
       {POS_ORDER.map((pos) => {
         const group = squad.players.filter((p) => p.position === pos);
         if (group.length === 0) return null;
-        return (
-          <div key={pos}>
-            {/* The count rides NEXT to the heading, not on the far side of the
-                row: a badge detached from its label reads as stray chrome. */}
-            <div className="mb-2 flex items-center gap-2">
-              <h2 className="label label-lg text-ink-2">{t(`pos.${pos}`)}</h2>
-              <Chip tone="muted">
-                <Num>{num(group.length)}</Num>
-              </Chip>
-            </div>
-            <ul className="space-y-1.5">
-              {group.map((player) => (
-                // One grid, flipped by `dir`: the jersey lands on the leading
-                // edge (right in Persian, left in English) and the goals/assists
-                // on the trailing edge, so there is no dead strip on either side.
-                <li
-                  key={player.id}
-                  dir={dir}
-                  className="player-row rounded-card border border-line bg-surface p-2.5"
-                >
-                  <Num className="player-number text-[11px] font-bold text-ink-3">
-                    {num(player.jersey ?? "–")}
-                  </Num>
-                  {/* A face for every squad member: the ESPN headshot where the
-                      feed has one, the player's initials where it doesn't, on
-                      the same footprint either way. */}
-                  <PlayerAvatar name={localize(player.name)} src={player.headshot} size="sm" />
-                  <span className="player-name min-w-0">
-                    <span className="block truncate text-sm font-bold text-ink">
-                      {/* <bdi> isolates a Latin name so it cannot drift the row's
-                          bidi run in Persian. */}
-                      <bdi>{localize(player.name)}</bdi>
-                    </span>
-                    <span className="block truncate text-[11px] text-ink-3">
-                      {player.espnPosition ?? t(`pos.${player.position}`)}
-                      {player.appearances
-                        ? ` · ${t("team.appearances", { count: num(player.appearances) })}`
-                        : ""}
-                    </span>
-                  </span>
-                  <span className="player-stats flex-none">
-                    <Num className={cx("text-sm", (player.goals ?? 0) > 0 ? "text-volt" : "text-ink-3")}>
-                      {num(player.goals ?? 0)}
-                    </Num>
-                    <Num className={cx("text-sm", (player.assists ?? 0) > 0 ? "text-gold" : "text-ink-3")}>
-                      {" "}
-                      {num(player.assists ?? 0)}
-                    </Num>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        );
+        return <SquadSection key={pos} pos={pos} players={group} num={num} />;
       })}
+    </div>
+  );
+}
+
+/**
+ * One position group (GK / DEF / MID / FWD) with a collapsible header. The MID
+ * group is 17 rows on its own — a scroll wall — so each group folds under its
+ * heading; the choice persists per position so a collapsed group stays folded
+ * across reloads. GK and DEF start open, MID and FWD closed.
+ */
+function SquadSection({
+  pos,
+  players,
+  num,
+}: {
+  pos: Position;
+  players: SquadRow[];
+  num: (value: number | string) => string;
+}) {
+  const { t, dir, localize } = useI18n();
+  const [collapsed, setCollapsed] = useLocalState<boolean>(
+    `team.squad.collapsed.${pos}`,
+    pos === "MID" || pos === "FWD",
+  );
+
+  return (
+    <div>
+      {/* The count rides NEXT to the heading, not on the far side of the row: a
+          badge detached from its label reads as stray chrome. */}
+      <button
+        type="button"
+        onClick={() => setCollapsed((value) => !value)}
+        aria-expanded={!collapsed}
+        className="mb-2 flex min-h-11 w-full items-center gap-2 rounded-xl px-1 text-start transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+      >
+        <h2 className="label label-lg text-ink-2">{t(`pos.${pos}`)}</h2>
+        <Chip tone="muted">
+          <Num>{num(players.length)}</Num>
+        </Chip>
+        {/* ChevronDown (▾) open / ChevronRight (▸) closed. ChevronRightIcon
+            already mirrors itself in RTL, so it points left in Persian. */}
+        <span className="ms-auto flex flex-none items-center text-ink-3" aria-hidden="true">
+          {collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
+        </span>
+      </button>
+
+      {/* Smooth fold: the grid-rows trick animates the height without measuring
+          the list, and the inner clip keeps the rows out of the layout while
+          collapsed. */}
+      <div className="squad-collapse" data-collapsed={collapsed}>
+        <div className="squad-collapse-inner">
+          <ul className="space-y-1.5">
+            {players.map((player) => (
+              // One grid, flipped by `dir`: the jersey lands on the leading
+              // edge (right in Persian, left in English) and the goals/assists
+              // on the trailing edge, so there is no dead strip on either side.
+              <li
+                key={player.id}
+                dir={dir}
+                className="player-row rounded-card border border-line bg-surface p-2.5"
+              >
+                <Num className="player-number text-[11px] font-bold text-ink-3">
+                  {num(player.jersey ?? "–")}
+                </Num>
+                {/* A face for every squad member: the ESPN headshot where the
+                    feed has one, the player's initials where it doesn't, on
+                    the same footprint either way. */}
+                <PlayerAvatar name={localize(player.name)} src={player.headshot} size="sm" />
+                <span className="player-name min-w-0">
+                  <span className="block truncate text-sm font-bold text-ink">
+                    {/* <bdi> isolates a Latin name so it cannot drift the row's
+                        bidi run in Persian. */}
+                    <bdi>{localize(player.name)}</bdi>
+                  </span>
+                  <span className="block truncate text-[11px] text-ink-3">
+                    {player.espnPosition ?? t(`pos.${player.position}`)}
+                    {player.appearances
+                      ? ` · ${t("team.appearances", { count: num(player.appearances) })}`
+                      : ""}
+                  </span>
+                </span>
+                <span className="player-stats flex-none">
+                  <Num className={cx("text-sm", (player.goals ?? 0) > 0 ? "text-volt" : "text-ink-3")}>
+                    {num(player.goals ?? 0)}
+                  </Num>
+                  <Num className={cx("text-sm", (player.assists ?? 0) > 0 ? "text-gold" : "text-ink-3")}>
+                    {" "}
+                    {num(player.assists ?? 0)}
+                  </Num>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
