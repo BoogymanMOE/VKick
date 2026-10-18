@@ -9,7 +9,6 @@ import { LineupsSkeleton,
 } from "../components/Skeletons";
 import { TimelineList } from "../components/TimelineList";
 import { TopBar } from "../components/TopBar";
-import { CommentaryPanel } from "../components/panels/CommentaryPanel";
 import { LineupsPanel } from "../components/panels/LineupsPanel";
 
 import {
@@ -20,7 +19,6 @@ import {
   ErrorState,
   LiveDot,
   Num,
-  SectionHeading,
   Segmented,
   TeamBadge,
 } from "../components/ui";
@@ -309,10 +307,10 @@ function TimelineTab({
   matchId: string;
   live: boolean;
   minute: number;
-  /** Both sides, for the timeline markers' club tint. */
-  teams: Array<{ id: string; color: string }>;
+  /** Both sides, for the timeline markers' club tint and the team label. */
+  teams: Array<{ id: string; shortName: string; color: string }>;
 }) {
-  const { t } = useI18n();
+  const { t, localize } = useI18n();
   const query = useQuery({
     queryKey: ["timeline", matchId],
     queryFn: () => api.getTimeline(matchId),
@@ -321,6 +319,9 @@ function TimelineTab({
   const events = query.data?.events ?? [];
   const adapted = events.map(adaptTimelineEvent);
   const teamColor = Object.fromEntries(teams.map((team) => [team.id, team.color]));
+  // teamId → localized club name, so a card names the side without printing the
+  // English event sentence the feed carries.
+  const teamNames = Object.fromEntries(teams.map((team) => [team.id, localize(team.shortName)]));
 
   if (query.isLoading) return <TimelineSkeleton rows={4} />;
   if (query.isError) {
@@ -331,28 +332,15 @@ function TimelineTab({
   }
 
   return (
-    <>
-      <TimelineList
-        events={adapted}
-        comments={[]}
-        liveMinute={live ? minute : undefined}
-        teamColor={teamColor}
-        homeTeamId={teams[0]?.id}
-        awayTeamId={teams[1]?.id}
-      />
-
-      <div className="mt-4">
-        <SectionHeading title={t("commentary.title")} />
-        <CommentaryPanel
-          lines={adapted.map((e) => ({
-            id: e.id,
-            minuteDisplay: e.minuteDisplay,
-            text: e.description,
-            isKey: e.type === "goal" || e.type === "card" || e.type === "substitution",
-          }))}
-        />
-      </div>
-    </>
+    <TimelineList
+      events={adapted}
+      comments={[]}
+      liveMinute={live ? minute : undefined}
+      teamColor={teamColor}
+      teamNames={teamNames}
+      homeTeamId={teams[0]?.id}
+      awayTeamId={teams[1]?.id}
+    />
   );
 }
 

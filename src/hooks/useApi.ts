@@ -650,15 +650,6 @@ export function useTeamUnderstat(teamId: string) {
 
 /* ------------------------------------------------------------------ squads */
 
-export function useCommentary(matchId: string) {
-  return useQuery({
-    queryKey: ["commentary", matchId],
-    queryFn: () => api.getCommentary(matchId),
-    enabled: Boolean(matchId),
-    staleTime: 10 * 60_000,
-  });
-}
-
 export interface SquadRow {
   id: string;
   name: string;

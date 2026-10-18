@@ -112,6 +112,7 @@ export function TimelineList({
   liveMinute,
   onOpenClip,
   teamColor,
+  teamNames,
   homeTeamId,
   awayTeamId,
 }: {
@@ -126,6 +127,12 @@ export function TimelineList({
    * caused the moment, so a two-column read of who did what needs no names.
    */
   teamColor?: Record<string, string>;
+  /**
+   * teamId → localized club name. A card names the player(s) and the side, not
+   * the English sentence the feed carries ("… Yellow Card at 12'"), which in a
+   * Persian page scrambles the bidi run and repeats the player name.
+   */
+  teamNames?: Record<string, string>;
   /** The match's two sides, so a goal can carry the scoreline it produced. */
   homeTeamId?: string;
   awayTeamId?: string;
@@ -221,11 +228,30 @@ export function TimelineList({
                   ) : null}
                 </div>
 
-                <p className="mt-2 text-sm text-ink">{event.description}</p>
-
-                {event.participants.length > 0 ? (
-                  <p className="mt-1 text-xs text-ink-2">{event.participants.map(localize).join(" · ")}</p>
-                ) : null}
+                {/* Player(s) and side — never the feed's English sentence. For a
+                    break (half-time/full-time) with no participants, the chip and
+                    minute above are the whole card; the raw description is the
+                    fallback only for a VAR/unknown moment, where it is the sole
+                    information. */}
+                {(() => {
+                  const who = event.participants.map(localize).join(" · ");
+                  const team = event.teamId ? teamNames?.[event.teamId] : undefined;
+                  const showSentence = !who && event.type === "var";
+                  return (
+                    <>
+                      {who || showSentence ? (
+                        <p className="mt-2 text-sm font-bold text-ink" dir="auto">
+                          {who || <bdi>{event.description}</bdi>}
+                        </p>
+                      ) : null}
+                      {team ? (
+                        <p className="mt-1 text-xs text-ink-2">
+                          <bdi>{team}</bdi>
+                        </p>
+                      ) : null}
+                    </>
+                  );
+                })()}
               </div>
 
               {/* Pinned reactions live INSIDE the event's slot, directly under it. */}

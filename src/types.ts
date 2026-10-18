@@ -160,13 +160,6 @@ export interface Comment {
   isMine?: boolean;
 }
 
-export interface CommentaryLine {
-  id: string;
-  minuteDisplay: string;
-  text: string;
-  isKey?: boolean;
-}
-
 /* -------------------------------------------------------- predictions hub */
 
 export type PredictionStatus = "done" | "pending" | "correct" | "wrong" | "open";

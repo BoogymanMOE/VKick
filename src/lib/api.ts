@@ -319,13 +319,6 @@ export interface ApiTimelineEvent {
   goal_y: number | null;
 }
 
-export interface ApiCommentaryLine {
-  sequence: number;
-  minute_display: string | null;
-  minute_seconds: number | null;
-  text: string;
-}
-
 export interface ApiSquadPlayer {
   id: string;
   full_name: string;
@@ -678,8 +671,6 @@ export const api = {
     }>(`/matches/${id}/lineups`),
 
   getTimeline: (id: string) => request<{ events: ApiTimelineEvent[] }>(`/matches/${id}/timeline`),
-
-  getCommentary: (id: string) => request<{ commentary: ApiCommentaryLine[] }>(`/matches/${id}/commentary`),
 
   getSquad: (teamId: string) =>
     request<{
