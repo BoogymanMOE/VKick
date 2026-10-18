@@ -84,11 +84,13 @@ export default function TeamPage() {
     league: leagueId ?? "PL",
   };
 
+  const teamLeagueLabel = leagueId ? t(`league.${leagueId}`) : competitionName(team.league, lang);
+
   return (
     <>
       <TopBar
         title={localize(teamView.shortName)}
-        subtitle={leagueId ? t(`league.${leagueId}`) : competitionName(team.league, lang)}
+        subtitle={teamLeagueLabel}
         back
       />
 

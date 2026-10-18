@@ -13,7 +13,7 @@ import { useMatches, useFollowedLeagues } from "../hooks/useApi";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
 import { formatClock } from "../lib/format";
-import { LEAGUE_BY_SLUG } from "../lib/leagues";
+import { LEAGUE_BY_SLUG, competitionName } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
 import {
   BallIcon,
@@ -256,9 +256,8 @@ export default function Matches() {
                       setLeagueFilter(l.league);
                     }}
                     aria-pressed={leagueFilter === l.league}
-                    className={cx(LEAGUE_CHIP, leagueFilter === l.league ? LEAGUE_CHIP_ON : LEAGUE_CHIP_OFF)}
-                  >
-                    {l.name ?? l.league}
+                    className={cx(LEAGUE_CHIP, leagueFilter === l.league ? LEAGUE_CHIP_ON : LEAGUE_CHIP_OFF)}                    >
+                    {l.name ? localize(l.name) : competitionName(l.league, lang)}
                   </button>
                 ))}
               </>

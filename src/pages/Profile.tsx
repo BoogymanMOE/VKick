@@ -102,11 +102,15 @@ export default function Profile() {
   const confirmReset = () => {
     haptic("medium");
     try {
+      // Keep auth + device identity: the device id (so the same guest account is
+      // waiting when the user comes back), the session token (so the user stays
+      // signed in), and the signed-out flag (so this doesn't silently sign them in).
       const keep = new Set([
         "verdikick.deviceId",
         "verdikick.loggedOut",
         "matchday.deviceId",
         "matchday.loggedOut",
+        "matchday.session",
       ]);
       Object.keys(localStorage)
         .filter((key) => (key.startsWith("verdikick.") || key.startsWith("matchday.")) && !keep.has(key))

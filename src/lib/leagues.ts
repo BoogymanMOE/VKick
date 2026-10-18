@@ -53,14 +53,21 @@ export const COMPETITION_NAMES: Record<string, { en: string; fa: string }> = {
   "ned.1": { en: "Eredivisie", fa: "اردیویزی" },
   "tur.1": { en: "Süper Lig", fa: "سوپرلیگ ترکیه" },
   "por.1": { en: "Primeira Liga", fa: "لیگ پرتغال" },
+  "gre.1": { en: "Super League Greece", fa: "سوپر لیگ یونان" },
+  "sco.1": { en: "Scottish Premiership", fa: "دوره اسکاتلند" },
 };
 
 /** Last resort for unknown slugs: never show the raw code. */
 export function humanizeSlug(slug: string): string {
-  const parts = slug.split(".").slice(1).join(" ").replace(/[_-]+/g, " ").trim();
-  return parts ? parts.replace(/\b\w/g, (c) => c.toUpperCase()) : slug;
+  // An empty slug, or one with no dots, never becomes the raw code.
+  if (!slug) return "—";
+  const parts = slug.split(".").slice(1);
+  if (parts.length === 0) return slug.replace(/\b\w/g, (c) => c.toUpperCase());
+  const joined = parts.join(" ").replace(/[_-]+/g, " ").trim();
+  return joined ? joined.replace(/\b\w/g, (c) => c.toUpperCase()) : slug;
 }
 
-export function competitionName(slug: string, lang: "en" | "fa"): string {
+export function competitionName(slug: string | null | undefined, lang: "en" | "fa"): string {
+  if (!slug) return "—";
   return COMPETITION_NAMES[slug]?.[lang] ?? humanizeSlug(slug);
 }
