@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { cx } from "../lib/cx";
-import { AlertIcon, BallIcon, CloseIcon, RefreshIcon, StarFilledIcon } from "./icons";
+import { AlertIcon, BallIcon, CheckIcon, CloseIcon, RefreshIcon, StarFilledIcon } from "./icons";
 import { ToastContext, type ToastItem, type ToastTone } from "./toastContext";
 
 /**
@@ -15,6 +15,7 @@ const GLYPHS: Record<string, ReactNode> = {
   "↻": <RefreshIcon className="h-4 w-4" />,
   "⚠": <AlertIcon className="h-4 w-4" />,
   "⚽": <BallIcon className="h-4 w-4" />,
+  "✓": <CheckIcon className="h-4 w-4" />,
 };
 
 /*
@@ -27,14 +28,16 @@ const toneClass: Record<ToastTone, string> = {
   volt: "border-volt border-s-4 text-volt",
   gold: "border-gold border-s-4 text-gold",
   danger: "border-danger border-s-4 text-danger",
-  muted: "border-line border-s-4 text-ink-2",
+  // "Last sync" / "Updated" reads as a successful sync, so it borrows the
+  // success tint: a volt border + wash rather than a grey disabled-looking one.
+  muted: "border-volt border-s-4 text-volt",
 };
 
 const toneTint: Record<ToastTone, string | undefined> = {
   volt: "color-mix(in srgb, var(--volt) 14%, var(--bg-elevated))",
   gold: "color-mix(in srgb, var(--gold) 14%, var(--bg-elevated))",
   danger: "color-mix(in srgb, var(--danger) 14%, var(--bg-elevated))",
-  muted: undefined,
+  muted: "color-mix(in srgb, var(--volt) 12%, transparent)",
 };
 
 /** How long the copy stays readable before it starts to leave. */
@@ -87,6 +90,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
       <div
+        // `auto` (not inherited rtl/ltr): an English "Updated 9:41 PM" inside a
+        // Persian app must read LTR, while a Persian message reads RTL.
+        dir="auto"
         className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-3 pt-[max(env(safe-area-inset-top),10px)]"
         role="status"
         aria-live="polite"

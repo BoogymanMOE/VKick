@@ -187,7 +187,8 @@ export default function Matches() {
       push({
         text: t("matches.lastSync", { time: formatClock(now, locale) }),
         tone: "muted",
-        icon: <RefreshIcon className="h-4 w-4" />,
+        // A successful sync, not a spinner: the checkmark says "done".
+        icon: "✓",
       });
     });
   }
@@ -316,14 +317,17 @@ export default function Matches() {
         {/* No favorites yet: above the groups, because it is the answer to an
             empty feed rather than a footnote under one. */}
         {favCount === 0 ? (
-          <Card className="pitch-watermark mt-4 flex items-center justify-between gap-3 p-4">
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-ink">{t("myTeams.empty")}</p>
-              <p className="mt-0.5 text-xs text-ink-3">{t("myTeams.hint")}</p>
-            </div>
+          <Card className="pitch-watermark mt-4 p-5 text-center">
+            {/* An icon at the head of the card: the empty state is a moment to
+                act, not a blank slab, and the ball names the app it belongs to. */}
+            <BallIcon className="mx-auto h-8 w-8 text-volt" />
+            <p className="mt-2 text-sm font-bold text-ink">{t("myTeams.empty")}</p>
+            <p className="mt-1 text-xs text-ink-3">{t("myTeams.hint")}</p>
+            {/* The one action this card owns: everything else on the screen is
+                a different job, so there is no second button to split the intent. */}
             <Link
               to="/onboarding"
-              className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-sm font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
+              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-volt px-5 text-sm font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
             >
               {t("matches.pickTeams")}
             </Link>

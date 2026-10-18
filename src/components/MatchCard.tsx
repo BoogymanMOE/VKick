@@ -29,15 +29,17 @@ export const MatchCard = memo(function MatchCard({
   const competition = useCompetitionLabel(match.league);
 
   const isHalftime = match.status === "halftime";
-  const isLive = match.status === "live" || isHalftime;
+  // Half-time is a neutral pause, not a running match: only `live` gets the red
+  // dot and live tint. (The adapter folds halftime into "live" for the feed, so
+  // this is the defensive branch for data that still carries the real status.)
+  const isLive = match.status === "live";
   const isFinished = match.status === "finished";
-  const hasScore = isLive || isFinished;
+  const hasScore = isLive || isHalftime || isFinished;
   const homeScore = match.homeScore ?? 0;
   const awayScore = match.awayScore ?? 0;
   const kickoff = formatKickoff(new Date(match.kickoffAt), locale);
   // Half-time has no minute on the clock; name the break instead of showing an
-  // empty slot. The adapter currently folds halftime into "live", so this is
-  // the defensive branch for data that still carries the real status.
+  // empty slot.
   const minuteLabel = isHalftime ? match.minute || t("timeline.halftime") : match.minute;
   const home = localize(match.home.shortName);
   const away = localize(match.away.shortName);
@@ -46,9 +48,11 @@ export const MatchCard = memo(function MatchCard({
   // final score when finished, kickoff time when upcoming.
   const status = isLive
     ? `${t("status.live")} ${minuteLabel ?? ""}`.trim()
-    : isFinished
-      ? t("status.finished")
-      : kickoff;
+    : isHalftime
+      ? t("timeline.halftime")
+      : isFinished
+        ? t("status.finished")
+        : kickoff;
   const label = hasScore
     ? `${home} ${homeScore}, ${away} ${awayScore}, ${status}`
     : `${home} ${t("common.versus")} ${away}, ${kickoff}`;
@@ -73,6 +77,10 @@ export const MatchCard = memo(function MatchCard({
         to={`/match/${match.id}`}
         onPointerDown={() => prefetchMatch(match.id)}
         aria-label={label}
+        // The 3-column grid flips with `dir`, so home sits on the right and away
+        // on the left in Persian; explicit so the card reads correctly even if
+        // the shell ever stops setting dir on the root.
+        dir={lang === "fa" ? "rtl" : "ltr"}
         className="block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2"
         style={{
           borderColor: isLive ? "color-mix(in srgb, var(--live) 60%, transparent)" : "var(--line)",
@@ -103,6 +111,9 @@ export const MatchCard = memo(function MatchCard({
                 <LiveDot />
                 <Num>{minuteLabel}</Num>
               </span>
+            ) : isHalftime ? (
+              // Neutral (muted), not the live red: a break is not a goal.
+              <span className="text-xs font-bold text-ink-3">{minuteLabel}</span>
             ) : isFinished ? (
               <span className="text-xs text-ink-3">{t("status.finished")}</span>
             ) : null}
