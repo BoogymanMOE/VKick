@@ -45,11 +45,19 @@ export default function TeamPage() {
   // branch is deliberate — a failed background refetch keeps the data already
   // on screen instead of replacing a good page with an error card.
   if (detailQuery.isError && !detailQuery.data) {
+    // A banned-league club 404s LEAGUE_NOT_SUPPORTED: that is a permanent
+    // state, not a retryable failure, so it gets the empty state rather than
+    // the error/retry card.
+    const code = (detailQuery.error as { code?: string } | null)?.code;
     return (
       <>
         <TopBar title={t("team.title")} back />
         <div className="mt-3">
-          <ErrorState onRetry={() => detailQuery.refetch()} />
+          {code === "LEAGUE_NOT_SUPPORTED" ? (
+            <EmptyState title={t("team.leagueUnsupported")} />
+          ) : (
+            <ErrorState onRetry={() => detailQuery.refetch()} />
+          )}
         </div>
       </>
     );

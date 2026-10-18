@@ -92,6 +92,9 @@ export function serverErrorKey(err: unknown): string {
     TOO_MANY_REQUESTS: "auth.errRateLimited",
     // cup standings endpoint (404): knockout competitions have no table
     NO_TABLE_FOR_CUP: "cups.noTable",
+    // team/match/standings read (404): the competition is outside the
+    // five-league catalog, so it has no page in this app
+    LEAGUE_NOT_SUPPORTED: "team.leagueUnsupported",
     // Telegram/initData verification failures on the login route (the Login
     // screen's Telegram path): malformed or stale initData, or the server has
     // no bot token configured. Never the generic fallback — the client cannot
