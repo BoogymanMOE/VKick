@@ -18,6 +18,9 @@ import {
 
 const db = getDb();
 
+/** A live/halftime match whose kickoff is older than this is treated as stuck. */
+const STUCK_LIVE_MS = 4 * 3_600_000;
+
 function log(msg: string): void {
   console.log(`[sync ${new Date().toISOString()}] ${msg}`);
 }
@@ -188,6 +191,37 @@ export async function syncSummaries(): Promise<GoalAlert[]> {
     goals.push(...(await syncMatchSummary(m.league as LeagueSlug, m.id)));
   }
   return goals;
+}
+
+/**
+ * Stuck-live reconciliation: a match still marked live/halftime whose kickoff is
+ * more than four hours past. The per-minute summary pass already re-fetches
+ * every live row, but if ESPN cannot resolve it (or answers with the same stale
+ * status) the row never moves. This is the explicit second attempt on the
+ * slower 10-minute cadence, so a genuinely finished match settles instead of
+ * reading as live forever. The read-time fallback in server/matches/reconcile.ts
+ * is what guarantees the API never serves it as live regardless.
+ */
+export async function reconcileStuckLive(): Promise<number> {
+  const cutoff = new Date(Date.now() - STUCK_LIVE_MS).toISOString();
+  const stuck = all<{ id: string; league: string }>(
+    db,
+    `SELECT id, league FROM matches
+     WHERE status IN ('live','halftime') AND kickoff_at <= ?`,
+    [cutoff],
+  );
+  let reconciled = 0;
+  for (const m of stuck) {
+    try {
+      const json = await fetchSummary(m.league as LeagueSlug, m.id);
+      const { match } = applySummary(db, json, m.league);
+      if (match.status === "finished") reconciled += 1;
+    } catch (err) {
+      console.error(`[sync] stuck-match reconcile ${m.league}/${m.id} FAILED:`, String(err));
+    }
+  }
+  if (reconciled > 0) log(`stuck matches reconciled to finished: ${reconciled}`);
+  return reconciled;
 }
 
 /**
@@ -427,6 +461,7 @@ export function startSyncLoop(): void {
     }
     scoreboardsRunning = true;
     void syncScoreboards()
+      .then(() => reconcileStuckLive())
       .then(() => recordSyncPassOk())
       .catch((err) => {
         recordSyncPassFail();

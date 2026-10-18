@@ -21,6 +21,8 @@ import { all, get, type DB } from "../db/index.js";
 const STALE_LIVE_MS = 15 * 60_000;
 /** A pass that has not completed for this long means the loop is dead. */
 const DEAD_LOOP_MS = 30 * 60_000;
+/** A live/halftime match whose kickoff is older than this was never reconciled. */
+const STUCK_KICKOFF_MS = 4 * 3_600_000;
 /** Minimum spacing between repeated alerts — matchday moments are noisy. */
 const ALERT_COOLDOWN_MS = 30 * 60_000;
 
@@ -67,6 +69,8 @@ export interface SyncHealthSnapshot {
   latestLastSyncedAt: string | null;
   /** Live/halftime matches whose row is STALE_LIVE_MS old or more. */
   staleLive: number;
+  /** Live/halftime matches whose kickoff is STUCK_KICKOFF_MS old or more. */
+  stuckLive: number;
   liveCount: number;
   scheduledCount: number;
   finishedCount: number;
@@ -113,6 +117,18 @@ export function syncHealthSnapshot(db: DB, now: Date = new Date()): SyncHealthSn
       [new Date(nowMs - STALE_LIVE_MS).toISOString()],
     )?.n ?? 0;
 
+  // A live/halftime row long past kickoff: the sync never reconciled it. The
+  // read-time fallback still serves it as finished, but the row is wrong and
+  // needs the loop (or a manual sync) to fix it.
+  const stuckLive =
+    get<{ n: number }>(
+      db,
+      `SELECT COUNT(*) AS n FROM matches
+       WHERE status IN ('live','halftime')
+         AND kickoff_at <= ?`,
+      [new Date(nowMs - STUCK_KICKOFF_MS).toISOString()],
+    )?.n ?? 0;
+
   const quiet = all<{ league: string }>(
     db,
     `SELECT DISTINCT f.league AS league FROM followed_leagues f
@@ -127,6 +143,7 @@ export function syncHealthSnapshot(db: DB, now: Date = new Date()): SyncHealthSn
   return {
     latestLastSyncedAt: latest?.t ?? null,
     staleLive: staleLive ?? 0,
+    stuckLive: stuckLive ?? 0,
     liveCount: counts?.live ?? 0,
     scheduledCount: counts?.scheduled ?? 0,
     finishedCount: counts?.finished ?? 0,
@@ -172,6 +189,11 @@ export function checkAndAlert(
   }
   if (snap.staleLive > 0) {
     problems.push(`${snap.staleLive} live match(es) untouched for 15+ min — summary sync is not keeping up`);
+  }
+  if (snap.stuckLive > 0) {
+    problems.push(
+      `${snap.stuckLive} live/half-time match(es) past kickoff by 4h+ — never reconciled (served as finished)`,
+    );
   }
   if (snap.quietFollowedLeagues.length > 0) {
     problems.push(`followed league(s) with no fixture within ±7d: ${snap.quietFollowedLeagues.join(", ")}`);

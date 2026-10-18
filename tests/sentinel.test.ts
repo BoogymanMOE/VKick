@@ -53,6 +53,15 @@ export function runSentinelTests(): void {
   assert.equal(quiet1.problem, null, "healthy data reports no problem");
   assert.equal(sent.length, 0, "no transport traffic when healthy");
 
+  // A live row long past kickoff is stuck: the sentinel flags it as never
+  // reconciled (the read-time fallback still serves it as finished).
+  db.prepare(
+    `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score, last_synced_at)
+     VALUES ('m2', 'eng.1', 'H', 'A', ?, 'live', 1, 0, ?)`,
+  ).run(new Date(NOW.getTime() - 6 * 3_600_000).toISOString(), NOW.toISOString());
+  const stuck = syncHealthSnapshot(db, NOW);
+  assert.equal(stuck.stuckLive, 1, "a live match 6h past kickoff is stuck");
+
   // The live row goes stale (sync stopped mid-match): one alert, then cooldown.
   db.prepare(
     "UPDATE matches SET last_synced_at = ? WHERE id = 'm1'",
@@ -64,6 +73,7 @@ export function runSentinelTests(): void {
   assert.equal(alert1.alerted, true, "stale live matches alert");
   assert.match(sent[0] ?? "", /live match/i, "the alert names the finding");
   assert.ok(alert1.problem?.includes("live match"), `the problem line names staleness: ${alert1.problem}`);
+  assert.match(alert1.problem ?? "", /reconciled/i, "the alert names the stuck live match");
 
   const alert2 = checkAndAlert(db, (t) => sent.push(t), new Date(NOW.getTime() + 60_000));
   assert.equal(alert2.alerted, false, "the cooldown suppresses repeat alerts");

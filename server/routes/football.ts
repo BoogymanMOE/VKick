@@ -12,6 +12,7 @@ import { competitionCatalog, isAllowedLeague } from "../espn/catalog.js";
 import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
 import { foldForm, type FormMatchRow } from "../standings/form.js";
 import { buildFeedQuery } from "../matches/feed.js";
+import { settleStaleLive, settleStaleLiveAll, type LiveMatchRow } from "../matches/reconcile.js";
 import { currentSeasonLabel } from "../scoring/ledger.js";
 import { bad, requireUser } from "./shared.js";
 // Sync freshness for the ops surface: the client shows "data as of <time>"
@@ -32,8 +33,8 @@ function safeArr(s: unknown): unknown[] {
   }
 }
 
-function matchWithTeams(id: string): unknown {
-  return get(
+function matchWithTeams(id: string): (LiveMatchRow & Record<string, unknown>) | undefined {
+  return get<LiveMatchRow & Record<string, unknown>>(
     db,
     `SELECT m.*, 
        th.name AS home_name, th.short_name AS home_short, th.abbreviation AS home_abbr, th.color AS home_color, th.logo_url AS home_logo,
@@ -93,7 +94,7 @@ matchesRouter.get("/api/matches", (req, res) => {
     to: req.query.to ? String(req.query.to) : null,
     limit: req.query.limit ? String(req.query.limit) : null,
   });
-  const rows = all<{ league: string }>(
+  const rows = all<{ league: string; id: string; status: string; kickoff_at: string }>(
     db,
     `SELECT m.*,
        th.name AS home_name, th.short_name AS home_short, th.abbreviation AS home_abbr, th.color AS home_color, th.logo_url AS home_logo,
@@ -109,7 +110,11 @@ matchesRouter.get("/api/matches", (req, res) => {
   // The allow-list is enforced HERE, not only in SQL: the catalog is trimmed to
   // the five big leagues, and stale rows from older, wider syncs must never
   // reach the feed even if a filter regresses.
-  res.json({ matches: rows.filter((m) => isAllowedLeague(m.league)) });
+  //
+  // settleStaleLiveAll is the read-time net for a row stuck live/halftime long
+  // past kickoff (the sync loop repairs the row itself; this keeps the feed
+  // honest even when it can't).
+  res.json({ matches: settleStaleLiveAll(rows.filter((m) => isAllowedLeague(m.league))) });
 });
 
 matchesRouter.get("/api/matches/:id", (req, res) => {
@@ -117,7 +122,7 @@ matchesRouter.get("/api/matches/:id", (req, res) => {
   if (!assertMatchAllowed(res, matchId)) return;
   const match = matchWithTeams(matchId);
   if (!match) return; // unreachable: assertMatchAllowed already 404'd
-  res.json({ match });
+  res.json({ match: settleStaleLive(match) });
 });
 
 /** Full minute-by-minute commentary for one match (blow-by-blow tab). */

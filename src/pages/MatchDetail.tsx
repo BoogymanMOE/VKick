@@ -221,13 +221,19 @@ export default function MatchDetail() {
                 <CountUp value={match.away_score} className="text-[40px] leading-none text-ink" />
               )}
             </span>
-            {live ? (
+            {inPlay ? (
               <Chip tone="live">
                 <LiveDot />
-                {t("status.live")} <Num>{currentMinute}&#39;</Num>
+                {match.status === "halftime" ? (
+                  t("timeline.halftime")
+                ) : (
+                  <>
+                    {t("status.live")} <Num>{currentMinute}&#39;</Num>
+                  </>
+                )}
               </Chip>
             ) : countdownLabel ? (
-              <Chip tone="volt" className="animate-pulse">
+              <Chip tone="volt" className="motion-safe:animate-pulse">
                 {countdownLabel}
               </Chip>
             ) : (
