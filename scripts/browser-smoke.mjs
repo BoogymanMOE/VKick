@@ -50,15 +50,32 @@ function appUrl(user, hash) {
   return `${BASE}/?devUser=${encodeURIComponent(user)}#${hash}`;
 }
 
-async function newPage(browser, { width, height, lang, loggedOut = false }) {
+async function newPage(browser, { width, height, lang, loggedOut = false, lcp = false }) {
   const ctx = await browser.newContext({ viewport: { width, height } });
   await ctx.addInitScript(
-    ([lang, loggedOut]) => {
+    ([lang, loggedOut, lcp]) => {
       localStorage.setItem("matchday.lang", lang);
       if (loggedOut) localStorage.setItem("matchday.loggedOut", "1");
       else localStorage.removeItem("matchday.loggedOut");
+      // LCP must be registered at document start (init script) with the
+      // buffered flag: an observer attached after a later navigation dies with
+      // its old document, leaving the reader an undefined — a vacuum pass.
+      if (lcp) {
+        window.__smokeLcp = {
+          value: null,
+          support:
+            typeof PerformanceObserver !== "undefined" &&
+            PerformanceObserver.supportedEntryTypes.includes("largest-contentful-paint"),
+        };
+        if (window.__smokeLcp.support) {
+          new PerformanceObserver((list) => {
+            const e = list.getEntries().at(-1);
+            if (e) window.__smokeLcp.value = e.startTime;
+          }).observe({ type: "largest-contentful-paint", buffered: true });
+        }
+      }
     },
-    [lang, loggedOut],
+    [lang, loggedOut, lcp],
   );
   return ctx.newPage();
 }
@@ -114,6 +131,25 @@ async function checkLogin(browser, lang) {
     else pass(`login ${lang} ${width}x${height} legal line in viewport`);
     await page.context().close();
   }
+}
+
+/**
+ * Render-time gate, the twin of the bundle budget: LCP of the feed under the
+ * CI runner's plain hardware. Generous by design (5s catches pathological
+ * regressions — sync floods, a mega-chunk, a render loop) without fighting
+ * machine-to-machine variance; the bundle budget owns the byte-level gate.
+ */
+const FEED_LCP_BUDGET_MS = 5000;
+
+async function checkFeedLcp(browser, lang) {
+  const page = await newPage(browser, { width: 390, height: 844, lang, lcp: true });
+  await settle(page, appUrl(devUserId(`lcp_${lang}`), "/matches"), 4000);
+  const d = await page.evaluate(() => window.__smokeLcp ?? { support: false, value: null });
+  if (!d.support) console.log(`  ~ feed ${lang} LCP: unsupported in this engine, not gated`);
+  else if (d.value == null) console.log(`  ~ feed ${lang} LCP: no entry observed (empty page?), not gated`);
+  else if (d.value > FEED_LCP_BUDGET_MS) fail(`feed ${lang} LCP`, `${Math.round(d.value)}ms exceeds the ${FEED_LCP_BUDGET_MS}ms budget`);
+  else pass(`feed ${lang} LCP ${Math.round(d.value)}ms <= ${FEED_LCP_BUDGET_MS}ms`);
+  await page.context().close();
 }
 
 async function checkSlugLeaks(browser, fixtures) {
@@ -274,6 +310,8 @@ try {
   console.log(`SMOKE against ${BASE} (match ${fixtures.match.id}, team ${fixtures.teamId})`);
   await checkLogin(browserHandle, "en");
   await checkLogin(browserHandle, "fa");
+  await checkFeedLcp(browserHandle, "en");
+  await checkFeedLcp(browserHandle, "fa");
   await checkSlugLeaks(browserHandle, fixtures);
   await checkResetSheet(browserHandle, "en");
   await checkResetSheet(browserHandle, "fa");
