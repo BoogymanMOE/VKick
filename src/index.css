@@ -624,9 +624,6 @@
      tall, vs ~850px portrait), so fixed-height chrome eats the whole screen. Make
      it usable, not pretty — content can clip, it must not crash the layout. */
   @media (orientation: landscape) and (max-height: 520px) {
-    :root {
-      --ad-slot-h: 60px;
-    }
     #boot img {
       height: 64px;
     }

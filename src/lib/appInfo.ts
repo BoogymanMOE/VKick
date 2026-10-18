@@ -15,6 +15,15 @@ export interface ReleaseNote {
  */
 export const WHATS_NEW: ReleaseNote[] = [
   {
+    version: "0.3.0",
+    date: "2026-10-18",
+    lines: [
+      "Pick any day with the new date strip.",
+      "Calmer match cards with clear live status.",
+      "League tables now fit on your phone.",
+    ],
+  },
+  {
     version: "0.2.0",
     date: "2026-09-28",
     lines: [

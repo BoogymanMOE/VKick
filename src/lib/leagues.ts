@@ -38,3 +38,29 @@ export function slugForLeague(idOrSlug: string): string {
 export function isCup(_slug: string): boolean {
   return false;
 }
+
+/** Human-readable competition name for any slug, in either language. */
+export const COMPETITION_NAMES: Record<string, { en: string; fa: string }> = {
+  "uefa.champions": { en: "Champions League", fa: "لیگ قهرمانان اروپا" },
+  "uefa.europa": { en: "Europa League", fa: "لیگ اروپا" },
+  "uefa.europa.conf": { en: "Conference League", fa: "لیگ کنفرانس اروپا" },
+  "eng.fa": { en: "FA Cup", fa: "جام حذفی انگلیس" },
+  "eng.league_cup": { en: "EFL Cup", fa: "جام اتحادیه انگلیس" },
+  "esp.copa_del_rey": { en: "Copa del Rey", fa: "کوپا دل ری" },
+  "ger.dfb_pokal": { en: "DFB-Pokal", fa: "جام حذفی آلمان" },
+  "ita.coppa_italia": { en: "Coppa Italia", fa: "کوپا ایتالیا" },
+  "fra.coupe_de_france": { en: "Coupe de France", fa: "جام حذفی فرانسه" },
+  "ned.1": { en: "Eredivisie", fa: "اردیویزی" },
+  "tur.1": { en: "Süper Lig", fa: "سوپرلیگ ترکیه" },
+  "por.1": { en: "Primeira Liga", fa: "لیگ پرتغال" },
+};
+
+/** Last resort for unknown slugs: never show the raw code. */
+export function humanizeSlug(slug: string): string {
+  const parts = slug.split(".").slice(1).join(" ").replace(/[_-]+/g, " ").trim();
+  return parts ? parts.replace(/\b\w/g, (c) => c.toUpperCase()) : slug;
+}
+
+export function competitionName(slug: string, lang: "en" | "fa"): string {
+  return COMPETITION_NAMES[slug]?.[lang] ?? humanizeSlug(slug);
+}

@@ -18,7 +18,7 @@ import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
 import { haptic } from "../lib/telegram";
 import type { LeagueId, Match, Team } from "../types";
-import { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE, slugForLeague } from "../lib/leagues";
+import { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE, slugForLeague, competitionName } from "../lib/leagues";
 
 // Public surface preserved: these now live in pure modules so non-React code
 // (and the node test runner) can use them without this file's imports.
@@ -462,18 +462,20 @@ export function useKnockoutCompetitions() {
  * Display name for any competition slug. Big-five slugs keep their short
  * localized alias; everything else (cups, international tournaments) reads the
  * catalog's own name through the cached competitions query, falling back to
- * the slug while that loads. Without this, a cup match page showed the raw
- * "uefa.champions" / "fifa.world".
+ * a humanized slug (never the raw code) while that loads. Without this, a cup
+ * match page showed the raw "uefa.champions" / "fifa.world".
  */
 export function useCompetitionLabel(slug: string): string {
-  const { t, localize } = useI18n();
+  const { t, localize, lang } = useI18n();
   const query = useCompetitions();
   return useMemo(() => {
     const id = leagueIdOf(slug);
     if (id) return t(`league.${id}` as never);
     const comp = query.data?.competitions.find((c) => c.slug === slug);
-    return comp ? localize(comp.name) : slug;
-  }, [slug, query.data, t, localize]);
+    if (comp) return localize(comp.name);
+    // Fall back to a localized humanized name, never the raw slug.
+    return competitionName(slug, lang);
+  }, [slug, query.data, t, localize, lang]);
 }
 
 /* ------------------------------------------------------------ leaderboards */

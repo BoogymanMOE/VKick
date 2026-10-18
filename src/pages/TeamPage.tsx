@@ -22,6 +22,7 @@ import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate } from "../lib/format";
 import type { ApiMatch } from "../lib/api";
 import type { Position } from "../types";
+import { competitionName } from "../lib/leagues";
 
 type Tab = "squad" | "form" | "stats" | "xg";
 
@@ -32,9 +33,7 @@ const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
  * recent fixtures. Reached by tapping any team in the table or a match card.
  */
 export default function TeamPage() {
-  const { id = "" } = useParams();
-  const { t, localize } = useI18n();
-
+  const { id = "" } = useParams();  const { t, lang, localize } = useI18n();
   const detailQuery = useTeamDetail(id);
   const squadQuery = useSquad(id);
 
@@ -89,7 +88,7 @@ export default function TeamPage() {
     <>
       <TopBar
         title={localize(teamView.shortName)}
-        subtitle={leagueId ? t(`league.${leagueId}`) : team.league}
+        subtitle={leagueId ? t(`league.${leagueId}`) : competitionName(team.league, lang)}
         back
       />
 

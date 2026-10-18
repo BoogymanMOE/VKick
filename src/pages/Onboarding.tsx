@@ -77,7 +77,6 @@ export default function Onboarding() {
     return false;
   });
   const [step, setStep] = useState(0);
-  const [saved, setSaved] = useState(false);
 
   const teamsQuery = useTeams();
   // Stable identity: `groupTeams` and the picker memos below depend on it.
@@ -124,9 +123,6 @@ export default function Onboarding() {
   function pickClub(team: (typeof allTeams)[number]) {
     selectionHaptic();
     if (isFavorite(team.id)) return;
-    // A changed pick un-saves the step: the Save button comes back so the
-    // written confirmation never names a team the user just swapped out.
-    setSaved(false);
     if (count === 0) {
       // First pick becomes the anchor automatically — but only AFTER the
       // follow has persisted (the anchor endpoint 404s otherwise). The
@@ -171,21 +167,6 @@ export default function Onboarding() {
     }
     notifyHaptic("success");
     navigate("/matches", { replace: true });
-  }
-
-  /**
-   * Explicit save on the favorite-club step: persists the gate flag so the
-   * Matchday feed scopes to the saved club, and confirms the choice in copy —
-   * the picker alone used to leave “did my pick stick?” unanswered.
-   */
-  function saveFavorite() {
-    try {
-      localStorage.setItem("verdikick.onboarded", "1");
-    } catch {
-      /* private mode */
-    }
-    notifyHaptic("success");
-    setSaved(true);
   }
 
   /** Advance a step; leaving the favorite step persists the gate flag. */
@@ -465,25 +446,18 @@ export default function Onboarding() {
         </section>
       ) : null}
 
-      {/* Actions. The favorite step (the product's anchor) gets a real Save
-          button with a written confirmation instead of a silent toggle; after
-          saving, the same button becomes Continue so the flow stays one-tap. */}
+      {/* Actions. */}
       <div className="mt-6 space-y-2 pb-6">
         {step === 0 && count >= 1 ? (
-          <>
-            {saved ? (
-              <p
-                className="rise-in flex items-center justify-center gap-1.5 rounded-card border border-volt px-3 py-2.5 text-xs font-bold text-volt"
-                role="status"
-              >
-                <CheckIcon className="h-4 w-4 flex-none" />
-                {t("onboarding.favoriteSaved", { team: anchorName })}
-              </p>
-            ) : null}
-            <Button className="w-full" onClick={saved ? advance : saveFavorite}>
-              {t(saved ? "onboarding.next" : "common.save")}
-            </Button>
-          </>
+          <Button
+            className="w-full"
+            onClick={() => {
+              notifyHaptic("success");
+              advance();
+            }}
+          >
+            {t("onboarding.next")}
+          </Button>
         ) : null}
         {canAdvance && step > 0 && step < TOTAL_STEPS - 1 ? (
           <Button className="w-full" onClick={advance}>

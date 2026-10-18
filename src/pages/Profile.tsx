@@ -50,6 +50,9 @@ export default function Profile() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  /** Reset local data: a confirm sheet, no silent wipe. */
+  const [resetOpen, setResetOpen] = useState(false);
+
   // Push preferences live on the SERVER (user_notification_prefs) — the bot
   // checks them before sending, so these toggles actually gate sends. Only
   // the haptics switch stays local (it's a device-side concern).
@@ -94,6 +97,25 @@ export default function Profile() {
       setDeleteError(t(serverErrorKey(err) as never));
       setDeleteBusy(false);
     }
+  };
+
+  const confirmReset = () => {
+    haptic("medium");
+    try {
+      const keep = new Set([
+        "verdikick.deviceId",
+        "verdikick.loggedOut",
+        "matchday.deviceId",
+        "matchday.loggedOut",
+      ]);
+      Object.keys(localStorage)
+        .filter((key) => (key.startsWith("verdikick.") || key.startsWith("matchday.")) && !keep.has(key))
+        .forEach((key) => localStorage.removeItem(key));
+    } catch {
+      /* private mode */
+    }
+    setResetOpen(false);
+    push({ text: t("profile.resetDone"), tone: "danger", icon: "⟲" });
   };
 
   const openNameEditor = () => {
@@ -228,26 +250,8 @@ export default function Profile() {
             label={t("profile.resetLocal")}
             hint={t("profile.resetHint")}
             onClick={() => {
-              haptic("medium");
-              try {
-                // Wipe local data but keep the auth keys: the device id (so the
-                // same guest account is waiting when the user comes back) and
-                // the signed-out flag (so this doesn't silently sign them in).
-                const keep = new Set([
-                  "verdikick.deviceId",
-                  "verdikick.loggedOut",
-                  "matchday.deviceId",
-                  "matchday.loggedOut",
-                ]);
-                Object.keys(localStorage)
-                  .filter(
-                    (key) => (key.startsWith("verdikick.") || key.startsWith("matchday.")) && !keep.has(key),
-                  )
-                  .forEach((key) => localStorage.removeItem(key));
-              } catch {
-                /* private mode */
-              }
-              push({ text: t("profile.resetDone"), tone: "danger", icon: "⟲" });
+              haptic("light");
+              setResetOpen(true);
             }}
             right={<ChevronRightIcon className="text-ink-3" />}
           />
@@ -457,6 +461,29 @@ export default function Profile() {
             {deleteError}
           </p>
         ) : null}
+      </BottomSheet>
+
+      <BottomSheet
+        open={resetOpen}
+        onClose={() => setResetOpen(false)}
+        title={t("profile.resetLocal")}
+        subtitle={t("profile.resetHint")}
+        footer={
+          <SheetActions>
+            <Button variant="ghost" className="flex-1" onClick={() => setResetOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              className="flex-1 border border-danger text-danger"
+              variant="ghost"
+              onClick={confirmReset}
+            >
+              {t("profile.resetConfirm")}
+            </Button>
+          </SheetActions>
+        }
+      >
+        <p className="text-sm leading-relaxed text-ink-2">{t("profile.resetHint")}</p>
       </BottomSheet>
     </>
   );

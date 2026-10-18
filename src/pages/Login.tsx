@@ -94,12 +94,9 @@ export default function Login() {
         </div>
       </header>
 
-      {/* The fixed A-ADS ad slot overlaps this screen too (Login sits outside
-          AppShell, so there is no TabBar to offset it). The bottom padding reserves
-          the ad slot height plus safe-area so the legal line stays reachable. */}
       <main
         className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-5"
-        style={{ paddingBottom: "calc(40px + var(--ad-slot-h, 100px) + max(env(safe-area-inset-bottom), 8px))" }}
+        style={{ paddingBottom: "calc(40px + max(env(safe-area-inset-bottom), 8px))" }}
       >
         {/* Hero: the mark over the wordmark, over the floodlit wash. */}
         <section className="rise-in px-1 pb-10 text-center">
