@@ -24,7 +24,7 @@ import type { ApiMatch } from "../lib/api";
 import type { Position } from "../types";
 import { competitionName } from "../lib/leagues";
 
-type Tab = "squad" | "form" | "stats" | "xg";
+type Tab = "squad" | "fixtures" | "season" | "xg";
 
 const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
 
@@ -129,18 +129,18 @@ export default function TeamPage() {
           value={tab}
           onChange={setTab}
           options={[
-            { value: "squad", label: t("team.tabSquad") },
-            { value: "form", label: t("team.tabFixtures") },
-            { value: "stats", label: t("team.tabStats") },
-            { value: "xg", label: t("team.tabXg") },
+            { value: "squad", label: t("team.tab.squad") },
+            { value: "fixtures", label: t("team.tab.fixtures") },
+            { value: "season", label: t("team.tab.season") },
+            { value: "xg", label: t("team.tab.xg") },
           ]}
         />
       </div>
 
       <section className="panel-in mt-4" key={tab}>
         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
-        {tab === "form" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
-        {tab === "stats" ? <StatsTab stats={seasonStats} /> : null}
+        {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
+        {tab === "season" ? <StatsTab stats={seasonStats} /> : null}
         {tab === "xg" ? (
           <XgTab
             teamId={team.id}
