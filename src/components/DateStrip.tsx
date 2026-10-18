@@ -58,7 +58,7 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
     // explicit pressed state, and role=tab would promise arrow-key semantics
     // this row does not implement.
     <div
-      className="mt-4 flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)]"
+      className="mt-4 flex items-center gap-1 overflow-x-auto px-[var(--space-page-x,16px)]"
       role="group"
       aria-label={t("dateStrip.label")}
     >
