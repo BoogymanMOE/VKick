@@ -13,7 +13,7 @@ import { useMatches, useFollowedLeagues } from "../hooks/useApi";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
 import { formatClock } from "../lib/format";
-import { LEAGUE_BY_SLUG, competitionName } from "../lib/leagues";
+import { competitionName } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
 import {
   BallIcon,
@@ -286,7 +286,7 @@ export default function Matches() {
           <div className="mt-4 flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3">
             <p className="min-w-0 truncate text-xs text-ink-2">
               {t("matches.leagueScope", {
-                league: LEAGUE_BY_SLUG[league] ? t(`league.${LEAGUE_BY_SLUG[league]}`) : league,
+                league: competitionName(league, lang),
               })}
             </p>
             <button
