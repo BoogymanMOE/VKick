@@ -30,7 +30,7 @@ import { TEAM_FALLBACK } from "../lib/colors";
 import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
 import { RATINGS_ENABLED } from "../lib/features";
-import { formatKickoff, formatKickoffDate } from "../lib/format";
+import { formatClock, formatKickoff, formatKickoffDate } from "../lib/format";
 import { useNow } from "../hooks/useNow";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
 import type { Team } from "../types";
@@ -114,19 +114,26 @@ export default function MatchDetail() {
 
   const now = useNow(30_000);
 
+  // Days, then hours+minutes in words — never a bare "335h 45m", whose Latin
+  // h/m scramble the bidi run of a Persian sentence.
+  const nf = new Intl.NumberFormat(locale);
   const countdownLabel = useMemo(() => {
     if (!match || match.status !== "scheduled") return null;
     const ms = new Date(match.kickoff_at).getTime() - now;
-    if (ms <= 0) return null;
+    if (ms <= 0) return t("match.awaiting");
     const totalMinutes = Math.floor(ms / 60_000);
     if (totalMinutes < 1) return t("predict.startingSoon");
+    const days = Math.floor(totalMinutes / 1440);
+    if (days >= 1) return t("match.startsInDays", { count: nf.format(days) });
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    if (hours > 0) {
-      return t("predict.startsIn", { time: `${hours}h ${minutes}m` });
-    }
-    return t("predict.startsIn", { time: `${minutes}m` });
-  }, [match, now, t]);
+    return t("predict.startsIn", {
+      time:
+        hours > 0
+          ? t("match.hoursMinutes", { h: nf.format(hours), m: nf.format(minutes) })
+          : t("match.minutes", { m: nf.format(minutes) }),
+    });
+  }, [match, now, t, locale]);
 
 
 
@@ -205,22 +212,28 @@ export default function MatchDetail() {
           </div>
 
           <div className="flex flex-col items-center gap-1.5">
-            {/* The score rolls up to its new value when the feed moves, so a
-                goal lands rather than snapping. A side that hasn't played keeps
-                the honest dash (null is not zero). */}
-            <span className="flex items-baseline gap-1">
-              {match.home_score === null ? (
-                <Num className="text-[40px] leading-none text-ink">–</Num>
-              ) : (
-                <CountUp value={match.home_score} className="text-[40px] leading-none text-ink" />
-              )}
-              <Num className="text-[40px] leading-none text-ink">:</Num>
-              {match.away_score === null ? (
-                <Num className="text-[40px] leading-none text-ink">–</Num>
-              ) : (
-                <CountUp value={match.away_score} className="text-[40px] leading-none text-ink" />
-              )}
-            </span>
+            {/* Before kickoff there is no score to show — the kickoff clock is
+                the honest read, and dashes ("– : –") read as a broken scoreboard.
+                Once a side has a number the score rolls up as it moves. */}
+            {match.home_score === null && match.away_score === null ? (
+              <Num className="text-[28px] leading-none text-ink-2">
+                {formatClock(new Date(match.kickoff_at), locale)}
+              </Num>
+            ) : (
+              <span className="flex items-baseline gap-1">
+                {match.home_score === null ? (
+                  <Num className="text-[40px] leading-none text-ink">–</Num>
+                ) : (
+                  <CountUp value={match.home_score} className="text-[40px] leading-none text-ink" />
+                )}
+                <Num className="text-[40px] leading-none text-ink">:</Num>
+                {match.away_score === null ? (
+                  <Num className="text-[40px] leading-none text-ink">–</Num>
+                ) : (
+                  <CountUp value={match.away_score} className="text-[40px] leading-none text-ink" />
+                )}
+              </span>
+            )}
             {inPlay ? (
               <Chip tone="live">
                 <LiveDot />
@@ -478,7 +491,9 @@ function LineupsTab({
     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
   }
   if (!data || data.players.length === 0) {
-    return <EmptyState title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
+    // The Lineups tab is about the XI, not the stat sheet — an upcoming match
+    // must not say "stats land here after the first whistle".
+    return <EmptyState title={t("lineups.noneYet")} hint={t("lineups.noneHint")} />;
   }
 
   const toPlayer = (r: Record<string, unknown>) => ({
