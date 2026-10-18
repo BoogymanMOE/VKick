@@ -37,3 +37,8 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # The built bundle ships to 360px phones on 3G — a size regression is a
+      # user-facing performance regression even when every test stays green.
+      - name: Bundle budget
+        run: npm run budget

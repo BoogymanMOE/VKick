@@ -57,7 +57,18 @@ export const MatchCard = memo(function MatchCard({
     match.gameweek > 0 ? t("matches.cardMeta", { league: competition, gw: match.gameweek }) : competition;
 
   return (
-    <li className="list-in" style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}>
+    <li
+      className="list-in"
+      style={{
+        "--stagger": `${Math.min(index, 8) * 40}ms`,
+        // Skip the off-screen render work for long matchdays: the browser still
+        // reserves the card's footprint (contain-intrinsic-size ≈ one card),
+        // so scrollbars and scroll anchoring don't shift, but layout/paint of
+        // cards below the fold is deferred until they approach the viewport.
+        contentVisibility: "auto",
+        containIntrinsicSize: "auto 96px",
+      } as CSSProperties}
+    >
       <Link
         to={`/match/${match.id}`}
         onPointerDown={() => prefetchMatch(match.id)}
