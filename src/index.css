@@ -123,6 +123,29 @@
     padding-bottom: max(env(safe-area-inset-bottom), 8px);
   }
 
+  /* Squad row: one grid whose tracks flip with `dir`, so the jersey number sits
+     on the LEADING edge (right in Persian, left in English) and the goals/assists
+     on the trailing edge in both scripts. A single template does both: grid
+     tracks are placed in the inline direction, so dir=rtl mirrors the row. */
+  .player-row {
+    display: grid;
+    grid-template-columns: 22px 32px 1fr auto;
+    align-items: center;
+    gap: 8px;
+  }
+  .player-number {
+    text-align: center;
+  }
+  .player-name {
+    min-width: 0;
+    overflow: hidden;
+  }
+  .player-stats {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+
   /* "night match under floodlights" texture: pitch lines at 4% opacity. */
   .pitch-watermark {
     position: relative;

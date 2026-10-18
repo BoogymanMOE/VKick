@@ -19,7 +19,7 @@ import type { StringKey } from "../i18n/strings";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { TEAM_FALLBACK } from "../lib/colors";
 import { useI18n } from "../i18n/context";
-import { formatKickoff, formatKickoffDate } from "../lib/format";
+import { formatKickoff, formatKickoffDate, toFaDigits } from "../lib/format";
 import type { ApiMatch } from "../lib/api";
 import type { Position } from "../types";
 import { competitionName } from "../lib/leagues";
@@ -156,7 +156,7 @@ export default function TeamPage() {
 /* ------------------------------------------------------------ squad */
 
 function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
-  const { t, localize } = useI18n();
+  const { t, lang, dir, localize } = useI18n();
   if (squadQuery.isLoading) return <PanelSkeleton height={192} />;
   if (squadQuery.isError) return <ErrorState onRetry={() => squadQuery.refetch()} />;
 
@@ -165,6 +165,10 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
     return <EmptyState title={t("team.squadEmpty")} hint={t("team.squadEmptyHint")} />;
   }
 
+  // Persian reads every number in the Persian script — jersey, counts and stats
+  // alike. Mixing ۱۳ with 00/01 in one row was the bug this fixes.
+  const num = (value: number | string) => (lang === "fa" ? toFaDigits(value) : String(value));
+
   return (
     <div className="space-y-4">
       {POS_ORDER.map((pos) => {
@@ -172,43 +176,51 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
         if (group.length === 0) return null;
         return (
           <div key={pos}>
-            <SectionHeading
-              title={t(`pos.${pos}`)}
-              action={
-                <Chip tone="muted">
-                  <Num>{group.length}</Num>
-                </Chip>
-              }
-            />
+            {/* The count rides NEXT to the heading, not on the far side of the
+                row: a badge detached from its label reads as stray chrome. */}
+            <div className="mb-2 flex items-center gap-2">
+              <h2 className="label label-lg text-ink-2">{t(`pos.${pos}`)}</h2>
+              <Chip tone="muted">
+                <Num>{num(group.length)}</Num>
+              </Chip>
+            </div>
             <ul className="space-y-1.5">
               {group.map((player) => (
+                // One grid, flipped by `dir`: the jersey lands on the leading
+                // edge (right in Persian, left in English) and the goals/assists
+                // on the trailing edge, so there is no dead strip on either side.
                 <li
                   key={player.id}
-                  className="flex items-center gap-3 rounded-card border border-line bg-surface p-2.5"
+                  dir={dir}
+                  className="player-row rounded-card border border-line bg-surface p-2.5"
                 >
+                  <Num className="player-number text-[11px] font-bold text-ink-3">
+                    {num(player.jersey ?? "–")}
+                  </Num>
                   {/* A face for every squad member: the ESPN headshot where the
                       feed has one, the player's initials where it doesn't, on
                       the same footprint either way. */}
-                  <PlayerAvatar name={localize(player.name)} src={player.headshot} size="md" />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline gap-1.5">
-                      <Num className="flex-none text-[10px] font-bold text-ink-3">{player.jersey ?? "–"}</Num>
-                      <span className="min-w-0 truncate text-sm font-bold text-ink">
-                        {localize(player.name)}
-                      </span>
+                  <PlayerAvatar name={localize(player.name)} src={player.headshot} size="sm" />
+                  <span className="player-name min-w-0">
+                    <span className="block truncate text-sm font-bold text-ink">
+                      {/* <bdi> isolates a Latin name so it cannot drift the row's
+                          bidi run in Persian. */}
+                      <bdi>{localize(player.name)}</bdi>
                     </span>
-                    <span className="block text-[11px] text-ink-3">
+                    <span className="block truncate text-[11px] text-ink-3">
                       {player.espnPosition ?? t(`pos.${player.position}`)}
-                      {player.appearances ? ` · ${t("team.appearances", { count: player.appearances })}` : ""}
+                      {player.appearances
+                        ? ` · ${t("team.appearances", { count: num(player.appearances) })}`
+                        : ""}
                     </span>
                   </span>
-                  <span className="flex-none text-end">
+                  <span className="player-stats flex-none">
                     <Num className={cx("text-sm", (player.goals ?? 0) > 0 ? "text-volt" : "text-ink-3")}>
-                      {player.goals ?? 0}
+                      {num(player.goals ?? 0)}
                     </Num>
                     <Num className={cx("text-sm", (player.assists ?? 0) > 0 ? "text-gold" : "text-ink-3")}>
                       {" "}
-                      {player.assists ?? 0}
+                      {num(player.assists ?? 0)}
                     </Num>
                   </span>
                 </li>

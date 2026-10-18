@@ -1,3 +1,14 @@
+/** Persian-Indic digit table — FA mode renders every number in this script. */
+const FA_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+
+/**
+ * Convert Western digits to Persian-Indic; everything else passes through.
+ * Persian reads left-to-right within a number, so ordering is preserved.
+ */
+export function toFaDigits(value: number | string): string {
+  return String(value).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
+}
+
 /** Wall-clock label for "last synced" affordances. Pass `fa-IR` under Persian. */
 export function formatClock(date: Date, locale?: string): string {
   return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
