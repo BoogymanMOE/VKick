@@ -32,6 +32,8 @@ import {
   halftimePush,
   lineupPush,
   lockPush,
+  matchLink,
+  pushFooter,
   ratingsPush,
   type PushLang,
 } from "./messages.js";
@@ -185,6 +187,17 @@ export function matchRecipients(db: DB, matchId: string, kind: PushKind): PushRe
   return [...byId.values()];
 }
 
+/**
+ * Attach the deep link in the recipient's own language: the copy plus one
+ * footer line and the Mini App match route. Bare when MINI_APP_URL is unset
+ * or still a placeholder — a dead example.com link would be worse than none,
+ * and every test text stays byte-identical with no env set.
+ */
+function withMatchLink(text: string, matchId: string, lang: PushLang): string {
+  const link = matchLink(matchId);
+  return link ? `${text}\n${pushFooter(lang)}\n${link}` : text;
+}
+
 /** Queue one push. The bot's drain owns delivery and retries. */
 export function enqueuePush(db: DB, telegramId: string, kind: PushKind, text: string): void {
   db.prepare("INSERT INTO bot_push_queue (telegram_id, kind, text, created_at) VALUES (?, ?, ?, ?)").run(
@@ -258,7 +271,7 @@ export function queueGoalAlerts(db: DB, goals: GoalAlertInput[]): number {
         db,
         r.telegramId,
         "goal",
-        goalPush(r.lang, { minute: g.minute, club, scorer: g.scorerName, score }),
+        withMatchLink(goalPush(r.lang, { minute: g.minute, club, scorer: g.scorerName, score }), g.matchId, r.lang),
       );
       queued++;
     }
@@ -391,7 +404,7 @@ function emit(db: DB, matchId: string, stage: PushKind, copy: (lang: PushLang) =
   let sent = 0;
   for (const r of matchRecipients(db, matchId, stage)) {
     if (!claimNotification(db, r.telegramId, matchId, stage)) continue;
-    enqueuePush(db, r.telegramId, stage, copy(r.lang));
+    enqueuePush(db, r.telegramId, stage, withMatchLink(copy(r.lang), matchId, r.lang));
     sent += 1;
   }
   return sent;

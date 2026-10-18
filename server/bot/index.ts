@@ -287,9 +287,9 @@ async function drainPushes(): Promise<void> {
   try {
     const db = getDb();
     const now = Date.now();
-    const rows = all<{ id: number; telegram_id: string; text: string; attempts: number; kind: string }>(
+    const rows = all<{ id: number; telegram_id: string; text: string; attempts: number; kind: string; created_at: string }>(
       db,
-      `SELECT id, telegram_id, text, attempts, kind
+      `SELECT id, telegram_id, text, attempts, kind, created_at
        FROM bot_push_queue
       WHERE sent_at IS NULL AND failed_at IS NULL AND next_attempt_at <= ?
       ORDER BY id ASC LIMIT 20`,
@@ -318,6 +318,20 @@ async function drainPushes(): Promise<void> {
       try {
         await bot.api.sendMessage(row.telegram_id, row.text);
         run(db, "UPDATE bot_push_queue SET sent_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
+        // Delivery-delay monitor: a "GOAL!" that lands 20 minutes after the
+        // goal trains users not to trust the push channel. A goal-to-sendTime
+        // gap over this threshold means the queue, the network or Telegram
+        // itself is lagging exactly when it matters most.
+        const queuedMs = Date.parse(row.created_at);
+        if (Number.isFinite(queuedMs)) {
+          const latencySec = (Date.now() - queuedMs) / 1000;
+          if (latencySec > 120) {
+            console.error(
+              `[bot] slow push delivery: ${kind} pushed ${Math.round(latencySec)}s after queueing ` +
+                `(queue->send should be seconds)`,
+            );
+          }
+        }
       } catch (err) {
         const msg = String(err);
         const attempts = (row.attempts ?? 0) + 1;

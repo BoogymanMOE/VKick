@@ -40,6 +40,33 @@ export interface MatchPushVars {
   score: string;
 }
 
+/**
+ * The "why am I getting this / where do I act" line, appended to pushes below.
+ * Left bare in the prior copy: a push named a match but pointed nowhere, so
+ * the user either opened the app and hunted for it or muted the bot entirely.
+ * The Mini App is a HashRouter, so the route travels after the `#` (same shape
+ * as the command-menu deep links in server/bot/index.ts).
+ */
+export function matchLink(matchId: string): string | null {
+  const base = (process.env.MINI_APP_URL ?? "").trim().replace(/\/+$/, "");
+  if (!base) return null;
+  let host = "";
+  try {
+    host = new URL(base).hostname;
+  } catch {
+    return null;
+  }
+  // Placeholder or unset config yields no link — a dead example.com footer
+  // trains users to ignore the line.
+  if (!host || host === "example.com" || host.endsWith(".example.com")) return null;
+  return `${base}/#/match/${matchId}`;
+}
+
+/** The line above the link — one sentence, per push language. */
+export function pushFooter(lang: PushLang): string {
+  return lang === "fa" ? "بازی زنده و شرح لحظه‌به‌لحظه:" : "Live scores and the minute-by-minute timeline:";
+}
+
 export interface LockPushVars {
   home: string;
   away: string;

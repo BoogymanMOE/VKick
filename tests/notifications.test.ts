@@ -30,7 +30,7 @@ import {
   setPredictionsEnabledForTest,
   setRatingsEnabledForTest,
 } from "../server/features.js";
-import { asPushLang, botCommandMenu, botStartText } from "../server/messages.js";
+import { asPushLang, botCommandMenu, botStartText, matchLink } from "../server/messages.js";
 
 /** Fixed clock: the producers take `now`, so every window is deterministic. */
 const NOW = new Date("2026-09-29T18:00:00.000Z");
@@ -666,6 +666,58 @@ function testRatingsPushesGatedOff() {
   db.close();
 }
 
+/**
+ * Push trust: with MINI_APP_URL configured, every push carries a footer line
+ * plus a /#/match/<id> deep link, in the recipient's language — so the
+ * notification answers "why am I getting this and where do I act". With no
+ * env set the copy stays bare (never a dead example.com link).
+ */
+function testPushTrustLink(): void {
+  const base = "https://vkick.example.org";
+  const prev = process.env.MINI_APP_URL;
+  try {
+    process.env.MINI_APP_URL = base;
+    const db = tempDb();
+    seed(db);
+    db.prepare("UPDATE users SET language = 'fa' WHERE id = 1").run();
+    addMatch(db, "m_g", "live", minutesFromNow(-8), { home: 1, away: 0 });
+    queueGoalAlerts(db, [
+      { matchId: "m_g", scoringTeamId: "H", scorerName: "Saka", minute: "8", homeScore: 2, awayScore: 0 },
+    ]);
+    const en = queued(db).find((r) => r.telegram_id === "u3" && r.kind === "goal");
+    const fa = queued(db).find((r) => r.telegram_id === "u1" && r.kind === "goal");
+    const url = `${base}/#/match/m_g`;
+    assert.ok(en?.text.includes(`Live scores and the minute-by-minute timeline:\n${url}`),
+      `EN push carries the EN footer + deep link: ${en?.text}`);
+    assert.ok(!en?.text.includes("بازی زنده"), `EN push never gets the FA footer: ${en?.text}`);
+    assert.ok(fa?.text.includes(`بازی زنده و شرح لحظه‌به‌لحظه:\n${url}`),
+      `FA push carries the FA footer + deep link: ${fa?.text}`);
+    db.close();
+
+    // No MINI_APP_URL: the link and footer are omitted rather than made dead.
+    process.env.MINI_APP_URL = "";
+    const db2 = tempDb();
+    seed(db2);
+    addMatch(db2, "m_g", "live", minutesFromNow(-8), { home: 1, away: 0 });
+    queueGoalAlerts(db2, [
+      { matchId: "m_g", scoringTeamId: "H", scorerName: "Saka", minute: "8", homeScore: 1, awayScore: 0 },
+    ]);
+    const bare = queued(db2).find((r) => r.telegram_id === "u3" && r.kind === "goal");
+    assert.ok(bare?.text && !/#\/match\//.test(bare.text),
+      `bare copy has no deep link when MINI_APP_URL is unset: ${bare?.text}`);
+    assert.ok(!bare?.text.includes("Live scores and"), `bare copy has no footer: ${bare?.text}`);
+    db2.close();
+
+    // Placeholder hosts (still the example.com fallback some devs paste) are
+    // treated like unset: no dead link goes out.
+    process.env.MINI_APP_URL = "https://example.com";
+    assert.equal(matchLink("m_g"), null, "the placeholder host yields no link");
+  } finally {
+    if (prev === undefined) delete process.env.MINI_APP_URL;
+    else process.env.MINI_APP_URL = prev;
+  }
+}
+
 export async function runNotificationTests(): Promise<void> {
   // The legacy-behaviour tests below assert that prediction and rating pushes
   // fire; they run with both flags on, and the two gated-off tests below cover
@@ -684,6 +736,7 @@ export async function runNotificationTests(): Promise<void> {
   testDeliverabilityFilter();
   testPredictionPushesGatedOff();
   testRatingsPushesGatedOff();
+  testPushTrustLink();
   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
   console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
