@@ -42,3 +42,36 @@ jobs:
       # user-facing performance regression even when every test stays green.
       - name: Bundle budget
         run: npm run budget
+
+  browser-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      # The smoke suite needs a real browser, but stays OFF the package
+      # manifest on purpose (installed --no-save): browsers are bulky, the
+      # suite runs only here and locally.
+      - name: Install Playwright browser
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+      # Seeded data so the slug/fixture checks exercise real rows; SKIP_CRON=1
+      # keeps the seed put while the servers run beneath the suite. The smoke
+      # script itself waits for both servers to answer, so no extra wait tool.
+      - name: Seed demo data
+        run: npm run seed:demo
+      - name: Start servers
+        run: |
+          SKIP_CRON=1 npx tsx server/index.ts &
+          npm run dev &
+      - name: Browser smoke
+        run: npm run smoke
+        env:
+          SMOKE_CHANNEL: ""
+          SMOKE_BASE_URL: http://localhost:5173
+          SMOKE_API_URL: http://127.0.0.1:8787
