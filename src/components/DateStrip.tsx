@@ -89,6 +89,12 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
             <span className="text-[15px] font-bold leading-none">
               {digits.format(day.getDate())}
             </span>
+            {isToday ? (
+              <span
+                aria-hidden="true"
+                className={`mt-0.5 h-1 w-1 rounded-full ${isSelected ? "bg-[color:var(--bg-base)]" : "bg-volt"}`}
+              />
+            ) : null}
           </button>
         );
       })}

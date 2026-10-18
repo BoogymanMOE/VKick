@@ -357,7 +357,7 @@ export default function Matches() {
         ) : null}
 
         {!matchesQuery.isLoading && !hasFeedError ? (
-          <>
+          <div key={selectedKey} className="day-swap">
             {/* My teams group: matches where a favorite team is playing. */}
             {favCount > 0 && myTeamsMatches.length > 0 && (
               <section className="mt-4">
@@ -391,7 +391,7 @@ export default function Matches() {
                 </ul>
               </section>
             )}
-          </>
+          </div>
         ) : null}
 
         {/* Sync note, not a second refresh button: pull-to-refresh and the

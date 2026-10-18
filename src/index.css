@@ -278,6 +278,28 @@
     }
   }
 
+  /* Day-swap: fade + slight rise when the selected day changes. Re-mounted via
+     a key on the feed wrapper in Matches.tsx, so the animation replays on every
+     day change without resetting scroll position. */
+  .day-swap {
+    animation: day-swap var(--t-std) var(--ease-out) both;
+  }
+  @keyframes day-swap {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .day-swap {
+      animation-duration: 1ms;
+    }
+  }
+
   /* Signature animation 3: timeline entrance, staggered 40ms. */
   .timeline-in {
     animation: timeline-in var(--t-std) var(--ease-out) both;
