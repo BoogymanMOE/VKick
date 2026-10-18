@@ -75,12 +75,12 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
             // so the user always knows where they are in the week.
             aria-current={isToday ? "date" : undefined}
             onClick={() => onSelect(day)}
-            className={`min-h-12 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-[12px] border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.97] ${
+            className={`min-h-11 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-[12px] border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.96] ${
               isSelected
-                ? "border-volt bg-volt text-[color:var(--bg-base)]"
+                ? "border-volt bg-volt text-[color:var(--bg-base)] active:bg-volt/80"
                 : isToday
-                  ? "border-volt bg-transparent text-volt"
-                  : "border-line bg-transparent text-ink-3"
+                  ? "border-volt bg-transparent text-volt active:bg-volt/15"
+                  : "border-line bg-transparent text-ink-3 active:bg-line/20"
             }`}
           >
             <span className="text-xs font-bold">

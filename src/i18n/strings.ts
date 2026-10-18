@@ -608,7 +608,7 @@ export const strings = {
     "dates.day.thu": "پ",
     "dates.day.fri": "ج",
     "dates.day.sat": "ش",
-    "dates.day.sun": "ال",
+    "dates.day.sun": "ی",
     "dates.today": "امروز",
     "dates.yesterday": "دیروز",
     "dates.tomorrow": "فردا",
