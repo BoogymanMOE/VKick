@@ -222,7 +222,7 @@ export default function Cups() {
             {scheduled.length > 0 ? (
               <CupMatchList matches={scheduled} />
             ) : (
-              <EmptyState title={t("cups.empty")} hint={t("cups.emptyHint")} />
+              <EmptyState icon="🏆" title={t("cups.empty")} hint={t("cups.emptyHint")} />
             )}
           </section>
 
