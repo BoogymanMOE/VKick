@@ -4,7 +4,7 @@ import { BottomSheet, SheetActions } from "../components/BottomSheet";
 import { TopBar, LanguageToggle } from "../components/TopBar";
 import { ChevronRightIcon, CloseIcon, PencilIcon, ShareIcon } from "../components/icons";
 import { useToast } from "../components/toastContext";
-import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch, TeamBadge } from "../components/ui";
+import { Avatar, Button, Card, Chip, EmptyState, ListRow, SectionHeading, Switch, TeamBadge } from "../components/ui";
 import { useAuth } from "../hooks/authContext";
 import { useFavorites } from "../hooks/useFavorites";
 import { useNotificationPrefs, useReferral } from "../hooks/useApi";
@@ -509,9 +509,20 @@ export default function Profile() {
  * below, not an empty rail.
  */
 function FavoriteTeamsStrip() {
-  const { localize } = useI18n();
+  const { t, localize } = useI18n();
   const { teams, loading } = useFavorites();
-  if (loading || teams.length === 0) return null;
+  // First-run honest state: an empty rail with nothing at all read as a
+  // broken component — say that no clubs are picked and where to pick them.
+  if (loading) return null;
+  if (teams.length === 0) {
+    return (
+      <EmptyState
+        icon="⭐"
+        title={t("profile.noClubs")}
+        hint={t("profile.noClubsHint")}
+      />
+    );
+  }
 
   return (
     <ul className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">

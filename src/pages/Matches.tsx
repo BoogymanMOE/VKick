@@ -350,6 +350,7 @@ export default function Matches() {
         ) : dayMatches.length === 0 ? (
           <div className="mt-4">
             <EmptyState
+              icon="⚽"
               title={t("matches.empty")}
               hint={t("matches.emptyHint")}
               action={

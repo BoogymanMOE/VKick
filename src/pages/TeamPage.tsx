@@ -186,7 +186,7 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
 
   const squad = squadQuery.data;
   if (!squad || squad.players.length === 0) {
-    return <EmptyState title={t("team.squadEmpty")} hint={t("team.squadEmptyHint")} />;
+    return <EmptyState icon="👥" title={t("team.squadEmpty")} hint={t("team.squadEmptyHint")} />;
   }
 
   // Persian reads every number in the Persian script — jersey, counts and stats

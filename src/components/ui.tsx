@@ -760,10 +760,23 @@ export function Switch({
 
 /* ------------------------------------------------------------------ loading */
 
-export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
+export function EmptyState({
+  title,
+  hint,
+  action,
+  icon,
+}: {
+  title: string;
+  hint?: string;
+  action?: ReactNode;
+  /** A small 24px pictogram above the title (⚽ the feed, ⏱ the timeline…).
+      Optional: call sites without one render exactly as before. */
+  icon?: ReactNode;
+}) {
   return (
     <div className="rise-in pitch-watermark rounded-card border border-dashed border-line px-4 py-10 text-center">
-      <p className="text-sm font-bold text-ink-2">{title}</p>
+      {icon ? <div className="text-2xl leading-none text-ink-3">{icon}</div> : null}
+      <p className={cx(icon ? "mt-3" : undefined, "text-sm font-bold text-ink-2")}>{title}</p>
       {hint ? <p className="mt-1 text-xs text-ink-3">{hint}</p> : null}
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>

@@ -368,6 +368,8 @@ export const strings = {
     "profile.deleteAccount": "Delete account",
     "profile.deleteHint": "Removes your account and everything in it — permanently",
     "profile.deleteConfirmTitle": "Delete account?",
+    "profile.noClubs": "No clubs picked",
+    "profile.noClubsHint": "The clubs you follow show up here — pick your first in onboarding.",
     "profile.deleteConfirmBody":
       "This permanently deletes your account, favorites and everything saved in it. It cannot be undone, and the data cannot be recovered.",
     "profile.deleteConfirm": "Delete forever",
@@ -995,6 +997,8 @@ export const strings = {
     "profile.deleteAccount": "حذف حساب",
     "profile.deleteHint": "حساب و همه محتوای آن برای همیشه پاک می‌شود",
     "profile.deleteConfirmTitle": "حساب حذف شود؟",
+    "profile.noClubs": "هنوز باشگاهی انتخاب نشده",
+    "profile.noClubsHint": "باشگاه‌هایی که دنبال می‌کنی اینجا می‌آیند — اولین انتخاب را در آشناسازی بزن.",
     "profile.deleteConfirmBody":
       "این کار حساب، تیم‌های محبوب و همه چیز ذخیره‌شده در آن را برای همیشه پاک می‌کند. قابل بازگشت نیست و داده‌ها بازیابی نمی‌شوند.",
     "profile.deleteConfirm": "حذف برای همیشه",

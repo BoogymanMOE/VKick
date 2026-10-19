@@ -332,7 +332,7 @@ function TimelineTab({
     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
   }
   if (adapted.length === 0) {
-    return <EmptyState title={t("timeline.empty")} hint={t("timeline.emptyHint")} />;
+    return <EmptyState icon="⏱" title={t("timeline.empty")} hint={t("timeline.emptyHint")} />;
   }
 
   return (
@@ -376,7 +376,7 @@ function StatsTab({
     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
   }
   if (rows.length === 0) {
-    return <EmptyState title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
+    return <EmptyState icon="📊" title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
   }
 
   const asNum = (v: unknown): number => (typeof v === "number" ? v : 0);
@@ -581,7 +581,7 @@ function LineupsTab({
   if (!data || data.players.length === 0) {
     // The Lineups tab is about the XI, not the stat sheet — an upcoming match
     // must not say "stats land here after the first whistle".
-    return <EmptyState title={t("lineups.noneYet")} hint={t("lineups.noneHint")} />;
+    return <EmptyState icon="📋" title={t("lineups.noneYet")} hint={t("lineups.noneHint")} />;
   }
 
   const toPlayer = (r: Record<string, unknown>) => ({

@@ -609,7 +609,7 @@ function KnockoutView({ slug }: { slug: string }) {
     return <ErrorState onRetry={() => matchesQuery.refetch()} />;
   }
   if (cupMatches.length === 0) {
-    return <EmptyState title={t("table.emptyTitle")} hint={t("table.emptyHint")} />;
+    return <EmptyState icon="📈" title={t("table.emptyTitle")} hint={t("table.emptyHint")} />;
   }
 
   const rounds = new Map<string, Match[]>();
