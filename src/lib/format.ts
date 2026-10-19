@@ -32,6 +32,23 @@ export function formatKickoffDate(date: Date, locale?: string): string {
 }
 
 /**
+ * Splits a kickoff into weekday, clock and day period (AM/PM).
+ * The period is "" for 24-hour locales such as Persian (fa-IR), where
+ * `toLocaleTimeString` does not emit a dayPeriod part.
+ */
+export function kickoffParts(date: Date, locale?: string): { day: string; clock: string; period: string } {
+  const day = new Intl.DateTimeFormat(locale, { weekday: "short" }).format(date);
+  const parts = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).formatToParts(date);
+  const period = parts.find((p) => p.type === "dayPeriod")?.value ?? "";
+  const clock = parts
+    .filter((p) => p.type !== "dayPeriod")
+    .map((p) => p.value)
+    .join("")
+    .trim();
+  return { day, clock, period };
+}
+
+/**
  * Sticky date header label for grouped upcoming feeds.
  * Returns "Today" / "Tomorrow" for near dates, or a full weekday + date for
  * anything further out (e.g. "Saturday, Oct 12"). Pass `fa-IR` under Persian.
