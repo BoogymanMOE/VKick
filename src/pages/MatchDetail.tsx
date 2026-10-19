@@ -31,7 +31,7 @@ import { RATINGS_ENABLED } from "../lib/features";
 import { formatClock, formatKickoff, formatKickoffDate } from "../lib/format";
 import { useNow } from "../hooks/useNow";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
-import type { Team } from "../types";
+import type { Team, TimelineEventType } from "../types";
 
 type Tab = "timeline" | "stats" | "lineups";
 const TABS: Tab[] = ["timeline", "stats", "lineups"];
@@ -321,7 +321,9 @@ function TimelineTab({
     refetchInterval: live ? 20_000 : false,
   });
   const events = query.data?.events ?? [];
-  const adapted = events.map(adaptTimelineEvent);
+  const adapted = events
+    .map(adaptTimelineEvent)
+    .filter((e) => e.type !== "other"); // drop commentary noise; keep kickoff + structured events
   const teamColor = Object.fromEntries(teams.map((team) => [team.id, team.color]));
   // teamId → localized club name, so a card names the side without printing the
   // English event sentence the feed carries.
@@ -686,9 +688,10 @@ function adaptTimelineEvent(e: ApiTimelineEvent) {
     id: String(e.id),
     minuteDisplay: e.minute_display,
     minuteSeconds: e.minute_seconds,
-    type: (["goal", "card", "substitution", "var", "halftime", "fulltime"].includes(e.type)
-      ? e.type
-      : "var") as "goal" | "card" | "substitution" | "var" | "halftime" | "fulltime",
+    // Trust the server's normalization — it already maps ESPN's many type
+    // strings to the 8-value union. The previous fallback to "var" mis-tagged
+    // kickoff and other events as VAR reviews.
+    type: e.type as TimelineEventType,
     teamId: e.team_id,
     description: e.description,
     participants: e.participants.map((p) => p.name),
