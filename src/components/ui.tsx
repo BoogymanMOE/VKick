@@ -275,6 +275,7 @@ export function Chip({
   children,
   tone = "muted",
   className,
+  normalCase = false,
 }: {
   children: ReactNode;
   tone?: ChipTone;
@@ -282,7 +283,6 @@ export function Chip({
   /** Opt out of the badge default for inline labels (names, positions). */
   normalCase?: boolean;
 }) {
-  const normalCase = false;
   const { className: toneClass, style } = chipStyles[tone];
   return (
     <span
