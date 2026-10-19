@@ -13,8 +13,10 @@ const typeKey: Record<TimelineEvent["type"], StringKey> = {
   card: "timeline.card",
   substitution: "timeline.sub",
   var: "timeline.var",
+  kickoff: "timeline.kickoff",
   halftime: "timeline.halftime",
   fulltime: "timeline.fulltime",
+  other: "timeline.other",
 };
 
 /**
@@ -39,10 +41,14 @@ function eventMark(type: TimelineEvent["type"], description: string): { glyph: R
       return { glyph: <SwapIcon className="h-4 w-4" />, tone: "text-ink-2" };
     case "var":
       return { glyph: "◇", tone: "text-ink-2" };
+    case "kickoff":
+      return { glyph: "•", tone: "text-ink-2" }; // a small dot — kickoff is the start, not a flashy event
     case "halftime":
       return { glyph: "‖", tone: "text-ink-2" };
     case "fulltime":
       return { glyph: "■", tone: "text-ink-2" };
+    case "other":
+      return { glyph: "·", tone: "text-ink-3" }; // even more muted — these are commentary noise
   }
 }
 
