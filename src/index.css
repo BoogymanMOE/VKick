@@ -29,10 +29,32 @@
   --font-num: var(--font-display);
 
   --radius-card: 14px;
+  --radius-e-card: var(--radius-card);
+  --radius-s-card: var(--radius-card);
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+@layer components {
+  /* Rounded only the end / start side of the card radius — used by the clustered
+     timeline band so the band rounds off the far edge without rounding the rail
+     edge (which would clip the marker dot). Mirrors itself via logical sides, so
+     the band flips to the right in the FA layout. */
+  .rounded-s-card {
+    border-start-start-radius: var(--radius-s-card);
+    border-end-start-radius: var(--radius-s-card);
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+  .rounded-e-card {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+    border-start-end-radius: var(--radius-e-card);
+    border-end-end-radius: var(--radius-e-card);
+  }
+}
+
 
 @layer base {
   html,
@@ -719,6 +741,34 @@
         inset 3px 0 0 0 transparent,
         0 0 0 0 transparent;
       border-color: var(--border-subtle);
+    }
+  }
+
+  /* FIX 8: the newest live timeline event pulses. The marker dot gets a
+     continuous coral ring (box-shadow spread 0 → 6px, fading out), and the card
+     body gets a persistent 2px coral ring + a soft glow beneath it — so the
+     live moment separates from the surrounding events at a glance. The card's
+     own event colour (volt/gold/danger) is kept on the start accent edge; the
+     live colour is reserved for the ring + glow so the two never fight.
+     
+     The keyframe body uses `var(--live)` directly (not color-mix) so Tailwind v4's
+     CSS processor keeps the @keyframes block — color-mix() inside keyframe bodies
+     is stripped by the processor, which would leave the class animationless. */
+  .timeline-live-pulse {
+    animation: timeline-live-pulse 1.6s var(--ease-out) infinite;
+  }
+  @keyframes timeline-live-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 var(--live);
+    }
+    50% {
+      box-shadow: 0 0 0 6px transparent;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .timeline-live-pulse {
+      animation: none;
     }
   }
 
