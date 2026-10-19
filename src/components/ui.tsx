@@ -244,7 +244,7 @@ export function LiveDot() {
   return <span className="live-dot" aria-hidden="true" />;
 }
 
-type ChipTone = "volt" | "live" | "gold" | "danger" | "pitch" | "muted";
+export type ChipTone = "volt" | "live" | "gold" | "danger" | "pitch" | "muted";
 
 const chipStyles: Record<ChipTone, { className: string; style?: React.CSSProperties }> = {
   volt: {
