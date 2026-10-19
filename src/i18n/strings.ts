@@ -492,6 +492,8 @@ export const strings = {
     "browse.comingSoon": "Not in your feed yet",
     "browse.liveScores": "Live scores & fixtures",
     "browse.soon": "Soon",
+    "browse.empty": "Nothing to browse here yet",
+    "browse.emptyHint": "Competitions appear here as soon as their fixtures sync.",
     // Prediction history + the "why did I get X" breakdown panel.
     "predictions.title": "Your predictions",
     "predictions.subtitle": "Why each pick scored what it scored",
@@ -1097,6 +1099,8 @@ export const strings = {
     "browse.comingSoon": "هنوز در فید شما نیست",
     "browse.liveScores": "نتایج زنده و برنامه بازی‌ها",
     "browse.soon": "به‌زودی",
+    "browse.empty": "فعلاً چیزی برای مرور نیست",
+    "browse.emptyHint": "مسابقات به محض همگام‌شدن برنامه‌شان اینجا می‌آیند.",
     "predictions.title": "پیش‌بینی‌های شما",
     "predictions.subtitle": "چرا هر انتخاب این امتیاز را گرفت",
     "predictions.empty": "هنوز پیش‌بینی‌ای ثبت نشده",

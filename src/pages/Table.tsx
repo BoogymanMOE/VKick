@@ -310,6 +310,12 @@ function BrowseContent() {
         <div className="mt-4">
           <CompRowSkeleton rows={6} />
         </div>
+      ) : groups.leagues.length + groups.cups.length + groups.tournaments.length === 0 ? (
+        // The filter user picked (or the catalog) has nothing to list — say so
+        // instead of fading out into a silent blank panel.
+        <div className="mt-4 fade-swap">
+          <EmptyState icon="📈" title={t("browse.empty")} hint={t("browse.emptyHint")} />
+        </div>
       ) : (
         sections.map(
           ({ title, rows }) =>
@@ -343,20 +349,9 @@ function BrowseContent() {
                               : "border-line bg-surface hover:bg-elevated",
                           )}
                         >
-                          <span
-                            className={cx(
-                              "grid h-9 w-9 flex-none place-items-center rounded-full border text-xs font-extrabold",
-                              soon ? "border-line text-ink-3" : "border-volt text-volt",
-                            )}
-                            style={{
-                              backgroundColor: soon
-                                ? undefined
-                                : "color-mix(in srgb, var(--volt) 12%, transparent)",
-                            }}
-                            aria-hidden="true"
-                          >
-                            {comp.name.slice(0, 1)}
-                          </span>
+                          {/* No monogram tile: a single letter beside the full
+                              name reads as doubled text ("PPremier League") —
+                              the same call the onboarding league list made. */}
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-bold text-ink">
                               {localize(comp.name)}
