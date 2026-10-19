@@ -228,9 +228,17 @@
     }
   }
 
-  /* Signature animation 8: skeleton shimmer — 1.4s gradient sweep. */
+  /* Signature animation 8: skeleton shimmer — 1.4s gradient sweep. The
+     gradient carries a faint volt tint (4%/8%) so a loading state feels
+     branded instead of grey, without competing with the real content it
+     stands in for. */
   .shimmer {
-    background: linear-gradient(90deg, var(--bg-surface) 0%, var(--bg-elevated) 50%, var(--bg-surface) 100%);
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--volt) 4%, var(--bg-surface)) 0%,
+      color-mix(in srgb, var(--volt) 8%, var(--bg-elevated)) 50%,
+      color-mix(in srgb, var(--volt) 4%, var(--bg-surface)) 100%
+    );
     background-size: 200% 100%;
     animation: shimmer 1.4s linear infinite;
   }
