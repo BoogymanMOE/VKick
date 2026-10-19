@@ -364,8 +364,7 @@ function StatsTab({
   };
   away: typeof home;
 }) {
-  const { t, localize } = useI18n();
-  const [team, setTeam] = useState<"home" | "away">("home");
+  const { t } = useI18n();
   const query = useQuery({
     queryKey: ["matchPlayers", matchId],
     queryFn: () => api.getMatchPlayers(matchId),
@@ -380,27 +379,112 @@ function StatsTab({
     return <EmptyState title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
   }
 
-  const selected = team === "home" ? home : away;
+  const asNum = (v: unknown): number => (typeof v === "number" ? v : 0);
   // A substitute who never came on is a row of zeros, not a player — hide them.
-  const teamRows = rows.filter(
-    (r) => r.team_id === selected.id && (r.started || Number(r.minutes_played) > 0),
-  );
-  if (teamRows.length === 0) {
-    return <EmptyState title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
-  }
+  const teamRows = (teamId: string) =>
+    rows.filter((r) => r.team_id === teamId && (r.started || asNum(r.minutes_played) > 0));
+
+  // Team-vs-team totals, aggregated from the per-player stat rows the players
+  // endpoint already serves — there is no client-reachable route for the
+  // server-side per-match team stats, so possession/corners/pass accuracy
+  // (which only exist there) are omitted rather than invented.
+  const totalsFor = (teamId: string) => {
+    const rowsOf = rows.filter((r) => r.team_id === teamId);
+    const sum = (key: string) => rowsOf.reduce((acc, r) => acc + asNum(r[key]), 0);
+    return {
+      goals: sum("goals"),
+      shots: sum("shots"),
+      onTarget: sum("shots_on_target"),
+      fouls: sum("fouls_committed"),
+      offsides: sum("offsides"),
+      saves: sum("saves"),
+    };
+  };
+
+  const homeTotals = totalsFor(home.id);
+  const awayTotals = totalsFor(away.id);
+  const statRows: Array<{ label: string; homeValue: number; awayValue: number }> = [
+    { label: t("stats.goals"), homeValue: homeTotals.goals, awayValue: awayTotals.goals },
+    { label: t("stats.shots"), homeValue: homeTotals.shots, awayValue: awayTotals.shots },
+    { label: t("stats.onTarget"), homeValue: homeTotals.onTarget, awayValue: awayTotals.onTarget },
+    { label: t("stats.fouls"), homeValue: homeTotals.fouls, awayValue: awayTotals.fouls },
+    { label: t("stats.offsides"), homeValue: homeTotals.offsides, awayValue: awayTotals.offsides },
+    { label: t("stats.saves"), homeValue: homeTotals.saves, awayValue: awayTotals.saves },
+  ];
+
+  const homeRows = teamRows(home.id);
+  const awayRows = teamRows(away.id);
 
   return (
     <div className="space-y-3">
-      <Segmented
-        value={team}
-        onChange={(v) => setTeam(v as "home" | "away")}
-        options={[
-          { value: "home", label: localize(home.shortName) },
-          { value: "away", label: localize(away.shortName) },
-        ]}
-      />
+      {/* Comparison card: both sides' totals on the same row with a proportion
+          bar. Forced LTR so the home half is always the left one, whichever
+          direction the page runs. */}
+      <Card className="p-3">
+        <div dir="ltr">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <span className="flex min-w-0 items-center gap-1.5 text-xs font-bold text-ink">
+              <span
+                className="h-2.5 w-2.5 flex-none rounded-full ring-1 ring-ink-3"
+                style={{ backgroundColor: home.color }}
+                aria-hidden="true"
+              />
+              <span className="truncate">{home.shortName}</span>
+            </span>
+            <span className="flex min-w-0 items-center gap-1.5 text-xs font-bold text-ink">
+              <span className="truncate">{away.shortName}</span>
+              <span
+                className="h-2.5 w-2.5 flex-none rounded-full ring-1 ring-ink-3"
+                style={{ backgroundColor: away.color }}
+                aria-hidden="true"
+              />
+            </span>
+          </div>
+          <div className="space-y-3">
+            {statRows.map((row) => (
+              <StatCompareRow key={row.label} {...row} />
+            ))}
+          </div>
+        </div>
+      </Card>
 
-      <MatchPlayerTable title={selected.shortName} color={selected.color} rows={teamRows} />
+      {/* Every player who appeared, both sides in one pass — no Home/Away
+          toggle to remember to tap. */}
+      {homeRows.length > 0 ? (
+        <MatchPlayerTable title={home.shortName} color={home.color} rows={homeRows} />
+      ) : null}
+      {awayRows.length > 0 ? (
+        <MatchPlayerTable title={away.shortName} color={away.color} rows={awayRows} />
+      ) : null}
+    </div>
+  );
+}
+
+/** One team-stat row: home value, label, away value, and the proportion bar
+    underneath — volt half for home (left), live-coral half for away. */
+function StatCompareRow({ label, homeValue, awayValue }: { label: string; homeValue: number; awayValue: number }) {
+  const total = homeValue + awayValue;
+  // With nothing on either side the track is an even 50/50 in a muted grey —
+  // an equal-looking bar that never reads as "someone is winning something".
+  const homePct = total > 0 ? Math.round((homeValue / total) * 100) : 50;
+  const fill = total > 0;
+  return (
+    <div dir="ltr">
+      <div className="flex items-center gap-2 text-xs">
+        <Num className="w-7 text-end font-black text-ink">{homeValue}</Num>
+        <span className="flex-1 truncate text-center text-[11px] font-bold text-ink-2">{label}</span>
+        <Num className="w-7 font-black text-ink">{awayValue}</Num>
+      </div>
+      <div className="mt-1 flex h-1.5 gap-0.5 overflow-hidden">
+        <span
+          className={`rounded-full ${fill ? "bg-volt" : "bg-ink-3/40"}`}
+          style={{ width: `${homePct}%` }}
+        />
+        <span
+          className={`rounded-full ${fill ? "bg-live" : "bg-ink-3/40"}`}
+          style={{ width: `${100 - homePct}%` }}
+        />
+      </div>
     </div>
   );
 }
