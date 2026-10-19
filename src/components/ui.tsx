@@ -272,17 +272,17 @@ const chipStyles: Record<ChipTone, { className: string; style?: React.CSSPropert
 };
 
 export function Chip({
-  tone = "muted",
   children,
+  tone = "muted",
   className,
-  normalCase = false,
 }: {
-  tone?: ChipTone;
   children: ReactNode;
+  tone?: ChipTone;
   className?: string;
   /** Opt out of the badge default for inline labels (names, positions). */
   normalCase?: boolean;
 }) {
+  const normalCase = false;
   const { className: toneClass, style } = chipStyles[tone];
   return (
     <span
