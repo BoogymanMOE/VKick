@@ -49,6 +49,7 @@ import { runTimelineScoreTests } from "./timelineScore.test.js";
 import { runSentinelTests } from "./sentinel.test.js";
 import { runFaStringsTests } from "./faStrings.test.js";
 import { runMatchReconcileTests } from "./matchReconcile.test.js";
+import { runTeamStatsTests } from "./teamStats.test.js";
 
 let failed = 0;
 const groups: Array<[string, () => void | Promise<void>]> = [
@@ -100,6 +101,8 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["sentinel", runSentinelTests],
   ["faStrings", runFaStringsTests],
   ["matchReconcile", runMatchReconcileTests],
+  // Owns getDb() too (router under test, module-scope handle): stays last.
+  ["teamStats", runTeamStatsTests],
 ];
 
 for (const [name, run] of groups) {

@@ -277,6 +277,24 @@ export interface LeagueTeamStatRow {
   total_fouls?: number | null;
 }
 
+/**
+ * One side of GET /api/matches/:id/team-stats — the per-match box score from
+ * match_team_stats. Goals come off the matches row (the boxscore table carries
+ * none). A null field means the stat did not sync for this match; the whole
+ * side is null when no row exists yet (stats not synced, match still upcoming).
+ */
+export interface TeamStats {
+  possession_pct: number | null;
+  corners: number | null;
+  pass_accuracy_pct: number | null;
+  shots: number | null;
+  shots_on_target: number | null;
+  fouls: number | null;
+  offsides: number | null;
+  saves: number | null;
+  goals: number | null;
+}
+
 export interface ApiStanding {
   team_id: string;
   /** The competition this table belongs to — also feeds teamFromApi's league mapping. */
@@ -580,6 +598,9 @@ export const api = {
 
   getMatchPlayers: (matchId: string) =>
     request<{ players: Record<string, unknown>[] }>(`/matches/${matchId}/players`),
+
+  getMatchTeamStats: (matchId: string) =>
+    request<{ home: TeamStats | null; away: TeamStats | null }>(`/matches/${matchId}/team-stats`),
 
   getFavorites: () => request<{ favorites: ApiFavorite[] }>("/me/favorites"),
 

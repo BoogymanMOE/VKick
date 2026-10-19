@@ -370,12 +370,24 @@ function StatsTab({
     queryFn: () => api.getMatchPlayers(matchId),
   });
   const rows = (query.data?.players ?? []) as Array<Record<string, unknown>>;
+  // The synced box score (possession/corners/pass accuracy only exist here).
+  // A failure or a missing pair falls back to the player aggregates below —
+  // the tab never blanks because one feed went quiet.
+  const teamStatsQuery = useQuery({
+    queryKey: ["matchTeamStats", matchId],
+    queryFn: () => api.getMatchTeamStats(matchId),
+    staleTime: 60_000,
+  });
+  const served =
+    teamStatsQuery.data?.home && teamStatsQuery.data?.away
+      ? { home: teamStatsQuery.data.home, away: teamStatsQuery.data.away }
+      : null;
 
-  if (query.isLoading) return <StatsTableSkeleton />;
+  if (query.isLoading || teamStatsQuery.isLoading) return <StatsTableSkeleton />;
   if (query.isError) {
     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
   }
-  if (rows.length === 0) {
+  if (rows.length === 0 && !served) {
     return <EmptyState icon="📊" title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
   }
 
@@ -384,10 +396,8 @@ function StatsTab({
   const teamRows = (teamId: string) =>
     rows.filter((r) => r.team_id === teamId && (r.started || asNum(r.minutes_played) > 0));
 
-  // Team-vs-team totals, aggregated from the per-player stat rows the players
-  // endpoint already serves — there is no client-reachable route for the
-  // server-side per-match team stats, so possession/corners/pass accuracy
-  // (which only exist there) are omitted rather than invented.
+  // Fallback totals aggregated from the per-player stat rows, used only when
+  // the synced box score has no row for this match — never alongside it.
   const totalsFor = (teamId: string) => {
     const rowsOf = rows.filter((r) => r.team_id === teamId);
     const sum = (key: string) => rowsOf.reduce((acc, r) => acc + asNum(r[key]), 0);
@@ -403,14 +413,29 @@ function StatsTab({
 
   const homeTotals = totalsFor(home.id);
   const awayTotals = totalsFor(away.id);
-  const statRows: Array<{ label: string; homeValue: number; awayValue: number }> = [
-    { label: t("stats.goals"), homeValue: homeTotals.goals, awayValue: awayTotals.goals },
-    { label: t("stats.shots"), homeValue: homeTotals.shots, awayValue: awayTotals.shots },
-    { label: t("stats.onTarget"), homeValue: homeTotals.onTarget, awayValue: awayTotals.onTarget },
-    { label: t("stats.fouls"), homeValue: homeTotals.fouls, awayValue: awayTotals.fouls },
-    { label: t("stats.offsides"), homeValue: homeTotals.offsides, awayValue: awayTotals.offsides },
-    { label: t("stats.saves"), homeValue: homeTotals.saves, awayValue: awayTotals.saves },
-  ];
+  // Synced box score first: all eight stats in display order. Possession and
+  // pass accuracy are shares of 100 shown as "63%", with the bar split by the
+  // raw percentage instead of a ratio.
+  const statRows: Array<{ label: string; homeValue: number | null; awayValue: number | null; pct?: boolean }> =
+    served
+      ? [
+          { label: t("stats.possession"), homeValue: served.home.possession_pct, awayValue: served.away.possession_pct, pct: true },
+          { label: t("stats.shots"), homeValue: served.home.shots, awayValue: served.away.shots },
+          { label: t("stats.onTarget"), homeValue: served.home.shots_on_target, awayValue: served.away.shots_on_target },
+          { label: t("stats.corners"), homeValue: served.home.corners, awayValue: served.away.corners },
+          { label: t("stats.fouls"), homeValue: served.home.fouls, awayValue: served.away.fouls },
+          { label: t("stats.offsides"), homeValue: served.home.offsides, awayValue: served.away.offsides },
+          { label: t("stats.passAccuracy"), homeValue: served.home.pass_accuracy_pct, awayValue: served.away.pass_accuracy_pct, pct: true },
+          { label: t("stats.saves"), homeValue: served.home.saves, awayValue: served.away.saves },
+        ]
+      : [
+          { label: t("stats.goals"), homeValue: homeTotals.goals, awayValue: awayTotals.goals },
+          { label: t("stats.shots"), homeValue: homeTotals.shots, awayValue: awayTotals.shots },
+          { label: t("stats.onTarget"), homeValue: homeTotals.onTarget, awayValue: awayTotals.onTarget },
+          { label: t("stats.fouls"), homeValue: homeTotals.fouls, awayValue: awayTotals.fouls },
+          { label: t("stats.offsides"), homeValue: homeTotals.offsides, awayValue: awayTotals.offsides },
+          { label: t("stats.saves"), homeValue: homeTotals.saves, awayValue: awayTotals.saves },
+        ];
 
   const homeRows = teamRows(home.id);
   const awayRows = teamRows(away.id);
@@ -461,19 +486,36 @@ function StatsTab({
 }
 
 /** One team-stat row: home value, label, away value, and the proportion bar
-    underneath — volt half for home (left), live-coral half for away. */
-function StatCompareRow({ label, homeValue, awayValue }: { label: string; homeValue: number; awayValue: number }) {
-  const total = homeValue + awayValue;
+    underneath — volt half for home (left), live-coral half for away. A synced
+    percentage row (`pct`) prints "63%" and splits the bar by the raw
+    percentage itself; a count splits by ratio. A null rides as "–" and counts
+    as zero; zeros on both sides settle into an even, muted 50/50. */
+function StatCompareRow({
+  label,
+  homeValue,
+  awayValue,
+  pct = false,
+}: {
+  label: string;
+  homeValue: number | null;
+  awayValue: number | null;
+  pct?: boolean;
+}) {
+  const show = (v: number | null) => (v === null ? "–" : pct ? `${v}%` : String(v));
+  const hv = homeValue ?? 0;
+  const av = awayValue ?? 0;
+  const total = hv + av;
   // With nothing on either side the track is an even 50/50 in a muted grey —
   // an equal-looking bar that never reads as "someone is winning something".
-  const homePct = total > 0 ? Math.round((homeValue / total) * 100) : 50;
+  // A percentage splits by its own raw value: 63% possession means a 63/37 bar.
+  const homePct = total > 0 ? (pct ? hv : Math.round((hv / total) * 100)) : 50;
   const fill = total > 0;
   return (
     <div dir="ltr">
       <div className="flex items-center gap-2 text-xs">
-        <Num className="w-7 text-end font-black text-ink">{homeValue}</Num>
+        <Num className="w-8 text-end font-black text-ink">{show(homeValue)}</Num>
         <span className="flex-1 truncate text-center text-[11px] font-bold text-ink-2">{label}</span>
-        <Num className="w-7 font-black text-ink">{awayValue}</Num>
+        <Num className="w-8 font-black text-ink">{show(awayValue)}</Num>
       </div>
       <div className="mt-1 flex h-1.5 gap-0.5 overflow-hidden">
         <span

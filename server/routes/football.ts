@@ -160,6 +160,61 @@ matchesRouter.get("/api/matches/:id/players", (req, res) => {
   res.json({ players: rows });
 });
 
+/**
+ * Team-vs-team box score for the match detail comparison view, straight from
+ * the per-match team stats synced off ESPN's summary boxscore
+ * (match_team_stats). Goals ride on the matches row itself — the boxscore
+ * table carries no goals column. A match whose stats have not synced yet
+ * answers nulls, never 404: the match exists, the numbers just are not in.
+ */
+matchesRouter.get("/api/matches/:id/team-stats", (req, res) => {
+  const matchId = String(req.params.id);
+  if (!assertMatchAllowed(res, matchId)) return;
+  const match = get<{
+    home_team_id: string;
+    away_team_id: string;
+    home_score: number | null;
+    away_score: number | null;
+  }>(
+    db,
+    "SELECT home_team_id, away_team_id, home_score, away_score FROM matches WHERE id = ?",
+    [matchId],
+  );
+  if (!match) return bad(res, "not found", 404);
+  const rows = all<{ [key: string]: unknown }>(
+    db,
+    `SELECT team_id, possession_pct, shots, shots_on_target, corners,
+            fouls, offsides, saves, pass_accuracy_pct
+     FROM match_team_stats
+     WHERE match_id = ?`,
+    [matchId],
+  );
+  // The synced percentages arrive as REALs (86.4); the display contract is a
+  // whole number. Counts stay as-is; anything missing rides out as 0.
+  const pct = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null;
+  const count = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  const side = (teamId: string, goals: number | null) => {
+    const row = rows.find((r) => r.team_id === teamId);
+    if (!row) return null;
+    return {
+      possession_pct: pct(row.possession_pct),
+      corners: count(row.corners),
+      pass_accuracy_pct: pct(row.pass_accuracy_pct),
+      shots: count(row.shots),
+      shots_on_target: count(row.shots_on_target),
+      fouls: count(row.fouls),
+      offsides: count(row.offsides),
+      saves: count(row.saves),
+      goals,
+    };
+  };
+  res.json({
+    home: side(match.home_team_id, match.home_score),
+    away: side(match.away_team_id, match.away_score),
+  });
+});
+
 matchesRouter.get("/api/matches/:id/lineups", (req, res) => {
   const matchId = String(req.params.id);
   if (!assertMatchAllowed(res, matchId)) return;
