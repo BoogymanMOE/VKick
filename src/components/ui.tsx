@@ -665,6 +665,7 @@ export function ListRow({
   onClick,
   onToggle,
   icon,
+  danger,
 }: {
   label: string;
   hint?: string;
@@ -678,6 +679,9 @@ export function ListRow({
    */
   onToggle?: () => void;
   icon?: ReactNode;
+  /** Destructive rows: the label carries the --live coral so the action's
+      stakes are visible before the tap, not only after. */
+  danger?: boolean;
 }) {
   const Tag = onClick ? "button" : "div";
   const active = Boolean(onClick || onToggle);
@@ -703,7 +707,14 @@ export function ListRow({
     >
       {icon ? <span className="flex-none text-ink-2">{icon}</span> : null}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-bold text-ink">{label}</span>
+        <span
+          className={cx(
+            "block truncate text-sm font-bold",
+            danger ? "text-danger" : "text-ink",
+          )}
+        >
+          {label}
+        </span>
         {hint ? <span className="block truncate text-xs text-ink-3">{hint}</span> : null}
       </span>
       {right}

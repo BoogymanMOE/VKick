@@ -301,7 +301,10 @@ export default function Profile() {
 
       <section className="mt-6">
         <SectionHeading title={t("profile.dangerZone")} />
+        {/* The one destructive row on the page: the label carries the live
+            (coral) colour so the stakes are visible without reading the hint. */}
         <ListRow
+          danger
           label={t("profile.deleteAccount")}
           hint={t("profile.deleteHint")}
           onClick={() => {
