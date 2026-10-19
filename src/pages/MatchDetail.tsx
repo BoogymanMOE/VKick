@@ -38,7 +38,7 @@ const TABS: Tab[] = ["timeline", "stats", "lineups"];
 
 export default function MatchDetail() {
   const { id = "" } = useParams();
-  const { t, lang, localize } = useI18n();
+  const { t, lang } = useI18n();
   const locale = lang === "fa" ? "fa-IR" : undefined;
   useLiveUpdates();
 
@@ -198,7 +198,7 @@ export default function MatchDetail() {
       {/* Score header */}
       <div
         className={cx(
-          "score-hero relative mt-3 overflow-hidden rounded-card border p-4",
+          "score-hero relative mt-3 overflow-hidden rounded-card border p-3",
           flashScore ? "goal-flash border-volt/60 bg-elevated" : "border-line",
         )}
       >
@@ -206,9 +206,12 @@ export default function MatchDetail() {
           {leagueLabel} · {formatKickoff(new Date(match.kickoff_at), locale)}
         </p>
         <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-col items-center gap-2">
-            <TeamBadge team={home} size="lg" />
-            <span className="text-xs font-bold text-ink-2">{localize(home.shortName)}</span>
+          {/* Badge only: the user tapped this match's card, so the crest is
+              all the teams need — the scoreboard below already says who plays.
+              The md badge keeps the crest as supporting context so the score
+              itself is the hero. */}
+          <div className="flex flex-col items-center">
+            <TeamBadge team={home} size="md" />
           </div>
 
           <div className="flex flex-col items-center gap-1.5">
@@ -222,15 +225,15 @@ export default function MatchDetail() {
             ) : (
               <span className="flex items-baseline gap-1">
                 {match.home_score === null ? (
-                  <Num className="text-[40px] leading-none text-ink">–</Num>
+                  <Num className="text-[48px] leading-none text-ink">–</Num>
                 ) : (
-                  <CountUp value={match.home_score} className="text-[40px] leading-none text-ink" />
+                  <CountUp value={match.home_score} className="text-[48px] leading-none text-ink" />
                 )}
-                <Num className="text-[40px] leading-none text-ink">:</Num>
+                <Num className="text-[48px] leading-none text-ink">:</Num>
                 {match.away_score === null ? (
-                  <Num className="text-[40px] leading-none text-ink">–</Num>
+                  <Num className="text-[48px] leading-none text-ink">–</Num>
                 ) : (
-                  <CountUp value={match.away_score} className="text-[40px] leading-none text-ink" />
+                  <CountUp value={match.away_score} className="text-[48px] leading-none text-ink" />
                 )}
               </span>
             )}
@@ -260,9 +263,8 @@ export default function MatchDetail() {
             )}
           </div>
 
-          <div className="flex flex-col items-center gap-2">
-            <TeamBadge team={away} size="lg" />
-            <span className="text-xs font-bold text-ink-2">{localize(away.shortName)}</span>
+          <div className="flex flex-col items-center">
+            <TeamBadge team={away} size="md" />
           </div>
         </div>
       </div>
