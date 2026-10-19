@@ -2,12 +2,13 @@
  * The Browse catalog: the 5 big-five leagues, each with its display name.
  * No cups, no internationals, no extra competitions.
  */
-import { COMPETITIONS, isCup, type LeagueSlug } from "./types.js";
+import { COMPETITIONS, isCup } from "./types.js";
 
 export type CompetitionKind = "league" | "cup" | "tournament";
 
 export interface CatalogEntry {
-  slug: LeagueSlug;
+  /** Big-five slugs for the synced leagues; any slug the DB carries for cups. */
+  slug: string;
   name: string;
   kind: CompetitionKind;
   /** True when the competition owns a league table (always true for leagues). */

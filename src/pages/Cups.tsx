@@ -15,6 +15,7 @@ import {
 import { buildBracket, type BracketTie } from "../lib/bracket";
 import { useKnockoutCompetitions, useMatches } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
+import { competitionName } from "../lib/leagues";
 import { formatKickoff } from "../lib/format";
 import { haptic } from "../lib/telegram";
 import type { Match } from "../types";
@@ -33,7 +34,7 @@ import type { Match } from "../types";
  * open straight onto the International tab.
  */
 export default function Cups() {
-  const { t, localize } = useI18n();
+  const { t, lang, localize } = useI18n();
 
   const compsQuery = useKnockoutCompetitions();
   const comps = compsQuery.data ?? [];
@@ -106,6 +107,13 @@ export default function Cups() {
           />
         </div>
       )}
+
+      {/* Name the competition the fixtures below belong to — without it a strip
+          of knockout fixtures has no context. */}
+      <h2 className="mt-4 text-base font-extrabold text-ink">
+        {localize(comps.find((c) => c.slug === active)?.name ?? "") ||
+          competitionName(active, lang)}
+      </h2>
 
       {bracket.rounds.length > 0 ? (
         /* Round structure when the sync carries it: live first, then the
@@ -180,45 +188,34 @@ export default function Cups() {
       ) : (
         /* No round labels in the window: the original status sections. */
         <>
-          <section className="mt-4">
-            <SectionHeading
-              title={t("matches.live")}
-              action={
-                live.length > 0 ? (
+          {/* "Live now" only exists when something is live — an empty heading
+              with a "Try again" button reads as a failure that never happened.
+              Loading/error still render (they are states, not emptiness). */}
+          {matchesQuery.isLoading ? (
+            <section className="mt-4">
+              <SectionHeading title={t("matches.live")} />
+              <ul className="space-y-2">
+                <MatchCardSkeleton />
+              </ul>
+            </section>
+          ) : matchesQuery.isError ? (
+            <div className="mt-4">
+              <ErrorState onRetry={() => matchesQuery.refetch()} />
+            </div>
+          ) : live.length > 0 ? (
+            <section className="mt-4">
+              <SectionHeading
+                title={t("matches.live")}
+                action={
                   <Chip tone="live">
                     <LiveDot />
                     <Num>{live.length}</Num>
                   </Chip>
-                ) : null
-              }
-            />
-            {matchesQuery.isLoading ? (
-              <ul className="space-y-2">
-                <MatchCardSkeleton />
-              </ul>
-            ) : matchesQuery.isError ? (
-              <ErrorState onRetry={() => matchesQuery.refetch()} />
-            ) : live.length > 0 ? (
-              <CupMatchList matches={live} />
-            ) : (
-              <EmptyState
-                title={t("cups.empty")}
-                hint={t("cups.emptyHint")}
-                action={
-                  <button
-                    type="button"
-                    onClick={() => {
-                      haptic("light");
-                      matchesQuery.refetch();
-                    }}
-                    className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-                  >
-                    {t("common.retry")}
-                  </button>
                 }
               />
-            )}
-          </section>
+              <CupMatchList matches={live} />
+            </section>
+          ) : null}
 
           <section className="mt-6">
             <SectionHeading title={t("matches.upcoming")} />
@@ -229,18 +226,16 @@ export default function Cups() {
             )}
           </section>
 
-          <CollapsibleSection
-            id="cups-finished"
-            level={2}
-            title={t("matches.previous")}
-            count={finished.length}
-          >
-            {finished.length > 0 ? (
+          {finished.length > 0 ? (
+            <CollapsibleSection
+              id="cups-finished"
+              level={2}
+              title={t("matches.previous")}
+              count={finished.length}
+            >
               <CupMatchList matches={finished} />
-            ) : (
-              <EmptyState title={t("cups.empty")} hint={t("cups.emptyHint")} />
-            )}
-          </CollapsibleSection>
+            </CollapsibleSection>
+          ) : null}
         </>
       )}
 
@@ -259,51 +254,51 @@ function CupMatchList({ matches, bare = false }: { matches: Match[]; bare?: bool
   const { t, lang, localize } = useI18n();
   return (
     <ul className={bare ? undefined : "space-y-2"}>
-      {matches.map((match) => (
-        <li
-          key={match.id}
-          className={
-            bare
-              ? "border-t border-line px-3 py-2 first:border-t-0"
-              : "rounded-card border border-line bg-surface p-3"
-          }
-        >
-          <div className="flex items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-end text-sm font-bold text-ink">
-              {localize(match.home.shortName)}
-            </span>
-            <span className="flex-none">
-              {match.status === "live" ? (
-                <Chip tone="live">
-                  <LiveDot />
-                  <Num>{match.minute ?? ""}</Num>
-                </Chip>
-              ) : match.status === "finished" ? (
-                <Chip tone="muted">
-                  <Num>
-                    {match.homeScore ?? 0}–{match.awayScore ?? 0}
-                  </Num>
-                </Chip>
-              ) : (
-                <Chip tone="volt">
-                  <Num>{formatKickoff(new Date(match.kickoffAt), lang === "fa" ? "fa-IR" : undefined)}</Num>
-                </Chip>
-              )}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
-              {localize(match.away.shortName)}
-            </span>
-          </div>
-          <div className="mt-2 flex min-h-11 items-center justify-end gap-4 border-t border-line pt-1">
+      {matches.map((match) => {
+        const home = localize(match.home.shortName);
+        const away = localize(match.away.shortName);
+        return (
+          <li
+            key={match.id}
+            className={
+              bare
+                ? "border-t border-line first:border-t-0"
+                : "rounded-card border border-line bg-surface"
+            }
+          >
+            {/* The whole card is the link: one tap target, no redundant footer
+                row that only repeated the card. */}
             <Link
               to={`/match/${match.id}`}
-              className="inline-flex h-11 items-center text-[11px] font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:text-ink"
+              aria-label={`${home} ${t("common.versus")} ${away}`}
+              className="flex min-h-14 items-center gap-2 px-3 py-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated"
             >
-              {t("match.summary")}
+              <span className="min-w-0 flex-1 truncate text-end text-sm font-bold text-ink">{home}</span>
+              <span className="flex-none">
+                {match.status === "live" ? (
+                  <Chip tone="live">
+                    <LiveDot />
+                    <Num>{match.minute ?? ""}</Num>
+                  </Chip>
+                ) : match.status === "finished" ? (
+                  <Chip tone="muted">
+                    <Num>
+                      {match.homeScore ?? 0}–{match.awayScore ?? 0}
+                    </Num>
+                  </Chip>
+                ) : (
+                  <Chip tone="volt">
+                    <Num>
+                      {formatKickoff(new Date(match.kickoffAt), lang === "fa" ? "fa-IR" : undefined)}
+                    </Num>
+                  </Chip>
+                )}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{away}</span>
             </Link>
-          </div>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }

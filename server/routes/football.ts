@@ -8,7 +8,8 @@ import express, { type Response } from "express";
 import { getDb, all, get } from "../db/index.js";
 import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
 
-import { competitionCatalog, isAllowedLeague } from "../espn/catalog.js";
+import { isAllowedLeague } from "../espn/catalog.js";
+import { competitionCatalogWithMatches } from "../espn/competitions.js";
 import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
 import { foldForm, type FormMatchRow } from "../standings/form.js";
 import { buildFeedQuery } from "../matches/feed.js";
@@ -68,9 +69,13 @@ function assertMatchAllowed(res: Response, matchId: string): boolean {
 
 /* ------------------------------------------------------------ catalog */
 
-/** All competitions: synced ones plus extra ESPN ones marked coming-soon. */
+/**
+ * All competitions: the synced big five plus any cup/tournament the database
+ * actually has a fixture for (Cups/Browse otherwise list nothing, and a match
+ * could never say which competition it belonged to).
+ */
 matchesRouter.get("/api/competitions", (_req, res) => {
-  res.json({ competitions: competitionCatalog() });
+  res.json({ competitions: competitionCatalogWithMatches(db) });
 });
 
 /**

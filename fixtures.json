@@ -1,0 +1,20 @@
+{
+  "feed": [
+    {"id": "m1", "status": "live", "description": "Match in progress at minute 45"},
+    {"id": "m2", "status": "halftime", "description": "Half-time break"},
+    {"id": "m3", "status": "finished", "description": "Match completed: home 2 - away 1"},
+    {"id": "m4", "status": "scheduled", "description": "Scheduled for later today, kickoff 20:00"},
+    {"id": "m5", "status": "scheduled", "description": "Scheduled more than a day away, kickoff 2026-10-21"}
+  ],
+  "matchDetail": {
+    "live": {"id": "m1", "status": "live", "minute": "45"},
+    "halftime": {"id": "m2", "status": "halftime"},
+    "finished": {"id": "m3", "status": "finished", "home_score": 2, "away_score": 1},
+    "scheduledToday": {"id": "m4", "status": "scheduled", "kickoff_at": "2026-10-20T20:00:00.000Z"},
+    "scheduledTomorrow": {"id": "m5", "status": "scheduled", "kickoff_at": "2026-10-21T20:00:00.000Z"}
+  },
+  "cups": {
+    "uefa.champions": "cup with fixtures in DB",
+    "ned.1": "league with fixtures in DB"
+  }
+}

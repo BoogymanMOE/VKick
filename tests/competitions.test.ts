@@ -14,7 +14,13 @@
  * below pin that boundary so the trim cannot drift back one slug at a time.
  */
 import { strict as assert } from "node:assert";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { migrate } from "../server/db/schema.js";
 import { competitionCatalog } from "../server/espn/catalog.js";
+import { competitionCatalogWithMatches } from "../server/espn/competitions.js";
 import { COMPETITIONS, CUPS, INTERNATIONALS, LEAGUES, isCup } from "../server/espn/types.js";
 import { EXTRA_COMPETITIONS } from "../server/espn/extra.js";
 
@@ -82,6 +88,44 @@ function testTrimmedScopeStaysRemoved(): void {
   }
 }
 
+/**
+ * The API-facing catalog is the big five PLUS whatever the DB has a match for:
+ * a cup with fixtures must be listed (so Cups/Browse name it), and the base
+ * catalog must not have changed to include it on its own.
+ */
+function testCatalogIncludesDbCups(): void {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-comps-"));
+  const db = new DatabaseSync(path.join(dir, "c.db"));
+  try {
+    migrate(db);
+    db.exec(`
+      INSERT INTO teams (id, name, short_name, league) VALUES
+        ('H', 'Home FC', 'Home', 'uefa.champions'),
+        ('A', 'Away FC', 'Away', 'uefa.champions'),
+        ('N', 'Ned FC', 'Ned', 'ned.1');
+      INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status) VALUES
+        ('c1', 'uefa.champions', 'H', 'A', '2026-10-18T18:00:00.000Z', 'live'),
+        ('l1', 'ned.1', 'N', 'A', '2026-10-18T18:00:00.000Z', 'live');
+    `);
+    const catalog = competitionCatalogWithMatches(db);
+    const bySlug = new Map(catalog.map((c) => [c.slug, c]));
+
+    assert.ok(bySlug.has("uefa.champions"), "the cup with a match is listed");
+    assert.equal(bySlug.get("uefa.champions")?.kind, "cup", "uefa.champions is a cup");
+    assert.equal(bySlug.get("uefa.champions")?.name, "UEFA Champions League", "a known cup gets its name");
+    assert.ok(bySlug.has("ned.1"), "the league with a match is listed");
+    assert.equal(bySlug.get("ned.1")?.kind, "league", "ned.1 is a league");
+    assert.equal(bySlug.get("ned.1")?.name, "Dutch Eredivisie", "a known league gets its name");
+
+    // The base catalog is untouched: the cup is added by the API layer, not by
+    // silently widening the pinned big-five list.
+    assert.equal(competitionCatalog().some((c) => c.slug === "uefa.champions"), false);
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 export function runCompetitionsTests(): void {
   testCatalogHasNoDuplicates();
   testCatalogIsExactlyTheBigFive();
@@ -89,5 +133,8 @@ export function runCompetitionsTests(): void {
   testSyncedEntriesArePolled();
   testExtrasAreComingSoon();
   testTrimmedScopeStaysRemoved();
-  console.log("  competitions: big-five-only catalog, no duplicate slugs, nothing polled missing OK");
+  testCatalogIncludesDbCups();
+  console.log(
+    "  competitions: big-five-only catalog, no duplicate slugs, DB cups listed, nothing polled missing OK",
+  );
 }
