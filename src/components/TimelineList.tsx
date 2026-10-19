@@ -175,6 +175,31 @@ export function TimelineList({
         );
         const count = event.commentCount + (event.commentCount > 0 ? 0 : pinned.length);
 
+        // Card type, for both the tint and the accent edge: ESPN folds a red
+        // (including a second yellow) into `card`, so its text is the signal.
+        const redCard = event.type === "card" && /\bred card\b|second yellow/i.test(event.description);
+        // Subtle fill that lets the timeline read as coloured bands instead of
+        // a monochrome list: a goal washes volt, a booking washes gold (or the
+        // sending-off's red), a substitution keeps only its neutral edge, and
+        // breaks (VAR/halftime/fulltime) stay quiet. The wash is additive —
+        // icon, minute and text are untouched. `border-s-*` is the logical
+        // property, so the accent flips to the right side in the FA layout.
+        const tinted = event.type === "goal" || event.type === "card" || event.type === "substitution";
+        const tint =
+          event.type === "goal"
+            ? "color-mix(in srgb, var(--volt) 8%, transparent)"
+            : event.type === "card"
+              ? `color-mix(in srgb, var(--${redCard ? "live" : "gold"}) 8%, transparent)`
+              : undefined;
+        const edge =
+          event.type === "goal"
+            ? "border-s-volt"
+            : event.type === "card"
+              ? redCard
+                ? "border-s-danger"
+                : "border-s-gold"
+              : "border-s-line";
+
         return (
           <Fragment key={event.id}>
             <li
@@ -206,8 +231,11 @@ export function TimelineList({
                 className={cx(
                   "rounded-card border bg-surface p-3",
                   isGoal ? "border-volt/40" : "border-line",
+                  tinted && "border-s-2",
+                  tinted && edge,
                   isNewestLive && "live-edge",
                 )}
+                style={tint ? { background: tint } : undefined}
               >
                 <div className="flex items-center gap-2">
                   <Num className="grid h-6 min-w-[38px] place-items-center rounded-md border border-line bg-elevated px-1 text-[11px] text-ink-2">
