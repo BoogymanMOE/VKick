@@ -46,6 +46,7 @@ import { runErrorsTests } from "./errors.test.js";
 import { runAdsgramTests } from "./adsgram.test.js";
 import { runBotMenuTests } from "./botMenu.test.js";
 import { runTimelineScoreTests } from "./timelineScore.test.js";
+import { runKickoffPartsTests } from "./kickoffParts.test.js";
 import { runSentinelTests } from "./sentinel.test.js";
 import { runFaStringsTests } from "./faStrings.test.js";
 import { runMatchReconcileTests } from "./matchReconcile.test.js";
@@ -98,6 +99,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["adsgram", runAdsgramTests],
   ["botMenu", runBotMenuTests],
   ["timelineScore", runTimelineScoreTests],
+  ["kickoffParts", runKickoffPartsTests],
   ["sentinel", runSentinelTests],
   ["faStrings", runFaStringsTests],
   ["matchReconcile", runMatchReconcileTests],
