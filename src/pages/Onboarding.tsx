@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { LegalLinks } from "../components/LegalLinks";
@@ -19,7 +19,7 @@ import {
 import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
 import { serverErrorKey } from "../lib/api";
-import { haptic, selectionHaptic, notifyHaptic } from "../lib/telegram";
+import { haptic, selectionHaptic, notifyHaptic, telegram } from "../lib/telegram";
 import { buildPickerGroups, teamsInGroup } from "../lib/pickerGroups";
 import { PREDICTIONS_ENABLED, RATINGS_ENABLED } from "../lib/features";
 
@@ -58,7 +58,7 @@ const SLIDES = ALL_SLIDES.filter(
  * Each step is skippable except the first — the anchor club is the product.
  */
 export default function Onboarding() {
-  const { t, localize } = useI18n();
+  const { t, lang, localize } = useI18n();
   const { push } = useToast();
   const navigate = useNavigate();
   const { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, toggleAndAnchor } =
@@ -77,6 +77,27 @@ export default function Onboarding() {
     return false;
   });
   const [step, setStep] = useState(0);
+  // Counts inside Arabic-script copy carry Persian digits («گام ۲ از ۳») —
+  // Latin numerals break the bidi run the way they did in match countdowns.
+  // EN locale (undefined) passes plain digits straight through.
+  const nf = useMemo(() => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : undefined), [lang]);
+
+  // Android hardware back walks the picker back instead of closing the app.
+  // The global hook treats /onboarding as a root (it hides Telegram's back
+  // button), so while the user sits deeper than the first step this screen
+  // owns the back affordance; step 0 and the intro give it back to Telegram.
+  useEffect(() => {
+    const app = telegram();
+    if (!app?.BackButton || intro || step === 0) return;
+    const bb = app.BackButton;
+    bb.show();
+    const onBack = () => setStep((s) => Math.max(0, s - 1));
+    bb.onClick(onBack);
+    return () => {
+      bb.offClick(onBack);
+      bb.hide();
+    };
+  }, [intro, step]);
 
   const teamsQuery = useTeams();
   // Stable identity: `groupTeams` and the picker memos below depend on it.
@@ -199,7 +220,7 @@ export default function Onboarding() {
     <>
       <TopBar
         title={t("onboarding.title")}
-        subtitle={t("onboarding.step", { step: step + 1, total: TOTAL_STEPS })}
+        subtitle={t("onboarding.step", { step: nf.format(step + 1), total: nf.format(TOTAL_STEPS) })}
       />
 
       {/* Step dots */}
@@ -396,11 +417,11 @@ export default function Onboarding() {
               optional national-team shelf on the right. */}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             <Chip tone={clubCount >= MAX_FAVORITES ? "gold" : "volt"}>
-              {t("myTeams.picked", { count: clubCount, max: MAX_FAVORITES })}
+              {t("myTeams.picked", { count: nf.format(clubCount), max: nf.format(MAX_FAVORITES) })}
             </Chip>
             {intlCount > 0 || clubCount >= MAX_FAVORITES ? (
               <Chip tone={intlCount >= MAX_INTERNATIONALS ? "gold" : "volt"}>
-                {t("myTeams.pickedIntl", { count: intlCount, max: MAX_INTERNATIONALS })}
+                {t("myTeams.pickedIntl", { count: nf.format(intlCount), max: nf.format(MAX_INTERNATIONALS) })}
               </Chip>
             ) : null}
           </div>
@@ -440,7 +461,7 @@ export default function Onboarding() {
 
           <div className="mt-3 flex justify-center">
             <Chip tone={followed.count >= MAX_FOLLOWED_LEAGUES ? "gold" : "volt"}>
-              {t("myTeams.picked", { count: followed.count, max: MAX_FOLLOWED_LEAGUES })}
+              {t("myTeams.picked", { count: nf.format(followed.count), max: nf.format(MAX_FOLLOWED_LEAGUES) })}
             </Chip>
           </div>
         </section>
