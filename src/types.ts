@@ -64,7 +64,15 @@ export interface Match {
 
 export type PredictionKind = "lineup" | "shot" | "sub" | "watch" | "versus";
 
-export type TimelineEventType = "goal" | "card" | "substitution" | "var" | "halftime" | "fulltime";
+export type TimelineEventType =
+  | "goal"
+  | "card"
+  | "substitution"
+  | "var"
+  | "kickoff"
+  | "halftime"
+  | "fulltime"
+  | "other";
 
 export interface TimelineEvent {
   id: string;
