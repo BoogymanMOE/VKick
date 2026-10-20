@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type ButtonHTMLAttributes,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import type { Team } from "../types";
@@ -13,7 +14,7 @@ import { cx } from "../lib/cx";
 import { crestSources } from "../lib/logos";
 import { haptic } from "../lib/telegram";
 import { useLocalState } from "../lib/useLocalState";
-import { AlertIcon, ChevronDownIcon, RefreshIcon, StarFilledIcon, SwapIcon, TargetIcon } from "./icons";
+import { AlertIcon, BallIcon, ChartIcon, ClockIcon, ChevronDownIcon, ListIcon, RefreshIcon, ShirtIcon, StarFilledIcon, SwapIcon, TargetIcon } from "./icons";
 
 /* ------------------------------------------------------------------ surfaces */
 
@@ -446,11 +447,19 @@ export function Segmented<T extends string>({
   options,
   onChange,
   className,
+  /** Optional id prefix that wires the tabs to their panel:
+   *  tab `${id}-${value}`, panel `${id}-panel`, tabs carry aria-controls.
+   *  Call sites that use this as a real tab control (MatchDetail, TeamPage)
+   *  give their panel the matching id + role="tabpanel"; filter-style uses
+   *  omit it and stay plain buttons-with-role="tab" until arrow-key APG is
+   *  what they want (they are toggles, so they don't). */
+  id,
 }: {
   value: T;
   options: Array<{ value: T; label: string; badge?: ReactNode }>;
   onChange: (value: T) => void;
   className?: string;
+  id?: string;
 }) {
   const { dir } = useI18n();
   const activeIndex = options.findIndex((option) => option.value === value);
@@ -488,6 +497,51 @@ export function Segmented<T extends string>({
     observer.observe(track);
     return () => observer.disconnect();
   }, [activeIndex, options.length, dir]);
+  // Roving focus for the APG tab pattern: the selected tab is the only tab
+  // stop, and Arrow keys walk the tabs (visual order — mirrored in RTL),
+  // selecting as they go. A tablist that accepts focus but ignores arrows
+  // breaks the expectation role="tab" itself creates.
+  const selectAndFocus = (index: number) => {
+    const next = options[Math.max(0, Math.min(options.length - 1, index))];
+    if (!next) return;
+    if (next.value !== value) {
+      haptic("light");
+      onChange(next.value);
+    }
+    // Focus follows selection even when the value didn't change (at the ends).
+    const track = trackRef.current;
+    requestAnimationFrame(() => {
+      track
+        ?.querySelector<HTMLButtonElement>(`[data-tab-value="${next.value}"]`)
+        ?.focus();
+    });
+  };
+  const onTabKeyDown = (event: ReactKeyboardEvent) => {
+    // Visual arrows, not logical: in an RTL row the visually-rightmost tab is
+    // options[0], so ArrowRight walks backwards through the array.
+    const rtl = dir === "rtl";
+    if (event.key === "ArrowRight") selectAndFocus(activeIndex + (rtl ? -1 : 1));
+    else if (event.key === "ArrowLeft") selectAndFocus(activeIndex + (rtl ? 1 : -1));
+    else if (event.key === "Home") selectAndFocus(0);
+    else if (event.key === "End") selectAndFocus(options.length - 1);
+    else return;
+    event.preventDefault();
+  };
+
+  // Scroll hint: when a crowded track actually overflows, a faint inline-end
+  // fade says "there is more past this edge" without a visible arrow to
+  // maintain. Recomputed on the same observer that measures the pill.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || typeof ResizeObserver === "undefined") return;
+    const check = () => setScrolled(track.scrollWidth > track.clientWidth + 2);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(track);
+    return () => observer.disconnect();
+  }, [options.length]);
+
   return (
     <div
       ref={trackRef}
@@ -497,6 +551,21 @@ export function Segmented<T extends string>({
         className,
       )}
     >
+      {scrolled ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none sticky end-0 shrink-0"
+          style={{
+            width: 14,
+            marginInlineEnd: -4,
+            // The fade sits on the END edge, which flips in RTL — so the
+            // gradient flips with it.
+            background:
+              dir === "rtl"
+                ? "linear-gradient(to left, transparent, var(--bg-surface))"
+                : "linear-gradient(to right, transparent, var(--bg-surface))",
+          }}
+        />        ) : null}
       {indicator ? (
         <span
           aria-hidden="true"
@@ -504,12 +573,17 @@ export function Segmented<T extends string>({
           style={{ left: 0, width: indicator.width, transform: `translateX(${indicator.start}px)` }}
         />
       ) : null}
-      {options.map((option) => (
+      {options.map((option, index) => (
         <button
           key={option.value}
+          data-tab-value={option.value}
+          id={id ? `${id}-${option.value}` : undefined}
+          aria-controls={id ? `${id}-panel` : undefined}
           type="button"
           role="tab"
           aria-selected={value === option.value}
+          tabIndex={index === activeIndex ? 0 : -1}
+          onKeyDown={onTabKeyDown}
           onClick={() => {
             if (value !== option.value) haptic("light");
             onChange(option.value);
@@ -760,6 +834,23 @@ export function Switch({
 
 /* ------------------------------------------------------------------ loading */
 
+/**
+ * Empty-state emoji shorthand → drawn icons. The design system's icon rule is
+ * "drawn, never emoji" (see TimelineList's eventIcon), so these strings are
+ * swapped for the shared SVG set here, once, instead of at every call site.
+ * Unknown emoji are stripped so a new call site can never ship a system-font
+ * glyph that shifts weight against the drawn set.
+ */
+const GLYPHS: Record<string, ReactNode> = {
+  "⚽": <BallIcon />,
+  "⏱": <ClockIcon />,
+  "📊": <ChartIcon />,
+  "📋": <ListIcon />,
+  "👥": <ShirtIcon />,
+  "📈": <ChartIcon />,
+  "⭐": <StarFilledIcon />,
+};
+
 export function EmptyState({
   title,
   hint,
@@ -769,13 +860,22 @@ export function EmptyState({
   title: string;
   hint?: string;
   action?: ReactNode;
-  /** A small 24px pictogram above the title (⚽ the feed, ⏱ the timeline…).
-      Optional: call sites without one render exactly as before. */
+  /** A small pictogram above the title. Call sites still pass their original
+   *  emoji shorthand; the strings are swapped for the drawn icon set here so
+   *  every empty state obeys the design system's "drawn, never emoji" icon
+   *  rule without touching 8 call sites. */
   icon?: ReactNode;
 }) {
   return (
     <div className="rise-in pitch-watermark rounded-card border border-dashed border-line px-4 py-10 text-center">
-      {icon ? <div className="text-2xl leading-none text-ink-3">{icon}</div> : null}
+      {icon ? (
+        <div
+          className="grid place-items-center text-ink-3 [&>svg]:h-7 [&>svg]:w-7"
+          aria-hidden="true"
+        >
+          {typeof icon === "string" ? (GLYPHS[icon] ?? icon.replace(/[\u{1F300}-\u{1FAFF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]/gu, "")) : icon}
+        </div>
+      ) : null}
       <p className={cx(icon ? "mt-3" : undefined, "text-sm font-bold text-ink-2")}>{title}</p>
       {hint ? <p className="mt-1 text-xs text-ink-3">{hint}</p> : null}
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}

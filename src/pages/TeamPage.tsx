@@ -150,6 +150,7 @@ export default function TeamPage() {
 
       <div className="mt-4">
         <Segmented
+          id="team-tabs"
           value={tab}
           onChange={setTab}
           options={[
@@ -161,7 +162,14 @@ export default function TeamPage() {
         />
       </div>
 
-      <section className="panel-in mt-4" key={tab}>
+      {/* The panel the team-tabs tablist above points at (see MatchDetail). */}
+      <section
+        id="team-tabs-panel"
+        role="tabpanel"
+        aria-labelledby={`team-tabs-${tab}`}
+        className="panel-in mt-4"
+        key={tab}
+      >
         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
         {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
         {tab === "season" ? <StatsTab stats={seasonStats} /> : null}

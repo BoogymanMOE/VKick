@@ -158,6 +158,14 @@ export const TargetIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Clock — the timeline's empty-state pictogram (was the ⏱ emoji). */
+export const ClockIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} width={28} height={28}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7v5l3.2 2" />
+  </svg>
+);
+
 /** Info — the "How points work" entry point on Predictions and Boards. */
 export const InfoIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} width={18} height={18}>

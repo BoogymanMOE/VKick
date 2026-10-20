@@ -271,6 +271,7 @@ export default function MatchDetail() {
       </div>
 
       <div className="mt-4">          <Segmented
+          id="match-tabs"
           value={tab}
           onChange={setTab}
           options={[
@@ -281,7 +282,16 @@ export default function MatchDetail() {
         />
       </div>
 
-      <section className="panel-in mt-4" key={tab}>
+      {/* The panel that the tabs above (role=tab/aria-controls) point at: the
+          labelled-by ties tab → panel so screen readers announce the owning
+          tab, and arrow keys on the tablist land here. */}
+      <section
+        id="match-tabs-panel"
+        role="tabpanel"
+        aria-labelledby={`match-tabs-${tab}`}
+        className="panel-in mt-4"
+        key={tab}
+      >
         {tab === "timeline" ? (
           <TimelineTab
             matchId={id}

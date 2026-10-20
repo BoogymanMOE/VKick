@@ -351,6 +351,12 @@ export function TimelineList({
                 cosmetic-only below. */}
             {commentsOpen ? (
               <li className="px-1 pb-2">
+                {/* The composer is intentionally unmounted for now, so the
+                    thread must SAY it is view-only: a thread the user can
+                    open but never answer otherwise reads as a broken form. */}
+                <p role="note" className="mb-1 text-[11px] leading-relaxed text-ink-3">
+                  {t("comments.readOnly")}
+                </p>
                 <ul>
                   {pinned.map((comment) => (
                     <li key={comment.id}>

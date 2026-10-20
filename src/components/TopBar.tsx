@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { haptic } from "../lib/telegram";
 import { ChevronLeftIcon, GlobeIcon } from "./icons";
@@ -17,6 +17,15 @@ export function TopBar({
 }) {
   const navigate = useNavigate();
   const { dir, t } = useI18n();
+  // A back button on the session's FIRST entry (a shared deep link) has no
+  // history to pop: navigate(-1) would leave the mini app entirely. The
+  // first entry has React Router's "default" location key — route to the
+  // feed instead, replacing the URL so the back gesture can't loop.
+  const firstEntry = useLocation().key === "default";
+  const goBack = () => {
+    if (firstEntry) navigate("/matches", { replace: true });
+    else navigate(-1);
+  };
 
   return (
     // No backdrop blur: the bar is 95% opaque, so the blur was invisible while
@@ -31,7 +40,7 @@ export function TopBar({
             type="button"
             onClick={() => {
               haptic("light");
-              navigate(-1);
+              goBack();
             }}
             aria-label={t("common.back")}
             className="-ms-1 grid h-11 w-11 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated"

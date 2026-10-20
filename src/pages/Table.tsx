@@ -278,7 +278,8 @@ function BrowseContent() {
     <>
       <div
         className="mt-3 grid grid-cols-3 gap-1 rounded-full border border-line bg-surface p-1"
-        role="tablist"
+        role="group"
+        aria-label={t("browse.filterLabel")}
       >
         {(
           [
@@ -290,8 +291,7 @@ function BrowseContent() {
           <button
             key={value}
             type="button"
-            role="tab"
-            aria-selected={filter === value}
+            aria-pressed={filter === value}
             onClick={() => {
               haptic("light");
               setFilter(value);
@@ -509,7 +509,10 @@ function ExpectedItem({
       className={cx(
         "list-in relative grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] items-center gap-1.5 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
         mine ? "bg-elevated" : "hover:bg-elevated/60",
-        expected == null && "opacity-55",
+        // Uncovered clubs read as incomplete WITHOUT dimming the text: the row
+        // darkens toward --bg-base instead, so the ink-3 numerals keep their
+        // AA-passing contrast (opacity-55 on the whole row measured ≈2.4:1).
+        expected == null && !mine && "bg-base/50",
       )}
       style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
     >

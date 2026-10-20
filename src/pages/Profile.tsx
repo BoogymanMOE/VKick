@@ -9,6 +9,7 @@ import { useAuth } from "../hooks/authContext";
 import { useFavorites } from "../hooks/useFavorites";
 import { useNotificationPrefs, useReferral } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
+import { PanelSkeleton } from "../components/Skeletons";
 import { api, serverErrorKey } from "../lib/api";
 import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
 import { PREDICTIONS_ENABLED, RATINGS_ENABLED } from "../lib/features";
@@ -513,7 +514,10 @@ function FavoriteTeamsStrip() {
   const { teams, loading } = useFavorites();
   // First-run honest state: an empty rail with nothing at all read as a
   // broken component — say that no clubs are picked and where to pick them.
-  if (loading) return null;
+  // The strip reserves its own footprint while the favorites query resolves —
+  // silently returning null made the whole Account section jump when the
+  // shelf appeared (and read as a missing component on a slow connection).
+  if (loading) return <PanelSkeleton height={78} />;
   if (teams.length === 0) {
     return (
       <EmptyState

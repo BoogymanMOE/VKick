@@ -5,15 +5,11 @@ import { telegram } from "../lib/telegram";
 /** The tab roots — the back button hides here; Telegram's default close takes over. */
 const ROOTS = new Set([
   "/matches",
-  "/leaderboards",
-  "/browse",
   "/table",
   "/profile",
   "/onboarding",
   "/cups",
   "/ratings",
-  "/predictions",
-  "/stats",
 ]);
 
 /**

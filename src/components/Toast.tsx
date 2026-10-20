@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { cx } from "../lib/cx";
+import { useI18n } from "../i18n/context";
 import { AlertIcon, BallIcon, CheckIcon, CloseIcon, RefreshIcon, StarFilledIcon } from "./icons";
 import { ToastContext, type ToastItem, type ToastTone } from "./toastContext";
 
@@ -53,6 +54,7 @@ const LEAVE_MS = 320;
 
 /** App-wide transient alerts: goals, deadline warnings, saved confirmations. */
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   // Every toast owns two timers; they are cleared on unmount so a hot reload
   // never sets state on a dead provider.
@@ -121,6 +123,21 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               </span>
             ) : null}
             <span className="min-w-0 flex-1 truncate">{toast.text}</span>
+            {/* Only errors get an explicit out: a dismissed failure stays in
+                the user's memory; the success/muted dwell is short enough not
+                to need one. */}
+            {toast.tone === "danger" ? (
+              <button
+                type="button"
+                aria-label={t("toast.dismiss")}
+                onClick={() =>
+                  setToasts((prev) => prev.map((item) => (item.id === toast.id ? { ...item, leaving: true } : item)))
+                }
+                className="flex-none text-current opacity-70 transition-opacity hover:opacity-100"
+              >
+                <CloseIcon className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
           </div>
         ))}
       </div>

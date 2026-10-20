@@ -48,10 +48,10 @@ export function AppShell() {
       >
         {t("common.skipToContent")}
       </a>
-      {/* key={pathname} remounts the wrapper per route, replaying the animation. 
-          The bottom padding reserves space for BOTH the sticky TabBar (~56px) AND
-          the fixed A-ADS ad slot, so the last match card / league row is never hidden
-          behind the tab bar and ad. */}
+      {/* key={pathname} remounts the wrapper per route, replaying the animation.
+          The bottom padding reserves space for the sticky TabBar (~56px); the ad
+          is inline now, so the last match card / league row only has to clear
+          the tab bar itself. */}
       <main
         id="main-content"
         tabIndex={-1}

@@ -129,16 +129,34 @@ export function initTelegram(): void {
   }
 }
 
+/**
+ * The user's haptics toggle (Profile → Settings) is a device-side concern, so
+ * it lives here — at the single choke point every call site already goes
+ * through. Stored by useLocalState as JSON ("false" when off); reading errors
+ * (private mode) default to buzzing, the old behavior before a choice exists.
+ */
+function hapticsEnabled(): boolean {
+  try {
+    const raw = localStorage.getItem("matchday.haptics");
+    return raw ? JSON.parse(raw) !== false : true;
+  } catch {
+    return true;
+  }
+}
+
 export function haptic(style: HapticStyle = "light"): void {
+  if (!hapticsEnabled()) return;
   telegram()?.HapticFeedback?.impactOccurred(style);
 }
 
 export function selectionHaptic(): void {
+  if (!hapticsEnabled()) return;
   telegram()?.HapticFeedback?.selectionChanged();
 }
 
 /** Used when an action is rejected — e.g. a third Shot Plotter pin. */
 export function notifyHaptic(type: "error" | "success" | "warning"): void {
+  if (!hapticsEnabled()) return;
   telegram()?.HapticFeedback?.notificationOccurred(type);
 }
 
