@@ -51,7 +51,7 @@ export function Countdown({
 
   if (expired) {
     return (
-      <span className={cx("font-bold text-danger", size === "lg" ? "text-2xl" : "text-sm")}>
+      <span className={cx("font-bold text-danger", size === "lg" ? "text-lg" : "text-sm")}>
         {t("deadline.locked")}
       </span>
     );
@@ -64,7 +64,7 @@ export function Countdown({
       className={cx(
         "num-display tabular-nums inline-flex items-baseline transition-colors duration-[var(--t-slow)]",
         color,
-        size === "lg" ? "text-2xl" : "text-base",
+        size === "lg" ? "text-lg" : "text-md",
         heat === "panic" && "tick-panic",
       )}
     >

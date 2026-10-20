@@ -18,6 +18,7 @@
   --color-ink: var(--text-primary);
   --color-ink-2: var(--text-secondary);
   --color-ink-3: var(--text-muted);
+  --color-on-volt: var(--text-on-volt);
 
   --color-volt: var(--volt);
   --color-live: var(--live);
@@ -25,8 +26,14 @@
   --color-danger: var(--danger);
   --color-pitch: var(--pitch);
 
-  --font-ui: var(--font-body);
-  --font-num: var(--font-display);
+  /* Type scale — 4 steps + display, from the --type-* tokens. xs/sm mirror
+     Tailwind's old defaults (12/14px) so existing uses are unchanged; lg
+     firms to 22px, and md/display are the named steps call sites map to. */
+  --text-xs: var(--type-xs);
+  --text-sm: var(--type-sm);
+  --text-md: var(--type-md);
+  --text-lg: var(--type-lg);
+  --text-display: var(--type-display);
 
   --radius-card: 14px;
   --radius-e-card: var(--radius-card);
@@ -101,11 +108,11 @@
     font-size: 14px;
   }
 
-  /* Persian floor: Vazirmatn at 9-11px is unreadable, so every micro-size
-     utility is lifted to 12px in fa while Latin keeps the designed scale. */
-  html[lang="fa"] .text-\[9px\],
-  html[lang="fa"] .text-\[10px\],
-  html[lang="fa"] .text-\[11px\] {
+  /* Persian floor: Vazirmatn at 9-11px was unreadable, and every micro-size
+     arbitrary class is now the named text-xs (12px = the floor itself), so
+     this override is a no-op kept as a belt-and-braces guarantee that FA
+     never renders below 12px, wherever a future size creeps in. */
+  html[lang="fa"] .text-xs {
     font-size: 12px;
   }
 

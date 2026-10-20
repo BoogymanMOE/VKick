@@ -238,7 +238,7 @@ export default function Onboarding() {
 
       {step === 0 ? (
         <section className="mt-5 rise-in">
-          <h2 className="text-xl font-extrabold text-ink">{t("onboarding.favoriteTitle")}</h2>
+          <h2 className="text-lg font-extrabold text-ink">{t("onboarding.favoriteTitle")}</h2>
           <p className="mt-1 text-sm text-ink-2">{t("onboarding.favoriteHint")}</p>
 
           {/* The pick so far, named and faced: survives tab switches, so the
@@ -251,7 +251,7 @@ export default function Onboarding() {
               <TeamBadge team={anchorTeam} size="md" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-ink">{anchorName}</p>
-                <p className="flex items-center gap-1 text-[11px] font-bold text-gold">
+                <p className="flex items-center gap-1 text-xs font-bold text-gold">
                   <StarFilledIcon className="star-pop h-3 w-3 flex-none" />
                   {t("onboarding.isFavorite")}
                 </p>
@@ -320,7 +320,7 @@ export default function Onboarding() {
 
       {step === 1 ? (
         <section className="mt-5 rise-in">
-          <h2 className="text-xl font-extrabold text-ink">{t("onboarding.clubsTitle")}</h2>
+          <h2 className="text-lg font-extrabold text-ink">{t("onboarding.clubsTitle")}</h2>
           <p className="mt-1 text-sm text-ink-2">{t("onboarding.clubsHint")}</p>
 
           {/* Picked clubs so far, removable: the count chip alone makes people
@@ -333,7 +333,7 @@ export default function Onboarding() {
                   <li key={team.id} className="relative flex-none">
                     <div className="flex w-[76px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center">
                       <TeamBadge team={team} size="sm" />
-                      <span className="w-full truncate text-[10px] font-bold text-ink">
+                      <span className="w-full truncate text-xs font-bold text-ink">
                         {localize(team.shortName)}
                       </span>
                     </div>
@@ -425,13 +425,13 @@ export default function Onboarding() {
               </Chip>
             ) : null}
           </div>
-          <p className="mt-2 text-center text-[11px] text-ink-3">{t("onboarding.intlHint")}</p>
+          <p className="mt-2 text-center text-xs text-ink-3">{t("onboarding.intlHint")}</p>
         </section>
       ) : null}
 
       {step === 2 ? (
         <section className="mt-5 rise-in">
-          <h2 className="text-xl font-extrabold text-ink">{t("onboarding.leaguesTitle")}</h2>
+          <h2 className="text-lg font-extrabold text-ink">{t("onboarding.leaguesTitle")}</h2>
           <p className="mt-1 text-sm text-ink-2">{t("onboarding.leaguesHint")}</p>
 
           <ul className="mt-3 space-y-2">
@@ -560,7 +560,7 @@ function Intro({ onDone }: { onDone: () => void }) {
         </span>
         {/* The intro has no TopBar, so this brand line is the screen's only
             heading — h1, not h2, or the document opens at a level down. */}
-        <h1 className="intro-in mt-5 text-2xl font-extrabold text-ink">{t("app.name")}</h1>
+        <h1 className="intro-in mt-5 text-lg font-extrabold text-ink">{t("app.name")}</h1>
 
         <ul className="intro-in mt-5 space-y-4">
           {SLIDES.map(({ key, titleKey, bodyKey, Glyph }) => (

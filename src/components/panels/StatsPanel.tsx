@@ -51,7 +51,7 @@ export function StatsPanel({
         ))}
       </ul>
 
-      <div className="mt-4 flex items-center justify-between border-t border-line pt-3 text-[11px] text-ink-3">
+      <div className="mt-4 flex items-center justify-between border-t border-line pt-3 text-xs text-ink-3">
         <span>{t("stats.source")}</span>
         <Num>{t("stats.live")}</Num>
       </div>

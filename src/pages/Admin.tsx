@@ -115,8 +115,8 @@ export default function Admin() {
 function StatCard({ label, value }: { label: string; value?: number }) {
   return (
     <Card className="p-3">
-      <p className="text-[11px] text-ink-3">{label}</p>
-      <Num className="mt-0.5 text-2xl text-ink">{value !== undefined ? value.toLocaleString() : "—"}</Num>
+      <p className="text-xs text-ink-3">{label}</p>
+      <Num className="mt-0.5 text-lg text-ink">{value !== undefined ? value.toLocaleString() : "—"}</Num>
     </Card>
   );
 }

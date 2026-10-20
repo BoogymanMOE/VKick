@@ -61,10 +61,10 @@ export function FallbackCard({ onRetry }: { onRetry: () => void }) {
   return (
     <div role="alert" className="grid min-h-[100svh] place-items-center px-6">
       <div className="w-full max-w-[380px] rounded-card border border-line bg-surface p-5 text-center">
-        <p className="text-3xl" aria-hidden="true">
+        <p className="text-lg" aria-hidden="true">
           ⚽
         </p>
-        <p className="mt-2 text-base font-bold text-ink">Something went wrong</p>
+        <p className="mt-2 text-md font-bold text-ink">Something went wrong</p>
         <p className="mt-1 text-xs leading-relaxed text-ink-2">
           The screen hit an unexpected error. Retrying usually fixes it.
         </p>

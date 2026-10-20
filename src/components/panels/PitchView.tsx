@@ -79,7 +79,7 @@ export function PitchView({
         ]}
       />
 
-      <p className="mt-2 mb-2 text-[11px] text-ink-3">{t("pitchView.hint")}</p>
+      <p className="mt-2 mb-2 text-xs text-ink-3">{t("pitchView.hint")}</p>
 
       {mode === "grid" ? (
         <GoalGrid events={located} home={home} away={away} />
@@ -88,7 +88,7 @@ export function PitchView({
       )}
 
       {located.length === 0 ? (
-        <p className="mt-3 rounded-card border border-dashed border-line px-3 py-4 text-center text-[11px] text-ink-3">
+        <p className="mt-3 rounded-card border border-dashed border-line px-3 py-4 text-center text-xs text-ink-3">
           <span className="block font-bold text-ink-2">{t("pitchView.empty")}</span>
           {t("pitchView.emptyHint")}
         </p>
@@ -119,7 +119,7 @@ function Legend({ events, home, away }: { events: LocatedEvent[]; home: Side; aw
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line pt-2">
       {[home, away].map((side) => (
-        <span key={side.id} className="inline-flex items-center gap-1.5 text-[11px] text-ink-2">
+        <span key={side.id} className="inline-flex items-center gap-1.5 text-xs text-ink-2">
           <span
             className="h-2.5 w-2.5 rounded-full"
             style={{ backgroundColor: side.color }}
@@ -128,12 +128,12 @@ function Legend({ events, home, away }: { events: LocatedEvent[]; home: Side; aw
           <span className="truncate">{localize(side.shortName)}</span>
         </span>
       ))}
-      <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-3">
+      <span className="inline-flex items-center gap-1.5 text-xs text-ink-3">
         <span className="h-2.5 w-2.5 rounded-full ring-1 ring-white/70" aria-hidden="true" />
         {t("pitchView.goal")}
       </span>
       {hasShot ? (
-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-3">
+        <span className="inline-flex items-center gap-1.5 text-xs text-ink-3">
           <span className="h-2.5 w-2.5 rounded-full border border-white/70" aria-hidden="true" />
           {t("pitchView.shot")}
         </span>
@@ -197,7 +197,7 @@ function GoalGrid({ events, home, away }: { events: LocatedEvent[]; home: Side; 
                   />
                 ))}
                 {pins.length > 4 ? (
-                  <Num className="text-[9px] font-bold text-ink-2">+{pins.length - 4}</Num>
+                  <Num className="text-xs font-bold text-ink-2">+{pins.length - 4}</Num>
                 ) : null}
               </div>
             );

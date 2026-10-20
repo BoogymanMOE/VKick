@@ -70,12 +70,12 @@ export function RateSheet({
     >
       <div className="text-center">
         {/* keyed so the pulse retriggers on every integer change */}
-        <Num key={value} className="rating-pulse text-[40px] leading-none text-gold">
+        <Num key={value} className="rating-pulse text-display leading-none text-gold">
           {value}
         </Num>
-        <p className="text-[11px] text-ink-3">{t("ratings.yourRating")}</p>
+        <p className="text-xs text-ink-3">{t("ratings.yourRating")}</p>
         {typeof cardsUsed === "number" && typeof cardsMax === "number" ? (
-          <p className="mt-1 text-[10px] text-ink-3">
+          <p className="mt-1 text-xs text-ink-3">
             {t("ratings.cards", { used: cardsUsed, max: cardsMax })}
           </p>
         ) : null}
@@ -95,7 +95,7 @@ export function RateSheet({
         className="mt-4 h-11 w-full accent-[var(--gold)]"
       />
 
-      <div className="flex justify-between text-[10px] text-ink-3">
+      <div className="flex justify-between text-xs text-ink-3">
         <span>1</span>
         <span>5</span>
         <span>10</span>
@@ -138,12 +138,12 @@ export function RateSheet({
                 )}
                 style={{ height: `${Math.max(3, (count / peak) * 64)}px` }}
               />
-              <span className="text-[9px] text-ink-3">{index + 1}</span>
+              <span className="text-xs text-ink-3">{index + 1}</span>
             </div>
           ))}
         </div>
 
-        <div className="mt-2 flex items-center justify-between text-[11px] text-ink-3">
+        <div className="mt-2 flex items-center justify-between text-xs text-ink-3">
           <span>{t("ratings.votes", { count: totalVotes })}</span>
           <Chip tone="gold">{t("ratings.eyeTest")}</Chip>
         </div>

@@ -159,7 +159,7 @@ function PlayerBoard({
                 {index + 1}
               </Num>
               <div
-                className="grid h-9 w-9 flex-none place-items-center rounded-full text-[10px] font-bold"
+                className="grid h-9 w-9 flex-none place-items-center rounded-full text-xs font-bold"
                 style={{ backgroundColor: row.teamColor ?? TEAM_FALLBACK, color: readableInk(row.teamColor) }}
                 aria-hidden="true"
               >
@@ -167,14 +167,14 @@ function PlayerBoard({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-ink">{localize(row.name)}</p>
-                <p className="truncate text-[11px] text-ink-3">
+                <p className="truncate text-xs text-ink-3">
                   {localize(row.teamShort ?? row.teamName)} · {t(`pos.${row.position}` as StringKey)} ·{" "}
                   <Num>{row.appearances}</Num>
                   {t("table.played" as StringKey)}
                 </p>
               </div>
               <div className="flex-none text-end">
-                <Num className={cx("block text-xl leading-none", index === 0 ? "text-gold" : "text-ink")}>
+                <Num className={cx("block text-lg leading-none", index === 0 ? "text-gold" : "text-ink")}>
                   {formatValue(row, sort)}
                 </Num>
                 <span className="label text-ink-3">{t(activeSort.labelKey)}</span>
@@ -270,7 +270,7 @@ function TeamBoard({ league }: { league: string }) {
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-[10px] text-ink-3">{label}</p>
+      <p className="text-xs text-ink-3">{label}</p>
       <Num className="text-sm text-ink">{value}</Num>
     </div>
   );

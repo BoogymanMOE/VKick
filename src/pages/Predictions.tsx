@@ -154,12 +154,12 @@ function PredictionCard({
       </div>
 
       {pick ? (
-        <p className="mt-1 truncate text-[11px] text-ink-2" dir="auto">
+        <p className="mt-1 truncate text-xs text-ink-2" dir="auto">
           {pick}
         </p>
       ) : null}
 
-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-2 text-[11px] text-ink-3">
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-2 text-xs text-ink-3">
         <span>
           {row.kickoffAt ? formatKickoff(new Date(row.kickoffAt), lang === "fa" ? "fa-IR" : undefined) : ""}
           {hasScore ? ` · ${row.homeScore}–${row.awayScore}` : ""}
@@ -184,7 +184,7 @@ function PredictionCard({
           )}
           <Link
             to={`/match/${row.matchId}`}
-            className="-my-3 inline-flex min-h-11 items-center px-1 text-[11px] font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:text-ink"
+            className="-my-3 inline-flex min-h-11 items-center px-1 text-xs font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:text-ink"
           >
             {t("match.summary")}
           </Link>
@@ -195,8 +195,8 @@ function PredictionCard({
         <dl className="mt-2 space-y-1 border-t border-line pt-2">
           {items.map((item) => (
             <div key={item.key} className="flex items-baseline justify-between gap-3">
-              <dt className={`text-[11px] ${item.flag ? "text-ink-3" : "text-ink-2"}`}>{item.label}</dt>
-              <dd className={`font-num text-[11px] font-bold ${item.flag ? "text-ink-3" : "text-ink"}`}>
+              <dt className={`text-xs ${item.flag ? "text-ink-3" : "text-ink-2"}`}>{item.label}</dt>
+              <dd className={`font-num text-xs font-bold ${item.flag ? "text-ink-3" : "text-ink"}`}>
                 {item.value}
               </dd>
             </div>

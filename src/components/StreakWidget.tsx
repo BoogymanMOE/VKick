@@ -45,7 +45,7 @@ export function StreakWidget({ className }: { className?: string }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold text-ink">{t("streak.title")}</p>
-          <p className="truncate text-[11px] text-ink-3">
+          <p className="truncate text-xs text-ink-3">
             {streak.active
               ? t("streak.activeSubtitle", { count: streak.current })
               : t("streak.idleSubtitle", { count: streak.current })}

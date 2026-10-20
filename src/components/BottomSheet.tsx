@@ -140,7 +140,7 @@ export function BottomSheet({
 
         <div className="flex items-start gap-3 border-b border-line px-4 pb-3">
           <div className="min-w-0 flex-1">
-            <h2 className="truncate text-base font-bold text-ink">{title}</h2>
+            <h2 className="truncate text-md font-bold text-ink">{title}</h2>
             {subtitle ? <p className="truncate text-xs text-ink-2">{subtitle}</p> : null}
           </div>
           <button

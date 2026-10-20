@@ -173,7 +173,7 @@ export default function Login() {
               </label>
 
               {mode === "register" ? (
-                <p className="px-1 text-[11px] leading-relaxed text-ink-3">{t("auth.createHint")}</p>
+                <p className="px-1 text-xs leading-relaxed text-ink-3">{t("auth.createHint")}</p>
               ) : null}
 
               {error ? (
@@ -220,7 +220,7 @@ export default function Login() {
               </Button>
 
               {isTelegram() ? (
-                <p className="px-2 text-center text-[11px] leading-relaxed text-ink-3">
+                <p className="px-2 text-center text-xs leading-relaxed text-ink-3">
                   {tgName ? t("auth.telegramSignedHint") : t("auth.telegramHint")}
                 </p>
               ) : null}
@@ -239,7 +239,7 @@ export default function Login() {
             </div>
           )}
         </Card>        <p
-          className="rise-in mt-6 px-1 text-center text-[11px] leading-relaxed text-ink-3"
+          className="rise-in mt-6 px-1 text-center text-xs leading-relaxed text-ink-3"
           style={{ "--stagger": "140ms" } as CSSProperties}>
           {t("auth.legal")}
         </p>

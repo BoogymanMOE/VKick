@@ -65,7 +65,7 @@ function LineupPitch({
               <span
                 key={player ? player.id : `empty-${rowIndex}-${index}`}
                 className={cx(
-                  "grid h-6 flex-1 place-items-center rounded-full border text-[10px] font-bold tabular-nums",
+                  "grid h-6 flex-1 place-items-center rounded-full border text-xs font-bold tabular-nums",
                   player ? "border-transparent bg-volt text-black" : "border-line border-dashed text-ink-3",
                 )}
               >
@@ -75,7 +75,7 @@ function LineupPitch({
           </div>
         ))}
       </div>
-      <p className="mt-2 border-t border-line pt-1.5 text-center text-[10px] text-ink-3">
+      <p className="mt-2 border-t border-line pt-1.5 text-center text-xs text-ink-3">
         {candidates.length}/{XI_SIZE} · {formationId}
       </p>
     </div>
@@ -103,13 +103,13 @@ function PlayerRow({
           picked ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
         )}
       >
-        <Num className="grid h-7 w-7 flex-none place-items-center rounded-md border border-line bg-elevated text-[11px] text-ink-2">
+        <Num className="grid h-7 w-7 flex-none place-items-center rounded-md border border-line bg-elevated text-xs text-ink-2">
           {player.jersey ?? "–"}
         </Num>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-bold text-ink">{localize(player.name)}</span>
           {player.appearances ? (
-            <span className="block text-[10px] text-ink-3">
+            <span className="block text-xs text-ink-3">
               <Num>{player.appearances}</Num> {t("lineup.apps")}
               {player.goals ? (
                 <>
@@ -250,7 +250,7 @@ export function LineupPicker({
         <Chip tone={complete ? "pitch" : "volt"}>
           <Num>{picked.length}</Num>/{XI_SIZE}
         </Chip>
-        <span className="text-[11px] text-ink-3">
+        <span className="text-xs text-ink-3">
           {t("lineup.perStarter")} · {t("lineup.exactFormation")}
         </span>
       </div>
@@ -306,7 +306,7 @@ export function LineupPicker({
                   <div className="sticky top-0 z-10 flex items-center justify-between bg-surface/95 py-1 backdrop-blur-sm">
                     <span className="label text-ink-2">{t(`lineup.unit.${unit}`)}</span>
                     <span
-                      className={cx("text-[10px] font-bold tabular-nums", done ? "text-volt" : "text-ink-3")}
+                      className={cx("text-xs font-bold tabular-nums", done ? "text-volt" : "text-ink-3")}
                     >
                       {count?.picked ?? 0}/{required[unit]}
                     </span>
@@ -329,7 +329,7 @@ export function LineupPicker({
       </div>
 
       {picked.length === XI_SIZE && !shapeMatches ? (
-        <p className="text-[11px] font-bold text-gold">{t("lineup.shapeMismatch")}</p>
+        <p className="text-xs font-bold text-gold">{t("lineup.shapeMismatch")}</p>
       ) : null}
 
       <div className="flex gap-2">

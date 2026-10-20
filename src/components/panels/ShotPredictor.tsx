@@ -137,14 +137,14 @@ export function ShotPredictor({
 
       <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
         {ZONE_KEYS.map((key) => (
-          <span key={key} className="text-[9px] text-ink-3">
+          <span key={key} className="text-xs text-ink-3">
             {t(key as never)}
           </span>
         ))}
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="text-[11px] text-ink-3">{t("predict.shotNewHint")}</span>
+        <span className="text-xs text-ink-3">{t("predict.shotNewHint")}</span>
         {cell ? (
           <Chip tone="volt">{t(ZONE_LABEL_KEY[cellZone(cell.gridX, cell.gridY)] as never)}</Chip>
         ) : null}

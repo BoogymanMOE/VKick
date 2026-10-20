@@ -89,7 +89,7 @@ export function SubBoard({
                 <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">
                   {nameOf(pair.offId)}
                 </span>
-                <span className="flex-none text-[11px] text-ink-3">→</span>
+                <span className="flex-none text-xs text-ink-3">→</span>
                 <span className="min-w-0 flex-1 truncate text-xs font-bold text-volt">
                   {nameOf(pair.onId)}
                 </span>

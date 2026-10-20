@@ -206,7 +206,7 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
       {/* The squad rows carry colour-coded numbers with no key; a colour-blind
           reader cannot tell goals from assists. The legend names both. */}
       <div
-        className="flex items-center gap-3 text-[11px] font-bold"
+        className="flex items-center gap-3 text-xs font-bold"
         style={{ padding: "8px 0", borderBottom: "1px solid var(--border-subtle)" }}
       >
         <span className="flex items-center gap-1" style={{ color: "var(--volt)" }}>
@@ -284,7 +284,7 @@ function SquadSection({
                 dir={dir}
                 className="player-row rounded-card border border-line bg-surface p-2.5"
               >
-                <Num className="player-number text-[11px] font-bold text-ink-3">
+                <Num className="player-number text-xs font-bold text-ink-3">
                   {num(player.jersey ?? "–")}
                 </Num>
                 {/* A face for every squad member: the ESPN headshot where the
@@ -297,7 +297,7 @@ function SquadSection({
                         bidi run in Persian. */}
                     <bdi>{localize(player.name)}</bdi>
                   </span>
-                  <span className="block truncate text-[11px] text-ink-3">
+                  <span className="block truncate text-xs text-ink-3">
                     {player.espnPosition ?? t(`pos.${player.position}`)}
                     {player.appearances
                       ? ` · ${t("team.appearances", { count: num(player.appearances) })}`
@@ -457,7 +457,7 @@ function StatCard({ title, rows }: { title: string; rows: Array<{ label: string;
           <div key={row.label} className="flex items-center justify-between gap-3 py-2.5">
             <dt className="text-xs text-ink-3">{row.label}</dt>
             <dd>
-              <Num className="text-base font-bold text-ink">{row.value}</Num>
+              <Num className="text-md font-bold text-ink">{row.value}</Num>
             </dd>
           </div>
         ))}
@@ -523,19 +523,19 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
         <SectionHeading title={t("xg.title")} />
         <div className="mt-3 grid grid-cols-2 gap-4">
           <div>
-            <p className="text-[11px] font-semibold text-ink-3">{t("xg.for")}</p>
-            <Num className="text-2xl font-black text-volt">{fixed(teamXg)}</Num>
+            <p className="text-xs font-semibold text-ink-3">{t("xg.for")}</p>
+            <Num className="text-lg font-black text-volt">{fixed(teamXg)}</Num>
             {perMatch(teamXg) ? (
-              <p className="text-[11px] text-ink-3">
+              <p className="text-xs text-ink-3">
                 <Num>{perMatch(teamXg)}</Num> {t("xg.perMatch")}
               </p>
             ) : null}
           </div>
           <div className="text-end">
-            <p className="text-[11px] font-semibold text-ink-3">{t("xg.against")}</p>
-            <Num className="text-2xl font-black text-ink-2">{fixed(teamXga)}</Num>
+            <p className="text-xs font-semibold text-ink-3">{t("xg.against")}</p>
+            <Num className="text-lg font-black text-ink-2">{fixed(teamXga)}</Num>
             {perMatch(teamXga) ? (
-              <p className="text-[11px] text-ink-3">
+              <p className="text-xs text-ink-3">
                 <Num>{perMatch(teamXga)}</Num> {t("xg.perMatch")}
               </p>
             ) : null}
@@ -545,7 +545,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
         {delta != null ? (
           <div className="mt-3 flex items-baseline justify-between gap-2 border-t border-line pt-3">
             <span className="text-xs text-ink-2">{t("xg.points")}</span>
-            <span className="text-[11px] text-ink-3">
+            <span className="text-xs text-ink-3">
               <Num className="text-sm font-bold text-ink">{points}</Num>
               {" · "}
               {t("xg.expected")} <Num className="text-sm font-bold text-gold">{expected?.toFixed(1)}</Num>{" "}
@@ -561,7 +561,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
           <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3">
             {extra.map((row) => (
               <div key={row.label}>
-                <dt className="text-[11px] font-semibold text-ink-3">{row.label}</dt>
+                <dt className="text-xs font-semibold text-ink-3">{row.label}</dt>
                 <dd>
                   <Num className="text-sm font-bold text-ink">{row.value}</Num>
                 </dd>
@@ -574,7 +574,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
       {situations.length > 0 ? (
         <Card className="p-4">
           <SectionHeading title={t("xg.situations")} />
-          <p className="mt-1 text-[11px] text-ink-3">{t("xg.situationsHint")}</p>
+          <p className="mt-1 text-xs text-ink-3">{t("xg.situationsHint")}</p>
           <ul className="mt-3 space-y-3">
             {situations.map((situation) => {
               const key = SITUATION_KEY[situation.situation];
@@ -582,7 +582,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
                 <li key={situation.situation}>
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-xs text-ink-2">{key ? t(key) : situation.situation}</span>
-                    <span className="text-[11px] text-ink-3">
+                    <span className="text-xs text-ink-3">
                       <Num>{situation.shots ?? 0}</Num> {t("stats.shots")} · <Num>{situation.goals ?? 0}</Num>{" "}
                       {t("stats.goals")}
                     </span>
@@ -594,7 +594,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
                         style={{ width: `${(((situation.xg ?? 0) / widest) * 100).toFixed(1)}%` }}
                       />
                     </span>
-                    <Num className="w-9 flex-none text-end text-[11px] font-bold text-ink">
+                    <Num className="w-9 flex-none text-end text-xs font-bold text-ink">
                       {fixed(situation.xg ?? 0)}
                     </Num>
                   </div>
@@ -613,13 +613,13 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
           <ul className="mt-2 divide-y divide-line">
             {players.slice(0, 10).map((player) => (
               <li key={player.id} className="flex items-center gap-3 px-3 py-2">
-                <Num className="grid h-6 w-6 flex-none place-items-center rounded-full bg-elevated text-[10px] text-ink-2">
+                <Num className="grid h-6 w-6 flex-none place-items-center rounded-full bg-elevated text-xs text-ink-2">
                   {player.jersey ?? "–"}
                 </Num>
                 <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">
                   {localize(player.name)}
                 </span>
-                <span className="flex-none text-[11px] text-ink-3">
+                <span className="flex-none text-xs text-ink-3">
                   <Num className="me-2 text-ink-2">
                     {t("xg.xa")} {fixed(player.xa ?? 0)}
                   </Num>
@@ -628,7 +628,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
               </li>
             ))}
           </ul>
-          <p className="px-3 pb-3 pt-2 text-[11px] text-ink-3">{t("xg.source")}</p>
+          <p className="px-3 pb-3 pt-2 text-xs text-ink-3">{t("xg.source")}</p>
         </Card>
       ) : null}
     </div>

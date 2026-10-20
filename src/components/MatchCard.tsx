@@ -140,14 +140,14 @@ export const MatchCard = memo(function MatchCard({
                   centred between the two rows that will always be there for a
                   live/halftime/finished card. */}
               <span className="min-h-[23px]" />
-              <span data-testid="match-center" className="text-2xl font-extrabold leading-7 text-ink">
+              <span data-testid="match-center" className="text-lg font-extrabold leading-7 text-ink">
                 {homeScore}–{awayScore}
               </span>
               <span className="flex min-h-[23px] items-center">
                 {isLive ? (
                   // Running match: red dot + minute — the live tint on the border
                   // already says "in play", so the dot is the affordance.
-                  <span className="flex items-center gap-1 text-xs font-bold text-[color:var(--live)]">
+                  <span className="flex items-center gap-1 text-xs font-bold text-live">
                     <LiveDot />
                     <Num>{minuteLabel}</Num>
                   </span>
@@ -163,12 +163,12 @@ export const MatchCard = memo(function MatchCard({
             <>
               {/* Weekday: 18px bold, 23px line height so the row is 23px tall even
                   when the period below is empty (Persian). */}
-              <span className="min-h-[23px] text-[18px] font-bold leading-[23px] text-ink-2">{parts.day}</span>
+              <span className="min-h-[23px] text-md font-bold leading-[23px] text-ink-2">{parts.day}</span>
               {/* Clock: the exact centre row. 18px bold, 23px leading, LTR isolated. */}
-              <span data-testid="match-center" className="text-[18px] font-bold leading-[23px] text-ink-2">{parts.clock}</span>
+              <span data-testid="match-center" className="text-md font-bold leading-[23px] text-ink-2">{parts.clock}</span>
               {/* Period: AM/PM for en-US, empty 23px spacer for fa-IR. Same fixed
                   height keeps the clock vertically centred in both scripts. */}
-              <span className="min-h-[23px] text-[18px] font-bold leading-[23px] text-ink-2">{parts.period}</span>
+              <span className="min-h-[23px] text-md font-bold leading-[23px] text-ink-2">{parts.period}</span>
             </>
           )}
         </div>

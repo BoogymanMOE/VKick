@@ -167,10 +167,10 @@ export function CollapsibleSection({
  */
 export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md" | "lg" | "xl" }) {
   const dims = {
-    sm: "h-6 w-6 text-[10px]",
+    sm: "h-6 w-6 text-xs",
     md: "h-9 w-9 text-xs",
     lg: "h-12 w-12 text-sm",
-    xl: "h-16 w-16 text-base",
+    xl: "h-16 w-16 text-md",
   }[size];
   const [broken, setBroken] = useState(false);
   const [remoteBroken, setRemoteBroken] = useState(false);
@@ -288,7 +288,7 @@ export function Chip({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[11px] font-bold",
+        "inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-xs font-bold",
         !normalCase && "uppercase",
         toneClass,
         className,
@@ -328,7 +328,7 @@ export function PlayerAvatar({
 }) {
   const [broken, setBroken] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const dims = { sm: "h-8 w-8 text-[10px]", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm" }[size];
+  const dims = { sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm" }[size];
   const photo = src && !broken ? src : null;
   return (
     <span
@@ -633,7 +633,7 @@ export function StatBar({
   }, []);
   return (
     <li className="space-y-1">
-      <div className="flex items-center justify-between text-[11px]">
+      <div className="flex items-center justify-between text-xs">
         <Num className={cx("w-8", home >= away ? "text-ink" : "text-ink-2")}>{home}</Num>
         <span className="text-ink-3">{label}</span>
         <Num className={cx("w-8 text-end", away >= home ? "text-ink" : "text-ink-2")}>{away}</Num>
@@ -674,7 +674,7 @@ export function ProgressBar({
   return (
     <div className="space-y-1">
       {label || valueLabel ? (
-        <div className="flex items-center justify-between text-[11px] text-ink-2">
+        <div className="flex items-center justify-between text-xs text-ink-2">
           <span>{label}</span>
           {valueLabel}
         </div>
@@ -715,7 +715,7 @@ export function Avatar({
   tone?: "volt" | "muted";
   size?: "sm" | "md" | "lg";
 }) {
-  const dims = { sm: "h-7 w-7 text-[11px]", md: "h-9 w-9 text-sm", lg: "h-12 w-12 text-lg" }[size];
+  const dims = { sm: "h-7 w-7 text-xs", md: "h-9 w-9 text-sm", lg: "h-12 w-12 text-lg" }[size];
   return (
     <span
       className={cx(
@@ -946,7 +946,7 @@ export function PredictionIcons({ kinds }: { kinds: string[] }) {
         return (
           <span
             key={k}
-            className="grid h-5 min-w-5 place-items-center rounded-full border border-volt px-1 text-[10px] font-bold text-volt"
+            className="grid h-5 min-w-5 place-items-center rounded-full border border-volt px-1 text-xs font-bold text-volt"
             style={{ backgroundColor: "color-mix(in srgb, var(--volt) 12%, transparent)" }}
             aria-hidden="true"
           >

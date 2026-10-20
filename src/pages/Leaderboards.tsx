@@ -124,7 +124,7 @@ export default function Leaderboards() {
                     )}
                   >
                     <span
-                      className="grid h-8 w-8 place-items-center rounded-full border text-[10px] font-extrabold"
+                      className="grid h-8 w-8 place-items-center rounded-full border text-xs font-extrabold"
                       style={{
                         borderColor: `color-mix(in srgb, ${team.color} 55%, transparent)`,
                         backgroundColor: `color-mix(in srgb, ${team.color} 18%, transparent)`,
@@ -133,7 +133,7 @@ export default function Leaderboards() {
                     >
                       {team.abbreviation}
                     </span>
-                    <span className="w-full truncate text-[11px] font-bold text-ink">
+                    <span className="w-full truncate text-xs font-bold text-ink">
                       {localize(team.shortName)}
                     </span>
                   </button>
@@ -225,7 +225,7 @@ function StandingStrip({
       <div className="min-w-0">
         <p className="label text-ink-3">{t("board.yourStanding")}</p>
         <p className="truncate text-sm font-bold text-ink">{t("board.you")}</p>
-        {belowPage ? <p className="text-[11px] text-ink-3">{t("board.belowPage")}</p> : null}
+        {belowPage ? <p className="text-xs text-ink-3">{t("board.belowPage")}</p> : null}
       </div>
       <div className="flex flex-none items-center gap-4 text-end">
         <div>
@@ -319,7 +319,7 @@ function BoardRow({
         {youLabel ? <Chip tone="volt">{youLabel}</Chip> : null}
         <RankDelta delta={delta} />
       </span>
-      <CountUp value={total} className="text-end text-base text-gold" />
+      <CountUp value={total} className="text-end text-md text-gold" />
     </li>
   );
 }

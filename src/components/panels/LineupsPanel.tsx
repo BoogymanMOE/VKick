@@ -95,11 +95,11 @@ function PitchSlot({ player, name }: { player: LineupPlayer | null; name: string
     <span className="flex min-w-0 flex-1 flex-col items-center">
       <span className="relative">
         <PlayerAvatar name={name} src={player.headshot} size="md" className="border-pitch/60" />
-        <Num className="absolute -end-1 -bottom-1 grid h-4 min-w-4 place-items-center rounded-full bg-volt px-0.5 text-[9px] leading-none text-black">
+        <Num className="absolute -end-1 -bottom-1 grid h-4 min-w-4 place-items-center rounded-full bg-volt px-0.5 text-xs leading-none text-black">
           {player.number > 0 ? player.number : "–"}
         </Num>
       </span>
-      <span className="mt-1 block w-full truncate text-center text-[9px] font-bold text-ink-2">{name}</span>
+      <span className="mt-1 block w-full truncate text-center text-xs font-bold text-ink-2">{name}</span>
     </span>
   );
 }
@@ -148,7 +148,7 @@ export function LineupsPanel({
         {/* The coach is not in every feed, and the lineups route has no coach
             endpoint at all — a bare "Coach:" label is worse than no line. */}
         {lineup.coach ? (
-          <p className="mt-3 border-t border-line pt-2 text-[11px] text-ink-3">
+          <p className="mt-3 border-t border-line pt-2 text-xs text-ink-3">
             {t("lineups.coach")}: {localize(lineup.coach)}
           </p>
         ) : null}
@@ -168,10 +168,10 @@ export function LineupsPanel({
                   className="flex w-[52px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center"
                   title={localize(player.name)}
                 >
-                  <Num className="grid h-6 w-6 place-items-center rounded-full bg-elevated px-0.5 text-[10px] font-black text-ink-2">
+                  <Num className="grid h-6 w-6 place-items-center rounded-full bg-elevated px-0.5 text-xs font-black text-ink-2">
                     {player.number > 0 ? player.number : "–"}
                   </Num>
-                  <span className="w-full truncate text-[10px] font-bold text-ink">
+                  <span className="w-full truncate text-xs font-bold text-ink">
                     {localize(player.name).slice(0, 1)}.
                   </span>
                 </div>

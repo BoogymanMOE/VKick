@@ -48,7 +48,7 @@ export function ReportButton({
       }}
       disabled={busy || done}
       className={cx(
-        "flex-none text-[10px] font-bold text-ink-3 underline-offset-2 transition-colors hover:text-danger hover:underline disabled:opacity-60",
+        "flex-none text-xs font-bold text-ink-3 underline-offset-2 transition-colors hover:text-danger hover:underline disabled:opacity-60",
         className,
       )}
     >

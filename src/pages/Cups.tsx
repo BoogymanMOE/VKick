@@ -110,7 +110,7 @@ export default function Cups() {
 
       {/* Name the competition the fixtures below belong to — without it a strip
           of knockout fixtures has no context. */}
-      <h2 className="mt-4 text-base font-extrabold text-ink">
+      <h2 className="mt-4 text-md font-extrabold text-ink">
         {localize(comps.find((c) => c.slug === active)?.name ?? "") ||
           competitionName(active, lang)}
       </h2>
@@ -154,7 +154,7 @@ export default function Cups() {
                   haptic("light");
                   setRoundsOverride((prev) => (prev === null ? false : !prev));
                 }}
-                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-[11px] font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
+                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-xs font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
               >
                 {roundsOverride === false ? t("common.expandAll") : t("common.collapseAll")}
               </button>
@@ -239,7 +239,7 @@ export default function Cups() {
         </>
       )}
 
-      <p className="mt-6 text-center text-[11px] text-ink-3">{t("cups.noTable")}</p>
+      <p className="mt-6 text-center text-xs text-ink-3">{t("cups.noTable")}</p>
     </>
   );
 }
@@ -331,7 +331,7 @@ function TieCard({ tie }: { tie: BracketTie }) {
       ) : null}
       <CupMatchList matches={tie.legs} bare />
       {showFooter ? (
-        <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11px]">
+        <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2 text-xs">
           {tie.winnerId ? (
             <span className="min-w-0 truncate font-bold text-volt">
               <span aria-hidden="true">→ </span>

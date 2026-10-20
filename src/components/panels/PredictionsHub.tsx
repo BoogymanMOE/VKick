@@ -246,24 +246,24 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <p className="min-w-0 text-[11px] text-ink-3">{t("predict.hubHint")}</p>
+        <p className="min-w-0 text-xs text-ink-3">{t("predict.hubHint")}</p>
         {/* The scoring tables live in the app now, not only in scoring-rules.md. */}
         <RulesButton variant="link" />
       </div>
       {showLockSoon ? (
         <Card className="border-danger/50 bg-danger/5 p-2.5">
-          <span className="text-[11px] font-bold text-danger animate-pulse">{t("predict.lockSoon")}</span>
+          <span className="text-xs font-bold text-danger animate-pulse">{t("predict.lockSoon")}</span>
         </Card>
       ) : null}
       {showHowTo ? (
         <Card className="border-volt/40 bg-elevated p-3">
           <p className="text-xs font-bold text-ink">{t("predict.howToTitle")}</p>
-          <p className="mt-1 text-[11px] text-ink-2">{t("predict.howToBody")}</p>
+          <p className="mt-1 text-xs text-ink-2">{t("predict.howToBody")}</p>
         </Card>
       ) : null}
       {halftime ? (
         <Card className="border-live/40 p-2.5">
-          <span className="text-[11px] font-bold text-live">{t("sub.halftimeBanner")}</span>
+          <span className="text-xs font-bold text-live">{t("sub.halftimeBanner")}</span>
         </Card>
       ) : null}
 
@@ -293,7 +293,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
               <div className="flex items-center gap-2">
                 <span
                   className={cx(
-                    "grid h-8 min-w-8 place-items-center rounded-full border px-1 text-[10px] font-extrabold",
+                    "grid h-8 min-w-8 place-items-center rounded-full border px-1 text-xs font-extrabold",
                     meta.tone === "gold"
                       ? "border-gold text-gold"
                       : meta.tone === "live"
@@ -306,7 +306,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-bold text-ink">{t(meta.key as never)}</span>
-                  <span className="block truncate text-[11px] text-ink-3">{t(meta.hintKey as never)}</span>
+                  <span className="block truncate text-xs text-ink-3">{t(meta.hintKey as never)}</span>
                 </span>
                 {statusChip(row)}
               </div>
@@ -615,7 +615,7 @@ function VersusEditor({
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] text-ink-3">{t("predict.versusNewHint")}</p>
+      <p className="text-xs text-ink-3">{t("predict.versusNewHint")}</p>
       {teams.map((teamId, index) => (
         <div key={teamId}>
           <p className="mb-1.5 label text-ink-2">{index === 0 ? "A" : "B"}</p>
@@ -691,7 +691,7 @@ function MechanicSummary({
   const summary = pickSummary(mechanic, payload, { t, nameOf });
   if (summary) {
     return (
-      <span className="max-w-[50%] truncate text-[10px] text-ink-3" dir="auto">
+      <span className="max-w-[50%] truncate text-xs text-ink-3" dir="auto">
         {summary}
       </span>
     );
@@ -699,12 +699,12 @@ function MechanicSummary({
   // No payload we can summarize: fall back to a bare count rather than nothing.
   if (mechanic === "sub") {
     const subs = Array.isArray(parsed.subs) ? parsed.subs.length : 0;
-    return <Num className="text-[10px] text-ink-3">{subs}</Num>;
+    return <Num className="text-xs text-ink-3">{subs}</Num>;
   }
   if (mechanic === "lineup") {
     const ids = Array.isArray(parsed.playerIds) ? parsed.playerIds.length : 0;
     return (
-      <Num className="text-[10px] text-ink-3">
+      <Num className="text-xs text-ink-3">
         {ids} · {String(parsed.formation ?? "")}
       </Num>
     );

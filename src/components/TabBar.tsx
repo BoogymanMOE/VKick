@@ -35,7 +35,7 @@ export function TabBar() {
               onClick={() => haptic("light")}
               className={({ isActive }) =>
                 cx(
-                  "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-bold transition-[color,background-color] duration-[var(--t-fast)]",
+                  "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-xs font-bold transition-[color,background-color] duration-[var(--t-fast)]",
                   // Inactive tabs sit at secondary, not muted: "available but
                   // not selected", never "disabled".
                   isActive && !isTeamSubPage

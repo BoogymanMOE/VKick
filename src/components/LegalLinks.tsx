@@ -12,7 +12,7 @@ export function LegalLinks({ className }: { className?: string }) {
   const { t } = useI18n();
   const linkClass = "underline decoration-line underline-offset-2 transition-colors hover:text-ink-2";
   return (
-    <p className={cx("text-center text-[11px] text-ink-3", className)}>
+    <p className={cx("text-center text-xs text-ink-3", className)}>
       <Link to={LEGAL_ROUTES.privacy} className={linkClass}>
         {t("legal.privacyTitle")}
       </Link>

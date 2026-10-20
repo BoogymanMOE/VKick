@@ -211,7 +211,7 @@ function MatchRatings({
       <section className="mt-4">
         <SectionHeading
           title={t("match.tabRatings")}
-          action={<span className="text-[11px] text-ink-3">{t("ratings.tapToRate")}</span>}
+          action={<span className="text-xs text-ink-3">{t("ratings.tapToRate")}</span>}
         />
         <ul className="mt-2 space-y-2">
           {rows.map((rating, index) => (

@@ -37,7 +37,7 @@ import type { Match } from "../types";
  * language wanted a tighter pill without shrinking what a thumb can hit.
  */
 const LEAGUE_CHIP =
-  "relative h-9 flex-none rounded-full border px-3.5 text-[13px] font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97] after:absolute after:-inset-x-0.5 after:-inset-y-1 after:content-['']";
+  "relative h-9 flex-none rounded-full border px-3.5 text-sm font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97] after:absolute after:-inset-x-0.5 after:-inset-y-1 after:content-['']";
 
 /** Selected league chip: filled volt pill — the row's one "picked" affordance. */
 const LEAGUE_CHIP_ON = "border-volt bg-volt/15 text-volt";
@@ -51,8 +51,8 @@ function GroupHeader({ id, label, count, tone }: { id: string; label: string; co
       <h2
         id={id}
         className={cx(
-          "text-[13px] font-extrabold",
-          tone === "live" ? "text-[color:var(--live)]" : tone === "gold" ? "text-gold" : "text-ink-2",
+          "text-sm font-extrabold",
+          tone === "live" ? "text-live" : tone === "gold" ? "text-gold" : "text-ink-2",
         )}
       >
         {label}
@@ -367,7 +367,7 @@ export default function Matches() {
                 haptic("light");
                 navigate("/matches");
               }}
-              className="inline-flex min-h-11 flex-none items-center rounded-full border border-volt px-3 text-[11px] font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+              className="inline-flex min-h-11 flex-none items-center rounded-full border border-volt px-3 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
             >
               {t("matches.showAll")}
             </button>
@@ -455,7 +455,7 @@ export default function Matches() {
               <section className="mt-4">
                 <div className="mb-2 flex items-center gap-2">
                   <StarFilledIcon className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
-                  <h2 className="text-[13px] font-bold text-ink-2">{t("matches.myTeams")}</h2>
+                  <h2 className="text-sm font-bold text-ink-2">{t("matches.myTeams")}</h2>
                 </div>
                 <ul className="space-y-2">
                   {myTeamsMatches.map((match, index) => (
@@ -534,7 +534,7 @@ export default function Matches() {
 
         {/* Sync note, not a second refresh button: pull-to-refresh and the
           TopBar icon already carry the action, so this line only reports it. */}
-        <p className="mt-6 text-center text-[11px] text-ink-3">
+        <p className="mt-6 text-center text-xs text-ink-3">
           {t("matches.hint")}
           {syncStale
             ? ` · ${t("matches.syncDelayed")}`

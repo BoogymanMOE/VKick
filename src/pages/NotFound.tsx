@@ -16,15 +16,15 @@ export default function NotFound() {
     <>
       <TopBar title={t("notFound.title")} back />
       <Card className="mt-6 flex flex-col items-center p-6 text-center">
-        <p className="font-num text-4xl font-black text-ink-3" aria-hidden="true">
+        <p className="font-num text-display font-black text-ink-3" aria-hidden="true">
           404
         </p>
         <p className="mt-2 text-sm font-bold text-ink">{t("notFound.body")}</p>
-        <p className="mt-1 break-all text-[11px] text-ink-3">{location.pathname}</p>
+        <p className="mt-1 break-all text-xs text-ink-3">{location.pathname}</p>
         <Button className="mt-4" onClick={() => window.history.back()}>
           {t("common.back")}
         </Button>
-        <p className="mt-3 text-[11px] text-ink-3">{t("notFound.browse")}</p>
+        <p className="mt-3 text-xs text-ink-3">{t("notFound.browse")}</p>
       </Card>
     </>
   );

@@ -163,7 +163,7 @@ export default function Profile() {
       <Card className="mt-3 flex items-center gap-3 p-4">
         <Avatar name={displayName} tone="volt" size="lg" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-bold text-ink">{displayName}</p>
+          <p className="truncate text-md font-bold text-ink">{displayName}</p>
           <p className="truncate text-xs text-ink-2">
             {viaUsername && user?.username
               ? `@${user.username}`
@@ -538,7 +538,7 @@ function FavoriteTeamsStrip() {
             className="flex w-[76px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
           >
             <TeamBadge team={team} size="sm" />
-            <span className="w-full truncate text-[10px] font-bold text-ink">{localize(team.shortName)}</span>
+            <span className="w-full truncate text-xs font-bold text-ink">{localize(team.shortName)}</span>
           </Link>
         </li>
       ))}

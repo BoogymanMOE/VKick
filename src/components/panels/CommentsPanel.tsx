@@ -140,12 +140,12 @@ export function CommentsSection({
           {comments.map((comment) => (
             <li key={comment.id} className="rounded-card border border-line bg-surface p-3">
               <div className="flex items-center gap-2">
-                <Num className="grid h-6 min-w-[38px] place-items-center rounded-md border border-line bg-elevated px-1 text-[11px] text-ink-2">
+                <Num className="grid h-6 min-w-[38px] place-items-center rounded-md border border-line bg-elevated px-1 text-xs text-ink-2">
                   {comment.minuteDisplay ?? "?"}
                 </Num>
                 <span
                   className={cx(
-                    "min-w-0 flex-1 truncate text-[11px] font-bold",
+                    "min-w-0 flex-1 truncate text-xs font-bold",
                     comment.isMine ? "text-gold" : "text-ink-2",
                   )}
                 >
@@ -155,7 +155,7 @@ export function CommentsSection({
                   <button
                     type="button"
                     onClick={() => (onOpenClip ? onOpenClip(comment) : setClipUrl(comment.mediaLink ?? ""))}
-                    className="flex-none text-[11px] font-bold text-volt underline-offset-2 hover:underline"
+                    className="flex-none text-xs font-bold text-volt underline-offset-2 hover:underline"
                   >
                     {t("comments.attachOpen")} ↗
                   </button>
@@ -215,10 +215,10 @@ export function CommentsSection({
           className="mt-2 w-full resize-none rounded-card border border-line bg-elevated p-3 text-sm text-ink placeholder:text-ink-3 focus-visible:outline-2 focus-visible:outline-volt"
         />
         <div className="mt-1 flex items-center justify-between">
-          <span className="text-[10px] text-ink-3">
+          <span className="text-xs text-ink-3">
             {t("comments.media")}: {t("comments.mediaHint")}
           </span>
-          <Num className="text-[10px] text-ink-3">{text.length}/500</Num>
+          <Num className="text-xs text-ink-3">{text.length}/500</Num>
         </div>
         <input
           value={mediaLink}

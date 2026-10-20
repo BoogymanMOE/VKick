@@ -84,7 +84,7 @@ export function LeaguePickerSheet({ open, onClose }: { open: boolean; onClose: (
           <Chip tone={full ? "gold" : "volt"}>
             {t("leagues.count", { count: followed.count, max: MAX_FOLLOWED_LEAGUES })}
           </Chip>
-          <span className="min-w-0 flex-1 text-end text-[10px] leading-tight text-ink-3">
+          <span className="min-w-0 flex-1 text-end text-xs leading-tight text-ink-3">
             {t(full ? "leagues.capHint" : "leagues.notifyHint", { max: MAX_FOLLOWED_LEAGUES })}
           </span>
         </div>
@@ -161,7 +161,7 @@ export function LeaguePickerSheet({ open, onClose }: { open: boolean; onClose: (
                         {soon ? (
                           <Chip tone="muted">{t("browse.soon")}</Chip>
                         ) : on ? (
-                          <span className="flex flex-none items-center gap-1 text-[11px] font-bold text-volt">
+                          <span className="flex flex-none items-center gap-1 text-xs font-bold text-volt">
                             <CheckIcon className="marker-pop h-3.5 w-3.5" aria-hidden="true" />
                             {t("leagues.following")}
                           </span>

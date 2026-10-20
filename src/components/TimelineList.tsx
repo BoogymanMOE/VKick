@@ -88,19 +88,19 @@ function PinnedComment({
     >
       <div className="flex items-center gap-2">
         <span
-          className="grid h-6 w-6 flex-none place-items-center rounded-full border border-line bg-surface text-[10px] font-extrabold text-ink-2"
+          className="grid h-6 w-6 flex-none place-items-center rounded-full border border-line bg-surface text-xs font-extrabold text-ink-2"
           aria-hidden="true"
         >
           {(comment.isMine ? t("comments.you") : comment.author).slice(0, 1).toUpperCase()}
         </span>
-        <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-ink-2">
+        <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink-2">
           {comment.isMine ? t("comments.you") : comment.author}
         </span>
         {comment.mediaLink ? (
           <button
             type="button"
             onClick={() => onOpenClip(comment)}
-            className="flex-none text-[11px] font-bold text-volt underline-offset-2 hover:underline"
+            className="flex-none text-xs font-bold text-volt underline-offset-2 hover:underline"
           >
             {t("comments.attachOpen")} ↗
           </button>
@@ -192,7 +192,7 @@ export function TimelineList({
       {liveMinute !== undefined ? (
         <li
           role="status"
-          className="flex items-center gap-2 px-1 py-1 text-xs font-bold text-[color:var(--live)]"
+          className="flex items-center gap-2 px-1 py-1 text-xs font-bold text-live"
         >
           <LiveDot />
           <span>{t("status.live")}</span>
@@ -354,7 +354,7 @@ export function TimelineList({
                 {/* The composer is intentionally unmounted for now, so the
                     thread must SAY it is view-only: a thread the user can
                     open but never answer otherwise reads as a broken form. */}
-                <p role="note" className="mb-1 text-[11px] leading-relaxed text-ink-3">
+                <p role="note" className="mb-1 text-xs leading-relaxed text-ink-3">
                   {t("comments.readOnly")}
                 </p>
                 <ul>

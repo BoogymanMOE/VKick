@@ -77,7 +77,7 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
             onClick={() => onSelect(day)}
             className={`min-h-11 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-[12px] border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.96] ${
               isSelected
-                ? "border-volt bg-volt text-[color:var(--bg-base)] active:bg-volt/80"
+                ? "border-volt bg-volt text-on-volt active:bg-volt/80"
                 : isToday
                   ? "border-volt bg-transparent text-volt active:bg-volt/15"
                   : "border-line bg-transparent text-ink-3 active:bg-line/20"
@@ -86,13 +86,13 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
             <span className="text-xs font-bold">
               {t(`dates.day.${DAY_NAMES[day.getDay()]}` as never)}
             </span>
-            <span className="text-[15px] font-bold leading-none">
+            <span className="text-md font-bold leading-none">
               {digits.format(day.getDate())}
             </span>
             {isToday ? (
               <span
                 aria-hidden="true"
-                className={`mt-0.5 h-1 w-1 rounded-full ${isSelected ? "bg-[color:var(--bg-base)]" : "bg-volt"}`}
+                className={`mt-0.5 h-1 w-1 rounded-full ${isSelected ? "bg-on-volt" : "bg-volt"}`}
               />
             ) : null}
           </button>

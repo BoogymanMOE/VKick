@@ -114,10 +114,10 @@ export default function Table() {
                   )}
                 >
                   <TeamBadge team={club} size="sm" />
-                  <span className="w-full truncate text-[11px] font-bold text-ink">
+                  <span className="w-full truncate text-xs font-bold text-ink">
                     {localize(club.shortName)}
                   </span>
-                  <span className="text-[10px] text-ink-3">{t(`league.${club.league}`)}</span>
+                  <span className="text-xs text-ink-3">{t(`league.${club.league}`)}</span>
                 </button>
               </li>
             ))}
@@ -141,7 +141,7 @@ export default function Table() {
               title={tabLabel(active)}
               action={
                 standingsQuery.data?.length ? (
-                  <span className="text-[11px] text-ink-3">
+                  <span className="text-xs text-ink-3">
                     {t("table.gw", { gw: standingsQuery.data[0]?.played ?? 0 })}
                   </span>
                 ) : null
@@ -207,7 +207,7 @@ export default function Table() {
                           ))}
                         </ul>
                       </div>
-                      <p className="mt-2 text-[11px] text-ink-3">{t("table.expectedHint")}</p>
+                      <p className="mt-2 text-xs text-ink-3">{t("table.expectedHint")}</p>
                     </>
                   ) : (
                     <EmptyState title={t("table.expectedEmpty")} hint={t("table.expectedEmptyHint")} />
@@ -356,7 +356,7 @@ function BrowseContent() {
                             <span className="block truncate text-sm font-bold text-ink">
                               {localize(comp.name)}
                             </span>
-                            <span className="block truncate text-[11px] text-ink-3">
+                            <span className="block truncate text-xs text-ink-3">
                               {soon ? t("browse.comingSoon") : t("browse.liveScores")}
                             </span>
                           </span>
@@ -469,7 +469,7 @@ function FormStrip({ form }: { form: string }) {
       role="img"
       aria-label={`${t("table.form")}: ${label}`}
       dir="ltr"
-      className="flex flex-none gap-0.5 text-[11px] font-black leading-none"
+      className="flex flex-none gap-0.5 text-xs font-black leading-none"
     >
       {results.map((result, index) => (
         <span

@@ -58,15 +58,15 @@ export function RatingRow({
               {t(`pos.${rating.position}`)}
             </Chip>
             {hasCrowd ? (
-              <span className="text-[11px] text-ink-3">{t("ratings.votes", { count: rating.votes })}</span>
+              <span className="text-xs text-ink-3">{t("ratings.votes", { count: rating.votes })}</span>
             ) : (
-              <span className="text-[11px] text-ink-3">{t("ratings.pending")}</span>
+              <span className="text-xs text-ink-3">{t("ratings.pending")}</span>
             )}
           </div>
           {/* The eye-test comment — the crowd's why, not just its number. */}
           {(rating.myComment || rating.latestComment) && onTap ? (
             <div className="mt-1 flex items-start gap-2">
-              <p className="min-w-0 flex-1 line-clamp-2 text-[11px] italic text-ink-3">
+              <p className="min-w-0 flex-1 line-clamp-2 text-xs italic text-ink-3">
                 “{rating.myComment || rating.latestComment}”
               </p>
               {!rating.myComment && rating.latestCommentId ? (
@@ -78,14 +78,14 @@ export function RatingRow({
 
         {/* Crowd rating — gold, the only accent that means crowd approval. */}
         <div className="flex-none text-center">
-          <Num className={cx("block text-xl leading-none", hasCrowd ? "text-gold" : "text-ink-3")}>
+          <Num className={cx("block text-lg leading-none", hasCrowd ? "text-gold" : "text-ink-3")}>
             {hasCrowd ? rating.crowdRating!.toFixed(1) : "–"}
           </Num>
           <span className="label text-ink-3">{t("ratings.crowd")}</span>
         </div>
 
         <div className="flex-none text-center">
-          <Num className="block text-xl leading-none text-ink">{rating.fantasyPoints}</Num>
+          <Num className="block text-lg leading-none text-ink">{rating.fantasyPoints}</Num>
           <span className="label text-ink-3">{t("ratings.points")}</span>
         </div>
 
@@ -108,7 +108,7 @@ export function RatingRow({
               <Num>{rating.myRating}</Num>
             </span>
           ) : (
-            <span className="flex-none text-[11px] font-bold text-ink-3">{t("ratings.tapToRate")}</span>
+            <span className="flex-none text-xs font-bold text-ink-3">{t("ratings.tapToRate")}</span>
           )
         ) : null}
       </Tag>
@@ -156,7 +156,7 @@ export function RatingSlider({
         onPointerUp={(e) => onChange(Number((e.target as HTMLInputElement).value))}
         className="h-11 w-20 accent-[var(--volt)]"
       />
-      <Num className="text-[11px] text-ink-3">{value ?? "–"}</Num>
+      <Num className="text-xs text-ink-3">{value ?? "–"}</Num>
     </label>
   );
 }

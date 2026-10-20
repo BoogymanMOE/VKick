@@ -49,7 +49,7 @@ export function RulesButton({
                 className,
               )
             : cx(
-                "-my-2 inline-flex min-h-11 flex-none items-center px-1 text-[11px] font-bold text-volt transition-colors duration-[var(--t-fast)] hover:underline",
+                "-my-2 inline-flex min-h-11 flex-none items-center px-1 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:underline",
                 className,
               )
         }
@@ -66,7 +66,7 @@ export function RulesButton({
             </li>
           ))}
         </ul>
-        <p className="mt-3 text-[11px] leading-relaxed text-ink-3">{t("rules.settle")}</p>
+        <p className="mt-3 text-xs leading-relaxed text-ink-3">{t("rules.settle")}</p>
       </BottomSheet>
     </>
   );

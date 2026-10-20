@@ -17,7 +17,7 @@ export function InlineAd() {
           arbitrary pill, so the slot reads as branded furniture. */}
       <span
         aria-label="Advertisement"
-        className="grid h-7 min-w-[34px] flex-none place-items-center rounded-md border border-line bg-surface px-1.5 text-[10px] font-bold uppercase tracking-wide text-ink-3"
+        className="grid h-7 min-w-[34px] flex-none place-items-center rounded-md border border-line bg-surface px-1.5 text-xs font-bold uppercase tracking-wide text-ink-3"
       >
         Ad
       </span>

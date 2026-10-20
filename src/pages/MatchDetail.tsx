@@ -203,7 +203,7 @@ export default function MatchDetail() {
           flashScore ? "goal-flash border-volt/60 bg-elevated" : "border-line",
         )}
       >
-        <p className="pb-2 text-center text-[11px] font-bold text-ink-2">
+        <p className="pb-2 text-center text-xs font-bold text-ink-2">
           {leagueLabel} · {formatKickoff(new Date(match.kickoff_at), locale)}
         </p>
         <div className="flex items-center justify-between gap-3">
@@ -220,21 +220,21 @@ export default function MatchDetail() {
                 the honest read, and dashes ("– : –") read as a broken scoreboard.
                 Once a side has a number the score rolls up as it moves. */}
             {match.home_score === null && match.away_score === null ? (
-              <Num className="text-[28px] leading-none text-ink-2">
+              <Num className="text-lg leading-none text-ink-2">
                 {formatClock(new Date(match.kickoff_at), locale)}
               </Num>
             ) : (
               <span className="flex items-baseline gap-1">
                 {match.home_score === null ? (
-                  <Num className="text-[48px] leading-none text-ink">–</Num>
+                  <Num className="text-display leading-none text-ink">–</Num>
                 ) : (
-                  <CountUp value={match.home_score} className="text-[48px] leading-none text-ink" />
+                  <CountUp value={match.home_score} className="text-display leading-none text-ink" />
                 )}
-                <Num className="text-[48px] leading-none text-ink">:</Num>
+                <Num className="text-display leading-none text-ink">:</Num>
                 {match.away_score === null ? (
-                  <Num className="text-[48px] leading-none text-ink">–</Num>
+                  <Num className="text-display leading-none text-ink">–</Num>
                 ) : (
-                  <CountUp value={match.away_score} className="text-[48px] leading-none text-ink" />
+                  <CountUp value={match.away_score} className="text-display leading-none text-ink" />
                 )}
               </span>
             )}
@@ -535,7 +535,7 @@ function StatCompareRow({
     <div dir="ltr">
       <div className="flex items-center gap-2 text-xs">
         <Num className="w-8 text-end font-black text-ink">{show(homeValue)}</Num>
-        <span className="flex-1 truncate text-center text-[11px] font-bold text-ink-2">{label}</span>
+        <span className="flex-1 truncate text-center text-xs font-bold text-ink-2">{label}</span>
         <Num className="w-8 font-black text-ink">{show(awayValue)}</Num>
       </div>
       <div className="mt-1 flex h-1.5 gap-0.5 overflow-hidden">
@@ -596,7 +596,7 @@ function MatchPlayerTable({
             <tr key={str(r.player_id)} className="border-t border-line">
               <td className="p-2">
                 <span className="block truncate font-bold text-ink">{localize(str(r.full_name))}</span>
-                <span className="text-[10px] text-ink-3">
+                <span className="text-xs text-ink-3">
                   {num(r.minutes_played)}&#39; {r.started ? "· XI" : ""}
                 </span>
               </td>

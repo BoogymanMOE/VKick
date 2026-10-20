@@ -39,17 +39,17 @@ export function ClubFixtureCard({
     const goalsFor = live.home.id === team.id ? live.homeScore : live.awayScore;
     const goalsAgainst = live.home.id === team.id ? live.awayScore : live.homeScore;
     status = (
-      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-live">
+      <span className="inline-flex items-center gap-1 text-xs font-bold text-live">
         <LiveDot />
         <Num>
           {goalsFor}-{goalsAgainst}
         </Num>
-        <span className="text-[10px] font-normal text-ink-3">{live.minute}</span>
+        <span className="text-xs font-normal text-ink-3">{live.minute}</span>
       </span>
     );
   } else if (next) {
     status = (
-      <span className="flex w-full flex-col items-center gap-0.5 text-[10px] leading-tight text-ink-3">
+      <span className="flex w-full flex-col items-center gap-0.5 text-xs leading-tight text-ink-3">
         <span className="w-full truncate">
           {t("myTeams.vsOpp", { opp: localize(opponentOf(team.id, next).shortName) })}
         </span>
@@ -58,12 +58,12 @@ export function ClubFixtureCard({
     );
   } else if (last) {
     status = (
-      <span className="w-full truncate text-[11px] text-ink-3">
+      <span className="w-full truncate text-xs text-ink-3">
         <Num>{last.homeScore}</Num>-<Num>{last.awayScore}</Num>
       </span>
     );
   } else {
-    status = <span className="text-[10px] text-ink-3">{t("matches.noMatch")}</span>;
+    status = <span className="text-xs text-ink-3">{t("matches.noMatch")}</span>;
   }
 
   const body = (
@@ -74,7 +74,7 @@ export function ClubFixtureCard({
       )}
     >
       <TeamBadge team={team} size="md" />
-      <span className="w-full truncate text-[11px] font-bold text-ink">{name}</span>
+      <span className="w-full truncate text-xs font-bold text-ink">{name}</span>
       {status}
       {anchored ? (
         <span className="text-gold">
