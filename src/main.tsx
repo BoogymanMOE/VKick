@@ -24,13 +24,9 @@ try {
   /* non-Telegram browser: no-op */
 }
 
-// Fade out the index.html boot splash once React owns the screen. The class is
-// on <html> so the transition lives entirely in the head style; the node is
-// removed after the fade so it can never intercept pointer events.
-requestAnimationFrame(() => {
-  document.documentElement.classList.add("boot-done");
-  setTimeout(() => document.getElementById("boot")?.remove(), 350);
-});
+// The index.html boot splash lives INSIDE #root now, so React's very first
+// render replaces it — no hand-over animation or manual removal needed, and
+// a dead splash node can never intercept pointer events again.
 
 // The one and only cache. (A second client used to exist in App.tsx, nested
 // inside this provider, so it silently won — the two disagreed on

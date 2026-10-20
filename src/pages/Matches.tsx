@@ -93,7 +93,9 @@ export default function Matches() {
   const { push } = useToast();
   const navigate = useNavigate();
   const locale = lang === "fa" ? "fa-IR" : undefined;
-  const queryClient = useQueryClient();
+  /** Localized short day label ("Wed 21" / "پ، ۲۱") for the empty-day copy. */
+  const dayLabel = (d: Date) =>
+    new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric" }).format(d);  const queryClient = useQueryClient();
   useLiveUpdates();
 
   // Deep link from Browse: /matches?league=eng.1 narrows the feed to one
@@ -373,8 +375,9 @@ export default function Matches() {
         ) : null}
 
         {/* No favorites yet: above the groups, because it is the answer to an
-            empty feed rather than a footnote under one. */}
-        {showPickBanner ? (
+            empty feed rather than a footnote under one. Hidden while the first
+            payload loads — the skeleton list stands in for the whole feed. */}
+        {showPickBanner && !matchesQuery.isLoading ? (
           <div
             role="region"
             aria-label={t("matches.pickBanner")}
@@ -411,6 +414,7 @@ export default function Matches() {
             <MatchCardSkeleton />
             <MatchCardSkeleton />
             <MatchCardSkeleton />
+            <MatchCardSkeleton />
           </ul>
         ) : hasFeedError ? (
           <div className="mt-4">
@@ -420,8 +424,12 @@ export default function Matches() {
           <div className="mt-4">
             <EmptyState
               icon="⚽"
-              title={t("matches.empty")}
-              hint={t("matches.emptyHint")}
+              title={t("matches.emptyDay", { day: dayLabel(selectedDay) })}
+              hint={
+                nextMatchDay
+                  ? t("matches.emptyNext", { day: dayLabel(nextMatchDay) })
+                  : t("matches.emptyHint")
+              }
               action={
                 nextMatchDay ? (
                   <button
@@ -432,7 +440,7 @@ export default function Matches() {
                     }}
                     className="min-h-11 rounded-full border border-volt px-5 text-sm font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
                   >
-                    {t("matches.nextDay")}
+                    {t("matches.goToDay", { day: dayLabel(nextMatchDay) })}
                   </button>
                 ) : null
               }

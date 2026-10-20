@@ -20,25 +20,42 @@
         background: #081613;
         color-scheme: dark;
       }
-      /* Boot splash: visible from the first paint, removed by React when the
-         shell is interactive. Kept here (not in index.css) so it needs zero
-         JS and zero app CSS to render. */
+      /* Boot splash: sits INSIDE #root (React's first render replaces it).
+         Literal brand colours, not tokens — this runs before the CSS bundle.
+         The 150ms animation delay keeps fast loads flash-free; reduced motion
+         gets a static plate with no spinning ring. */
       #boot {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
+        min-height: 100svh;
         display: grid;
-        place-items: center;
+        place-content: center;
+        justify-items: center;
+        gap: 18px;
         background: #081613;
-        transition: opacity 250ms ease-out;
-      }
-      #boot img {
-        width: 96px;
-        height: 96px;
-      }
-      html.boot-done #boot {
         opacity: 0;
-        pointer-events: none;
+        animation: bootIn 0.2s ease 0.15s forwards;
+      }
+      .boot-ring {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 3px solid #1e3b34;
+        border-top-color: #1fbfa0;
+        animation: bootSpin 0.8s linear infinite;
+      }
+      @keyframes bootIn {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes bootSpin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-ring {
+          animation: none;
+        }
       }
     </style>
     <meta
@@ -75,10 +92,12 @@
     <!-- END Tapsell ad loader -->
   </head>
   <body>
-    <div id="boot" aria-hidden="true">
-      <img src="/vkick-mark.svg" alt="" width="96" height="96" />
+    <div id="root">
+      <div id="boot" role="status" aria-label="Loading">
+        <img src="/vkick-mark.svg" width="64" height="64" alt="" />
+        <span class="boot-ring"></span>
+      </div>
     </div>
-    <div id="root"></div>
     <!-- Telegram's official SDK: initData must exist when AuthProvider first
          reads it, or the Telegram login silently degrades to a guest account
          (no bot pushes).

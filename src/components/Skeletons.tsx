@@ -2,27 +2,28 @@ import { cx } from "../lib/cx";
 
 const bar = "shimmer rounded";
 
-/** Signature animation 8: 1.4s shimmer sweep, shaped like the real component. */
+/** Signature animation 8: 1.4s shimmer sweep, shaped like the real component.
+ *  Height matches a filled match card (≈108px): verified in the Task 3 check. */
 export function MatchCardSkeleton() {
   return (
-    <li className="rounded-card border border-line bg-surface p-3">
-      <div className="mb-2 flex items-center justify-between">
+    <li className="rounded-card border border-line bg-surface p-2">
+      <div className="mb-1.5 flex items-center justify-between">
         <span className={cx(bar, "h-3 w-28")} />
         <span className={cx(bar, "h-5 w-16 rounded-md")} />
       </div>
       {/* Square crest placeholders, not circles: TeamBadge renders the crest in
           a square footprint so nothing changes shape when the card fills in. */}
       <div className="flex items-center gap-2">
-        <span className={cx(bar, "h-9 w-9")} />
+        <span className={cx(bar, "h-8 w-8")} />
         <span className={cx(bar, "h-4 w-20")} />
         <span className="flex-1" />
         <span className={cx(bar, "h-7 w-5")} />
         <span className={cx(bar, "h-4 w-2")} />
         <span className={cx(bar, "h-7 w-5")} />
         <span className={cx(bar, "h-4 w-20")} />
-        <span className={cx(bar, "h-9 w-9")} />
+        <span className={cx(bar, "h-8 w-8")} />
       </div>
-      <div className="mt-3 flex items-center justify-between border-t border-line pt-2">
+      <div className="mt-2 flex items-center justify-between border-t border-line pt-1">
         <span className={cx(bar, "h-3 w-20")} />
         <span className={cx(bar, "h-5 w-24 rounded-full")} />
       </div>

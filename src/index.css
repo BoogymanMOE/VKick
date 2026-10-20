@@ -269,6 +269,12 @@
       background-position: -200% 0;
     }
   }
+  /* Reduced motion: the skeleton shows its mid-gradient fill statically. */
+  @media (prefers-reduced-motion: reduce) {
+    .shimmer {
+      animation: none;
+    }
+  }
 
   /* Signature animation 1: goal flash — volt sweep across a match card. */
   .goal-flash::after {
