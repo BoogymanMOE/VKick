@@ -5,7 +5,15 @@ import { ConfettiBurst } from "../components/Confetti";
 import { MatchCard } from "../components/MatchCard";
 import { TopBar } from "../components/TopBar";
 import { useToast } from "../components/toastContext";
-import { Card, EmptyState, ErrorState } from "../components/ui";
+import { EmptyState, ErrorState } from "../components/ui";
+import { useLocalState } from "../lib/useLocalState";
+import {
+  BallIcon,
+  CloseIcon,
+  PlusIcon,
+  RefreshIcon,
+  StarFilledIcon,
+} from "../components/icons";
 import { MatchCardSkeleton } from "../components/Skeletons";
 import { useNow } from "../hooks/useNow";
 import { cx } from "../lib/cx";
@@ -15,12 +23,6 @@ import { useI18n } from "../i18n/context";
 import { formatClock } from "../lib/format";
 import { competitionName } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
-import {
-  BallIcon,
-  PlusIcon,
-  RefreshIcon,
-  StarFilledIcon,
-} from "../components/icons";
 import { DateStrip } from "../components/DateStrip";
 import { InlineAd } from "../components/InlineAd";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
@@ -42,6 +44,7 @@ const LEAGUE_CHIP_ON = "border-volt bg-volt/15 text-volt";
 const LEAGUE_CHIP_OFF = "border-line text-ink-3";
 
 const pad = (n: number) => String(n).padStart(2, "0");
+
 /**
  * Local calendar-day key. NEVER use toISOString() for this: it is UTC, so east
  * of UTC (this app's users are UTC+3:30/+4) local midnight is still the previous
@@ -58,6 +61,13 @@ const STATUS_RANK: Record<string, number> = { live: 0, halftime: 0, scheduled: 1
 const byPlay = (a: Match, b: Match) =>
   (STATUS_RANK[a.status] ?? 1) - (STATUS_RANK[b.status] ?? 1) ||
   new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime();
+
+/**
+ * Pick-banner dismiss is persisted so a user who already said “don’t show me
+ * this again” keeps that choice after reload — the stored id beats the
+ * computed “we don’t have any favorites” default.
+ */
+const PICK_BANNER_KEY = "verdikick.pickBannerDismissed";
 
 export default function Matches() {
   const { t, lang, localize } = useI18n();
@@ -78,6 +88,9 @@ export default function Matches() {
   // (from Browse) takes precedence over both.
   const [leagueFilter, setLeagueFilter] = useState<string | null>(null);
   const activeLeague = league ?? leagueFilter ?? undefined;
+
+  const [bannerDismissed, setBannerDismissed] = useLocalState<boolean>(PICK_BANNER_KEY, false);
+  const showPickBanner = favCount === 0 && !bannerDismissed;
 
   const matchesQuery = useMatches({ league: activeLeague });
   // Stable identity: every memo below keys on it, and `data ?? []` would hand
@@ -244,7 +257,7 @@ export default function Matches() {
             py-1 with -my-1 keeps the chips' 4px invisible hit band INSIDE this
             scroll container: overflow-x-auto clips vertically too, so without
             the padding the extra target area above and below is unreachable. */}
-        {!league ? (
+        {!league && (followed.count > 0 || favCount > 0) ? (
           <div className="-mx-[var(--space-page-x,16px)] -my-1 mt-4 flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
             {followed.count > 0 ? (
               <>
@@ -316,22 +329,33 @@ export default function Matches() {
 
         {/* No favorites yet: above the groups, because it is the answer to an
             empty feed rather than a footnote under one. */}
-        {favCount === 0 ? (
-          <Card className="pitch-watermark mt-4 p-5 text-center">
-            {/* An icon at the head of the card: the empty state is a moment to
-                act, not a blank slab, and the ball names the app it belongs to. */}
-            <BallIcon className="mx-auto h-8 w-8 text-volt" />
-            <p className="mt-2 text-sm font-bold text-ink">{t("myTeams.empty")}</p>
-            <p className="mt-1 text-xs text-ink-3">{t("myTeams.hint")}</p>
-            {/* The one action this card owns: everything else on the screen is
-                a different job, so there is no second button to split the intent. */}
+        {showPickBanner ? (
+          <div
+            role="region"
+            aria-label={t("matches.pickBanner")}
+            className="mt-2 flex min-h-11 items-center gap-2 rounded-card border border-line bg-elevated ps-3 pe-1"
+          >
+            <StarFilledIcon className="h-4 w-4 flex-none text-gold" aria-hidden="true" />
+            <p className="min-w-0 flex-1 text-xs font-bold text-ink">{t("matches.pickBanner")}</p>
             <Link
               to="/onboarding"
-              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-volt px-5 text-sm font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
+              onClick={() => haptic("light")}
+              className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-xs font-bold text-black"
             >
-              {t("matches.pickTeams")}
+              {t("matches.pickBannerCta")}
             </Link>
-          </Card>
+            <button
+              type="button"
+              aria-label={t("matches.pickBannerDismiss")}
+              onClick={() => {
+                haptic("light");
+                setBannerDismissed(true);
+              }}
+              className="grid h-11 w-11 flex-none place-items-center rounded-full text-ink-3"
+            >
+              <CloseIcon className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         ) : null}
 
         {/* Feed states: three skeletons while the first payload lands, an error
@@ -395,10 +419,12 @@ export default function Matches() {
 
             {/* Everything else on the day. */}
             {otherMatches.length > 0 && (
-              <section className="mt-4">
-                <h2 className="mb-2 text-[13px] font-bold text-ink-2">
-                  {t("matches.otherMatches")}
-                </h2>
+              <section className={favCount === 0 ? "mt-2" : "mt-4"}>
+                {favCount > 0 && (
+                  <h2 className="mb-2 text-[13px] font-bold text-ink-2">
+                    {t("matches.otherMatches")}
+                  </h2>
+                )}
                 <ul className="space-y-2">
                   {otherMatches.map((match, index) => (
                     <MatchCard key={match.id} match={match} index={index} />
