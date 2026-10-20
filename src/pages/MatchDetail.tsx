@@ -29,6 +29,7 @@ import { TEAM_FALLBACK } from "../lib/colors";
 import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
 import { RATINGS_ENABLED } from "../lib/features";
+import { flipIntoPlace, getFlipFirst } from "../lib/flip";
 import { formatClock, formatKickoff, formatKickoffDate } from "../lib/format";
 import { useNow } from "../hooks/useNow";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
@@ -105,6 +106,38 @@ export default function MatchDetail() {
     }
     scoreRef.current = score;
   }, [match?.home_score, match?.away_score, match]);
+
+  // FLIP: the tapped feed card recorded its score block's First rect; the
+  // hero's score plays the inversion once it exists. Ran off a ref + the
+  // hero's presence (the hero mounts after the match query resolves, so the
+  // plain mount effect would fire before it), and each rect is consumed on
+  // read — one tap, one play, never on re-renders or background refetches.
+  // Reduced-motion users get the hero immediately, no transition.
+  const flipPlayed = useRef(false);
+  useEffect(() => {
+    if (!match || flipPlayed.current) return;
+    const heroScore = document.querySelector('[data-flip-key="match-score"]');
+    if (!(heroScore instanceof HTMLElement)) return;
+    const first = getFlipFirst("match-score");
+    if (!first) return;
+    flipPlayed.current = true;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Two frames: the page-in wrapper is still settling its transform on
+    // frame one, so the Last rect is measured after layout has committed.
+    //
+    // The frames are deliberately NOT cancelled on cleanup. `prefetchMatch`
+    // warms the query cache, so the hero usually exists on the FIRST render
+    // — and React StrictMode's dev double-invoke then runs this effect twice,
+    // with the cleanup firing in between. Cancelling there killed the
+    // transition before it could play. One play per navigation is guaranteed
+    // by the store instead: the First rect is consumed on read, so the second
+    // pass finds nothing to play.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (heroScore.isConnected) flipIntoPlace(heroScore, first);
+      });
+    });
+  }, [match]);
 
   const currentMinute = useMemo(() => {
     const m = /\d+/.exec(match?.minute_display ?? "");
@@ -224,7 +257,9 @@ export default function MatchDetail() {
                 {formatClock(new Date(match.kickoff_at), locale)}
               </Num>
             ) : (
-              <span className="flex items-baseline gap-1">
+              /* This row is the FLIP's Last frame: same key the tapped card
+                 recorded its First rect under (see MatchCard onPointerDown). */
+              <span data-flip-key="match-score" className="flex items-baseline gap-1">
                 {match.home_score === null ? (
                   <Num className="text-display leading-none text-ink">–</Num>
                 ) : (

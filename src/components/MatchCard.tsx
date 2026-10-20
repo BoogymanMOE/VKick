@@ -7,6 +7,7 @@ import { useCompetitionLabel } from "../hooks/useApi";
 import { formatKickoff } from "../lib/format";
 import { kickoffParts } from "../lib/format";
 import { LiveDot, Num, TeamBadge } from "./ui";
+import { recordFlipFirst } from "../lib/flip";
 
 /**
  * Memoized: the live feed re-renders its page every tick, and neither prop
@@ -83,7 +84,18 @@ export const MatchCard = memo(function MatchCard({
     >
       <Link
         to={`/match/${match.id}`}
-        onPointerDown={() => prefetchMatch(match.id)}
+        onPointerDown={() => {
+          // Record the score block's position BEFORE the route change — this
+          // is the FLIP's First frame (matches with no score yet have no key
+          // here, and the detail hero simply renders without the transition).
+          const scoreEl = document.querySelector(
+            `[data-flip-key="match-${match.id}-score"]`,
+          );
+          if (scoreEl instanceof HTMLElement) {
+            recordFlipFirst("match-score", scoreEl);
+          }
+          prefetchMatch(match.id);
+        }}
         aria-label={label}
         // The 3-column grid flips with `dir`, so home sits on the right and away
         // on the left in Persian; explicit so the card reads correctly even if
@@ -140,7 +152,14 @@ export const MatchCard = memo(function MatchCard({
                   centred between the two rows that will always be there for a
                   live/halftime/finished card. */}
               <span className="min-h-[23px]" />
-              <span data-testid="match-center" className="text-lg font-extrabold leading-7 text-ink">
+              {/* The score carries a flip key: MatchDetail finds its First
+                  rect under the SAME key to play the feed→hero handoff. A key
+                  on every card is fine — only the tapped one is recorded. */}
+              <span
+                data-testid="match-center"
+                data-flip-key={`match-${match.id}-score`}
+                className="text-lg font-extrabold leading-7 text-ink"
+              >
                 {homeScore}–{awayScore}
               </span>
               <span className="flex min-h-[23px] items-center">
