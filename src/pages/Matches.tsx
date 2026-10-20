@@ -264,11 +264,17 @@ export default function Matches() {
       <ConfettiBurst trigger={burst} />
       <TopBar
         title={t("matches.title")}
-        subtitle={new Date().toLocaleDateString(lang === "fa" ? "fa-IR" : undefined, {
-          weekday: "short",
+        // The subtitle is the SELECTED day, not today: the DateStrip below
+        // can move the feed a week, and a header that stayed on Wednesday
+        // while the cards showed Friday would be the one lying. calendar:
+        // "gregory" keeps fa-IR on the same month/day number the strip's
+        // chips print (fa-IR's default Persian calendar renames them).
+        subtitle={new Intl.DateTimeFormat(locale, {
+          weekday: "long",
           day: "numeric",
           month: "short",
-        })}
+          calendar: "gregory",
+        }).format(selectedDay)}
         right={
           // The non-gesture refresh path the pull-to-refresh comment promises:
           // a real 44px button, reachable by keyboard and announced by name.
