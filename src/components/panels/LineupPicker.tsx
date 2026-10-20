@@ -65,7 +65,7 @@ function LineupPitch({
               <span
                 key={player ? player.id : `empty-${rowIndex}-${index}`}
                 className={cx(
-                  "grid h-6 flex-1 place-items-center rounded-full border text-xs font-bold tabular-nums",
+                  "grid h-6 flex-1 place-items-center rounded-lg border text-xs font-bold tabular-nums",
                   player ? "border-transparent bg-volt text-black" : "border-line border-dashed text-ink-3",
                 )}
               >

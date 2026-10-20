@@ -547,7 +547,7 @@ export function Segmented<T extends string>({
       ref={trackRef}
       role="tablist"
       className={cx(
-        "relative flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1",
+        "relative flex gap-1 overflow-x-auto rounded-lg border border-line bg-surface p-1",
         className,
       )}
     >
@@ -569,7 +569,7 @@ export function Segmented<T extends string>({
       {indicator ? (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute top-1 bottom-1 rounded-full bg-elevated shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--volt)_35%,transparent)] transition-transform duration-[var(--t-fast)] ease-[var(--ease-pop)]"
+          className="pointer-events-none absolute top-1 bottom-1 rounded-lg bg-elevated shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--volt)_35%,transparent)] transition-transform duration-[var(--t-fast)] ease-[var(--ease-pop)]"
           style={{ left: 0, width: indicator.width, transform: `translateX(${indicator.start}px)` }}
         />
       ) : null}
@@ -593,7 +593,7 @@ export function Segmented<T extends string>({
             // fills the track, and with whitespace-nowrap each tab's min-content
             // width is its label, so a crowded row (the five match tabs in
             // Persian) scrolls rather than breaking a word.
-            "relative flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap transition-colors duration-[var(--t-fast)]",
+            "relative flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-bold whitespace-nowrap transition-colors duration-[var(--t-fast)]",
             value === option.value ? "text-volt" : "text-ink-2 hover:text-ink",
           )}
         >
@@ -819,7 +819,10 @@ export function Switch({
         haptic("light");
         onChange(!checked);
       }}
-      className="relative h-6 w-11 flex-none rounded-full border border-line transition-colors duration-[var(--t-fast)] after:absolute after:-inset-2.5 after:content-['']"
+      // The track is a control, not a badge: rounded-lg keeps it in the
+      // "secondary control" family with the other switches, and the knob
+      // stays a circle on top of it.
+      className="relative h-6 w-11 flex-none rounded-lg border border-line transition-colors duration-[var(--t-fast)] after:absolute after:-inset-2.5 after:content-['']"
       style={{
         backgroundColor: checked ? "var(--volt)" : "color-mix(in srgb, var(--text-muted) 35%, transparent)",
       }}
@@ -906,7 +909,7 @@ export function ErrorState({ title, hint, onRetry }: { title?: string; hint?: st
           haptic("light");
           onRetry();
         }}
-        className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+        className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
       >
         <RefreshIcon />
         {t("common.retry")}

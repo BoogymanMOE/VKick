@@ -82,7 +82,7 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
             // so the user always knows where they are in the week.
             aria-current={isToday ? "date" : undefined}
             onClick={() => onSelect(day)}
-            className={`min-h-11 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-[12px] border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.96] ${
+            className={`min-h-11 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-lg border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.96] ${
               isSelected
                 ? "border-volt bg-volt text-on-volt active:bg-volt/80"
                 : isToday

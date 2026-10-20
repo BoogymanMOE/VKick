@@ -158,7 +158,7 @@ export default function Table() {
                 action={
                   <Link
                     to="/onboarding"
-                    className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                    className="min-h-11 rounded-lg border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
                   >
                     {t("table.emptyAction")}
                   </Link>
@@ -277,7 +277,7 @@ function BrowseContent() {
   return (
     <>
       <div
-        className="mt-3 grid grid-cols-3 gap-1 rounded-full border border-line bg-surface p-1"
+        className="mt-3 grid grid-cols-3 gap-1 rounded-lg border border-line bg-surface p-1"
         role="group"
         aria-label={t("browse.filterLabel")}
       >
@@ -297,7 +297,7 @@ function BrowseContent() {
               setFilter(value);
             }}
             className={cx(
-              "min-h-11 rounded-full text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+              "min-h-11 rounded-lg text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
               filter === value ? "bg-elevated text-volt" : "text-ink-2 hover:text-ink",
             )}
           >

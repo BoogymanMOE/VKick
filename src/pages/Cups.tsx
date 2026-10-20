@@ -154,7 +154,7 @@ export default function Cups() {
                   haptic("light");
                   setRoundsOverride((prev) => (prev === null ? false : !prev));
                 }}
-                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-xs font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
+                className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-xs font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
               >
                 {roundsOverride === false ? t("common.expandAll") : t("common.collapseAll")}
               </button>

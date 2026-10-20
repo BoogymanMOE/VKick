@@ -37,7 +37,7 @@ export function PickerTabs({
             onChange(group.value);
           }}
           className={cx(
-            "min-h-11 flex-none rounded-full border px-3.5 text-xs font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+            "min-h-11 flex-none rounded-lg border px-3.5 text-xs font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
             value === group.value ? "border-volt text-volt" : "border-line text-ink-3 hover:text-ink-2",
           )}
         >

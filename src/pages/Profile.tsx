@@ -672,7 +672,7 @@ function WhatsNew() {
               haptic("light");
               setSeenRelease(latest.version);
             }}
-            className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
           >
             <CloseIcon className="h-3 w-3" />
             {t("whatsNew.dismiss")}

@@ -249,7 +249,7 @@ export function TimelineList({
                     // 36px visual with an invisible 44px+ hit band (the same
                     // pattern as the feed's league chips): a full 44px visual
                     // control would balloon the row past the compact band.
-                    className="relative inline-flex h-9 items-center gap-1 rounded-full px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
+                    className="relative inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
                   >
                     <span aria-hidden="true">💬</span>
                     <Num>{count}</Num>
@@ -336,7 +336,7 @@ export function TimelineList({
                     // 36px visual with an invisible 44px+ hit band (the same
                     // pattern as the feed's league chips): a full 44px visual
                     // control would balloon the row past the compact band.
-                    className="relative inline-flex h-9 items-center gap-1 rounded-full px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
+                    className="relative inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
                   >
                     <span aria-hidden="true">💬</span>
                     <Num>{count}</Num>

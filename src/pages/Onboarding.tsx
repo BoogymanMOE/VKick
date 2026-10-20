@@ -494,7 +494,7 @@ export default function Onboarding() {
           <button
             type="button"
             onClick={finish}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-full text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-lg text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
           >
             {t("onboarding.skip")}
           </button>
@@ -541,7 +541,7 @@ function Intro({ onDone }: { onDone: () => void }) {
             haptic("light");
             onDone();
           }}
-          className="min-h-11 rounded-full px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
+          className="min-h-11 rounded-lg px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
         >
           {t("intro.skip")}
         </button>
