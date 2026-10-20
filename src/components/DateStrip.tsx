@@ -11,6 +11,10 @@ const DAY_NAMES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 interface DateStripProps {
   selected: Date;
   onSelect: (date: Date) => void;
+  /** Day keys (same format as `dayKey`) that have at least one match — the
+   *  chip carries a small dot so a quiet Saturday reads as quiet before the
+   *  tap. Absent = no dots (call sites without the data unchanged). */
+  daysWithMatches?: Set<string>;
 }
 
 const startOfDay = (d: Date) => {
@@ -21,9 +25,11 @@ const startOfDay = (d: Date) => {
 
 /**
  * Local calendar-day key — never `toISOString()`, which is UTC and files a
- * local midnight east of UTC under the previous day.
+ * local midnight east of UTC under the previous day. Exported so call sites
+ * that precompute per-day facts (the fixture dots) build keys that are
+ * guaranteed to match the chips' own keys.
  */
-const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+export const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 /**
  * Yesterday … +3 as local calendar days. `setDate` (not millisecond arithmetic)
@@ -38,7 +44,7 @@ function buildDays(): Date[] {
   });
 }
 
-export function DateStrip({ selected, onSelect }: DateStripProps) {
+export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProps) {
   const { t, lang } = useI18n();
   const locale = lang === "fa" ? "fa-IR" : undefined;
   // Localized day number: Farsi reads ۱۴ not 14.
@@ -66,6 +72,7 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
         const key = dayKey(day);
         const isToday = key === todayKey;
         const isSelected = key === selectedKey;
+        const hasMatches = daysWithMatches?.has(key) ?? false;
         return (
           <button
             key={key}
@@ -94,6 +101,11 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
                 aria-hidden="true"
                 className={`mt-0.5 h-1 w-1 rounded-full ${isSelected ? "bg-on-volt" : "bg-volt"}`}
               />
+            ) : hasMatches && !isSelected ? (
+              // Days with fixtures get a 2px dot so the user can scan without
+              // tapping; the selected chip needs no marker (the volt fill IS
+              // the marker).
+              <span aria-hidden="true" className="mt-0.5 h-0.5 w-0.5 rounded-full bg-ink-3" />
             ) : null}
           </button>
         );

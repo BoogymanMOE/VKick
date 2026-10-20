@@ -23,7 +23,7 @@ import { useI18n } from "../i18n/context";
 import { formatClock } from "../lib/format";
 import { competitionName } from "../lib/leagues";
 import { haptic, notifyHaptic } from "../lib/telegram";
-import { DateStrip } from "../components/DateStrip";
+import { DateStrip, dayKey as chipDayKey } from "../components/DateStrip";
 import { InlineAd } from "../components/InlineAd";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
@@ -145,6 +145,16 @@ export default function Matches() {
     () => dayMatches.filter((m) => isFavorite(m.home.id) || isFavorite(m.away.id)),
     [dayMatches, isFavorite],
   );
+
+  // Which strip chips carry a fixture dot: keys built with DateStrip's own
+  // exported dayKey, so the dot can never disagree with the chip it sits on.
+  const daysWithMatches = useMemo(() => {
+    const set = new Set<string>();
+    for (const match of matches) {
+      set.add(chipDayKey(new Date(match.kickoffAt)));
+    }
+    return set;
+  }, [matches]);
   const otherMatches = useMemo(
     () => dayMatches.filter((m) => !myTeamsMatches.includes(m)),
     [dayMatches, myTeamsMatches],
@@ -300,7 +310,7 @@ export default function Matches() {
         <PullIndicator pull={pull} />
 
         {/* Date strip: 5 day chips, today selected by default. */}
-        <DateStrip selected={selectedDay} onSelect={setPicked} />
+        <DateStrip selected={selectedDay} onSelect={setPicked} daysWithMatches={daysWithMatches} />
 
         {/* Favorite leagues — the start page's own way in. One tap re-scopes
             the whole feed (concept pillar 1); the last chip opens the picker,
