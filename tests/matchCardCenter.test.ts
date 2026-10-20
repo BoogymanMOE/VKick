@@ -1,0 +1,263 @@
+/**
+ * Task 3: browser proof for the dead-centre match card.
+ *
+ * States: upcoming, live, halftime, finished, very long team name, and the same
+ * upcoming card in FA.
+ *
+ * Viewports: 390x844, 360x640, 1360x768.
+ *
+ * For every card: measure [data-testid="match-center"] centre vs the card centre
+ * (both x and y within 1px). Also check match-center height <= 28px (no wrap),
+ * and that the rectangles of match-mid, the league label, and both team columns
+ * do not intersect.
+ *
+ * Block crest image requests once and confirm badges still show their
+ * abbreviation.
+ *
+ * Save screenshots to .ui-shots/review3/ (gitignored) and print the measurements
+ * as a table.
+ */
+import { chromium } from "playwright";
+import { mkdirSync } from "node:fs";
+
+const EXE = process.env.CHROMIUM_PATH ? process.env.CHROMIUM_PATH : "C:/Program Files/Google/Chrome/Application/chrome.exe";
+
+interface Viewport {
+  name: string;
+  width: number;
+  height: number;
+}
+
+const VIEWPORTS: Viewport[] = [
+  { name: "390x844", width: 390, height: 844 },
+  { name: "360x640", width: 360, height: 640 },
+  { name: "1360x768", width: 1360, height: 768 },
+];
+
+interface TestCase {
+  name: string;
+  lang: "en" | "fa";
+  mock?: {
+    status: "scheduled" | "live" | "halftime" | "finished";
+    homeScore?: number | null;
+    awayScore?: number | null;
+    minute?: string | null;
+    isHalftime?: boolean;
+  };
+  longNames?: boolean;
+}
+
+function makeMock(browserToday: string, tc: TestCase): any {
+  const base: any = {
+    id: "m1",
+    league: "eng.1",
+    home_team_id: "h1",
+    away_team_id: "a1",
+    kickoff_at: browserToday + "T14:00:00Z",
+    home_formation: null,
+    away_formation: null,
+    last_synced_at: null,
+    home_name: "Home City",
+    home_short: "Home",
+    home_abbr: "H",
+    home_color: "#1fbfa0",
+    home_logo: null,
+    away_name: "Away City",
+    away_short: "Away",
+    away_abbr: "A",
+    away_color: "#ff5a4d",
+    away_logo: null,
+  };
+  if (tc.mock) {
+    base.status = tc.mock.status;
+    base.home_score = tc.mock.homeScore ?? null;
+    base.away_score = tc.mock.awayScore ?? null;
+    base.minute_display = tc.mock.minute ?? null;
+    if (tc.mock.isHalftime) {
+      base.status = "live";
+      base.isHalftime = true;
+    }
+  }
+  if (tc.longNames) {
+    base.home_name = "Borussia Mönchengladbach";
+    base.home_short = "Borussia Mönchengladbach";
+    base.away_name = "Brighton & Hove Albion";
+    base.away_short = "Brighton & Hove Albion";
+  }
+  return base;
+}
+
+
+
+async function runOne(
+  page: import("playwright").Page,
+  vp: Viewport,
+  tc: TestCase,
+  browserToday: string,
+): Promise<void> {
+  const lang = tc.lang;
+  await page.setExtraHTTPHeaders({ lang });
+  await page.setViewportSize({ width: vp.width, height: vp.height });
+
+  const mock = makeMock(browserToday, tc);
+
+  await page.route("**/api/matches*", (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ matches: [mock], count: 1 }),
+    }),
+  );
+  await page.route("**/api/competitions*", (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ name: "Premier League" }),
+    }),
+  );
+  await page.route("**/*logo*.png", (r) => r.fulfill({ body: "" }));
+  await page.route("**/*logo*.webp", (r) => r.fulfill({ body: "" }));
+  await page.route("**/*crest**", (r) => r.fulfill({ body: "" }));
+  await page.route("**/team/**/logo", (r) => r.fulfill({ body: "" }));
+
+  await page.goto("http://localhost:5173/#/matches", { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(3500);
+
+  const cardEls = await page.$$eval(
+    "li.list-in > a, li.list-in > Link",
+    (els: HTMLElement[]) =>
+      els.map((el) => {
+        const cr = el.getBoundingClientRect();
+        const cardCx = cr.left + cr.width / 2;
+        const cardCy = cr.top + cr.height / 2;
+        const centerEls = Array.from(el.querySelectorAll('[data-testid="match-center"]')) as HTMLElement[];
+        const centerData = centerEls.map((cc) => {
+          const r = cc.getBoundingClientRect();
+          const midX = r.left + r.width / 2;
+          const midY = r.top + r.height / 2;
+          return {
+            rect: { l: r.left, t: r.top, w: r.width, h: r.height },
+            mid: { x: midX, y: midY },
+            dx: Math.abs(midX - cardCx),
+            dy: Math.abs(midY - cardCy),
+            ok: Math.abs(midX - cardCx) <= 1 && Math.abs(midY - cardCy) <= 1 && r.height <= 28,
+          };
+        });
+        const midEls = Array.from(el.querySelectorAll('[data-testid="match-mid"]')) as HTMLElement[];
+        const midData = midEls.map((m) => {
+          const r = m.getBoundingClientRect();
+          return { l: r.left, t: r.top, w: r.width, h: r.height };
+        });
+        const leagueEls = Array.from(el.querySelectorAll("p.text-ink-3.text-xs")) as HTMLElement[];
+        const leagueData = leagueEls.map((l) => {
+          const r = l.getBoundingClientRect();
+          return { l: r.left, t: r.top, w: r.width, h: r.height };
+        });
+        const teamColEls = Array.from(el.querySelectorAll("div.flex.min-w-0.flex-col")) as HTMLElement[];
+        const teamColData = teamColEls.map((t) => {
+          const r = t.getBoundingClientRect();
+          return { l: r.left, t: r.top, w: r.width, h: r.height };
+        });
+        void leagueEls;
+        void teamColEls;
+        const badgeEls = Array.from(el.querySelectorAll("span.font-num.font-extrabold")) as HTMLElement[];
+        const badgeTexts = badgeEls.map((b) => b.textContent?.trim() ?? "");
+        const issues: string[] = [];
+        for (const m of midData) {
+          for (const l of leagueData) {
+            if (!(m.l + m.w <= l.l || l.l + l.w <= m.l || m.t + m.h <= l.t || l.t + l.h <= m.t))
+              issues.push("mid intersects league");
+          }
+          for (const t of teamColData) {
+            if (!(m.l + m.w <= t.l || t.l + t.w <= m.l || m.t + m.h <= t.t || t.t + t.h <= m.t))
+              issues.push("mid intersects teamCol");
+          }
+        }
+        return {
+          card: { l: cr.left, t: cr.top, w: cr.width, h: cr.height, cx: cardCx, cy: cardCy },
+          centers: centerData,
+          mids: midData,
+          leagues: leagueData,
+          teamCols: teamColData,
+          badgeTexts,
+          issues,
+          screenshotEl: el,
+        };
+      }),
+  );
+
+  const lines: string[] = [];
+  lines.push(`\n=== viewport=${vp.name} lang=${lang} case=${tc.name} ===`);
+  lines.push(`mock status=${tc.mock?.status ?? "scheduled"} kickoff=${tc.mock?.minute ?? "scheduled"}`);
+  for (let i = 0; i < cardEls.length; i++) {
+    const card = cardEls[i]!;
+    lines.push(
+      `  CARD[${i}]: rect=(${card.card.l.toFixed(1)},${card.card.t.toFixed(1)}) ${card.card.w.toFixed(1)}x${card.card.h.toFixed(1)} center=(${card.card.cx.toFixed(1)},${card.card.cy.toFixed(1)})`,
+    );
+    for (let j = 0; j < card.centers.length; j++) {
+      const c = card.centers[j]!;
+      lines.push(
+        `    center[${j}]: rect=(${c.rect.l.toFixed(1)},${c.rect.t.toFixed(1)}) ${c.rect.w.toFixed(1)}x${c.rect.h.toFixed(1)} mid=(${c.mid.x.toFixed(1)},${c.mid.y.toFixed(1)}) dx=${c.dx.toFixed(2)} dy=${c.dy.toFixed(2)} h=${c.rect.h.toFixed(1)} ${c.ok ? "OK" : "FAIL"}`,
+      );
+    }
+    lines.push(`    badgeTexts=${JSON.stringify(card.badgeTexts)}`);
+    if (card.issues.length > 0) {
+      lines.push(`    ISSUES: ${card.issues.join(", ")}`);
+    } else {
+      lines.push(`    OK: mid does not intersect league or team cols`);
+    }
+    const fn = `.ui-shots/review3/card-${tc.name}-${lang}-${vp.name}.png`;
+    try {
+      await card.screenshotEl.screenshot({ path: fn });
+      lines.push(`    screenshot: ${fn}`);
+    } catch (e) {
+      lines.push(`    screenshot: FAILED (${(e as Error).message})`);
+    }
+  }
+  console.log(lines.join("\n"));
+}
+
+async function main() {
+  mkdirSync(".ui-shots/review3", { recursive: true });
+  const b = await chromium.launch({
+    executablePath: EXE,
+    args: ["--no-first-run", "--no-default-browser-check", "--headless=new"],
+  });
+  const p = await b.newPage();
+
+  const browserToday = await p.evaluate(() => {
+    const d = new Date();
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    return d.getFullYear() + "-" + (m < 10 ? "0" : "") + m + "-" + (day < 10 ? "0" : "") + day;
+  });
+  console.log("browser today:", browserToday);
+
+  const TEST_CASES: TestCase[] = [
+    { name: "upcoming", lang: "en", mock: { status: "scheduled" } },
+    { name: "upcoming-FA", lang: "fa", mock: { status: "scheduled" } },
+    { name: "live", lang: "en", mock: { status: "live", homeScore: 1, awayScore: 0, minute: "67" } },
+    { name: "halftime", lang: "en", mock: { status: "live", homeScore: 2, awayScore: 1, minute: "45", isHalftime: true } },
+    { name: "finished", lang: "en", mock: { status: "finished", homeScore: 3, awayScore: 2 } },
+    { name: "long-names", lang: "en", longNames: true, mock: { status: "scheduled" } },
+  ];
+
+  for (const vp of VIEWPORTS) {
+    for (const tc of TEST_CASES) {
+      try {
+        await runOne(p, vp, tc, browserToday);
+      } catch (e) {
+        console.log(`\n=== viewport=${vp.name} lang=${tc.lang} case=${tc.name}: ERROR ${(e as Error).message} ===`);
+      }
+    }
+  }
+
+  await b.close();
+  console.log("\nDone. Screenshots in .ui-shots/review3/");
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
