@@ -8,6 +8,7 @@ import { LineupsSkeleton,
   TimelineSkeleton,
 } from "../components/Skeletons";
 import { TimelineList } from "../components/TimelineList";
+import { adaptComments } from "../lib/adaptComments";
 import { TopBar } from "../components/TopBar";
 import { LineupsPanel } from "../components/panels/LineupsPanel";
 
@@ -320,7 +321,15 @@ function TimelineTab({
     queryFn: () => api.getTimeline(matchId),
     refetchInterval: live ? 20_000 : false,
   });
+  // Pinned minute-comments, for the rows' comment count trigger. Read-only: the
+  // composer was deliberately unmounted by the "core five" trim (8d73687) —
+  // this restores the reading side, not the writing side.
+  const commentsQuery = useQuery({
+    queryKey: ["comments", matchId],
+    queryFn: () => api.getComments(matchId),
+  });
   const events = query.data?.events ?? [];
+  const pinned = adaptComments(commentsQuery.data?.comments ?? [], undefined);
   const adapted = events
     .map(adaptTimelineEvent)
     .filter((e) => e.type !== "other"); // drop commentary noise; keep kickoff + structured events
@@ -340,7 +349,7 @@ function TimelineTab({
   return (
     <TimelineList
       events={adapted}
-      comments={[]}
+      comments={pinned}
       liveMinute={live ? minute : undefined}
       teamColor={teamColor}
       teamNames={teamNames}
