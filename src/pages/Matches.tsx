@@ -5,7 +5,7 @@ import { ConfettiBurst } from "../components/Confetti";
 import { MatchCard } from "../components/MatchCard";
 import { TopBar } from "../components/TopBar";
 import { useToast } from "../components/toastContext";
-import { EmptyState, ErrorState } from "../components/ui";
+import { Chip, CollapsibleSection, EmptyState, ErrorState, Num } from "../components/ui";
 import { useLocalState } from "../lib/useLocalState";
 import {
   BallIcon,
@@ -44,6 +44,25 @@ const LEAGUE_CHIP_ON = "border-volt bg-volt/15 text-volt";
 const LEAGUE_CHIP_OFF = "border-line text-ink-3";
 
 const pad = (n: number) => String(n).padStart(2, "0");
+
+function GroupHeader({ id, label, count, tone }: { id: string; label: string; count: number; tone: "live" | "gold" | "muted" }) {
+  return (
+    <div className="mb-2 mt-5 flex items-center gap-2 first:mt-0">
+      <h2
+        id={id}
+        className={cx(
+          "text-[13px] font-extrabold",
+          tone === "live" ? "text-[color:var(--live)]" : tone === "gold" ? "text-gold" : "text-ink-2",
+        )}
+      >
+        {label}
+      </h2>
+      <Chip tone={tone}>
+        <Num>{count}</Num>
+      </Chip>
+    </div>
+  );
+}
 
 /**
  * Local calendar-day key. NEVER use toISOString() for this: it is UTC, so east
@@ -128,6 +147,32 @@ export default function Matches() {
     () => dayMatches.filter((m) => !myTeamsMatches.includes(m)),
     [dayMatches, myTeamsMatches],
   );
+
+  // The rest of the day, grouped by state: a busy matchday is otherwise one
+  // column of twelve half-time borders. Live first, then the break, then what
+  // is still ahead, then the record. Parts of the day before group boundaries
+  // never repeat: `Match` folds a real `halftime` server status into `live`, so
+  // the break flag carves the half-time group out of the live column.
+  const groups = useMemo(() => {
+    const g = { live: [] as Match[], halftime: [] as Match[], scheduled: [] as Match[], finished: [] as Match[] };
+    for (const m of otherMatches) {
+      if (m.status === "finished") g.finished.push(m);
+      else if (m.isHalftime) g.halftime.push(m);
+      else if (m.status === "live") g.live.push(m);
+      else g.scheduled.push(m);
+    }
+    return g;
+  }, [otherMatches]);
+  const isToday = selectedKey === dayKey(startOfDay(new Date(now)));
+  // Finished collapsed by default whenever anything sits above it (my teams
+  // included); expanded by default when it is the day's only content. A saved
+  // per-user choice always beats this computed default — useLocalState reads
+  // the stored value before it ever looks at `defaultOpen`.
+  const onlyFinishedHasContent =
+    myTeamsMatches.length === 0 &&
+    groups.live.length === 0 &&
+    groups.halftime.length === 0 &&
+    groups.scheduled.length === 0;
 
   // First later day that has matches, for the empty state's shortcut.
   const nextMatchDay = useMemo(() => {
@@ -417,20 +462,64 @@ export default function Matches() {
               <InlineAd />
             )}
 
-            {/* Everything else on the day. */}
-            {otherMatches.length > 0 && (
-              <section className={favCount === 0 ? "mt-2" : "mt-4"}>
-                {favCount > 0 && (
-                  <h2 className="mb-2 text-[13px] font-bold text-ink-2">
-                    {t("matches.otherMatches")}
-                  </h2>
-                )}
+            {/* Everything else on the day, grouped by state. */}
+            {groups.live.length > 0 && (
+              <section aria-labelledby="feed-group-live">
+                <GroupHeader id="feed-group-live" label={t("matches.groupLive")} count={groups.live.length} tone="live" />
                 <ul className="space-y-2">
-                  {otherMatches.map((match, index) => (
+                  {groups.live.map((match, index) => (
                     <MatchCard key={match.id} match={match} index={index} />
                   ))}
                 </ul>
               </section>
+            )}
+
+            {groups.halftime.length > 0 && (
+              <section aria-labelledby="feed-group-halftime">
+                <GroupHeader
+                  id="feed-group-halftime"
+                  label={t("matches.groupHalftime")}
+                  count={groups.halftime.length}
+                  tone="gold"
+                />
+                <ul className="space-y-2">
+                  {groups.halftime.map((match, index) => (
+                    <MatchCard key={match.id} match={match} index={index} />
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {groups.scheduled.length > 0 && (
+              <section aria-labelledby="feed-group-scheduled">
+                <GroupHeader
+                  id="feed-group-scheduled"
+                  label={t(isToday ? "matches.groupLater" : "matches.groupUpcoming")}
+                  count={groups.scheduled.length}
+                  tone="muted"
+                />
+                <ul className="space-y-2">
+                  {groups.scheduled.map((match, index) => (
+                    <MatchCard key={match.id} match={match} index={index} />
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {groups.finished.length > 0 && (
+              <CollapsibleSection
+                id="feed-finished"
+                level={2}
+                title={t("matches.groupFinished")}
+                count={groups.finished.length}
+                defaultOpen={onlyFinishedHasContent}
+              >
+                <ul className="space-y-2">
+                  {groups.finished.map((match, index) => (
+                    <MatchCard key={match.id} match={match} index={index} />
+                  ))}
+                </ul>
+              </CollapsibleSection>
             )}
           </div>
         ) : null}

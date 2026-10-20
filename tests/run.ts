@@ -103,6 +103,14 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["sentinel", runSentinelTests],
   ["faStrings", runFaStringsTests],
   ["matchReconcile", runMatchReconcileTests],
+  // Browser group: needs playwright (skips itself cleanly without it).
+  [
+    "useLocalState",
+    async () => {
+      const mod = (await import("./useLocalState.test.js")) as { runUseLocalStateTests(): Promise<void> };
+      await mod.runUseLocalStateTests();
+    },
+  ],
   // Owns getDb() too (router under test, module-scope handle): stays last.
   ["teamStats", runTeamStatsTests],
 ];
