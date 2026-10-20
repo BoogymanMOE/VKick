@@ -47,7 +47,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 
 function GroupHeader({ id, label, count, tone }: { id: string; label: string; count: number; tone: "live" | "gold" | "muted" }) {
   return (
-    <div className="mb-2 mt-5 flex items-center gap-2 first:mt-0">
+    <div className="mb-2 mt-lg flex items-center gap-2 first:mt-0">
       <h2
         id={id}
         className={cx(
@@ -305,7 +305,7 @@ export default function Matches() {
             scroll container: overflow-x-auto clips vertically too, so without
             the padding the extra target area above and below is unreachable. */}
         {!league && (followed.count > 0 || favCount > 0) ? (
-          <div className="-mx-[var(--space-page-x,16px)] -my-1 mt-4 flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
+          <div className="-mx-[var(--space-page-x,16px)] -my-1 mt-md flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
             {followed.count > 0 ? (
               <>
                 <button
@@ -355,7 +355,7 @@ export default function Matches() {
         {/* Single-league deep link: name the scope, let the user leave. Without
           this the screen looks like a broken feed when the window is quiet. */}
         {league ? (
-          <div className="mt-4 flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3">
+          <div className="mt-md flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3">
             <p className="min-w-0 truncate text-xs text-ink-2">
               {t("matches.leagueScope", {
                 league: competitionName(league, lang),
@@ -410,18 +410,18 @@ export default function Matches() {
             card only when there is nothing cached, and an empty day that offers
             the next day with football instead of a dead end. */}
         {matchesQuery.isLoading ? (
-          <ul className="mt-4 space-y-2" aria-busy="true">
+          <ul className="mt-md space-y-2" aria-busy="true">
             <MatchCardSkeleton />
             <MatchCardSkeleton />
             <MatchCardSkeleton />
             <MatchCardSkeleton />
           </ul>
         ) : hasFeedError ? (
-          <div className="mt-4">
+          <div className="mt-md">
             <ErrorState onRetry={() => matchesQuery.refetch()} />
           </div>
         ) : dayMatches.length === 0 ? (
-          <div className="mt-4">
+          <div className="mt-md">
             <EmptyState
               icon="⚽"
               title={t("matches.emptyDay", { day: dayLabel(selectedDay) })}
@@ -452,7 +452,7 @@ export default function Matches() {
           <div key={selectedKey} className="day-swap">
             {/* My teams group: matches where a favorite team is playing. */}
             {favCount > 0 && myTeamsMatches.length > 0 && (
-              <section className="mt-4">
+              <section className="mt-md">
                 <div className="mb-2 flex items-center gap-2">
                   <StarFilledIcon className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
                   <h2 className="text-sm font-bold text-ink-2">{t("matches.myTeams")}</h2>
@@ -534,7 +534,7 @@ export default function Matches() {
 
         {/* Sync note, not a second refresh button: pull-to-refresh and the
           TopBar icon already carry the action, so this line only reports it. */}
-        <p className="mt-6 text-center text-xs text-ink-3">
+        <p className="mt-xl text-center text-xs text-ink-3">
           {t("matches.hint")}
           {syncStale
             ? ` · ${t("matches.syncDelayed")}`

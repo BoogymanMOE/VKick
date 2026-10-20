@@ -160,7 +160,7 @@ export default function Profile() {
     <>
       <TopBar title={t("profile.title")} />
 
-      <Card className="mt-3 flex items-center gap-3 p-4">
+      <Card className="mt-md flex items-center gap-3 p-4">
         <Avatar name={displayName} tone="volt" size="lg" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-md font-bold text-ink">{displayName}</p>
@@ -192,9 +192,9 @@ export default function Profile() {
         </Chip>
       </Card>
 
-      <section className="mt-6">
+      <section className="mt-xl">
         <SectionHeading title={t("profile.account")} />
-        <div className="space-y-2">
+        <div className="space-y-sm">
           <FavoriteTeamsStrip />
           <ListRow
             label={t("profile.telegram")}
@@ -241,9 +241,9 @@ export default function Profile() {
 
       <ReferralSection />
 
-      <section className="mt-6">
+      <section className="mt-xl">
         <SectionHeading title={t("profile.settings")} />
-        <div className="space-y-2">
+        <div className="space-y-sm">
           <ListRow label={t("profile.language")} right={<LanguageToggle />} />
           <ListRow
             label={t("profile.haptics")}
@@ -263,9 +263,9 @@ export default function Profile() {
         </div>
       </section>
 
-      <section className="mt-6">
+      <section className="mt-xl">
         <SectionHeading title={t("profile.about")} />
-        <Card className="space-y-2 p-3">
+        <Card className="space-y-sm p-3">
           <p className="text-sm text-ink-2">{t("profile.aboutBody")}</p>
           <div className="flex items-center justify-between border-t border-line pt-2 text-xs text-ink-3">
             <span>{t("profile.version")}</span>
@@ -276,9 +276,9 @@ export default function Profile() {
         </Card>
       </section>
 
-      <section className="mt-6">
+      <section className="mt-xl">
         <SectionHeading title={t("profile.legal")} />
-        <div className="space-y-2">
+        <div className="space-y-sm">
           <ListRow
             label={t("legal.privacyTitle")}
             onClick={() => {
@@ -300,7 +300,7 @@ export default function Profile() {
 
       <WhatsNew />
 
-      <section className="mt-6">
+      <section className="mt-xl">
         <SectionHeading title={t("profile.dangerZone")} />
         {/* The one destructive row on the page: the label carries the live
             (coral) colour so the stakes are visible without reading the hint. */}
@@ -318,14 +318,14 @@ export default function Profile() {
       </section>
 
       {user?.isAdmin ? (
-        <section className="mt-6">
+        <section className="mt-xl">
           <Button variant="ghost" className="w-full" onClick={() => navigate("/admin")}>
             Admin Dashboard
           </Button>
         </section>
       ) : null}
 
-      <section className="mt-6 mb-2">
+      <section className="mt-xl mb-2">
         <Button variant="ghost" className="w-full text-danger" onClick={signOut}>
           {t("profile.signOut")}
         </Button>
@@ -342,7 +342,7 @@ export default function Profile() {
           </Button>
         }
       >
-        <div className="space-y-2">
+        <div className="space-y-sm">
           <ListRow
             label={t("profile.notifGoals")}
             hint={t("profile.notifGoalsHint")}
@@ -463,7 +463,7 @@ export default function Profile() {
         <p className="text-sm leading-relaxed text-ink-2">{t("profile.deleteConfirmBody")}</p>
         {deleteError ? (
           <p
-            className="mt-3 rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
+            className="mt-md rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
             role="alert"
           >
             {deleteError}
@@ -590,7 +590,7 @@ function ReferralSection() {
   };
 
   return (
-    <section className="mt-6">
+    <section className="mt-xl">
       <SectionHeading title={t("referral.title")} />
       <Card className="space-y-3 p-3">
         <p className="text-xs text-ink-2">{t("referral.hint")}</p>
@@ -659,7 +659,7 @@ function WhatsNew() {
   if (latest.version === seenRelease) return null;
 
   return (
-    <section className="mt-6">
+    <section className="mt-xl">
       <SectionHeading title={t("whatsNew.title")} />
       <Card className="relative p-3">
         <div className="flex items-center justify-between">

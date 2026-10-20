@@ -140,7 +140,7 @@ export default function MatchDetail() {
     return (
       <>
         <TopBar title={t("match.summary")} back />
-        <div className="mt-3">
+        <div className="mt-md">
           <ScoreHeroSkeleton />
         </div>
       </>
@@ -151,7 +151,7 @@ export default function MatchDetail() {
     return (
       <>
         <TopBar title={t("match.summary")} back />
-        <div className="mt-4">
+        <div className="mt-md">
           <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => matchQuery.refetch()} />
         </div>
       </>
@@ -162,7 +162,7 @@ export default function MatchDetail() {
     return (
       <>
         <TopBar title={t("match.summary")} back />
-        <div className="mt-4">
+        <div className="mt-md">
           <EmptyState title={t("matches.empty")} hint={t("matches.emptyHint")} />
         </div>
       </>
@@ -199,7 +199,7 @@ export default function MatchDetail() {
       {/* Score header */}
       <div
         className={cx(
-          "score-hero relative mt-3 overflow-hidden rounded-card border p-3",
+          "score-hero relative mt-md overflow-hidden rounded-card border p-3",
           flashScore ? "goal-flash border-volt/60 bg-elevated" : "border-line",
         )}
       >
@@ -270,7 +270,7 @@ export default function MatchDetail() {
         </div>
       </div>
 
-      <div className="mt-4">          <Segmented
+      <div className="mt-md">          <Segmented
           id="match-tabs"
           value={tab}
           onChange={setTab}
@@ -289,7 +289,7 @@ export default function MatchDetail() {
         id="match-tabs-panel"
         role="tabpanel"
         aria-labelledby={`match-tabs-${tab}`}
-        className="panel-in mt-4"
+        className="panel-in mt-md"
         key={tab}
       >
         {tab === "timeline" ? (

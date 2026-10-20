@@ -57,6 +57,15 @@
      previous 12px (px-3) read as cramped. */
   --space-page-x: 16px;
 
+  /* Vertical spacing scale — section breaks, card stacks, group gaps.
+     Page gutter is --space-page-x (16px, horizontal). These are vertical. */
+  --space-xs: 4px;    /* tight: inside a card, between label+value */
+  --space-sm: 8px;    /* default: between match cards, chip rows */
+  --space-md: 12px;   /* comfortable: between a header and its content */
+  --space-lg: 16px;   /* section break: between groups on the feed */
+  --space-xl: 24px;   /* page break: between major sections (Profile, Table) */
+  --space-2xl: 32px;  /* screen-level: top of page before first content */
+
 }
 body {
   background: var(--bg-base);

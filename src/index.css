@@ -35,6 +35,16 @@
   --text-lg: var(--type-lg);
   --text-display: var(--type-display);
 
+  /* Vertical spacing scale — named steps map from the --space-* tokens.
+     Tailwind's bare-number scale (mt-2, mt-4…) still works unchanged; the
+     named steps are what call sites use once a value carries intent. */
+  --spacing-xs: var(--space-xs);
+  --spacing-sm: var(--space-sm);
+  --spacing-md: var(--space-md);
+  --spacing-lg: var(--space-lg);
+  --spacing-xl: var(--space-xl);
+  --spacing-2xl: var(--space-2xl);
+
   --radius-card: 14px;
   --radius-e-card: var(--radius-card);
   --radius-s-card: var(--radius-card);
