@@ -99,7 +99,7 @@ export function DateStrip({
     // A group of pressable day buttons, not a tablist: they are toggles with an
     // explicit pressed state, and role=tab would promise arrow-key semantics
     // this row does not implement.
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1.5">
       {/* Scrollable day chips */}
       <div
         ref={containerRef}
@@ -160,7 +160,7 @@ export function DateStrip({
             onOpenCalendar();
           }}
           aria-label={t("calendar.open")}
-          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96] ms-1 me-[var(--space-page-x,16px)]"
+          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96] me-[var(--space-page-x,16px)]"
         >
           <CalendarIcon className="h-5 w-5" />
         </button>
