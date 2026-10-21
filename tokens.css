@@ -33,22 +33,6 @@
   --font-display: "Archivo", "Vazirmatn", sans-serif;
   --font-body: "Vazirmatn", "Archivo", sans-serif;
 
-  /* Self-hosted font faces — replace Google Fonts CDN dependency. */
-  @font-face {
-    font-family: "Archivo";
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url("/fonts/archivo-latin-400-normal.woff2") format("woff2");
-  }
-  @font-face {
-    font-family: "Vazirmatn";
-    font-style: normal;
-    font-weight: 400;
-    font-display: swap;
-    src: url("/fonts/vazirmatn-latin-400-normal.woff2") format("woff2");
-  }
-
   /* motion */
   --t-fast: 150ms;
   --t-std: 250ms;

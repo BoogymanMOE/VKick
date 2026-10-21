@@ -9,6 +9,15 @@ import { I18nProvider } from "./i18n/I18nProvider";
 import { initTelegram } from "./lib/telegram";
 import { applyTelegramUrlNormalization } from "./lib/telegramUrl";
 import { installErrorReporting } from "./lib/errorReporting";
+// Self-hosted fonts — no CDN dependency
+import "@fontsource/archivo/500.css";
+import "@fontsource/archivo/700.css";
+import "@fontsource/archivo/800.css";
+import "@fontsource/archivo/900.css";
+import "@fontsource/vazirmatn/400.css";
+import "@fontsource/vazirmatn/500.css";
+import "@fontsource/vazirmatn/700.css";
+import "@fontsource/vazirmatn/800.css";
 import "./index.css";
 
 // Attach window `error` / `unhandledrejection` listeners before anything else

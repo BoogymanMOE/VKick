@@ -37,7 +37,7 @@ import type { Match } from "../types";
  * an invisible `after:` band that keeps the real hit area at 44px — the visual
  * language wanted a tighter pill without shrinking what a thumb can hit.
  */
-const LEAGUE_CHIP ="relative h-9 flex-none rounded-full border px-3.5 text-sm font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97] after:absolute after:-inset-x-0.5 after:-inset-y-1 after:content-['']"
+const LEAGUE_CHIP ="relative h-9 flex-none rounded-lg border px-3.5 text-sm font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97] after:absolute after:-inset-x-0.5 after:-inset-y-1 after:content-['']"
 ;
 
 /** Selected league chip: filled volt pill — the row's one "picked" affordance. */
@@ -297,7 +297,7 @@ export default function Matches() {
             disabled={refreshing}
             aria-label={t("common.refresh")}
             title={t("common.refresh")}
-            className="grid h-11 w-11 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated disabled:opacity-60"
+            className="grid h-11 w-11 flex-none place-items-center rounded-lg border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated disabled:opacity-60"
           >
             <span className={cx(refreshing && "animate-spin")}>
               <RefreshIcon />
@@ -399,7 +399,7 @@ export default function Matches() {
                 haptic("light");
                 navigate("/matches");
               }}
-              className="inline-flex min-h-11 flex-none items-center rounded-full border border-volt px-3 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+              className="inline-flex min-h-11 flex-none items-center rounded-lg border border-volt px-3 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
             >
               {t("matches.showAll")}
             </button>
@@ -420,7 +420,7 @@ export default function Matches() {
             <Link
               to="/onboarding"
               onClick={() => haptic("light")}
-              className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-xs font-bold text-black"
+              className="inline-flex min-h-11 flex-none items-center rounded-lg bg-volt px-4 text-xs font-bold text-black"
             >
               {t("matches.pickBannerCta")}
             </Link>
@@ -431,7 +431,7 @@ export default function Matches() {
                 haptic("light");
                 setBannerDismissed(true);
               }}
-              className="grid h-11 w-11 flex-none place-items-center rounded-full text-ink-3"
+              className="grid h-11 w-11 flex-none place-items-center rounded-lg text-ink-3"
             >
               <CloseIcon className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -470,7 +470,7 @@ export default function Matches() {
                       haptic("light");
                       setPicked(nextMatchDay);
                     }}
-                    className="min-h-11 rounded-full border border-volt px-5 text-sm font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                    className="min-h-11 rounded-lg border border-volt px-5 text-sm font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
                   >
                     {t("matches.goToDay", { day: dayLabel(nextMatchDay) })}
                   </button>
