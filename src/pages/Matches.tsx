@@ -351,11 +351,15 @@ export default function Matches() {
             and the row is here even with nothing followed so leagues are
             pickable from the feed rather than only during onboarding.
 
-            py-1 with -my-1 keeps the chips' 4px invisible hit band INSIDE this
-            scroll container: overflow-x-auto clips vertically too, so without
-            the padding the extra target area above and below is unreachable. */}
+            py-1 keeps the chips' 4px invisible hit band INSIDE this scroll
+            container: overflow-x-auto clips vertically too, so without the
+            padding the extra target area above and below is unreachable. It is
+            a plain 12px margin above now, not the old -my-1 compensation: the
+            row is part of the 8px rhythm (12px under the strip, and the first
+            group header 16px under the row), and a -4px bottom margin was
+            eating 4px of that header gap. */}
         {!league && (followed.count > 0 || favCount > 0) ? (
-          <div className="-mx-[var(--space-page-x,16px)] -my-1 mt-md flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
+          <div className="-mx-[var(--space-page-x,16px)] mt-md flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
             {followed.count > 0 ? (
               <>
                 <button
@@ -431,14 +435,16 @@ export default function Matches() {
           <div
             role="region"
             aria-label={t("matches.pickBanner")}
-            className="mt-2 flex min-h-11 items-center gap-2 rounded-card border border-line bg-elevated ps-3 pe-1"
+            className="mt-md flex min-h-12 items-center gap-2 rounded-card border border-line bg-elevated ps-3 pe-0.5"
           >
             <StarFilledIcon className="h-4 w-4 flex-none text-gold" aria-hidden="true" />
             <p className="min-w-0 flex-1 text-xs font-bold text-ink">{t("matches.pickBanner")}</p>
             <Link
               to="/onboarding"
               onClick={() => haptic("light")}
-              className="inline-flex min-h-11 flex-none items-center rounded-lg bg-volt px-4 text-xs font-bold text-black"
+              // A pill, not a block glued to the banner's edge: 36px tall
+              // inside the 48px banner, with an invisible band to 44px.
+              className="relative inline-flex h-9 flex-none items-center rounded-full bg-volt px-4 text-[13px] font-bold text-black after:absolute after:-inset-1 after:content-['']"
             >
               {t("matches.pickBannerCta")}
             </Link>
@@ -449,7 +455,7 @@ export default function Matches() {
                 haptic("light");
                 setBannerDismissed(true);
               }}
-              className="grid h-11 w-11 flex-none place-items-center rounded-lg text-ink-3"
+              className="grid h-11 w-11 flex-none place-items-center rounded-full text-ink-3"
             >
               <CloseIcon className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -502,7 +508,7 @@ export default function Matches() {
           <div key={selectedKey} className="day-swap">
             {/* My teams group: matches where a favorite team is playing. */}
             {favCount > 0 && myTeamsMatches.length > 0 && (
-              <section className="mt-md">
+              <section className="mt-4">
                 <div className="mb-2 flex items-center gap-2">
                   <StarFilledIcon className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
                   <h2 className="text-sm font-bold text-ink-2">{t("matches.myTeams")}</h2>
@@ -568,6 +574,8 @@ export default function Matches() {
               <CollapsibleSection
                 id="feed-finished"
                 level={2}
+                // Same 16px between-group rhythm as GroupHeader's mt-4.
+                className="mt-4"
                 title={t("matches.groupFinished")}
                 count={groups.finished.length}
                 defaultOpen={onlyFinishedHasContent}

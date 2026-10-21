@@ -78,6 +78,10 @@ export function CollapsibleSection({
   collapsedBadge,
   /** Heading level; 3 unless this section is a top level of the page itself. */
   level = 3,
+  /** Spacing override for the outer <section>: the feed's 8px rhythm places
+   *  its groups 16px apart, while a standalone collapsible keeps the default
+   *  24px page-level break. */
+  className,
   children,
 }: {
   id: string;
@@ -89,6 +93,7 @@ export function CollapsibleSection({
   onUserToggle?: () => void;
   collapsedBadge?: ReactNode;
   level?: 2 | 3;
+  className?: string;
   children: ReactNode;
 }) {
   const [storedOpen, setOpen] = useLocalState<boolean>(`section.open.${id}`, defaultOpen);
@@ -117,7 +122,7 @@ export function CollapsibleSection({
     setOpen((value) => !value);
   };
   return (
-    <section className="mt-6">
+    <section className={className ?? "mt-6"}>
       <Heading id={headingId} className="mb-2">
         <button
           ref={headerRef}
