@@ -789,7 +789,7 @@ export function ListRow({
         >
           {label}
         </span>
-        {hint ? <span className="block truncate text-xs text-ink-3">{hint}</span> : null}
+        {hint ? <span className="text-xs text-ink-3">{hint}</span> : null}
       </span>
       {right}
     </Tag>

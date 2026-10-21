@@ -20,18 +20,18 @@ const GLYPHS: Record<string, ReactNode> = {
 };
 
 /*
- * The tone owns a 4px accent bar on the card's leading edge (`border-s-4`, so
+ * The tone owns a 4px accent bar on the card's leading edge (`border-s-2`, so
  * it moves to the right in Persian like everything else) over the 1px tone
  * border: success volt, error danger, evaluative gold. It is colour + width
  * only — the toast keeps one tint, one icon and one line of copy.
  */
 const toneClass: Record<ToastTone, string> = {
-  volt: "border-volt border-s-4 text-volt",
-  gold: "border-gold border-s-4 text-gold",
-  danger: "border-danger border-s-4 text-danger",
+  volt: "border-volt border-s-2 text-volt",
+  gold: "border-gold border-s-2 text-gold",
+  danger: "border-danger border-s-2 text-danger",
   // "Last sync" / "Updated" reads as a successful sync, so it borrows the
   // success tint: a volt border + wash rather than a grey disabled-looking one.
-  muted: "border-volt border-s-4 text-volt",
+  muted: "border-volt border-s-2 text-volt",
 };
 
 const toneTint: Record<ToastTone, string | undefined> = {
