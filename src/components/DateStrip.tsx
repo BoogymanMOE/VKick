@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n/context";
 
 /**
@@ -32,12 +32,17 @@ const startOfDay = (d: Date) => {
 export const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 /**
- * Yesterday … +3 as local calendar days. `setDate` (not millisecond arithmetic)
+ * 13 days back … 7 days forward (21 chips) as local calendar days — the past
+ * two weeks and the coming week. `setDate` (not millisecond arithmetic)
  * because a DST change makes one local day 23 or 25 hours long.
  */
+const DAY_OFFSETS = [
+  -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7,
+];
+
 function buildDays(): Date[] {
   const today = startOfDay(new Date());
-  return [-1, 0, 1, 2, 3].map((offset) => {
+  return DAY_OFFSETS.map((offset) => {
     const d = new Date(today);
     d.setDate(today.getDate() + offset);
     return d;
@@ -59,12 +64,34 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
   const days = useMemo(buildDays, [todayKey]);
   const selectedKey = dayKey(selected);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Land on today, centered, before the first paint the user sees: a 21-chip
+  // strip opens on its left end otherwise, which is two weeks of nothing.
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const todayChip = container.querySelector<HTMLElement>('[aria-current="date"]');
+    todayChip?.scrollIntoView({ behavior: "auto", inline: "center", block: "nearest" });
+  }, []);
+
+  // A picked day (a chip tap, or a date chosen in the calendar sheet) comes to
+  // the middle too — the selected chip is the one thing that must never sit
+  // half off-screen. `nearest` keeps the page itself from scrolling.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const selectedChip = container.querySelector<HTMLElement>('[aria-pressed="true"]');
+    selectedChip?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [selectedKey]);
+
   return (
     // A group of pressable day buttons, not a tablist: they are toggles with an
     // explicit pressed state, and role=tab would promise arrow-key semantics
     // this row does not implement.
     <div
-      className="mt-4 flex items-center gap-1 overflow-x-auto px-[var(--space-page-x,16px)]"
+      ref={containerRef}
+      className="date-strip mt-4 flex items-center gap-1 overflow-x-auto px-[var(--space-page-x,16px)] pb-1"
       role="group"
       aria-label={t("dateStrip.label")}
     >
@@ -82,7 +109,7 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
             // so the user always knows where they are in the week.
             aria-current={isToday ? "date" : undefined}
             onClick={() => onSelect(day)}
-            className={`min-h-11 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-lg border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.96] ${
+            className={`min-h-11 min-w-[52px] flex-none flex flex-col items-center justify-center gap-0.5 rounded-lg border px-2 py-2 text-center transition-all duration-[var(--t-fast)] active:scale-[0.96] ${
               isSelected
                 ? "border-volt bg-volt text-on-volt active:bg-volt/80"
                 : isToday
@@ -110,6 +137,13 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
           </button>
         );
       })}
+      {/* Trailing spacer: a scroll container's end padding is not part of its
+          scrollable overflow on every engine, so the last chip would sit flush
+          against the screen edge. The spacer carries that padding instead. */}
+      <span
+        aria-hidden="true"
+        className="w-[var(--space-page-x,16px)] flex-none"
+      />
     </div>
   );
 }

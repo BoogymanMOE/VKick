@@ -125,7 +125,7 @@ export default function Matches() {
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [burst, setBurst] = useState(0);
 
-  // Date strip: 5 day chips. `picked` is null while "today" is selected — the
+  // Date strip: 21 day chips. `picked` is null while "today" is selected — the
   // day is then recomputed from the clock every minute, so an app left open
   // past local midnight rolls over to the new day instead of sticking on the
   // one it booted with.
@@ -309,7 +309,7 @@ export default function Matches() {
       <div className="relative">
         <PullIndicator pull={pull} />
 
-        {/* Date strip: 5 day chips, today selected by default. */}
+        {/* Date strip: 21 day chips, today selected by default. */}
         <DateStrip selected={selectedDay} onSelect={setPicked} daysWithMatches={daysWithMatches} />
 
         {/* Favorite leagues — the start page's own way in. One tap re-scopes

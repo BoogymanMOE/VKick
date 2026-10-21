@@ -397,6 +397,15 @@
     }
   }
 
+  /* Date strip: a swipe surface, not a scroll pane. The scrollbar is hidden so
+     the row reads as a strip of days, and the strip scrolls under the finger. */
+  .date-strip {
+    scrollbar-width: none;
+  }
+  .date-strip::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Signature animation 3: timeline entrance, staggered 40ms. */
   .timeline-in {
     animation: timeline-in var(--t-std) var(--ease-out) both;
