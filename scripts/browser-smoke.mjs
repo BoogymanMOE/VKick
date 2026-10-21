@@ -413,7 +413,22 @@ async function checkPickBanner(browser, lang) {
         h: Math.round(rect.height),
         bottom: Math.round(rect.bottom),
         vh: window.innerHeight,
-        cta: Math.round(link?.getBoundingClientRect().height ?? -1),
+        // The pill is 36px tall now; what a thumb hits is its invisible ::after
+        // band, so measure the probed target, not the box.
+        cta: (() => {
+          if (!link) return -1;
+          const b = link.getBoundingClientRect();
+          const x = b.left + b.width / 2;
+          const inside = (y) => {
+            const el = document.elementFromPoint(x, y);
+            return el === link || link.contains(el);
+          };
+          let top = b.top;
+          while (inside(top - 0.5) && b.top - top < 10) top -= 0.5;
+          let bottom = b.bottom;
+          while (inside(bottom + 0.5) && bottom - b.bottom < 10) bottom += 0.5;
+          return Math.round(bottom - top);
+        })(),
         dismiss: Math.round(btn?.getBoundingClientRect().height ?? -1),
       };
     });
@@ -659,6 +674,438 @@ async function checkTimelineRows(browser, lang, width) {
   await ctx.close();
 }
 
+// ------------------------------------------------------- round-5 feed polish
+/**
+ * Task 1 (seven-chip strip, calendar button in the header) and Task 2 (pill
+ * banner CTA, 8px rhythm on the feed top), measured in a real browser. Same
+ * rules as round 4: localStorage is seeded through storageState — an
+ * addInitScript would re-run on every reload and wipe what a check asserts —
+ * and every number is printed, not just judged.
+ */
+const REVIEW5 = ".ui-shots/review5";
+try {
+  mkdirSync(REVIEW5, { recursive: true });
+} catch {
+  /* screenshots never gate */
+}
+
+/** [name, measured, wanted] for every feed-top number this section checks. */
+const FEED_TOP_ROWS = [];
+function expectAt(label, name, got, want, tol = 1) {
+  FEED_TOP_ROWS.push([`${label} · ${name}`, Number.isFinite(got) ? Number(got.toFixed(1)) : String(got), want]);
+  if (!Number.isFinite(got) || Math.abs(got - want) > tol)
+    fail(label, `${name} = ${Number.isFinite(got) ? got.toFixed(1) : got}px, want ${want}px`);
+}
+function printFeedTopTable() {
+  const width = Math.max(...FEED_TOP_ROWS.map((r) => r[0].length));
+  console.log("\n  measurement table — feed top (px)");
+  for (const [name, got, want] of FEED_TOP_ROWS)
+    console.log(`    ${name.padEnd(width)}  ${String(got).padStart(7)}   want ${want}`);
+}
+
+/** A localised day number, so a chip/cell can be found in either language. */
+const dayNumber = (lang, offset) =>
+  new Intl.NumberFormat(lang === "fa" ? "fa-IR" : undefined, { useGrouping: false }).format(
+    new Date(new Date().setDate(new Date().getDate() + offset)).getDate(),
+  );
+
+/** Server-side favourite for a throwaway dev identity (the feed's banner gate). */
+async function seedFavorite(user, teamId) {
+  const res = await fetch(`${API}/api/me/favorites`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer dev:${user}` },
+    body: JSON.stringify({ teamId }),
+  });
+  return res.ok;
+}
+
+/**
+ * Everything the feed top has to prove at one viewport in one language: the
+ * strip's geometry and hit bands, the header's two actions, the pill banner
+ * CTA, the 8px rhythm, and the calendar round trip (far date → re-centre →
+ * Today → default week).
+ */
+async function checkFeedTop(browser, lang, width, height) {
+  const label = `feedTop ${lang} ${width}x${height}`;
+  const ctx = await browser.newContext({ viewport: { width, height }, storageState: round4Storage(lang) });
+  const page = await ctx.newPage();
+  // Three groups on one day (so "between groups" is measurable) plus ONE
+  // fixture two days out, so a chip tap can prove the feed really filters.
+  const feed = t4Payload({ live: 2, upcoming: 3, finished: 1 });
+  const inTwoDays = new Date();
+  inTwoDays.setDate(inTwoDays.getDate() + 2);
+  inTwoDays.setHours(18, 0, 0, 0);
+  feed.push({
+    ...feed[0],
+    id: "sm-day-after-tomorrow",
+    kickoff_at: inTwoDays.toISOString(),
+    status: "scheduled",
+    minute_display: null,
+    home_score: null,
+    away_score: null,
+  });
+  await mockFeed(page, feed);
+  await page.route("**/team/**/logo", (r) => r.fulfill({ body: "" }));
+  await settle(page, appUrl(devUserId(`feedtop_${lang}_${width}`), "/matches"), 4500);
+
+  const geo = await page.evaluate(() => {
+    const rectOf = (el) => {
+      const b = el.getBoundingClientRect();
+      return { l: b.left, r: b.right, t: b.top, b: b.bottom, w: b.width, h: b.height };
+    };
+    const inside = (el, x, y) => {
+      const hit = document.elementFromPoint(x, y);
+      return hit === el || el.contains(hit);
+    };
+    const group = document.querySelector('[role="group"]');
+    const chips = group ? [...group.querySelectorAll(":scope > button")] : [];
+    const chipData = chips.map((c) => {
+      const b = c.getBoundingClientRect();
+      const y = b.top + b.height / 2;
+      let left = b.left;
+      while (inside(c, left - 0.5, y) && b.left - left < 8) left -= 0.5;
+      let right = b.right;
+      while (inside(c, right + 0.5, y) && right - b.right < 8) right += 0.5;
+      return {
+        w: b.width,
+        h: b.height,
+        l: b.left,
+        r: b.right,
+        hitW: right - left,
+        bandOk: inside(c, b.left - 2, y) && inside(c, b.right + 2, y),
+        pressed: c.getAttribute("aria-pressed"),
+        current: c.getAttribute("aria-current"),
+        num: c.children[1]?.textContent ?? "",
+        ariaLabel: c.getAttribute("aria-label") ?? "",
+        outlined: c.classList.contains("border-volt") && !c.classList.contains("bg-volt"),
+      };
+    });
+    const header = document.querySelector("header");
+    const actions = [...header.querySelectorAll("button")].map((b) => {
+      const r = b.getBoundingClientRect();
+      const y = r.top + r.height / 2;
+      return {
+        ariaLabel: b.getAttribute("aria-label"),
+        popup: b.getAttribute("aria-haspopup"),
+        w: r.width,
+        h: r.height,
+        l: r.left,
+        t: r.top,
+        bandOk:
+          inside(b, r.left - 2, y) && inside(b, r.right + 2, y) && inside(b, r.left + r.width / 2, r.top - 2),
+      };
+    });
+    const card = document.querySelector("main ul li");
+    return {
+      dir: document.documentElement.dir,
+      chipCount: chips.length,
+      chips: chipData,
+      card: card ? rectOf(card) : null,
+      actions,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+
+  // ---- strip geometry
+  const widths = geo.chips.map((c) => c.w);
+  if (geo.chipCount !== 7) fail(label, `want 7 day chips, saw ${geo.chipCount}`);
+  expectAt(label, "chip count", geo.chipCount, 7, 0);
+  expectAt(label, "chip width spread", Math.max(...widths) - Math.min(...widths), 0);
+  expectAt(label, "chip height", geo.chips[0]?.h ?? NaN, 56);
+  const ordered = [...geo.chips].sort((a, b) => a.l - b.l);
+  const realGaps = ordered.slice(1).map((c, i) => c.l - ordered[i].r);
+  expectAt(label, "chip gap", realGaps[0] ?? NaN, 6);
+  expectAt(label, "strip left vs card left", Math.abs(ordered[0].l - geo.card.l), 0);
+  expectAt(label, "strip right vs card right", Math.abs(ordered[ordered.length - 1].r - geo.card.r), 0);
+  const minHitWidth = Math.min(...geo.chips.map((c) => c.hitW));
+  FEED_TOP_ROWS.push([`${label} · chip tappable width (min)`, Number(minHitWidth.toFixed(1)), "≥ 44"]);
+  if (minHitWidth < 44) fail(label, `chip tappable width ${minHitWidth.toFixed(1)}px (< 44)`);
+  if (geo.chips.some((c) => !c.bandOk)) fail(label, "a chip's hit band is missing 2px outside its edge");
+  if (geo.chips.some((c) => !c.ariaLabel)) fail(label, "a chip has no full-date aria-label");
+  if (geo.overflow > 1) fail(label, `horizontal overflow ${geo.overflow}px`);
+  if (lang === "fa" && !(geo.chips[0].l > geo.chips[6].l)) fail(label, "FA strip did not mirror");
+  if (lang === "fa" && !/[۰-۹]/.test(geo.chips[0].num)) fail(label, `FA chip number not Persian: ${geo.chips[0].num}`);
+  const todayChip = geo.chips.find((c) => c.current === "date");
+  if (!todayChip || todayChip.pressed !== "true") fail(label, "today is not marked and selected by default");
+  if (geo.chips[0].num !== dayNumber(lang, -1)) fail(label, `first chip is not yesterday (${geo.chips[0].num})`);
+
+  // ---- header actions: calendar first, then refresh
+  const cal = geo.actions.find((a) => a.popup === "dialog");
+  const refresh = geo.actions.find((a) => a.popup !== "dialog");
+  if (!cal) fail(label, "no calendar button (aria-haspopup=dialog) in the header");
+  if (!refresh) fail(label, "no refresh button in the header");
+  for (const action of [cal, refresh]) {
+    if (!action) continue;
+    expectAt(label, `header ${action.popup ? "calendar" : "refresh"} width`, action.w, 40);
+    expectAt(label, `header ${action.popup ? "calendar" : "refresh"} height`, action.h, 40);
+    if (!action.bandOk) fail(label, `${action.ariaLabel} has no 44px hit band 2px outside its edge`);
+  }
+  if (cal && refresh) {
+    expectAt(label, "header action gap", Math.abs(Math.abs(cal.l - refresh.l) - cal.w), 8);
+    expectAt(label, "header action top delta", Math.abs(cal.t - refresh.t), 0);
+    const leading = lang === "en" ? cal.l < refresh.l : cal.l > refresh.l;
+    if (!leading) fail(label, "calendar is not the leading header action");
+  }
+
+  // ---- spacing rhythm (12 / 12 / 16 / 8 / 8 / 16)
+  const flowNow = async () =>
+    page.evaluate(() => {
+      const rectOf = (el) => {
+        const b = el.getBoundingClientRect();
+        return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, h: b.height };
+      };
+      const container = document.querySelector("main > div");
+      const headerEls = [...document.querySelectorAll('h2[id^="feed-group-"], h2#feed-finished-heading')];
+      return {
+        header: rectOf(document.querySelector("header")),
+        strip: rectOf(document.querySelector('[role="group"]')),
+        blocks: [...container.children].map((el) => ({
+          ...rectOf(el),
+          isBanner: el.getAttribute("role") === "region",
+          isStrip: Boolean(el.querySelector('[role="group"]')),
+          text: (el.textContent ?? "").trim().slice(0, 16),
+        })),
+        headerTops: headerEls.map((h) => h.parentElement.getBoundingClientRect().top),
+        headerBottoms: headerEls.map((h) => h.parentElement.getBoundingClientRect().bottom),
+        cards: [...document.querySelectorAll("main ul li")].map(rectOf),
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+
+  const m = await flowNow();
+  const stripBlock = m.blocks.find((b) => b.isStrip);
+  const banner = m.blocks.find((b) => b.isBanner);
+  if (!banner) fail(label, "banner absent for a zero-favourite fresh user");
+  expectAt(label, "header→strip", stripBlock.top - m.header.bottom, 12);
+  expectAt(label, "strip→banner", banner.top - stripBlock.bottom, 12);
+  expectAt(label, "banner→first group header", m.headerTops[0] - banner.bottom, 16);
+  expectAt(label, "group header→first card", m.cards[0].top - m.headerBottoms[0], 8);
+  expectAt(label, "card→card", m.cards[1].top - m.cards[0].bottom, 8);
+  if (m.headerTops[1] != null) {
+    const before = m.cards.filter((c) => c.top < m.headerTops[1]);
+    expectAt(label, "group→group", m.headerTops[1] - Math.max(...before.map((c) => c.bottom)), 16);
+  }
+  expectAt(label, "banner left vs card left", Math.abs(banner.left - m.cards[0].left), 0);
+  expectAt(label, "banner right vs card right", Math.abs(banner.right - m.cards[0].right), 0);
+  if (m.overflow > 1) fail(label, `horizontal overflow ${m.overflow}px`);
+
+  // ---- banner: 48px tall, 36px pill with a 44px band, nothing touching
+  const pill = await page.evaluate(() => {
+    const region = document.querySelector('[role="region"]');
+    if (!region) return null;
+    const link = region.querySelector("a");
+    const dismiss = region.querySelector("button");
+    const b = link.getBoundingClientRect();
+    const d = dismiss.getBoundingClientRect();
+    const bannerBox = region.getBoundingClientRect();
+    const x = b.left + b.width / 2;
+    const inside = (y) => {
+      const el = document.elementFromPoint(x, y);
+      return el === link || link.contains(el);
+    };
+    let top = b.top;
+    while (inside(top - 0.5) && b.top - top < 10) top -= 0.5;
+    let bottom = b.bottom;
+    while (inside(bottom + 0.5) && bottom - b.bottom < 10) bottom += 0.5;
+    return {
+      bannerH: bannerBox.height,
+      pillH: b.height,
+      pillHit: bottom - top,
+      above: b.top - bannerBox.top,
+      below: bannerBox.bottom - b.bottom,
+      dismissH: d.height,
+      dismissW: d.width,
+      dismissGap: d.left >= b.left ? d.left - b.right : b.left - d.right,
+    };
+  });
+  if (!pill) fail(label, "no banner CTA to measure");
+  else {
+    expectAt(label, "banner height", pill.bannerH, 48);
+    expectAt(label, "Choose pill height", pill.pillH, 36);
+    expectAt(label, "Choose hit band", pill.pillHit, 44);
+    expectAt(label, "Choose clear of top edge", pill.above, 6);
+    expectAt(label, "Choose clear of bottom edge", pill.below, 6);
+    expectAt(label, "dismiss size", Math.min(pill.dismissW, pill.dismissH), 44);
+    if (pill.dismissGap < 4) fail(label, `dismiss sits ${pill.dismissGap}px from the pill`);
+  }
+  await page.screenshot({ path: `${REVIEW5}/feed-top-${lang}-${width}.png` });
+
+  // ---- chip tap selects its day; today stays outlined
+  const target = dayNumber(lang, 2);
+  const tapped = await page.evaluate(([num]) => {
+    const chips = [...document.querySelector('[role="group"]').querySelectorAll(":scope > button")];
+    const chip = chips.find((c) => (c.children[1]?.textContent ?? "") === num);
+    if (!chip) return false;
+    chip.click();
+    return true;
+  }, [target]);
+  await page.waitForTimeout(800);
+  if (!tapped) fail(label, `no chip for today+2 (${target})`);
+  else {
+    const after = await page.evaluate(() => {
+      const chips = [...document.querySelector('[role="group"]').querySelectorAll(":scope > button")];
+      const today = chips.find((c) => c.getAttribute("aria-current") === "date");
+      return {
+        pressed: chips.find((c) => c.getAttribute("aria-pressed") === "true")?.children[1]?.textContent ?? "",
+        todayOutlined: today ? today.classList.contains("border-volt") && !today.classList.contains("bg-volt") : false,
+        cards: document.querySelectorAll("main ul li").length,
+      };
+    });
+    if (after.pressed !== target) fail(label, `chip tap selected "${after.pressed}", want "${target}"`);
+    if (!after.todayOutlined) fail(label, "today lost its outline while another day is selected");
+    if (after.cards === 0) fail(label, "the feed lost its cards for a day that has matches");
+  }
+
+  // ---- calendar: far date re-centres the window, Today returns to default
+  await page.click("header button[aria-haspopup='dialog']");
+  await page.waitForTimeout(700);
+  if (!(await page.evaluate(() => Boolean(document.querySelector('[role="dialog"]')))))
+    fail(label, "the header calendar button did not open the sheet");
+  await page.screenshot({ path: `${REVIEW5}/calendar-sheet-${lang}-${width}.png` });
+
+  const far = new Date();
+  far.setDate(far.getDate() + 20);
+  const monthAhead = await page.evaluate(([iso, l]) => {
+    const date = new Date(iso);
+    const header = document.querySelector('[role="dialog"] span.text-md')?.textContent ?? "";
+    const month = new Intl.DateTimeFormat(l === "fa" ? "fa-IR" : undefined, {
+      month: "long",
+      calendar: "gregory",
+    }).format(date);
+    return { month, header, same: header.includes(month) };
+  }, [far.toISOString(), lang]);
+  if (!monthAhead.same) {
+    const nextLabel = { en: "Next month", fa: "ماه بعد" }[lang];
+    await page.click(`[role="dialog"] button[aria-label="${nextLabel}"]`);
+    await page.waitForTimeout(400);
+  }
+  const farDay = dayNumber(lang, 20);
+  const picked = await page.evaluate(([num]) => {
+    const cells = [...document.querySelector('[role="dialog"]').querySelectorAll("button")].filter(
+      (b) => (b.textContent ?? "").trim() === num,
+    );
+    if (!cells.length) return false;
+    cells[0].click();
+    return true;
+  }, [farDay]);
+  await page.waitForTimeout(900);
+  if (!picked) fail(label, `the calendar has no cell for day ${farDay}`);
+  else {
+    const centred = await page.evaluate(() => {
+      const chips = [...document.querySelector('[role="group"]').querySelectorAll(":scope > button")];
+      return {
+        pressedIndex: chips.findIndex((c) => c.getAttribute("aria-pressed") === "true"),
+        fourth: chips[3]?.children[1]?.textContent ?? "",
+        cards: document.querySelectorAll("main ul li").length,
+        empty: Boolean(document.querySelector(".pitch-watermark")),
+      };
+    });
+    expectAt(label, "far pick lands in chip slot", centred.pressedIndex, 3, 0);
+    if (centred.fourth !== farDay) fail(label, `4th chip reads ${centred.fourth}, want ${farDay}`);
+    if (centred.cards !== 0 || !centred.empty)
+      fail(label, `feed not filtered to the picked day (cards=${centred.cards}, empty=${centred.empty})`);
+    await page.screenshot({ path: `${REVIEW5}/far-date-${lang}-${width}.png` });
+  }
+
+  await page.click("header button[aria-haspopup='dialog']");
+  await page.waitForTimeout(600);
+  const todayLabel = { en: "Today", fa: "امروز" }[lang];
+  const shortcut = await page.evaluate(([t]) => {
+    const b = [...document.querySelector('[role="dialog"]').querySelectorAll("button")].find(
+      (x) => (x.textContent ?? "").trim() === t,
+    );
+    return b ? Math.round(b.getBoundingClientRect().height) : -1;
+  }, [todayLabel]);
+  if (shortcut < 44) fail(label, `"Today" shortcut missing or ${shortcut}px (< 44)`);
+  else {
+    await page.click(`[role="dialog"] >> text="${todayLabel}"`);
+    await page.waitForTimeout(900);
+    const home = await page.evaluate(() => {
+      const chips = [...document.querySelector('[role="group"]').querySelectorAll(":scope > button")];
+      return {
+        first: chips[0]?.children[1]?.textContent ?? "",
+        second: chips[1]?.children[1]?.textContent ?? "",
+        pressedIndex: chips.findIndex((c) => c.getAttribute("aria-pressed") === "true"),
+        currentIndex: chips.findIndex((c) => c.getAttribute("aria-current") === "date"),
+        dialog: Boolean(document.querySelector('[role="dialog"]')),
+      };
+    });
+    if (home.dialog) fail(label, "Today did not close the sheet");
+    if (home.first !== dayNumber(lang, -1)) fail(label, `default window does not start at yesterday (${home.first})`);
+    if (home.second !== dayNumber(lang, 0)) fail(label, `the second chip is not today (${home.second})`);
+    if (home.pressedIndex !== 1 || home.currentIndex !== 1) fail(label, "Today did not select today");
+    else pass(label, "far date re-centres on the 4th chip, Today restores the default week");
+  }
+
+  await ctx.close();
+}
+
+/**
+ * The same rhythm with the banner out of the way: favourites (banner hidden,
+ * league chip row shown) and a dismissed banner (nothing between strip and the
+ * first group header).
+ */
+async function checkFeedTopWithoutBanner(browser, lang, width, height, fixtures) {
+  const measureFlow = async (page) =>
+    page.evaluate(() => {
+      const rectOf = (el) => {
+        const b = el.getBoundingClientRect();
+        return {
+          top: b.top,
+          bottom: b.bottom,
+          h: b.height,
+          text: (el.textContent ?? "").trim().slice(0, 16),
+        };
+      };
+      const container = document.querySelector("main > div");
+      const headerEls = [...document.querySelectorAll('h2[id^="feed-group-"], h2#feed-finished-heading')];
+      return {
+        header: rectOf(document.querySelector("header")),
+        strip: rectOf(document.querySelector('[role="group"]')),
+        blocks: [...container.children].map(rectOf),
+        headerTops: headerEls.map((h) => h.parentElement.getBoundingClientRect().top),
+        banner: Boolean(document.querySelector('[role="region"]')),
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+
+  // ---- favourites: banner hidden, league chip row between strip and groups
+  const favLabel = `feedTop favourite ${lang} ${width}x${height}`;
+  const favCtx = await browser.newContext({ viewport: { width, height }, storageState: round4Storage(lang) });
+  const favPage = await favCtx.newPage();
+  await mockFeed(favPage, t4Payload({ live: 2, upcoming: 3, finished: 1 }));
+  await favPage.route("**/team/**/logo", (r) => r.fulfill({ body: "" }));
+  const favUser = devUserId(`fav_${lang}_${width}`);
+  const seeded = await seedFavorite(favUser, fixtures.teamId);
+  if (!seeded) fail(favLabel, "could not seed a favourite through the API");
+  await settle(favPage, appUrl(favUser, "/matches"), 4500);
+  const fav = await measureFlow(favPage);
+  if (fav.banner) fail(favLabel, "banner still visible with a favourite");
+  const nextBlock = fav.blocks.find((b) => b.top > fav.strip.bottom + 0.5 && b.h > 0.5);
+  expectAt(favLabel, "header→strip", fav.strip.top - fav.header.bottom, 12);
+  expectAt(favLabel, "strip→league row", nextBlock.top - fav.strip.bottom, 12);
+  expectAt(favLabel, "league row→first group header", fav.headerTops[0] - nextBlock.bottom, 16);
+  if (fav.overflow > 1) fail(favLabel, `horizontal overflow ${fav.overflow}px`);
+  await favPage.screenshot({ path: `${REVIEW5}/feed-favourites-${lang}-${width}.png` });
+  await favCtx.close();
+
+  // ---- dismissed banner: strip straight to the first group header, 16px
+  const dismissedLabel = `feedTop dismissed ${lang} ${width}x${height}`;
+  const ctx = await browser.newContext({
+    viewport: { width, height },
+    storageState: round4Storage(lang, { [PICK_BANNER_KEY]: true }),
+  });
+  const page = await ctx.newPage();
+  await mockFeed(page, t4Payload({ live: 2, upcoming: 3, finished: 1 }));
+  await page.route("**/team/**/logo", (r) => r.fulfill({ body: "" }));
+  await settle(page, appUrl(devUserId(`dismissed_${lang}_${width}`), "/matches"), 4500);
+  const d = await measureFlow(page);
+  if (d.banner) fail(dismissedLabel, "banner still visible after a persisted dismiss");
+  expectAt(dismissedLabel, "header→strip", d.strip.top - d.header.bottom, 12);
+  expectAt(dismissedLabel, "strip→first group header", d.headerTops[0] - d.strip.bottom, 16);
+  await ctx.close();
+}
+
 // -------------------------------------------------------------------- main
 // Wait for both servers (no extra wait-on dependency): the API's liveness
 // probe is /health on its own port, the app answers any request.
@@ -721,6 +1168,20 @@ try {
   await checkTimelineRows(browserHandle, "fa", 390);
   await checkTimelineRows(browserHandle, "en", 360);
   await checkTimelineRows(browserHandle, "fa", 360);
+  // Round-5 feed polish (Tasks 1+2): strip, header actions, pill, rhythm.
+  for (const lang of ["en", "fa"])
+    for (const [w, h] of [
+      [390, 844],
+      [360, 640],
+    ])
+      await checkFeedTop(browserHandle, lang, w, h);
+  for (const lang of ["en", "fa"])
+    for (const [w, h] of [
+      [390, 844],
+      [360, 640],
+    ])
+      await checkFeedTopWithoutBanner(browserHandle, lang, w, h, fixtures);
+  printFeedTopTable();
 } finally {
   await browserHandle.close();
 }
