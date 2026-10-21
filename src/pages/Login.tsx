@@ -115,7 +115,7 @@ export default function Login() {
 
         <Card className="rise-in p-4 sm:p-5" style={{ "--stagger": "70ms" } as CSSProperties}>
           {showUsername ? (
-            <form onSubmit={submitUsername} className="space-y-3">
+            <form onSubmit={submitUsername} className="space-y">
               <Segmented
                 value={mode}
                 onChange={(next) => {
@@ -201,7 +201,7 @@ export default function Login() {
               </button>
             </form>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y">
               {error ? (
                 <p
                   className="rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
@@ -239,7 +239,7 @@ export default function Login() {
             </div>
           )}
         </Card>        <p
-          className="rise-in mt-6 px-1 text-center text-xs leading-relaxed text-ink-3"
+          className="rise-in mt-2xl px-1 text-center text-xs leading-relaxed text-ink-3"
           style={{ "--stagger": "140ms" } as CSSProperties}>
           {t("auth.legal")}
         </p>

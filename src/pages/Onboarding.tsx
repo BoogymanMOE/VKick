@@ -224,7 +224,7 @@ export default function Onboarding() {
       />
 
       {/* Step dots */}
-      <div className="mt-3 flex justify-center gap-1.5" aria-hidden="true">
+      <div className="mt-md flex justify-center gap-1.5" aria-hidden="true">
         {Array.from({ length: TOTAL_STEPS }, (_, i) => (
           <span
             key={i}
@@ -237,7 +237,7 @@ export default function Onboarding() {
       </div>
 
       {step === 0 ? (
-        <section className="mt-5 rise-in">
+        <section className="mt-lg rise-in">
           <h2 className="text-lg font-extrabold text-ink">{t("onboarding.favoriteTitle")}</h2>
           <p className="mt-1 text-sm text-ink-2">{t("onboarding.favoriteHint")}</p>
 
@@ -245,7 +245,7 @@ export default function Onboarding() {
               user never has to remember what they tapped two tabs ago. */}
           {anchorTeam ? (
             <div
-              className="mt-3 flex items-center gap-2.5 rounded-card border border-gold bg-elevated px-3 py-2.5"
+              className="mt-md flex items-center gap-2.5 rounded-card border border-gold bg-elevated px-3 py-2.5"
               role="status"
             >
               <TeamBadge team={anchorTeam} size="md" />
@@ -259,7 +259,7 @@ export default function Onboarding() {
             </div>
           ) : null}
 
-          <div className="mt-3">
+          <div className="mt-md">
             <Segmented value={group} onChange={setGroup} options={pickerGroups} />
           </div>
 
@@ -281,7 +281,7 @@ export default function Onboarding() {
               return <EmptyState title={t("onboarding.teamsEmpty")} hint={t("onboarding.teamsEmptyHint")} />;
             }
             return (
-              <ul className="mt-3 grid grid-cols-2 gap-2">
+              <ul className="mt-md grid grid-cols-2 gap-2">
                 {groupTeams.map((team) => {
                   const pickedHere = isFavorite(team.id);
                   const isAnchor = team.id === anchorId;
@@ -319,14 +319,14 @@ export default function Onboarding() {
       ) : null}
 
       {step === 1 ? (
-        <section className="mt-5 rise-in">
+        <section className="mt-lg rise-in">
           <h2 className="text-lg font-extrabold text-ink">{t("onboarding.clubsTitle")}</h2>
           <p className="mt-1 text-sm text-ink-2">{t("onboarding.clubsHint")}</p>
 
           {/* Picked clubs so far, removable: the count chip alone makes people
               back out to fix a mistaken pick. */}
           {count > 0 ? (
-            <ul className="-mx-3 mt-3 flex gap-2 overflow-x-auto px-3 pb-1">
+            <ul className="-mx-3 mt-md flex gap-2 overflow-x-auto px-3 pb-1">
               {[...teams]
                 .sort((a, b) => Number(b.id === anchorId) - Number(a.id === anchorId))
                 .map((team) => (
@@ -363,7 +363,7 @@ export default function Onboarding() {
             </ul>
           ) : null}
 
-          <div className="mt-3">
+          <div className="mt-md">
             <Segmented value={group} onChange={setGroup} options={pickerGroups} />
           </div>
 
@@ -385,7 +385,7 @@ export default function Onboarding() {
               return <EmptyState title={t("onboarding.teamsEmpty")} hint={t("onboarding.teamsEmptyHint")} />;
             }
             return (
-              <ul className="mt-3 grid grid-cols-2 gap-2">
+              <ul className="mt-md grid grid-cols-2 gap-2">
                 {groupTeams.map((team) => {
                   const pickedHere = isFavorite(team.id);
                   return (
@@ -415,7 +415,7 @@ export default function Onboarding() {
 
           {/* Two honest counters, one per shelf: clubs on the left, the
               optional national-team shelf on the right. */}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          <div className="mt-md flex flex-wrap items-center justify-center gap-2">
             <Chip tone={clubCount >= MAX_FAVORITES ? "gold" : "volt"}>
               {t("myTeams.picked", { count: nf.format(clubCount), max: nf.format(MAX_FAVORITES) })}
             </Chip>
@@ -430,11 +430,11 @@ export default function Onboarding() {
       ) : null}
 
       {step === 2 ? (
-        <section className="mt-5 rise-in">
+        <section className="mt-lg rise-in">
           <h2 className="text-lg font-extrabold text-ink">{t("onboarding.leaguesTitle")}</h2>
           <p className="mt-1 text-sm text-ink-2">{t("onboarding.leaguesHint")}</p>
 
-          <ul className="mt-3 space-y-2">
+          <ul className="mt-md space-y-2">
             {leagueComps.map((comp) => {
               const following = followed.isFollowing(comp.slug);
               return (
@@ -459,7 +459,7 @@ export default function Onboarding() {
             })}
           </ul>
 
-          <div className="mt-3 flex justify-center">
+          <div className="mt-md flex justify-center">
             <Chip tone={followed.count >= MAX_FOLLOWED_LEAGUES ? "gold" : "volt"}>
               {t("myTeams.picked", { count: nf.format(followed.count), max: nf.format(MAX_FOLLOWED_LEAGUES) })}
             </Chip>
@@ -468,7 +468,7 @@ export default function Onboarding() {
       ) : null}
 
       {/* Actions. */}
-      <div className="mt-6 space-y-2 pb-6">
+      <div className="mt-2xl space-y-2 pb-6">
         {step === 0 && count >= 1 ? (
           <Button
             className="w-full"
@@ -494,7 +494,7 @@ export default function Onboarding() {
           <button
             type="button"
             onClick={finish}
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-lg text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-full text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
           >
             {t("onboarding.skip")}
           </button>
@@ -511,7 +511,7 @@ export default function Onboarding() {
         ) : null}
       </div>
 
-      <LegalLinks className="mt-3" />
+      <LegalLinks className="mt-md" />
 
       <Num className="sr-only">{step}</Num>
     </>
@@ -541,7 +541,7 @@ function Intro({ onDone }: { onDone: () => void }) {
             haptic("light");
             onDone();
           }}
-          className="min-h-11 rounded-lg px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
+          className="min-h-11 rounded-full px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
         >
           {t("intro.skip")}
         </button>
@@ -560,9 +560,9 @@ function Intro({ onDone }: { onDone: () => void }) {
         </span>
         {/* The intro has no TopBar, so this brand line is the screen's only
             heading — h1, not h2, or the document opens at a level down. */}
-        <h1 className="intro-in mt-5 text-lg font-extrabold text-ink">{t("app.name")}</h1>
+        <h1 className="intro-in mt-lg text-lg font-extrabold text-ink">{t("app.name")}</h1>
 
-        <ul className="intro-in mt-5 space-y-4">
+        <ul className="intro-in mt-lg space-y-lg">
           {SLIDES.map(({ key, titleKey, bodyKey, Glyph }) => (
             <li key={key} className="flex items-start gap-3">
               <span

@@ -61,7 +61,7 @@ export default function TeamPage() {
     return (
       <>
         <TopBar title={t("team.title")} back />
-        <div className="mt-3">
+        <div className="mt-md">
           {code === "LEAGUE_NOT_SUPPORTED" ? (
             <EmptyState title={t("team.leagueUnsupported")} />
           ) : (
@@ -119,7 +119,7 @@ export default function TeamPage() {
           dark chrome. It is a gradient, never a decorative side stripe, and the
           crest sits at the hero size — this is the one place the badge leads. */}
       <div
-        className="relative mt-3 overflow-hidden rounded-card border border-line p-4"
+        className="relative mt-md overflow-hidden rounded-card border border-line p-4"
         style={{
           background: `linear-gradient(135deg, color-mix(in srgb, ${teamView.color} 30%, transparent) 0%, color-mix(in srgb, ${teamView.color} 10%, transparent) 45%, var(--bg-surface) 100%)`,
         }}
@@ -148,7 +148,7 @@ export default function TeamPage() {
         </div>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-lg">
         <Segmented
           id="team-tabs"
           value={tab}
@@ -167,7 +167,7 @@ export default function TeamPage() {
         id="team-tabs-panel"
         role="tabpanel"
         aria-labelledby={`team-tabs-${tab}`}
-        className="panel-in mt-4"
+        className="panel-in mt-lg"
         key={tab}
       >
         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
@@ -202,7 +202,7 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
   const num = (value: number | string) => (lang === "fa" ? toFaDigits(value) : String(value));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-lg">
       {/* The squad rows carry colour-coded numbers with no key; a colour-blind
           reader cannot tell goals from assists. The legend names both. */}
       <div
@@ -274,7 +274,7 @@ function SquadSection({
           collapsed. */}
       <div className="squad-collapse" data-collapsed={collapsed}>
         <div className="squad-collapse-inner">
-          <ul className="space-y-1.5">
+          <ul className="space-y-2">
             {players.map((player) => (
               // One grid, flipped by `dir`: the jersey lands on the leading
               // edge (right in Persian, left in English) and the goals/assists
@@ -429,7 +429,7 @@ function StatsTab({ stats }: { stats: SeasonStats }) {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-lg">
       <Card className="flex items-center justify-between gap-3 p-4">
         <span className="label text-ink-3">{t("statsPage.teams")}</span>
         <span className="flex items-baseline gap-2">
@@ -518,10 +518,10 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
   const widest = Math.max(0.01, ...situations.map((s) => Math.max(s.xg ?? 0, s.xga ?? 0)));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-lg">
       <Card className="p-4">
         <SectionHeading title={t("xg.title")} />
-        <div className="mt-3 grid grid-cols-2 gap-4">
+        <div className="mt-md grid grid-cols-2 gap-4">
           <div>
             <p className="text-xs font-semibold text-ink-3">{t("xg.for")}</p>
             <Num className="text-lg font-black text-volt">{fixed(teamXg)}</Num>
@@ -543,7 +543,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
         </div>
 
         {delta != null ? (
-          <div className="mt-3 flex items-baseline justify-between gap-2 border-t border-line pt-3">
+          <div className="mt-md flex items-baseline justify-between gap-2 border-t border-line pt-3">
             <span className="text-xs text-ink-2">{t("xg.points")}</span>
             <span className="text-xs text-ink-3">
               <Num className="text-sm font-bold text-ink">{points}</Num>
@@ -558,7 +558,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
         ) : null}
 
         {extra.length > 0 ? (
-          <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3">
+          <dl className="mt-md grid grid-cols-2 gap-3 border-t border-line pt-3">
             {extra.map((row) => (
               <div key={row.label}>
                 <dt className="text-xs font-semibold text-ink-3">{row.label}</dt>
@@ -575,7 +575,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
         <Card className="p-4">
           <SectionHeading title={t("xg.situations")} />
           <p className="mt-1 text-xs text-ink-3">{t("xg.situationsHint")}</p>
-          <ul className="mt-3 space-y-3">
+          <ul className="mt-md space-y-3">
             {situations.map((situation) => {
               const key = SITUATION_KEY[situation.situation];
               return (

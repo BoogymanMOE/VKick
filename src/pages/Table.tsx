@@ -63,7 +63,7 @@ export default function Table() {
       {/* Tables / Browse is the FIRST control on the page, and the league chips
           live only inside the Tables view — otherwise the chips sit above a
           Browse list and look like they should filter it, but cannot. */}
-      <div className="mt-3">
+      <div className="mt-md">
         <Segmented
           value={browseView}
           onChange={setBrowseView}
@@ -71,16 +71,18 @@ export default function Table() {
             { value: "tables", label: t("table.view.tables") },
             { value: "browse", label: t("table.view.browse") },
           ]}
+          className="rounded-full"
         />
       </div>
 
       {browseView === "tables" && (
-        <div className="mt-3">
+        <div className="mt-md">
           <Segmented
             value={active}
             onChange={setLeague}
             options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
-          />
+          className="rounded-full"
+        />
         </div>
       )}
 
@@ -88,7 +90,7 @@ export default function Table() {
       {browseView === "tables" && (
         <>
           {/* Your clubs across all five leagues, with the position each sits in. */}
-          <section className="mt-4">
+          <section className="mt-lg">
           <SectionHeading
           title={t("table.myClubs")}
           action={
@@ -132,7 +134,7 @@ export default function Table() {
         )}
       </section>
 
-          <section className="mt-4">
+          <section className="mt-lg">
         {isCup(slug) ? (
           <CupView slug={slug} rows={rows} />
         ) : (
@@ -158,7 +160,7 @@ export default function Table() {
                 action={
                   <Link
                     to="/onboarding"
-                    className="min-h-11 rounded-lg border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                    className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
                   >
                     {t("table.emptyAction")}
                   </Link>
@@ -277,7 +279,7 @@ function BrowseContent() {
   return (
     <>
       <div
-        className="mt-3 grid grid-cols-3 gap-1 rounded-lg border border-line bg-surface p-1"
+        className="mt-md grid grid-cols-3 gap-1 rounded-lg border border-line bg-surface p-1"
         role="group"
         aria-label={t("browse.filterLabel")}
       >
@@ -297,7 +299,7 @@ function BrowseContent() {
               setFilter(value);
             }}
             className={cx(
-              "min-h-11 rounded-lg text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+              "min-h-11 rounded-full text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
               filter === value ? "bg-elevated text-volt" : "text-ink-2 hover:text-ink",
             )}
           >
@@ -307,13 +309,13 @@ function BrowseContent() {
       </div>
 
       {query.isLoading ? (
-        <div className="mt-4">
+        <div className="mt-lg">
           <CompRowSkeleton rows={6} />
         </div>
       ) : groups.leagues.length + groups.cups.length + groups.tournaments.length === 0 ? (
         // The filter user picked (or the catalog) has nothing to list — say so
         // instead of fading out into a silent blank panel.
-        <div className="mt-4 fade-swap">
+        <div className="mt-lg fade-swap">
           <EmptyState icon="📈" title={t("browse.empty")} hint={t("browse.emptyHint")} />
         </div>
       ) : (
@@ -329,7 +331,7 @@ function BrowseContent() {
                     </Chip>
                   }
                 />
-                <ul className="space-y-2">
+                <ul className="space-y-sm">
                   {rows.map((comp) => {
                     const soon = Boolean(comp.comingSoon);
                     const Wrapper = soon ? "div" : "button";
@@ -345,7 +347,7 @@ function BrowseContent() {
                           className={cx(
                             "flex w-full items-center gap-3 rounded-card border p-3 text-start transition-colors duration-[var(--t-fast)]",
                             soon
-                              ? "border-dashed border-line bg-transparent opacity-70"
+                              ? "border-dashed border-line bg-transparent opacity-70 rounded-full"
                               : "border-line bg-surface hover:bg-elevated",
                           )}
                         >
@@ -622,7 +624,7 @@ function KnockoutView({ slug }: { slug: string }) {
       {Array.from(rounds.entries()).map(([round, roundMatches]) => (
         <section key={round}>
           <SectionHeading title={localize(round)} />
-          <ul className="space-y-2">
+          <ul className="space-y-sm">
             {roundMatches.map((match) => (
               <li key={match.id}>
                 <Link
