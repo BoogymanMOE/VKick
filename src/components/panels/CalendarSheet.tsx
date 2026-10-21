@@ -46,7 +46,7 @@ const MONTH_NAMES_FA = [
  * only the names flip, so the two languages read the same grid.
  */
 const DOW_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DOW_FA = ["یک", "دو", "سه", "چه", "پن", "جمع", "شن"];
+const DOW_FA = ["شن", "یک", "دو", "سه", "چه", "پن", "جمع"];
 
 /**
  * Month-view date picker — the jump-to-any-day escape hatch at the end of the
@@ -105,12 +105,18 @@ export function CalendarSheet({
     const out: Array<Date | null> = [];
     // Leading blanks: the first day of the month sits in its own weekday
     // column.
-    for (let i = 0; i < first.getDay(); i++) out.push(null);
+    // In FA mode, the week starts on Saturday (day 6 in JS getDay()),
+    // so we shift by 1: Saturday (6) becomes 0, Sunday (0) becomes 1, etc.
+    // In EN mode, the week starts on Sunday, so getDay() is used as-is.
+    const startDow = lang === "fa"
+      ? (first.getDay() + 1) % 7   // Sat=0, Sun=1, Mon=2, Tue=3, Wed=4, Thu=5, Fri=6
+      : first.getDay();            // Sun=0, Mon=1, ... (unchanged)
+    for (let i = 0; i < startDow; i++) out.push(null);
     for (let d = 1; d <= last.getDate(); d++) out.push(new Date(view.year, view.month, d));
     // Trailing blanks fill the last row.
     while (out.length % 7 !== 0) out.push(null);
     return out;
-  }, [view.year, view.month]);
+  }, [view.year, view.month, lang]);
 
   const todayKey = dayKey(new Date());
   const selectedKey = dayKey(selected);

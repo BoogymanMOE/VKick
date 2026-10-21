@@ -99,22 +99,25 @@ export function DateStrip({
     // A group of pressable day buttons, not a tablist: they are toggles with an
     // explicit pressed state, and role=tab would promise arrow-key semantics
     // this row does not implement.
-    <div
-      ref={containerRef}
-      className="date-strip mt-4 flex items-center gap-1 overflow-x-auto px-[var(--space-page-x,16px)] pb-1"
-      role="group"
-      aria-label={t("dateStrip.label")}
-    >
-      {days.map((day) => {
-        const key = dayKey(day);
-        const isToday = key === todayKey;
-        const isSelected = key === selectedKey;
-        const hasMatches = daysWithMatches?.has(key) ?? false;
-        return (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={isSelected}
+    <div className="flex items-center gap-1">
+      {/* Scrollable day chips */}
+      <div
+        ref={containerRef}
+        className="date-strip flex flex-1 items-center gap-1 overflow-x-auto px-[var(--space-page-x,16px)] pb-1"
+        style={{ scrollbarWidth: "none" }}
+        role="group"
+        aria-label={t("dateStrip.label")}
+      >
+        {days.map((day) => {
+          const key = dayKey(day);
+          const isToday = key === todayKey;
+          const isSelected = key === selectedKey;
+          const hasMatches = daysWithMatches?.has(key) ?? false;
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={isSelected}
             // "Today" keeps its own marker even when another day is selected,
             // so the user always knows where they are in the week.
             aria-current={isToday ? "date" : undefined}
@@ -146,9 +149,9 @@ export function DateStrip({
             ) : null}
           </button>
         );
-      })}
-      {/* Calendar button — the days the strip cannot reach (anything older
-          than two weeks back, or further ahead than a week). */}
+        })}
+      </div>
+      {/* Calendar button — OUTSIDE the scroll container, always visible at the end */}
       {onOpenCalendar ? (
         <button
           type="button"
@@ -157,9 +160,9 @@ export function DateStrip({
             onOpenCalendar();
           }}
           aria-label={t("calendar.open")}
-          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96]"
+          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96] me-[var(--space-page-x,16px)]"
         >
-          <CalendarIcon />
+          <CalendarIcon className="h-5 w-5" />
         </button>
       ) : null}
       {/* Trailing spacer: a scroll container's end padding is not part of its
