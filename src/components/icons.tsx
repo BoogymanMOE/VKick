@@ -94,6 +94,14 @@ export const ChevronDownIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Calendar — the date strip's "pick any other day" button. */
+export const CalendarIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} width={20} height={20}>
+    <rect x="3" y="4.5" width="18" height="17" rx="2.5" />
+    <path d="M8 2.5v4M16 2.5v4M3 10h18" />
+  </svg>
+);
+
 export const GlobeIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)} width={18} height={18}>
     <circle cx="12" cy="12" r="8.5" />

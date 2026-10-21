@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n/context";
+import { CalendarIcon } from "./icons";
+import { haptic } from "../lib/telegram";
 
 /**
  * Catalog keys, not display labels: `dates.day.*` carries the short day name in
@@ -15,6 +17,9 @@ interface DateStripProps {
    *  chip carries a small dot so a quiet Saturday reads as quiet before the
    *  tap. Absent = no dots (call sites without the data unchanged). */
   daysWithMatches?: Set<string>;
+  /** Opens the month picker for the days the strip cannot reach. Absent =
+   *  no calendar button (call sites without a picker unchanged). */
+  onOpenCalendar?: () => void;
 }
 
 const startOfDay = (d: Date) => {
@@ -49,7 +54,12 @@ function buildDays(): Date[] {
   });
 }
 
-export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProps) {
+export function DateStrip({
+  selected,
+  onSelect,
+  daysWithMatches,
+  onOpenCalendar,
+}: DateStripProps) {
   const { t, lang } = useI18n();
   const locale = lang === "fa" ? "fa-IR" : undefined;
   // Localized day number: Farsi reads ۱۴ not 14.
@@ -137,6 +147,21 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
           </button>
         );
       })}
+      {/* Calendar button — the days the strip cannot reach (anything older
+          than two weeks back, or further ahead than a week). */}
+      {onOpenCalendar ? (
+        <button
+          type="button"
+          onClick={() => {
+            haptic("light");
+            onOpenCalendar();
+          }}
+          aria-label={t("calendar.open")}
+          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96]"
+        >
+          <CalendarIcon />
+        </button>
+      ) : null}
       {/* Trailing spacer: a scroll container's end padding is not part of its
           scrollable overflow on every engine, so the last chip would sit flush
           against the screen edge. The spacer carries that padding instead. */}

@@ -26,6 +26,7 @@ import { haptic, notifyHaptic } from "../lib/telegram";
 import { DateStrip, dayKey as chipDayKey } from "../components/DateStrip";
 import { InlineAd } from "../components/InlineAd";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
+import { CalendarSheet } from "../components/panels/CalendarSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
 import { PullIndicator } from "../components/PullToRefresh";
@@ -121,6 +122,8 @@ export default function Matches() {
   // The Favorite Leagues sheet. Local to the feed (not a route) so opening and
   // closing it never loses the scroll position or the selected league chip.
   const [leaguesOpen, setLeaguesOpen] = useState(false);
+  // The month picker, for the days the three-week strip cannot reach.
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [burst, setBurst] = useState(0);
@@ -309,8 +312,21 @@ export default function Matches() {
       <div className="relative">
         <PullIndicator pull={pull} />
 
-        {/* Date strip: 21 day chips, today selected by default. */}
-        <DateStrip selected={selectedDay} onSelect={setPicked} daysWithMatches={daysWithMatches} />
+        {/* Date strip: 21 day chips, today selected by default. The calendar
+            button at its end opens the month picker for any other day. */}
+        <DateStrip
+          selected={selectedDay}
+          onSelect={setPicked}
+          daysWithMatches={daysWithMatches}
+          onOpenCalendar={() => setCalendarOpen(true)}
+        />
+        <CalendarSheet
+          open={calendarOpen}
+          onClose={() => setCalendarOpen(false)}
+          selected={selectedDay}
+          onSelect={setPicked}
+          daysWithMatches={daysWithMatches}
+        />
 
         {/* Favorite leagues — the start page's own way in. One tap re-scopes
             the whole feed (concept pillar 1); the last chip opens the picker,
