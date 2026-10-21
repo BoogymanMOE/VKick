@@ -9,6 +9,7 @@ import { Chip, CollapsibleSection, EmptyState, ErrorState, Num } from "../compon
 import { useLocalState } from "../lib/useLocalState";
 import {
   BallIcon,
+  CalendarIcon,
   CloseIcon,
   PlusIcon,
   RefreshIcon,
@@ -48,7 +49,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 
 function GroupHeader({ id, label, count, tone }: { id: string; label: string; count: number; tone: "live" | "gold" | "muted" }) {
   return (
-    <div className="mb-2 mt-lg flex items-center gap-2 first:mt-0">
+    <div className="mb-2 mt-4 flex items-center gap-2">
       <h2
         id={id}
         className={cx(
@@ -122,7 +123,7 @@ export default function Matches() {
   // The Favorite Leagues sheet. Local to the feed (not a route) so opening and
   // closing it never loses the scroll position or the selected league chip.
   const [leaguesOpen, setLeaguesOpen] = useState(false);
-  // The month picker, for the days the three-week strip cannot reach.
+  // The month picker, for the days the seven-chip week cannot reach.
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
@@ -289,20 +290,38 @@ export default function Matches() {
           calendar: "gregory",
         }).format(selectedDay)}
         right={
-          // The non-gesture refresh path the pull-to-refresh comment promises:
-          // a real 44px button, reachable by keyboard and announced by name.
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={refreshing}
-            aria-label={t("common.refresh")}
-            title={t("common.refresh")}
-            className="grid h-11 w-11 flex-none place-items-center rounded-lg border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated disabled:opacity-60"
-          >
-            <span className={cx(refreshing && "animate-spin")}>
-              <RefreshIcon />
-            </span>
-          </button>
+          // Two header actions: the calendar first, then refresh. Both are 40px
+          // visual circles with an invisible 44px hit band (after:-inset-1), so
+          // the pair stays quiet next to the title while the thumb target never
+          // drops under the 44px floor. Refresh keeps the non-gesture path the
+          // pull-to-refresh comment promises: keyboard-reachable, named aloud.
+          <div className="flex flex-none items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                haptic("light");
+                setCalendarOpen(true);
+              }}
+              aria-haspopup="dialog"
+              aria-label={t("matches.pickDate")}
+              title={t("matches.pickDate")}
+              className="relative grid h-10 w-10 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated after:absolute after:-inset-1 after:content-['']"
+            >
+              <CalendarIcon className="h-[18px] w-[18px]" />
+            </button>
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={refreshing}
+              aria-label={t("common.refresh")}
+              title={t("common.refresh")}
+              className="relative grid h-10 w-10 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated disabled:opacity-60 after:absolute after:-inset-1 after:content-['']"
+            >
+              <span className={cx(refreshing && "animate-spin")}>
+                <RefreshIcon />
+              </span>
+            </button>
+          </div>
         }
       />
 
@@ -312,14 +331,13 @@ export default function Matches() {
       <div className="relative">
         <PullIndicator pull={pull} />
 
-        {/* Date strip: 21 day chips, today selected by default. The calendar
-            button at its end opens the month picker for any other day. */}
-        <DateStrip
-          selected={selectedDay}
-          onSelect={setPicked}
-          daysWithMatches={daysWithMatches}
-          onOpenCalendar={() => setCalendarOpen(true)}
-        />
+        {/* Date strip: seven day chips across the full content width, today
+            selected by default. mt-3 is the 12px gap under the header's bottom
+            border; the calendar moved up into the header, and the sheet below
+            is rendered from here so the header button has one owner. */}
+        <div className="mt-3">
+          <DateStrip selected={selectedDay} onSelect={setPicked} daysWithMatches={daysWithMatches} />
+        </div>
         <CalendarSheet
           open={calendarOpen}
           onClose={() => setCalendarOpen(false)}

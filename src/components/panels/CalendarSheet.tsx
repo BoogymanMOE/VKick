@@ -157,6 +157,21 @@ export function CalendarSheet({
         </button>
       </div>
 
+      {/* Back to today. The sheet opens on the selected day's month, so after
+          browsing to March the current week is many taps away; this is the one
+          tap back. 44px tall, like every other control in the sheet. */}
+      <button
+        type="button"
+        onClick={() => {
+          selectionHaptic();
+          onSelect(new Date());
+          onClose();
+        }}
+        className="mb-4 flex h-11 w-full items-center justify-center rounded-lg border border-line text-sm font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
+      >
+        {t("matches.today")}
+      </button>
+
       {/* Weekday header. */}
       <div className="mb-1 grid grid-cols-7 gap-1">
         {dowNames.map((dow) => (
