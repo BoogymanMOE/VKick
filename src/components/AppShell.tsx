@@ -56,7 +56,7 @@ export function AppShell() {
         id="main-content"
         tabIndex={-1}
         key={pathname}
-        className="page-in mx-auto w-full max-w-[560px] flex-1 px-[var(--space-page-x,16px)] pt-4 outline-none"
+        className="page-in mx-auto w-full max-w-[560px] flex-1 px-[var(--space-page-x,16px)] outline-none"
         // The sticky tab bar is 4px (its own pt-1) + 56px (min-h-14) + the
         // safe-area inset — reserving only 56px left the last card tucked under
         // it. The extra 4px is the difference.
