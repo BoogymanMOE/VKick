@@ -49,6 +49,19 @@ export function kickoffParts(date: Date, locale?: string): { day: string; clock:
 }
 
 /**
+ * Short kickoff label: weekday + 24h time, one line.
+ * EN: Sun 15:00
+ * FA: یکشنبه ۱۵:۰۰ (Persian day name + Persian digits)
+ * For LIVE matches this is combined with the score/minute below.
+ * For FINISHED matches this is the final score + "FT" on one line.
+ */
+export function formatKickoffShort(date: Date, locale?: string): string {
+  const day = new Intl.DateTimeFormat(locale ?? "en", { weekday: "short" }).format(date);
+  const time = new Intl.DateTimeFormat(locale ?? "en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  return `${day} ${time}`;
+}
+
+/**
  * Sticky date header label for grouped upcoming feeds.
  * Returns "Today" / "Tomorrow" for near dates, or a full weekday + date for
  * anything further out (e.g. "Saturday, Oct 12"). Pass `fa-IR` under Persian.

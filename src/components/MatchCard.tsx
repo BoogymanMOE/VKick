@@ -5,7 +5,6 @@ import { useI18n } from "../i18n/context";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { useCompetitionLabel } from "../hooks/useApi";
 import { formatKickoff } from "../lib/format";
-import { kickoffParts } from "../lib/format";
 import { LiveDot, Num, TeamBadge } from "./ui";
 import { recordFlipFirst } from "../lib/flip";
 
@@ -182,12 +181,9 @@ export const MatchCard = memo(function MatchCard({
             <>
               {/* Weekday: 18px bold, 23px line height so the row is 23px tall even
                   when the period below is empty (Persian). */}
-              <span className="min-h-[23px] text-md font-bold leading-[23px] text-ink-2">{parts.day}</span>
-              {/* Clock: the exact centre row. 18px bold, 23px leading, LTR isolated. */}
-              <span data-testid="match-center" className="text-md font-bold leading-[23px] text-ink-2">{parts.clock}</span>
-              {/* Period: AM/PM for en-US, empty 23px spacer for fa-IR. Same fixed
-                  height keeps the clock vertically centred in both scripts. */}
-              <span className="min-h-[23px] text-md font-bold leading-[23px] text-ink-2">{parts.period}</span>
+              <span className="text-sm font-display font-extrabold text-ink-2">
+                {formatKickoffShort(new Date(match.kickoffAt), lang === "fa" ? "fa-IR" : undefined)}
+              </span>
             </>
           )}
         </div>
