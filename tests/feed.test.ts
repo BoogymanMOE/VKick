@@ -15,7 +15,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { migrate } from "../server/db/schema.js";
-import { buildFeedQuery, isoDayOffset, FEED_LIMIT } from "../server/matches/feed.js";
+import { buildFeedQuery, isoDayOffset, FEED_LIMIT, FEED_MAX_LIMIT } from "../server/matches/feed.js";
 
 /** Fixed clock so the window never drifts with the wall clock. */
 const NOW = new Date("2026-10-03T12:00:00.000Z");
@@ -164,7 +164,7 @@ function testLimit(): void {
   );
   assert.equal(buildFeedQuery({ limit: "-4" }).limit, FEED_LIMIT, "a negative limit falls back too");
   assert.equal(buildFeedQuery({ limit: "abc" }).limit, FEED_LIMIT, "a non-numeric limit falls back");
-  assert.equal(buildFeedQuery({ limit: "99999" }).limit, 500, "clamped at 500");
+  assert.equal(buildFeedQuery({ limit: "99999" }).limit, FEED_MAX_LIMIT, "clamped at the range ceiling");
 }
 
 /**

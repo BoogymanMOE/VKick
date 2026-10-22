@@ -31,6 +31,12 @@ import { CalendarSheet } from "../components/panels/CalendarSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
 import { PullIndicator } from "../components/PullToRefresh";
+import {
+  addJalaliMonths,
+  jalaliMonthLength,
+  jalaliToGregorian,
+  toJalali,
+} from "../lib/jalali";
 import type { Match } from "../types";
 
 /**
@@ -46,6 +52,42 @@ const LEAGUE_CHIP_ON = "border-volt bg-volt/15 text-volt";
 const LEAGUE_CHIP_OFF = "border-line text-ink-3";
 
 const pad = (n: number) => String(n).padStart(2, "0");
+const localDayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+/**
+ * The calendar sheet spans today ± this many months (see CalendarSheet), so
+ * the feed query must cover every day in that band: a picked day three months
+ * out HAS fixtures to show, not the old “no matches” lie. With `from`/`to`
+ * set the server runs its range mode, unbounded by the 3-week relevance
+ * window — hence the explicit limit matching the server's range ceiling.
+ */
+const CALENDAR_HORIZON_MONTHS = 3;
+const FEED_RANGE_LIMIT = 2000;
+
+/**
+ * The band's first/last day, anchored at month bounds of the ACTIVE calendar
+ * (Solar Hijri under Persian, Gregorian under English) so every tile the
+ * sheet can clip into — its grid steps whole months of that calendar — is
+ * inside the fetched range. Computed once per language: an app left open
+ * across a month boundary would rebolt the range on reload, and the mid-band
+ * days it misses next session are caught by the cache-busting refetch.
+ */
+function feedRange(lang: "en" | "fa"): { from: string; to: string } {
+  const now = new Date();
+  if (lang === "fa") {
+    const t = toJalali(now);
+    const min = addJalaliMonths(t.jy, t.jm, -CALENDAR_HORIZON_MONTHS);
+    const max = addJalaliMonths(t.jy, t.jm, CALENDAR_HORIZON_MONTHS);
+    return {
+      from: localDayKey(jalaliToGregorian(min.jy, min.jm, 1)),
+      to: localDayKey(jalaliToGregorian(max.jy, max.jm, jalaliMonthLength(max.jy, max.jm))),
+    };
+  }
+  return {
+    from: localDayKey(new Date(now.getFullYear(), now.getMonth() - CALENDAR_HORIZON_MONTHS, 1)),
+    to: localDayKey(new Date(now.getFullYear(), now.getMonth() + CALENDAR_HORIZON_MONTHS + 1, 0)),
+  };
+}
 
 function GroupHeader({ id, label, count, tone }: { id: string; label: string; count: number; tone: "live" | "gold" | "muted" }) {
   return (
@@ -115,7 +157,15 @@ export default function Matches() {
   const [bannerDismissed, setBannerDismissed] = useLocalState<boolean>(PICK_BANNER_KEY, false);
   const showPickBanner = favCount === 0 && !bannerDismissed;
 
-  const matchesQuery = useMatches({ league: activeLeague });
+  // The calendar's full reach, not just the relevance window: the day feed and
+  // the sheet's fixture dots both read this one list.
+  const range = useMemo(() => feedRange(lang), [lang]);
+  const matchesQuery = useMatches({
+    league: activeLeague,
+    from: range.from,
+    to: range.to,
+    limit: FEED_RANGE_LIMIT,
+  });
   // Stable identity: every memo below keys on it, and `data ?? []` would hand
   // them a fresh array on each render (query data is stable between refetches).
   const matches = useMemo(() => matchesQuery.data ?? [], [matchesQuery.data]);

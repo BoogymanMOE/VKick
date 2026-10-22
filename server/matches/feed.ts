@@ -25,6 +25,14 @@ export const FINISHED_LOOKBACK_DAYS = 3;
 export const UPCOMING_LOOKAHEAD_DAYS = 14;
 /** Default cap on the window. Generous enough for a fortnight of the catalog. */
 export const FEED_LIMIT = 300;
+/**
+ * Absolute ceiling when a caller ASKS for more than the default. The matchday
+ * calendar spans today ± 3 months (six months of the big-five catalog is on
+ * the order of 1.5k fixtures), so range queries legitimately need a wider
+ * ceiling than the default window ever fills. A query that doesn't request a
+ * big limit still gets FEED_LIMIT, so relevance-window responses can't grow.
+ */
+export const FEED_MAX_LIMIT = 2000;
 
 /** Statuses that mean "in progress right now" — always inside the window. */
 const IN_PROGRESS = ["live", "halftime"];
@@ -71,7 +79,7 @@ function dayOf(iso: string): string {
 function clampLimit(raw: number | string | null | undefined): number {
   const n = Number.parseInt(String(raw ?? ""), 10);
   if (!Number.isFinite(n) || n <= 0) return FEED_LIMIT;
-  return Math.min(500, n);
+  return Math.min(FEED_MAX_LIMIT, n);
 }
 
 /**

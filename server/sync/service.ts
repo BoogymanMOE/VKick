@@ -88,6 +88,43 @@ export async function syncScoreboardWindow(backDays: number, forwardDays: number
 }
 
 /**
+ * How far ahead fixtures are kept sweepable. The matchday calendar spans
+ * today ± 3 months, so its range query needs real fixture rows that far out —
+ * the routine 21-day lookahead stops well short of that.
+ */
+export const FIXTURE_HORIZON_DAYS = 95;
+
+/**
+ * The fixture horizon: every day from just past the routine lookahead out to
+ * `FIXTURE_HORIZON_DAYS`, so the ± 3-month calendar query returns real games
+ * instead of quiet months. Far-future fixtures move rarely (rescheduling
+ * clusters within weeks of kickoff), so a DAILY pass is enough upkeep — the
+ * 6h window sweep stays narrow and stays the thing that keeps statuses fresh.
+ *
+ * Load accounting: with the big-five catalog this is ~75 days × 5 leagues ≈
+ * 375 scoreboard calls a day, sequential, once daily — deliberately cheaper
+ * per sweep than widening the 6h pass would have been.
+ */
+export async function syncFixtureHorizon(): Promise<GoalAlert[]> {
+  const goals: GoalAlert[] = [];
+  for (const league of LEAGUES) {
+    const win = pollWindow(league);
+    const from = Math.max(1, win.forward) + 1;
+    for (let off = from; off <= FIXTURE_HORIZON_DAYS; off++) {
+      try {
+        const json = await fetchScoreboard(league, datesAroundToday(off));
+        applyScoreboard(db, json, league);
+      } catch (err) {
+        // Same contract as syncScoreboardWindow: log loudly, keep walking —
+        // one dead day must not strand the rest of the horizon.
+        console.error(`[sync] horizon ${league} (${off}) FAILED:`, String(err));
+      }
+    }
+  }
+  return goals;
+}
+
+/**
  * Matches currently being summarized. The live summary pass and the live pulse
  * BOTH fan out to syncMatchSummary, and each loop has its own overlap guard —
  * so nothing stopped them from working the same match at the same time: a
@@ -370,6 +407,7 @@ let started = false;
 let summariesRunning = false;
 let scoreboardsRunning = false;
 let windowRunning = false;
+let horizonRunning = false;
 let pulseRunning = false;
 
 /** Start the cron loops. Called once from server/index.ts. */
@@ -382,6 +420,15 @@ export function startSyncLoop(): void {
   void syncScoreboardWindow(1, 21).catch((err) => console.error("[sync] initial window sweep error:", err));
   console.log("[sync] triggering initial standings sweep on boot...");
   void syncStandings().catch((err) => console.error("[sync] initial standings sweep error:", err));
+  // And the fixture horizon, so a fresh install has the ± 3-month calendar
+  // range populated within minutes of boot rather than at the next daily tick.
+  horizonRunning = true;
+  void syncFixtureHorizon()
+    .then(() => recordSyncPassOk())
+    .catch((err) => console.error("[sync] initial horizon sweep error:", err))
+    .finally(() => {
+      horizonRunning = false;
+    });
 
   // The live loop: summary of live matches every LIVE_SUMMARY_SECONDS.
   // A plain interval (not cron) because the cadence is env-configurable and
@@ -476,6 +523,27 @@ export function startSyncLoop(): void {
   const hour = parseInt(process.env.SYNC_DAILY_HOUR ?? "4", 10);
   cron.schedule(`0 ${hour} * * *`, () => {
     void syncStandings().catch((err) => console.error("[sync] standings loop error:", err));
+  });
+
+  // Daily, a little after the standings tick: the fixture horizon, so the
+  // ± 3-month calendar range keeps real games far beyond the 21-day window
+  // sweep. Its own overlap guard + its own hour keeps one slow ESPN stretch
+  // from colliding with anything else.
+  cron.schedule(`50 ${hour} * * *`, () => {
+    if (horizonRunning) {
+      log("horizon pass still running — skipping this tick");
+      return;
+    }
+    horizonRunning = true;
+    void syncFixtureHorizon()
+      .then(() => recordSyncPassOk())
+      .catch((err) => {
+        recordSyncPassFail();
+        console.error("[sync] horizon loop error:", err);
+      })
+      .finally(() => {
+        horizonRunning = false;
+      });
   });
 
   // Every 6h: fixture window sweep so future fixtures exist for browsing and

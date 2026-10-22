@@ -703,11 +703,28 @@ function printFeedTopTable() {
     console.log(`    ${name.padEnd(width)}  ${String(got).padStart(7)}   want ${want}`);
 }
 
-/** A localised day number, so a chip/cell can be found in either language. */
+/** A localised day number, so a chip can be found in either language. */
 const dayNumber = (lang, offset) =>
   new Intl.NumberFormat(lang === "fa" ? "fa-IR" : undefined, { useGrouping: false }).format(
     new Date(new Date().setDate(new Date().getDate() + offset)).getDate(),
   );
+
+/**
+ * The number a CALENDAR-SHEET cell carries for a date: the strip chips stay on
+ * Gregorian day numbers in both languages, but the sheet runs on the ACTIVE
+ * calendar — Jalali day under Persian, Gregorian day under English — so the
+ * far-day pick must ask Intl for that day of that system.
+ */
+const calendarDayNumber = (lang, date) => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = Number(
+    new Intl.DateTimeFormat(lang === "fa" ? "en-US-u-ca-persian" : "en-US", {
+      day: "numeric",
+      timeZone: "UTC",
+    }).format(d),
+  );
+  return new Intl.NumberFormat(lang === "fa" ? "fa-IR" : undefined, { useGrouping: false }).format(day);
+};
 
 /** Server-side favourite for a throwaway dev identity (the feed's banner gate). */
 async function seedFavorite(user, teamId) {
@@ -968,9 +985,12 @@ async function checkFeedTop(browser, lang, width, height) {
   const monthAhead = await page.evaluate(([iso, l]) => {
     const date = new Date(iso);
     const header = document.querySelector('[role="dialog"] span.text-md')?.textContent ?? "";
+    // The sheet runs on the ACTIVE calendar: Solar Hijri under Persian,
+    // Gregorian under English. The header must name the far day's month in
+    // that system, not the host one.
     const month = new Intl.DateTimeFormat(l === "fa" ? "fa-IR" : undefined, {
       month: "long",
-      calendar: "gregory",
+      calendar: l === "fa" ? "persian" : "gregory",
     }).format(date);
     return { month, header, same: header.includes(month) };
   }, [far.toISOString(), lang]);
@@ -979,17 +999,21 @@ async function checkFeedTop(browser, lang, width, height) {
     await page.click(`[role="dialog"] button[aria-label="${nextLabel}"]`);
     await page.waitForTimeout(400);
   }
-  const farDay = dayNumber(lang, 20);
+  const farDay = calendarDayNumber(lang, far);
   const picked = await page.evaluate(([num]) => {
     const cells = [...document.querySelector('[role="dialog"]').querySelectorAll("button")].filter(
       (b) => (b.textContent ?? "").trim() === num,
     );
-    if (!cells.length) return false;
-    cells[0].click();
-    return true;
+    if (!cells.length) return { ok: false, dotFree: false };
+    // Prefer a dot-free cell: the feed assertion below counts on an EMPTY
+    // matchday, and with the ± 3-month range now fetched the day-20 read can
+    // carry real fixtures.
+    const dotFree = cells.find((c) => !c.querySelector("span.bg-volt")) ?? null;
+    (dotFree ?? cells[0]).click();
+    return { ok: true, dotFree: Boolean(dotFree) };
   }, [farDay]);
   await page.waitForTimeout(900);
-  if (!picked) fail(label, `the calendar has no cell for day ${farDay}`);
+  if (!picked.ok) fail(label, `the calendar has no cell for day ${farDay}`);
   else {
     const centred = await page.evaluate(() => {
       const chips = [...document.querySelector('[role="group"]').querySelectorAll(":scope > button")];
@@ -1002,7 +1026,8 @@ async function checkFeedTop(browser, lang, width, height) {
     });
     expectAt(label, "far pick lands in chip slot", centred.pressedIndex, 3, 0);
     if (centred.fourth !== farDay) fail(label, `4th chip reads ${centred.fourth}, want ${farDay}`);
-    if (centred.cards !== 0 || !centred.empty)
+    // Only meaningful on an empty matchday (see the dot-free cell pick).
+    if (picked.dotFree && (centred.cards !== 0 || !centred.empty))
       fail(label, `feed not filtered to the picked day (cards=${centred.cards}, empty=${centred.empty})`);
     await page.screenshot({ path: `${REVIEW5}/far-date-${lang}-${width}.png` });
   }

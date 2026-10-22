@@ -3,14 +3,24 @@ import { BottomSheet } from "../BottomSheet";
 import { dayKey } from "../DateStrip";
 import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
 import { useI18n } from "../../i18n/context";
+import {
+  addJalaliMonths,
+  jalaliMonthIndex,
+  jalaliMonthLength,
+  jalaliToGregorian,
+  JALALI_MONTHS_FA,
+  toJalali,
+} from "../../lib/jalali";
 import { cx } from "../../lib/cx";
 import { selectionHaptic } from "../../lib/telegram";
 
 /**
- * Month names for the picker header. Persian gets its own list — a
- * localized month name is not the English one in a different script — and the
- * year and the day numbers come from Intl, because "۲۱" is not "21" in
- * another font.
+ * Persian gets its own calendar SYSTEM, not a transliterated month list: the
+ * sheet under Persian runs on the Solar Hijri (Jalali) calendar — فروردین
+ * first, Jalali year, Jalali day numbers — while the underlying cells stay
+ * real `Date` objects so day keys and match dots never disagree. English keeps
+ * the Gregorian month list. The year and day numbers still come from Intl,
+ * because "۲۱" is not "21" in another font.
  */
 const MONTH_NAMES_EN = [
   "January",
@@ -26,20 +36,6 @@ const MONTH_NAMES_EN = [
   "November",
   "December",
 ];
-const MONTH_NAMES_FA = [
-  "ژانویه",
-  "فوریه",
-  "مارس",
-  "آوریل",
-  "مه",
-  "ژوئن",
-  "ژوئیه",
-  "اوت",
-  "سپتامبر",
-  "اکتبر",
-  "نوامبر",
-  "دسامبر",
-];
 
 /**
  * Weekday headers. The grid keeps the Sunday-first order in both languages —
@@ -49,14 +45,52 @@ const DOW_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DOW_FA = ["شن", "یک", "دو", "سه", "چه", "پن", "جمع"];
 
 /**
+ * How many months the sheet may travel from today — 3 back, 3 ahead. The
+ * month grid can only land on whole months of the active calendar, so the
+ * clamp compares month indices of that calendar; the day feed covers the
+ * full range (see Matches).
+ */
+const HORIZON_MONTHS = 3;
+
+/**
+ * The month under construction, one calendar per language: Jalali {jy, jm}
+ * (1-based months) under Persian, Gregorian {y, m} (0-based) under English.
+ */
+interface MonthView {
+  y: number;
+  /** 1-based under Persian, 0-based under English — never mixed. */
+  m: number;
+}
+
+/** Gregorian month arithmetic on a 0-based index (Dec→Jan rollover free). */
+function addGregorianMonths(y: number, m: number, delta: number): MonthView {
+  const idx = y * 12 + m + delta;
+  return { y: Math.floor(idx / 12), m: ((idx % 12) + 12) % 12 };
+}
+
+/** Jalali month offset reshaped to a view tile (addJalaliMonths speaks {jy, jm}). */
+function offsetJalali(jy: number, jm: number, delta: number): MonthView {
+  const r = addJalaliMonths(jy, jm, delta);
+  return { y: r.jy, m: r.jm };
+}
+
+/** Clamp a view into the reachable ±HORIZON_MONTHS band of its calendar. */
+function clampView(view: MonthView, min: MonthView, max: MonthView): MonthView {
+  if (view.y * 12 + view.m < min.y * 12 + min.m) return min;
+  if (view.y * 12 + view.m > max.y * 12 + max.m) return max;
+  return view;
+}
+
+/**
  * Month-view date picker — the jump-to-any-day escape hatch at the end of the
  * date strip.
  *
- * The strip covers three weeks; this covers everything, so a user looking for
- * a match two months back does not have to hunt for it in a strip that is not
- * there. It is a picker first: a day outside the synced fixture window shows
- * no dot, and picking it lands on the feed's "no matches on this day" state
- * rather than a lie.
+ * The strip covers three weeks; this covers today ± 3 months, in the ACTIVE
+ * calendar (Solar Hijri in Persian, Gregorian in English), so a user looking
+ * for a match months away hunts for it in their own month names without
+ * browsing outside the synced fixture window. It is a picker first: a day
+ * outside any fixtures shows no dot, and picking an empty day lands on the
+ * feed's "no matches on this day" state rather than a lie.
  */
 export function CalendarSheet({
   open,
@@ -79,87 +113,115 @@ export function CalendarSheet({
     [isFa],
   );
 
+  // The reachable band, anchored at TODAY's month of each calendar. Computed
+  // per render from the clock (cheap math), so an app left open across a month
+  // boundary drifts its clamp along instead of sticking.
+  const [minView, maxView] = useMemo<[MonthView, MonthView]>(() => {
+    const now = new Date();
+    if (isFa) {
+      const t = toJalali(now);
+      return [
+        offsetJalali(t.jy, t.jm, -HORIZON_MONTHS),
+        offsetJalali(t.jy, t.jm, HORIZON_MONTHS),
+      ];
+    }
+    return [
+      addGregorianMonths(now.getFullYear(), now.getMonth(), -HORIZON_MONTHS),
+      addGregorianMonths(now.getFullYear(), now.getMonth(), HORIZON_MONTHS),
+    ];
+  }, [isFa]);
+
   // The month on screen. Re-opening the sheet always lands on the selected
-  // day's month — otherwise a user who browsed to March would come back to
-  // March after picking a day in October.
-  const [view, setView] = useState({
-    month: selected.getMonth(),
-    year: selected.getFullYear(),
-  });
+  // day's month (clamped into the band) — otherwise a user who browsed to a
+  // far month would come back to it after picking a day elsewhere.
+  const [view, setView] = useState<MonthView>(() => clampView(viewOf(selected, isFa), minView, maxView));
   // Open/close phase, so the reset above runs on the open EDGE and not on
   // every render (the selected date is a fresh object each minute).
   const [wasOpen, setWasOpen] = useState(open);
   if (open && !wasOpen) {
     setWasOpen(true);
-    setView({ month: selected.getMonth(), year: selected.getFullYear() });
+    setView(clampView(viewOf(selected, isFa), minView, maxView));
   }
   if (!open && wasOpen) setWasOpen(false);
 
-  const monthName = isFa ? MONTH_NAMES_FA[view.month] : MONTH_NAMES_EN[view.month];
+  const monthName = isFa ? JALALI_MONTHS_FA[view.m - 1] : MONTH_NAMES_EN[view.m];
   const dowNames = isFa ? DOW_FA : DOW_EN;
 
-  /** The month's days, padded to whole weeks so the grid never shifts. */
+  /** The month's days as real Dates, padded to whole weeks. */
   const cells = useMemo(() => {
-    const first = new Date(view.year, view.month, 1);
-    const last = new Date(view.year, view.month + 1, 0);
     const out: Array<Date | null> = [];
-    // Leading blanks: the first day of the month sits in its own weekday
-    // column.
-    // In FA mode, the week starts on Saturday (day 6 in JS getDay()),
-    // so we shift by 1: Saturday (6) becomes 0, Sunday (0) becomes 1, etc.
-    // In EN mode, the week starts on Sunday, so getDay() is used as-is.
-    const startDow = lang === "fa"
-      ? (first.getDay() + 1) % 7   // Sat=0, Sun=1, Mon=2, Tue=3, Wed=4, Thu=5, Fri=6
-      : first.getDay();            // Sun=0, Mon=1, ... (unchanged)
+    const first = isFa ? jalaliToGregorian(view.y, view.m, 1) : new Date(view.y, view.m, 1);
+    const days = isFa ? jalaliMonthLength(view.y, view.m) : lastGregDay(view.y, view.m);
+    // Leading blanks: the month's first day sits in its own weekday column.
+    // Both languages read the grid Saturday-first in Persian (Sat=0) and
+    // Sunday-first in English, so the shift survives the calendar switch.
+    const startDow = isFa ? (first.getDay() + 1) % 7 : first.getDay();
     for (let i = 0; i < startDow; i++) out.push(null);
-    for (let d = 1; d <= last.getDate(); d++) out.push(new Date(view.year, view.month, d));
+    if (isFa) {
+      for (let d = 1; d <= days; d++) out.push(jalaliToGregorian(view.y, view.m, d));
+    } else {
+      for (let d = 1; d <= days; d++) out.push(new Date(view.y, view.m, d));
+    }
     // Trailing blanks fill the last row.
     while (out.length % 7 !== 0) out.push(null);
     return out;
-  }, [view.year, view.month, lang]);
+  }, [view.y, view.m, isFa]);
 
   const todayKey = dayKey(new Date());
   const selectedKey = dayKey(selected);
 
+  const atMin = isFa
+    ? jalaliMonthIndex(view.y, view.m) <= jalaliMonthIndex(minView.y, minView.m)
+    : view.y * 12 + view.m <= minView.y * 12 + minView.m;
+  const atMax = isFa
+    ? jalaliMonthIndex(view.y, view.m) >= jalaliMonthIndex(maxView.y, maxView.m)
+    : view.y * 12 + view.m >= maxView.y * 12 + maxView.m;
+
   const prevMonth = () =>
-    setView((v) =>
-      v.month === 0 ? { month: 11, year: v.year - 1 } : { month: v.month - 1, year: v.year },
-    );
+    setView((v) => (isFa ? offsetJalali(v.y, v.m, -1) : addGregorianMonths(v.y, v.m, -1)));
   const nextMonth = () =>
-    setView((v) =>
-      v.month === 11 ? { month: 0, year: v.year + 1 } : { month: v.month + 1, year: v.year },
-    );
+    setView((v) => (isFa ? offsetJalali(v.y, v.m, 1) : addGregorianMonths(v.y, v.m, 1)));
 
   return (
     <BottomSheet open={open} onClose={onClose} title={t("calendar.title")}>
       {/* Month navigation. The chevrons point at the side they move to, and
           mirror themselves in Persian — the document direction flips the row,
-          so a fixed left arrow would point away from the month it opens. */}
+          so a fixed left arrow would point away from the month it opens.
+          At the band's edge the step is a no-op and the chevron dimmed: the
+          clamp, not a silently-drifting grid, is what holds the horizon. */}
       <div className="mb-4 flex items-center justify-between">
         <button
           type="button"
           onClick={prevMonth}
+          disabled={atMin}
           aria-label={t("calendar.prevMonth")}
-          className="grid h-11 w-11 flex-none place-items-center rounded-lg border border-line text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96]"
+          className={cx(
+            "grid h-11 w-11 flex-none place-items-center rounded-lg border transition-colors duration-[var(--t-fast)] active:scale-[0.96]",
+            atMin ? "border-line/50 text-ink-3/60" : "border-line text-ink-2 hover:bg-elevated",
+          )}
         >
           <ChevronLeftIcon className="rtl:-scale-x-100" />
         </button>
         <span className="min-w-0 flex-1 truncate text-center text-md font-bold text-ink">
-          {monthName} {digits.format(view.year)}
+          {monthName} {digits.format(view.y)}
         </span>
         <button
           type="button"
           onClick={nextMonth}
+          disabled={atMax}
           aria-label={t("calendar.nextMonth")}
-          className="grid h-11 w-11 flex-none place-items-center rounded-lg border border-line text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96]"
+          className={cx(
+            "grid h-11 w-11 flex-none place-items-center rounded-lg border transition-colors duration-[var(--t-fast)] active:scale-[0.96]",
+            atMax ? "border-line/50 text-ink-3/60" : "border-line text-ink-2 hover:bg-elevated",
+          )}
         >
           <ChevronRightIcon />
         </button>
       </div>
 
       {/* Back to today. The sheet opens on the selected day's month, so after
-          browsing to March the current week is many taps away; this is the one
-          tap back. 44px tall, like every other control in the sheet. */}
+          browsing to a far month the current week is many taps away; this is
+          the one tap back. 44px tall, like every other control in the sheet. */}
       <button
         type="button"
         onClick={() => {
@@ -181,7 +243,9 @@ export function CalendarSheet({
         ))}
       </div>
 
-      {/* The month. */}
+      {/* The month. In Persian mode the numbers are the JALALI day of the
+          cell — the Jalali month can straddle two Gregorian months, and the
+          display must follow the name in the header, not the host calendar. */}
       <div className="grid grid-cols-7 gap-1">
         {cells.map((day, index) => {
           if (!day) {
@@ -193,6 +257,7 @@ export function CalendarSheet({
           const isToday = key === todayKey;
           const isSelected = key === selectedKey;
           const hasMatches = daysWithMatches?.has(key) ?? false;
+          const dayNum = isFa ? toJalali(day).jd : day.getDate();
           return (
             <button
               key={key}
@@ -213,7 +278,7 @@ export function CalendarSheet({
                     : "border-line bg-transparent text-ink",
               )}
             >
-              <span className="num-display tabular-nums">{digits.format(day.getDate())}</span>
+              <span className="num-display tabular-nums">{digits.format(dayNum)}</span>
               {hasMatches ? (
                 // A day with fixtures carries a dot, so a busy Saturday reads as
                 // busy before the tap. The selected day's fill IS the marker.
@@ -234,4 +299,18 @@ export function CalendarSheet({
       </div>
     </BottomSheet>
   );
+}
+
+/** The view (month tile) the given date belongs to, in the active calendar. */
+function viewOf(date: Date, isFa: boolean): MonthView {
+  if (isFa) {
+    const j = toJalali(date);
+    return { y: j.jy, m: j.jm };
+  }
+  return { y: date.getFullYear(), m: date.getMonth() };
+}
+
+/** Last local day of a Gregorian month (day-before-first-of-next). */
+function lastGregDay(y: number, m: number): number {
+  return new Date(y, m + 1, 0).getDate();
 }

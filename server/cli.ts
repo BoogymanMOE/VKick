@@ -5,6 +5,7 @@
  *   npm run sync                          # scoreboard sweep + summaries + standings
  *   npm run sync -- sync-match eng.1 401874934
  *   npm run sync -- standings
+ *   npm run sync -- horizon              # backfill fixtures out to the 3-month calendar range
  *   npm run sync -- understat             # league-wide xG/xPts (the expected tables)
  *   npm run sync -- dev-token 12345       # print a dev auth token (needs DEV_AUTH_SECRET set)
  *   npm run sync -- --dry-run             # fetch + normalize, print, write nothing
@@ -82,6 +83,14 @@ async function main(): Promise<void> {
       await standings();
       break;
     }
+    case "horizon": {
+      // Manual backfill of the ± 3-month calendar range (see syncFixtureHorizon):
+      // for a fresh database that must not wait for the daily cron tick.
+      const { syncFixtureHorizon } = await import("./sync/service.js");
+      const goals = await syncFixtureHorizon();
+      log(`fixture horizon applied; ${goals.length} goal(s) detected`);
+      break;
+    }
     case "rosters": {
       const { syncRosters } = await import("./sync/service.js");
       await syncRosters();
@@ -112,7 +121,7 @@ async function main(): Promise<void> {
     default:
       log(`unknown command: ${cmd}`);
       log(
-        "commands: sync-all | sync-match <league> <eventId> | standings | rosters | understat | dev-token <id> [--dry-run]",
+        "commands: sync-all | sync-match <league> <eventId> | standings | horizon | rosters | understat | dev-token <id> [--dry-run]",
       );
       process.exit(1);
   }
