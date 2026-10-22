@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Share mode only: this page exists to photograph the app, it must never
+         sit in search results next to the real one. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="color-scheme" content="dark" />
+    <title>Vkick share mode</title>
+    <style>
+      /* Floodlit-night page skin: same family as the app's own tokens, kept
+         literal here because this page runs before (and without) the bundle. */
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background-color: #050e0c;
+        /* soft teal glow up top + faint pitch lines like the app's floodlight */
+        background-image:
+          radial-gradient(120% 55% at 50% -10%, rgba(31, 191, 160, 0.12), transparent 60%),
+          repeating-linear-gradient(
+            to bottom,
+            rgba(237, 247, 243, 0.02) 0px,
+            rgba(237, 247, 243, 0.02) 1px,
+            transparent 1px,
+            transparent 56px
+          );
+        color: #edf7f3;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        color-scheme: dark;
+        overflow: hidden; /* the fit() scaler owns the layout */
+      }
+
+      /* Two language buttons, pinned to the top end of the page. */
+      .langbar {
+        position: fixed;
+        top: 10px;
+        inset-inline-end: 12px;
+        display: flex;
+        gap: 8px;
+        z-index: 20;
+      }
+      .langbar button {
+        min-width: 52px;
+        min-height: 44px;
+        padding: 0 14px;
+        border-radius: 10px;
+        border: 1px solid #2c403b;
+        background: #0b1f1b;
+        color: #edf7f3;
+        font: 700 14px/1 system-ui, sans-serif;
+        cursor: pointer;
+      }
+      .langbar button[aria-pressed="true"] {
+        border-color: #1fbfa0;
+        color: #1fbfa0;
+      }
+
+      /* Everything below scales as one unit (fit()). */
+      #stage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        will-change: transform;
+      }
+
+      /* The phone: 12px bezel on an exact-size iframe screen. */
+      .device {
+        position: relative;
+        padding: 12px;
+        border: 1px solid #2c403b; /* 1px outer ring */
+        border-radius: 48px;
+        background: #1b2b27; /* bezel */
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+      }
+      .screen {
+        position: relative;
+        border-radius: 36px;
+        overflow: hidden; /* clips the app to the inner screen */
+        background: #081613;
+      }
+      .screen iframe {
+        display: block;
+        border: 0;
+        margin: 0;
+      }
+      /* Drawn ABOVE the app but never in its way. */
+      .island {
+        position: absolute;
+        top: 10px; /* of the screen box */
+        left: 50%;
+        transform: translateX(-50%);
+        width: 110px;
+        height: 30px;
+        border-radius: 15px;
+        background: #050e0c;
+        pointer-events: none;
+        z-index: 10;
+      }
+      .homebar {
+        position: absolute;
+        bottom: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 134px;
+        height: 5px;
+        border-radius: 3px;
+        background: rgba(237, 247, 243, 0.55);
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      .hint {
+        margin: 0;
+        font-size: 13px; /* >= 12px */
+        color: rgba(237, 247, 243, 0.6);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="langbar">
+      <button type="button" id="btn-en" aria-pressed="true">EN</button>
+      <button type="button" id="btn-fa" aria-pressed="false" lang="fa">فارسی</button>
+    </div>
+
+    <div id="fit">
+      <div id="stage">
+        <div class="device" id="device">
+          <div class="screen">
+            <iframe
+              id="app"
+              title="Vkick app preview"
+              width="390"
+              height="844"
+              frameborder="0"
+            ></iframe>
+            <div class="island" aria-hidden="true"></div>
+            <div class="homebar" aria-hidden="true"></div>
+          </div>
+        </div>
+        <p class="hint">Tip: browser zoom 200% gives sharper screenshots</p>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var devices = {
+          phone: { w: 390, h: 844 },
+          small: { w: 360, h: 640 },
+        };
+        var app = document.getElementById("app");
+        var device = document.getElementById("device");
+        var stage = document.getElementById("stage");
+        var fitBox = document.getElementById("fit");
+        var q = new URLSearchParams(window.location.search);
+
+        // hash: must start with "#/", otherwise the default wins.
+        var hash = q.get("hash") || "#/matches";
+        if (hash.indexOf("#/") !== 0) hash = "#/matches";
+        // devUser: digits only, passed through untouched.
+        var devUser = (q.get("devUser") || "").replace(/\D/g, "");
+        // device: "phone" (390x844) default, or "small" (360x640).
+        var dev = devices[q.get("device")] || devices.phone;
+
+        app.width = dev.w;
+        app.height = dev.h;
+        app.style.width = dev.w + "px";
+        app.style.height = dev.h + "px";
+
+        // The app's own src: same origin, embed flag on. Kept around so the
+        // language buttons can reload exactly this view.
+        var baseSrc =
+          "/?embed=1" + (devUser ? "&devUser=" + encodeURIComponent(devUser) : "") + hash;
+        app.src = baseSrc;
+
+        // Language: the label buttons talk to the app BEFORE it boots by
+        // writing the key the app reads on mount (I18nProvider: matchday.lang),
+        // then reload the iframe. Same origin, so the write lands in the app's
+        // own store; the parent-side write is the fallback for odd browsers.
+        function storedLang() {
+          var lang = "en";
+          try {
+            lang = app.contentWindow.localStorage.getItem("matchday.lang") || window.localStorage.getItem("matchday.lang") || "en";
+          } catch (e) {}
+          return lang === "fa" ? "fa" : "en";
+        }
+        function refreshPressed() {
+          var active = storedLang();
+          document.getElementById("btn-en").setAttribute("aria-pressed", String(active === "en"));
+          document.getElementById("btn-fa").setAttribute("aria-pressed", String(active === "fa"));
+        }
+        function setLang(lang) {
+          try {
+            var win = app.contentWindow;
+            (win && win.localStorage ? win.localStorage : window.localStorage).setItem("matchday.lang", lang);
+          } catch (e) {
+            try { window.localStorage.setItem("matchday.lang", lang); } catch (e2) {}
+          }
+          // Assigning the same src is a no-op in browsers, so reload for real.
+          try {
+            app.contentWindow.location.reload();
+          } catch (e) {
+            // Cache-buster needs to join the QUERY, not the fragment — the app
+            // is hash-routed, so anything after '#' would pollute the route.
+            app.src = baseSrc.replace("#", "&_r=" + Date.now() + "#") || baseSrc;
+          }
+          refreshPressed();
+        }
+        document.getElementById("btn-en").addEventListener("click", function () { setLang("en"); });
+        document.getElementById("btn-fa").addEventListener("click", function () { setLang("fa"); });
+        // First paint: pressed state from whatever the app already stored.
+        app.addEventListener("load", refreshPressed);
+        refreshPressed();
+
+        // Fit: never above 1, margins 48px tall / 32px wide, recalculated on
+        // resize. The measured device box keeps the constant table honest.
+        // scale() leaves the LAYOUT size of #stage untouched, so after scaling
+        // the box is resized to the visually scaled height/width — that keeps
+        // the grid centring (and the fit check) on the real visual box.
+        function fit() {
+          fitBox.style.position = "fixed";
+          fitBox.style.inset = "0";
+          fitBox.style.display = "grid";
+          fitBox.style.placeItems = "center";
+          var totalW = device.offsetWidth;
+          var totalH = device.offsetHeight;
+          var r = Math.min(
+            1,
+            (window.innerHeight - 48) / totalH,
+            (window.innerWidth - 32) / totalW
+          );
+          var layoutH = stage.scrollHeight; // device + gap + hint, unscaled
+          stage.style.transformOrigin = "top center";
+          stage.style.width = Math.floor(totalW * r) + "px";
+          stage.style.height = Math.floor((layoutH * r * 10) / 10) + "px";
+          stage.style.transform = "scale(" + r + ")";
+          window.__frameScale = r;
+        }
+        window.addEventListener("resize", fit);
+        fit();
+      })();
+    </script>
+  </body>
+</html>
