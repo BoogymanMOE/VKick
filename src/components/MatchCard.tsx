@@ -33,11 +33,15 @@ export const MatchCard = memo(function MatchCard({
   // raw status can no longer tell a break from a running match — `isHalftime`
   // carries the real value through.
   const isHalftime = match.isHalftime === true;
-  // Half-time is a neutral pause, not a running match: only `live` gets the red
-  // dot and live tint.
+  // Half-time is a neutral pause, not a running match: only `live` gets the red  // dot and live tint.
   const isLive = match.status === "live";
   const isFinished = match.status === "finished";
   const hasScore = isLive || isHalftime || isFinished;
+  // Left-edge accent per match status — additive (keeps existing live-glow)  const stateEdge =  match.status === "live"
+    ? "border-l-[3px] border-l-[var(--live)] bg-[color-mix(in_srgb,var(--live)_5%,var(--bg-surface))]"
+    : match.status === "finished"
+      ? "border-l-[3px] border-l-[color-mix(in_srgb,var(--text-muted)_60%,transparent)] opacity-85"
+      : "border-l-[3px] border-l-[var(--volt)]";
   const homeScore = match.homeScore ?? 0;
   const awayScore = match.awayScore ?? 0;
   const kickoff = formatKickoff(new Date(match.kickoffAt), locale);
@@ -99,8 +103,8 @@ export const MatchCard = memo(function MatchCard({
         // The 3-column grid flips with `dir`, so home sits on the right and away
         // on the left in Persian; explicit so the card reads correctly even if
         // the shell ever stops setting dir on the root.
-        dir={lang === "fa" ? "rtl" : "ltr"}
-        className="block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated shadow-[0_2px_8px_-4px_rgba(0,0,0,0.5)] focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2"
+        dir={lang === "fa" ? "rtl" : "ltr"}className={`block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated shadow-[0_2px_8px_-4px_rgba(0,0,0,0.5)] focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2 ${stateEdge}`}
+        style={{
         style={{
           // Red for a running match, amber for the break, neutral otherwise —
           // a feed of a dozen half-time cards must not read as a dozen alarms.
