@@ -115,7 +115,7 @@ export function BottomSheet({
         )}
         style={{
           transform: dragY ? `translateY(${dragY}px)` : undefined,
-          paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
+          paddingBottom: "max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 16px)",
         }}
       >
         {/* Drag handle: drag down past 90px to dismiss. */}

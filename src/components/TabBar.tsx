@@ -25,7 +25,7 @@ export function TabBar() {
     // imperceptible but ran on every scroll frame.
     // Ad is now inline and scrolls with content, so TabBar sits at the very bottom.
     <nav
-      className="pad-safe-bottom sticky z-20 border-t border-line bg-base/95 ps-[env(safe-area-inset-left)] pe-[env(safe-area-inset-right)]"
+      className="pad-safe-bottom sticky z-20 border-t border-line bg-base/95 ps-[var(--safe-left, env(safe-area-inset-left, 0px))] pe-[var(--safe-right, env(safe-area-inset-right, 0px))]"
     >
       <ul className="mx-auto flex w-full max-w-[560px] items-stretch justify-between px-2 pt-1">
         {tabs.map(({ to, key, Icon }) => (

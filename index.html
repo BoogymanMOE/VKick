@@ -78,6 +78,15 @@
     <meta property="og:image:height" content="360" />
     <meta name="twitter:card" content="summary_large_image" />
     <title>Vkick</title>
+    <!-- Share mode: /frame.html loads the app with ?embed=1 so the fake phone
+         can own the safe-area insets (an iframe has none of its own). Any normal
+         load — phone, desktop, Telegram — must be untouched. -->
+    <script>
+      try {
+        if (new URLSearchParams(window.location.search).get("embed") === "1")
+          document.documentElement.dataset.embed = "1";
+      } catch {}
+    </script>
     <!-- BEGIN Tapsell ad loader -->
     <script type="text/javascript">
       (function () {

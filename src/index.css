@@ -154,12 +154,23 @@
     unicode-bidi: isolate;
   }
 
-  /* Safe-area padding helpers — Telegram headers, iPhone home indicator, etc. */
+  /* Safe-area padding helpers — Telegram headers, iPhone home indicator, etc.
+     The var indirection only exists for share mode: /frame.html embeds the app
+     in an iframe, and an iframe has no real safe-area insets, so the frame
+     page supplies --safe-top/--safe-bottom itself (see html[data-embed] below).
+     Without the variables — every real user, everywhere — the fallback resolves
+     to exactly the env() value this rule had before. */
   .pad-safe-top {
-    padding-top: max(env(safe-area-inset-top), 8px);
+    padding-top: max(var(--safe-top, env(safe-area-inset-top, 0px)), 8px);
   }
   .pad-safe-bottom {
-    padding-bottom: max(env(safe-area-inset-bottom), 8px);
+    padding-bottom: max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 8px);
+  }
+  /* Share mode only: the fake phone's island and home bar. Undefined for every
+     real user, so the values above stay identical to today. */
+  html[data-embed="1"] {
+    --safe-top: 34px;
+    --safe-bottom: 20px;
   }
 
   /* Squad row: one grid whose tracks flip with `dir`, so the jersey number sits

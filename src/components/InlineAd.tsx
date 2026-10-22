@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { IS_EMBED } from "../lib/embed";
 
 /**
  * The feed's inline ad: a 56px hosted iframe (A-ADS, adaptive size) sitting
@@ -8,6 +9,8 @@ import type { CSSProperties } from "react";
  * collide with the app's dashed-border-means-nothing-here language).
  */
 export function InlineAd() {
+  // Share mode (?embed=1 inside /frame.html): clean screenshots, no ad iframe.
+  if (IS_EMBED) return null;
   return (
     <div
       className="my-3 flex items-center gap-2 rounded-card border border-line bg-elevated p-2"

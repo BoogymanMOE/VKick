@@ -95,7 +95,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         // `auto` (not inherited rtl/ltr): an English "Updated 9:41 PM" inside a
         // Persian app must read LTR, while a Persian message reads RTL.
         dir="auto"
-        className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-3 pt-[max(env(safe-area-inset-top),10px)]"
+        className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-3 pt-[max(var(--safe-top, env(safe-area-inset-top, 0px)),10px)]"
         role="status"
         aria-live="polite"
       >

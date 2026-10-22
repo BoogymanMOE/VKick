@@ -60,7 +60,9 @@ export function AppShell() {
         // The sticky tab bar is 4px (its own pt-1) + 56px (min-h-14) + the
         // safe-area inset — reserving only 56px left the last card tucked under
         // it. The extra 4px is the difference.
-        style={{ paddingBottom: "calc(60px + max(env(safe-area-inset-bottom), 8px))" }}
+        style={{
+          paddingBottom: "calc(60px + max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 8px))",
+        }}
       >
         <Suspense
           fallback={

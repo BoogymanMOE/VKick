@@ -96,7 +96,7 @@ export default function Login() {
 
       <main
         className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-5"
-        style={{ paddingBottom: "calc(40px + max(env(safe-area-inset-bottom), 8px))" }}
+        style={{ paddingBottom: "calc(40px + max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 8px))" }}
       >
         {/* Hero: the mark over the wordmark, over the floodlit wash. */}
         <section className="rise-in px-1 pb-10 text-center">
