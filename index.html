@@ -87,6 +87,34 @@
           document.documentElement.dataset.embed = "1";
       } catch {}
     </script>
+    <!-- Share mode switch: ?frame=1 on a WIDE, top-level, non-Telegram window
+         jumps to /frame.html, which re-embeds this same app in a phone bezel.
+         Every other load (phones, Telegram webview, framed pages, narrow
+         windows) never redirects — the switch is opt-in by query param and
+         additionally closed to exactly the contexts where the frame makes no
+         sense. Runs before the bundle; any failure is swallowed so it can
+         never break the boot below. -->
+    <script>
+      try {
+        var qFrame = new URLSearchParams(window.location.search);
+        if (
+          qFrame.get("frame") === "1" &&
+          window.innerWidth >= 700 &&
+          window.top === window.self &&
+          window.location.hash.indexOf("tgWebAppData") === -1
+        ) {
+          var frameDevUser = qFrame.get("devUser") || "";
+          var devUserParam = /^\\d+$/.test(frameDevUser)
+            ? "&devUser=" + encodeURIComponent(frameDevUser)
+            : "";
+          window.location.replace(
+            "/frame.html?hash=" +
+              encodeURIComponent(window.location.hash || "#/matches") +
+              devUserParam
+          );
+        }
+      } catch {}
+    </script>
     <!-- BEGIN Tapsell ad loader -->
     <script type="text/javascript">
       (function () {

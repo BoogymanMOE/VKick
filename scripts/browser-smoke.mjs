@@ -1216,3 +1216,161 @@ if (failures.length > 0) {
   process.exit(1);
 }
 console.log("\nSMOKE OK");
+
+/** Share mode acceptance checks (Tasks 1-3). * Seeds localStorage with storageState, never addInitScript. */
+async function checkShareMode(browser, fixtures) {
+  const label = "Share mode";
+  const review = ".ui-shots/review6";
+  try { mkdirSync(review, { recursive: true }); } catch {}
+
+  // Task 1: embed flag, hide ad, safe-area variables
+  async function task1() {
+    const label = "Task 1: embed mode";
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await ctx.newPage();
+    // Load normal app (no embed)
+    await settle(page, BASE + "/?devUser=dev1#/matches", 4000);
+    const normalHeader = await page.evaluate(() => {
+      const h = document.querySelector("header");
+      return h ? h.getBoundingClientRect().top : null;
+    });
+    const normalTabBar = await page.evaluate(() => {
+      const tbl = document.querySelector(".pad-safe-bottom");
+      return tbl ? tbl.getBoundingClientRect().bottom : null;
+    });
+    const adCount = await page.evaluate(() => {
+      return document.querySelectorAll('[data-aa]').length;
+    });
+    pass(`${label}: normal load`, `headerTop=${normalHeader} tabBarBottom=${normalTabBar} adCount=${adCount}`);
+
+    // Load with ?embed=1
+    await page.goto(BASE + "?embed=1&devUser=dev1#/matches", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForTimeout(500);
+    const embedHeader = await page.evaluate(() => {
+      const h = document.querySelector("header");
+      return h ? h.getBoundingClientRect().top : null;
+    });
+    const embedTabBar = await page.evaluate(() => {
+      const tbl = document.querySelector(".pad-safe-bottom");
+      return tbl ? tbl.getBoundingClientRect().bottom : null;
+    });
+    const embedAdCount = await page.evaluate(() => {
+      return document.querySelectorAll('[data-aa]').length;
+    });
+    pass(`${label}: embed load`, `headerTop=${embedHeader} tabBarBottom=${embedTabBar} adCount=${embedAdCount}`);
+    // Header should be 34px lower in embed mode
+    if (normalHeader && embedHeader && Math.abs(embedHeader - normalHeader) !== 34)
+      fail(`${label}: header`, `expected 34px difference, got ${Math.abs(embedHeader - normalHeader)}px`);
+    // Tab bar should have 20px bottom padding in embed mode
+    if (embedTabBar && normalTabBar && Math.abs(embedTabBar - normalTabBar) !== 20)
+      fail(`${label}: tab bar`, `expected 20px difference, got ${Math.abs(embedTabBar - normalTabBar)}px`);
+    // No ad iframe in embed mode
+    if (embedAdCount > 0) fail(`${label}: ad`, `expected 0 ad iframes in embed mode, saw ${embedAdCount}`);
+    await ctx.close();
+  }
+
+  // Task 2: frame page
+  async function task2() {
+    const label = "Task 2: frame page";
+    // 1360x900 - device should fit
+    const ctx900 = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+    const page900 = await ctx900.newPage();
+    await page900.goto(BASE + "/?frame=1&devUser=dev1#/matches", { waitUntil: "domcontentloaded", timeout: 30000 });
+    const innerWidth = await page900.evaluate(() => {
+      const iframe = document.querySelector("iframe#app");
+      return iframe ? iframe.contentWindow?.innerWidth : null;
+    });
+    const innerHeight = await page900.evaluate(() => {
+      const iframe = document.querySelector("iframe#app");
+      return iframe ? iframe.contentWindow?.innerHeight : null;
+    });
+    pass(`${label}: 1360x900 innerWidth`, innerWidth === 390 ? "390" : String(innerWidth));
+    pass(`${label}: 1360x900 innerHeight`, innerHeight === 844 ? "844" : String(innerHeight));
+    const pageTitle = await page900.evaluate(() => document.title);
+    pass(`${label}: title`, pageTitle === "Vkick share mode" ? "correct" : pageTitle);
+    await ctx900.close();
+
+    // small device 360x640
+    const ctxSmall = await browser.newContext({ viewport: { width: 360, height: 640 } });
+    const pageSmall = await ctxSmall.newPage();
+    await pageSmall.goto(BASE + "/?frame=1&devUser=dev1&device=small#/matches", { waitUntil: "domcontentloaded", timeout: 30000 });
+    pass(`${label}: small device fits`, pageSmall.url().includes("/frame.html"));
+    await ctxSmall.close();
+
+    // EN/FA language switch inside frame
+    const pageEN = await ctx900.newPage();
+    await pageEN.goto(BASE + "/?frame=1&devUser=dev1&lang=en#/matches", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await pageEN.evaluate(() => {
+      document.getElementById("btn-en").click();
+    });
+    await pageEN.waitForTimeout(1000);
+    const langEN = await pageEN.evaluate(() => localStorage.getItem("matchday.lang"));
+    pass(`${label}: EN switch`, langEN === "en" ? "correct" : langEN);
+    await pageEN.close();
+
+    const pageFA = await ctx900.newPage();
+    await pageFA.goto(BASE + "/?frame=1&devUser=dev1#/matches", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await pageFA.evaluate(() => {
+      document.getElementById("btn-fa").click();
+    });
+    await pageFA.waitForTimeout(1000);
+    const langFA = await pageFA.evaluate(() => localStorage.getItem("matchday.lang"));
+    pass(`${label}: FA switch`, langFA === "fa" ? "correct" : langFA);
+    await pageFA.close();
+  }
+
+  // Task 3: the switch, serving and headers
+  async function task3() {
+    const label = "Task 3: switch and headers";
+
+    // 1360x900 with ?frame=1 should redirect to /frame.html
+    const ctx900 = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+    const page900 = await ctx900.newPage();
+    await page900.goto(BASE + "/?frame=1&devUser=dev1#/matches", { waitUntil: "domcontentloaded", timeout: 30000 });
+    const finalUrl = page900.url();
+    pass(`${label}: 1360x900 redirect`, finalUrl.includes("/frame.html") ? "redirected" : "stayed on app");
+    await ctx900.close();
+
+    // 390x844 with ?frame=1 should stay on normal app (no redirect)
+    const ctx390 = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page390 = await ctx390.newPage();
+    await page390.goto(BASE + "/?frame=1&devUser=dev1#/matches", { waitUntil: "domcontentloaded", timeout: 30000 });
+    const url390 = page390.url();
+    pass(`${label}: 390x844 no redirect`, !url390.includes("/frame.html") ? "stayed on app" : "redirected");
+    await ctx390.close();
+
+    // 1360x900 with tgWebAppData should NOT redirect
+    const ctxTg = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+    const pageTg = await ctxTg.newPage();
+    await pageTg.goto(BASE + "/#tgWebAppData=x&tgWebAppVersion=7&?frame=1#/matches", { waitUntil: "domcontentloaded", timeout: 30000 });
+    const urlTg = pageTg.url();
+    pass(`${label}: Telegram data no redirect`, !urlTg.includes("/frame.html") ? "stayed on app" : "redirected");
+    await ctxTg.close();
+
+    // 1360x900 without frame param - no redirect
+    const ctxNoFrame = await browser.newContext({ viewport: { width: 1360, height: 900 } });
+    const pageNoFrame = await ctxNoFrame.newPage();
+    await pageNoFrame.goto(BASE + "/#/matches", { waitUntil: "domcontentloaded", timeout: 30000 });
+    const urlNoFrame = pageNoFrame.url();
+    pass(`${label}: no frame param`, !urlNoFrame.includes("/frame.html") ? "stayed on app" : "redirected");
+    await ctxNoFrame.close();
+
+    // Measure column width and tab bar width on normal app (unchanged)
+    const pageMeasure = await ctx900.newPage();
+    await pageMeasure.goto(BASE + "/#/matches", { waitUntil: "domcontentloaded", timeout: 30000 });
+    const colWidth = await pageMeasure.evaluate(() => {
+      const main = document.querySelector("main");
+      return main ? Math.round(main.getBoundingClientRect().width) : null;
+    });
+    const tabBarWidth = await pageMeasure.evaluate(() => {
+      const tbl = document.querySelector(".pad-safe-bottom");
+      return tbl ? Math.round(tbl.getBoundingClientRect().width) : null;
+    });
+    pass(`${label}: column width`, colWidth ? String(colWidth) : "n/a");
+    pass(`${label}: tab bar width`, tabBarWidth ? String(tabBarWidth) : "n/a");
+  }
+
+  await task1();
+  await task2();
+  await task3();
+}

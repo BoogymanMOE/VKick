@@ -41,7 +41,34 @@ CI (`.github/workflows/ci.yml`) runs typecheck, lint, the test suite and the bui
 2. In @BotFather → /newapp (or Menu Button) → paste the https URL
 3. Set `MINI_APP_URL` in `.env` to the same URL so the bot's /start button opens it
 
-## Manual data tools (the ESPN-breaks fallback)
+## Share mode
+
+A share mode for taking clean phone-frame screenshots to send to friends. It is **opt-in only** and **never affects real users**:
+- **Normal app on a phone, in Telegram, and on a laptop without the switch**: unchanged, pixel for pixel.
+- **Switch**: add `?frame=1` to the normal URL (for example `https://vkick.onrender.com/?frame=1#/matches`). Only on a wide screen (width 700px or more), at top level (not inside an iframe), and not inside Telegram, the page redirects to `/frame.html`, which draws a phone bezel around the real app.
+- URLs: `/?frame=1#/matches`, `/frame.html?hash=%23%2Fmatches&device=small`
+- Real users never see the frame; the switch requires window width >= 700px, top-level context (not framed), and no Telegram init data.
+- No new dependencies, no schema changes. `PREDICTIONS_ENABLED` and `RATINGS_ENABLED` stay false.
+- `MatchCard.tsx` is not modified.
+
+### How it works:
+1. When `?frame=1` is detected on a wide, top-level, non-Telegram window, the app redirects to `/frame.html`
+2. `/frame.html` embeds the app in an iframe with `?embed=1`, supplying `--safe-top: 34px` and `--safe-bottom: 20px` so safe-area insets work correctly inside the iframe.
+3. The iframe is sized to the device (default 390x844, `device=small` gives 360x640) and scaled to fit the window.
+4. Language buttons (EN/فارسی) let you switch the app language inside the frame; the active language is shown as pressed (`aria-pressed`).
+
+Real users never see this mode. The switch only triggers when all of the following are true:
+- Query param `frame=1` is present
+- `window.innerWidth >= 700`
+- `window.top === window.self` (not inside another frame)
+- Hash does NOT contain `tgWebAppData` (not a Telegram launch)
+
+Preview URLs:
+- `/?frame=1#/matches` — wide screen redirect to frame page
+- `/frame.html?hash=%23%2Fmatches&device=small` — small phone frame (360x640)
+- `/frame.html?hash=%23%2Fmatch%2F<id>...` — frame with a specific match page
+
+*Real users never see this mode. It is purely for generating clean phone-frame screenshots.*
 
 ```bash
 npm run sync                        # full sweep: scoreboards + live summaries + standings
