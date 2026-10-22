@@ -99,22 +99,18 @@ export function CollapsibleSection({
   const [storedOpen, setOpen] = useLocalState<boolean>(`section.open.${id}`, defaultOpen);
   const open = openOverride ? openOverride.open : storedOpen;
   const headingId = `${id}-heading`;
-  const panelId = `${id}-panel`;
-  const Heading = level === 2 ? "h2" : "h3";
+  const panelId = `${id}-panel`;const Heading = level === 2 ? "h2" : "h3";
   const headerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const handleToggle = () => {
     haptic("light");
     if (openOverride) {
-      // First individual toggle during a bulk action: release the override and
-      // land on the opposite of the bulk state, so this section moves while
-      // the rest keep the bulk position.
+      // First individual toggle during a bulk action: release the override and      // land on the opposite of the bulk state, so this section moves while      // the rest keep the bulk position.
       onUserToggle?.();
       setOpen(!openOverride.open);
       return;
     }
-    // Folding unmounts the panel: catch keyboard focus hiding inside it and
-    // move it to the header, or the next Tab would restart from the page top.
+    // Folding unmounts the panel: catch keyboard focus hiding inside it and    // move it to the header, or the next Tab would restart from the page top.
     const active = document.activeElement;
     if (!open && active instanceof Node && panelRef.current?.contains(active)) {
       headerRef.current?.focus();
@@ -123,7 +119,7 @@ export function CollapsibleSection({
   };
   return (
     <section className={className ?? "mt-6"}>
-      <Heading id={headingId} className="mb-2">
+      <Heading id={headingId} className="mb-2 border-b border-line pb-2 -mx-[var(--space-page-x,16px)] px-[var(--space-page-x,16px)]">
         <button
           ref={headerRef}
           type="button"
