@@ -4,7 +4,7 @@ import type { Match } from "../types";
 import { useI18n } from "../i18n/context";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { useCompetitionLabel } from "../hooks/useApi";
-import { formatKickoff } from "../lib/format";
+import { formatKickoff, formatKickoffShort } from "../lib/format";
 import { LiveDot, Num, TeamBadge } from "./ui";
 import { recordFlipFirst } from "../lib/flip";
 
@@ -45,11 +45,6 @@ export const MatchCard = memo(function MatchCard({
   const homeScore = match.homeScore ?? 0;
   const awayScore = match.awayScore ?? 0;
   const kickoff = formatKickoff(new Date(match.kickoffAt), locale);
-  // The three parts that sit on the dead centre of the card: weekday above the
-  // clock, clock in the middle, period below. Persian (fa-IR) has no dayPeriod,
-  // so the period row is an empty 23px spacer that keeps the clock vertically
-  // centred regardless of script.
-  const parts = kickoffParts(new Date(match.kickoffAt), locale);
   // Half-time has no minute on the clock; name the break instead of showing an
   // empty slot.
   const minuteLabel = isHalftime ? match.minute || t("timeline.halftime") : match.minute;
@@ -103,9 +98,7 @@ export const MatchCard = memo(function MatchCard({
         // The 3-column grid flips with `dir`, so home sits on the right and away
         // on the left in Persian; explicit so the card reads correctly even if
         // the shell ever stops setting dir on the root.
-        dir={lang === "fa" ? "rtl" : "ltr"}className={`block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated shadow-[0_2px_8px_-4px_rgba(0,0,0,0.5)] focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2 ${stateEdge}`}
-        style={{
-        style={{
+        dir={lang === "fa" ? "rtl" : "ltr"} className={`block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated shadow-[0_2px_8px_-4px_rgba(0,0,0,0.5)] focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2 ${stateEdge}`}        style={{
           // Red for a running match, amber for the break, neutral otherwise —
           // a feed of a dozen half-time cards must not read as a dozen alarms.
           borderColor: isLive
