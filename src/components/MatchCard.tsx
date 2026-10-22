@@ -101,7 +101,7 @@ export const MatchCard = memo(function MatchCard({
         // on the left in Persian; explicit so the card reads correctly even if
         // the shell ever stops setting dir on the root.
         dir={lang === "fa" ? "rtl" : "ltr"}
-        className="block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2"
+        className="block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated shadow-[0_2px_8px_-4px_rgba(0,0,0,0.5)] focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2"
         style={{
           // Red for a running match, amber for the break, neutral otherwise —
           // a feed of a dozen half-time cards must not read as a dozen alarms.
