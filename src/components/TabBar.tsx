@@ -27,7 +27,7 @@ export function TabBar() {
     <nav
       className="pad-safe-bottom fixed bottom-0 left-0 right-0 z-20 border-t border-line bg-base/95"
     >
-      <ul className="mx-auto flex w-full max-w-[560px] items-stretch justify-between px-2 pt-1">
+      <ul className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] items-stretch justify-between px-2 pt-1">
         {tabs.map(({ to, key, Icon }) => (
           <li key={to} className="flex-1">
             <NavLink

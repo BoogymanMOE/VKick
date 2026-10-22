@@ -56,6 +56,8 @@
      16px from each edge on a 360px webview is the modern mobile norm; the
      previous 12px (px-3) read as cramped. */
   --space-page-x: 16px;
+  /* App content max-width — caps how wide the centered content column can grow on tablets, desktop Telegram, and Android's expanded Mini-App view. 560px left 20–40px empty bands on each side of those wider viewports. 768px fills any reasonable phone or tablet-portrait while still capping cards on truly wide displays. The header bar, body, and tab bar all read this so they align as one column. */
+  --app-max-width: 768px;
 
   /* Vertical spacing scale — section breaks, card stacks, group gaps.
      Page gutter is --space-page-x (16px, horizontal). These are vertical. */

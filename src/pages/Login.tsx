@@ -89,13 +89,13 @@ export default function Login() {
   return (
     <div className="floodlight flex min-h-[100svh] flex-col">
       <header className="pad-safe-top">
-        <div className="mx-auto flex w-full max-w-[560px] justify-end px-[var(--space-page-x,16px)] py-3">
+        <div className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] justify-end px-[var(--space-page-x,16px)] py-3">
           <LanguageToggle />
         </div>
       </header>
 
       <main
-        className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-5"
+        className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] flex-1 flex-col justify-center px-5"
         style={{ paddingBottom: "calc(40px + max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 8px))" }}
       >
         {/* Hero: the mark over the wordmark, over the floodlit wash. */}
