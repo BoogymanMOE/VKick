@@ -102,6 +102,21 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["timelineScore", runTimelineScoreTests],
   ["kickoffParts", runKickoffPartsTests],
   ["sentinel", runSentinelTests],
+
+  // Dead-centre proof for MatchCard: its own browser group — skips cleanly
+  // (no failure) when Chrome or the dev app on :5173 is missing, asserts the
+  // 1px centre tolerance when both are up. Dynamic import uses the built .js
+  // name (the runner is plain compiled JS), same pattern as useLocalState.
+  [
+    "matchCardCenter",
+    async () => {
+      const mod = (await import("./matchCardCenter.test.js")) as {
+        runMatchCardCenterTests(opts?: { standalone?: boolean; log?: (...args: any[]) => void }): Promise<void>;
+      };
+      await mod.runMatchCardCenterTests({ log: console.log });
+    },
+  ],
+
   ["faStrings", runFaStringsTests],
   ["matchReconcile", runMatchReconcileTests],
   // Browser group: needs playwright (skips itself cleanly without it).
