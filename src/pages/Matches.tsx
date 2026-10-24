@@ -91,7 +91,7 @@ function feedRange(lang: "en" | "fa"): { from: string; to: string } {
 
 function GroupHeader({ id, label, count, tone }: { id: string; label: string; count: number; tone: "live" | "gold" | "muted" }) {
   return (
-    <div className="mb-2 flex items-baseline justify-between gap-3 border-b border-line pb-2 -mx-[var(--space-page-x,16px)] px-[var(--space-page-x,16x)]">
+    <div className="mb-3 flex items-baseline gap-2">
       <h2
         id={id}
         className={cx(
@@ -101,11 +101,6 @@ function GroupHeader({ id, label, count, tone }: { id: string; label: string; co
       >
         {label}
       </h2>
-      {tone === "live" ? (
-        <span className="inline-flex min-h-4 w-full rounded-full bg-volt/15 text-volt text-[8px] opacity-50"/>
-      ) : tone === "gold" ? (
-        <span className="inline-flex min-h-4 w-full rounded-full bg-gold/15 text-gold text-[8px] opacity-50"/>
-      ) : null}
       <Chip tone={tone}>
         <Num>{count}</Num>
       </Chip>

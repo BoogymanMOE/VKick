@@ -31,7 +31,14 @@ export function TopBar({
     // No backdrop blur: the bar is 95% opaque, so the blur was invisible while
     // still forcing a full-width backdrop read on every scroll frame — exactly
     // the cost the low-end Android target can't afford.
-    <header className="pad-safe-top sticky top-0 z-20 border-b border-line bg-base/95">
+    // Full-bleed BAND on phones (<480px): the header renders inside <main>'s
+    // page gutter, whose padding inset the band's background + hairline from
+    // the screen edge — the floating-inset rectangle that read as "cropped
+    // sides". The -mx- breaks the header out of its parent's page-gutter padding
+    // so the header background and its bottom hairline run full-bleed (left = 0 to
+    // right = viewport width), while the inner row keeps the gutter.
+    // ≥480px keeps today's inset-within-column look.
+    <header className="pad-safe-top sticky top-0 z-20 border-b border-line bg-base/95 -mx-[var(--space-page-x,16px)]">
       {/* px-[var(--space-page-x)] aligns the header's gutters with the page below
           and pb-4 gives more breathing room from the content underneath. */}
       <div className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] items-center gap-3 px-[var(--space-page-x,16px)] pb-4 pt-2">
