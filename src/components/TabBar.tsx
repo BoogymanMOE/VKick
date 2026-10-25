@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
+import { forwardRef } from "react";
 import { useI18n } from "../i18n/context";
 import { haptic } from "../lib/telegram";
 import { BallIcon, ListIcon, UserIcon } from "./icons";
@@ -14,7 +15,7 @@ const tabs: Array<{ to: string; key: StringKey; Icon: typeof BallIcon }> = [
   { to: "/profile", key: "nav.profile", Icon: UserIcon },
 ];
 
-export function TabBar() {
+export const TabBar = forwardRef<HTMLElement, {}>((_, ref) => {
   const { t } = useI18n();
   const { pathname } = useLocation();
   // A team sub-page belongs to no top-level tab: highlighting one would claim a
@@ -25,6 +26,7 @@ export function TabBar() {
     // imperceptible but ran on every scroll frame.
     // Ad is now inline and scrolls with content, so TabBar sits at the very bottom.
     <nav
+      ref={ref}
       className="pad-safe-bottom fixed bottom-0 left-0 right-0 z-20 border-t border-line bg-base/95"
     >
       <ul className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] items-stretch justify-between px-2 pt-1">
@@ -76,4 +78,4 @@ export function TabBar() {
       </ul>
     </nav>
   );
-}
+});

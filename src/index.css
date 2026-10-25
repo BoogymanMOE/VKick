@@ -157,7 +157,6 @@
   /* Shared constants — nav height is derived from the fixed sticky header     height (≈69px on real devices); use var() so a single source of truth
      feeds all spacing rules and avoids hardcoded 56px assumptions. */
   :root {
-    --bottom-nav-h: 56px;
   }
 
   /* Safe-area padding helpers — Telegram headers, iPhone home indicator, etc.     The var indirection only exists for share mode: /frame.html embeds the app     in an iframe, and an iframe has no real safe-area insets, so the frame     page supplies --safe-top/--safe-bottom itself (see html[data-embed] below).     Without the variables — every real user, everywhere — the fallback resolves     to exactly the env() value this rule had before. */

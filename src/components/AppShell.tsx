@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef, useLayoutEffect } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { initTelegram } from "../lib/telegram";
 import { useBackNavigation } from "../hooks/useBackNavigation";
@@ -25,6 +25,33 @@ export function AppShell() {
   useEffect(() => {
     initTelegram();
   }, []);
+
+  // Measure the bottom tab bar height dynamically and set the CSS variable.
+  const tabBarRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    // Measure synchronously on mount so --bottom-nav-h is set before first paint.
+    if (tabBarRef.current) {
+      const h = tabBarRef.current.offsetHeight;
+      document.documentElement.style.setProperty('--bottom-nav-h', h + 'px');
+    }
+    if (!tabBarRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const height = entries[0].borderBoxSize?.[0]?.blockSize ?? entries[0].contentRect.height;
+      document.documentElement.style.setProperty('--bottom-nav-h', height + 'px');
+    });
+    observer.observe(tabBarRef.current);
+    // Also listen for orientation / window resize changes.
+    const handleResize = () => {
+      if (tabBarRef.current) observer.observe(tabBarRef.current);
+    };
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+      observer.disconnect();
+    };
+  }, [tabBarRef]);
 
   // Android's hardware back inside Telegram: pop in-app history on detail
   // routes instead of closing the mini app.
@@ -57,11 +84,10 @@ export function AppShell() {
         tabIndex={-1}
         key={pathname}
         className="page-in mx-auto w-full max-w-[var(--app-max-width,768px)] flex-1 px-[var(--space-page-x,16px)] outline-none"
-        // The sticky tab bar is 4px (its own pt-1) + 56px (min-h-14) + the
-        // safe-area inset — reserving only 56px left the last card tucked under
-        // it. The extra 4px is the difference.
+        // The sticky tab bar height is measured dynamically via ResizeObserver
+        // and set as --bottom-nav-h on the root element.
         style={{
-          paddingBottom: "calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom))",
+          paddingBottom: "calc(var(--bottom-nav-h, 60px) + 16px)",
         }}
       >
         <Suspense
@@ -74,7 +100,7 @@ export function AppShell() {
           <Outlet />
         </Suspense>
       </main>
-      <TabBar />
+      <TabBar ref={tabBarRef} />
     </div>
   );
 }
