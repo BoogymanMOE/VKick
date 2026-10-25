@@ -82,8 +82,11 @@ export const strings = {
   // League-group header, far end: "22 matches" / "2 matches".
   "matches.matchCount": "{count} matches",
   "matches.matchCountOne": "{count} match",
-  // Tiny caption under the kickoff clock on feed rows.
-  "matches.tehranTime": "Tehran time",
+    // Tiny caption under the kickoff clock on feed rows.
+  "matches.headerTz": "times in Tehran time",
+  "matches.filter.all": "All",
+  "matches.filter.live": "Live {count}",
+  "matches.filter.mine": "My clubs",
   "matches.emptyDay": "No matches on {day}",
   "matches.emptyNext": "The next match day is {day}",
   "matches.goToDay": "Go to {day}",
@@ -113,6 +116,7 @@ export const strings = {
     "myTeams.removed": "{team} removed",
     "myTeams.vsOpp": "v {opp}",
     "ads.sponsored": "Sponsored",
+    "ads.label": "Ad",
     "onboarding.favoriteSaved":
       "{team} saved as your favorite team — its league's matches now lead your Matchday feed.",
     "onboarding.editPicksHint": "Your saved favorite team and leagues",
@@ -708,7 +712,7 @@ export const strings = {
     "league.UEL": "لیگ اروپا",
     "nav.table": "جدول",
     "nav.profile": "پروفایل",
-    "matches.title": "مچ‌دی",
+    "matches.title": "مسابقات",
     "matches.subtitle": "باشگاه‌ها و لیگ‌های شما",
     "matches.live": "در حال بازی",
     "matches.upcoming": "پیش رو",
@@ -746,7 +750,10 @@ export const strings = {
     "matches.matchCount": "{count} بازی",
     "matches.matchCountOne": "{count} بازی",
     // کپشن کوچک زیر ساعت شروع بازی در ردیف‌های فید.
-    "matches.tehranTime": "به وقت تهران",
+    "matches.headerTz": "ساعت‌ها به وقت تهران",
+    "matches.filter.all": "همه",
+    "matches.filter.live": "زنده {count}",
+    "matches.filter.mine": "تیم‌های من",
     "matches.emptyDay": "در {day} بازی‌ای نیست",
     "matches.emptyNext": "روز بعدیِ بازی‌ها {day} است",
     "matches.goToDay": "برو به {day}",
@@ -776,6 +783,7 @@ export const strings = {
     "myTeams.removed": "{team} حذف شد",
     "myTeams.vsOpp": "مقابل {opp}",
     "ads.sponsored": "اسپانسری",
+    "ads.label": "تبلیغ",
     "onboarding.favoriteSaved":
       "{team} به‌عنوان تیم موردعلاقه‌ات ذخیره شد — بازی‌های لیگش حالا اول مچ‌دی دیده می‌شود.",
     "onboarding.editPicksHint": "تیم و لیگ‌های موردعلاقه ذخیره‌شده",

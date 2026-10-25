@@ -4,8 +4,8 @@ import type { Match, Team } from "../types";
 import { useI18n } from "../i18n/context";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { useCompetitionLabel } from "../hooks/useApi";
-import { LiveDot, Num, TeamBadge } from "./ui";
-import { ChevronRightIcon, StarFilledIcon } from "./icons";
+import { Num, TeamBadge } from "./ui";
+import { StarFilledIcon } from "./icons";
 import { cx } from "../lib/cx";
 
 /**
@@ -57,7 +57,7 @@ function TeamLine({
     // star; the name truncates before anything else yields width.
     <div className="flex min-w-0 items-center gap-[9px]">
       <span className="flex-none">
-        <        TeamBadge team={team} size="xs" />
+        <TeamBadge team={team} size="xs" />
       </span>
       <span className="min-w-0 truncate text-sm font-medium">{localize(team.shortName)}</span>
       <StarFilledIcon
@@ -92,13 +92,17 @@ export const MatchRow = memo(function MatchRow({
   const home = localize(match.home.shortName);
   const away = localize(match.away.shortName);
   const clock = clockFormatter(lang === "fa" ? "fa-IR" : "en").format(new Date(match.kickoffAt));
+  // Live minute, Persian digits under fa: "۴۴′". The feed's `minute` is the
+  // server's normalised clock ("44'"); only the numeric part is localized.
+  const minuteNum = /\d+/.exec(match.minute ?? "")?.[0] ?? null;
+  const minuteLabel = minuteNum ? digitFormatter(lang === "fa" ? "fa-IR" : "en").format(Number(minuteNum)) : null;
 
   // The accessible name carries the state: score + minute when in play, final
   // score when finished, kickoff time when upcoming.
   const status = isLive
-    ? `${t("status.live")} ${match.minute ?? ""}`.trim()
+    ? `${t("status.live")} ${minuteLabel ?? ""}`.trim()
     : isHalftime
-      ? t("timeline.halftime")
+      ? t("matches.groupHalftime")
       : isFinished
         ? t("status.finished")
         : clock;
@@ -125,27 +129,30 @@ export const MatchRow = memo(function MatchRow({
         dir={lang === "fa" ? "rtl" : "ltr"}
         className="flex min-w-0 items-center gap-3 px-3.5 py-[9px] transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated focus-visible:outline-2 focus-visible:outline-volt focus-visible:-outline-offset-2"
       >
-        {/* Time column: 44px floor, centred. Normally the 24h clock fills the
-            floor exactly; if user text scaling pushes the clock or its caption
-            wider, the column grows instead of clipping or overlapping the team
-            column — height-always, never sideways. */}
-        <div dir="ltr" className="flex min-w-11 flex-none flex-col items-center gap-0.5 text-center">
-          <span className="whitespace-nowrap text-[15px] font-bold leading-4 text-ink">
-            <Num>{clock}</Num>
-          </span>
+        {/* TIME + STATUS column. Upcoming: kickoff clock. Live: the minute in
+            the live coral, in place of the kickoff time. Halftime: the break
+            label. Finished: "پایان" in muted ink. 44px floor, centred. */}
+        <div dir="ltr" className="flex min-w-11 flex-none flex-col items-center justify-center gap-0.5 text-center">
           {isLive ? (
-            <span className="flex items-center gap-1 text-[9px] font-bold leading-3 text-live">
-              <LiveDot />
-              <Num>{match.homeScore ?? 0}–{match.awayScore ?? 0}</Num>
-            </span>
+            minuteLabel ? (
+              <span className="whitespace-nowrap text-[15px] font-bold leading-5 text-live">
+                <Num>{minuteLabel}′</Num>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[15px] font-bold leading-5 text-live">
+                <span className="live-dot" aria-hidden="true" />
+              </span>
+            )
           ) : isHalftime ? (
-            <span className="text-[9px] font-bold leading-3 text-gold">{t("timeline.halftime")}</span>
-          ) : isFinished ? (
-            <span dir="ltr" className="text-[9px] leading-3 text-ink-3">
-              <Num>{match.homeScore ?? 0}–{match.awayScore ?? 0}</Num>
+            <span className="flex-nowrap text-[10px] font-bold leading-4 text-gold">
+              {t("matches.groupHalftime")}
             </span>
+          ) : isFinished ? (
+            <span className="text-[11px] font-bold leading-5 text-ink-3">{t("status.finished")}</span>
           ) : (
-            <span className="text-[9px] leading-3 text-ink-3">{t("matches.tehranTime")}</span>
+            <span className="whitespace-nowrap text-[15px] font-bold leading-5 text-ink">
+              <Num>{clock}</Num>
+            </span>
           )}
         </div>
 
@@ -157,10 +164,24 @@ export const MatchRow = memo(function MatchRow({
           <TeamLine team={match.away} followed={awayFollowed} />
         </div>
 
-        {/* Far end: small muted chevron, pointing at the edge it opens from. */}
-        <span className={cx("flex-none text-ink-3", lang === "fa" ? "rotate-180" : "")} aria-hidden="true">
-          <ChevronRightIcon className="h-3.5 w-3.5" />
-        </span>
+        {/* SCORE column: bold, one number per team line, aligned with that
+            team (the cells share the team line's 22px height and the same
+            7px row gap). Blank for upcoming matches — an upcoming row only
+            carries the kickoff clock. */}
+        {hasScore ? (
+          <div className="flex flex-none flex-col justify-end gap-[7px]">
+            <span className="flex h-[22px] items-center">
+              <Num className="text-[15px] font-extrabold text-ink">
+                {match.homeScore ?? 0}
+              </Num>
+            </span>
+            <span className="flex h-[22px] items-center">
+              <Num className="text-[15px] font-extrabold text-ink">
+                {match.awayScore ?? 0}
+              </Num>
+            </span>
+          </div>
+        ) : null}
       </Link>
     </li>
   );

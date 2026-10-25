@@ -178,6 +178,31 @@ export default function Matches() {
     [matches, selectedKey],
   );
 
+  // Day-state filter chips: all / live / followed clubs. The live chip hides
+  // when the day has no live football and the mine chip hides with no picks;
+  // a stale selection (e.g. "live" after the day rolled to a quiet one) falls
+  // back to "all" instead of holding an empty screen.
+  const [dayFilter, setDayFilter] = useState<"all" | "live" | "mine">("all");
+  const liveCount = useMemo(
+    () => dayMatches.filter((m) => m.status === "live" || m.isHalftime === true).length,
+    [dayMatches],
+  );
+  const effectiveFilter =
+    dayFilter === "live" && liveCount === 0
+      ? ("all" as const)
+      : dayFilter === "mine" && favCount === 0
+        ? ("all" as const)
+        : dayFilter;
+  const filteredMatches = useMemo(() => {
+    if (effectiveFilter === "live") {
+      return dayMatches.filter((m) => m.status === "live" || m.isHalftime === true);
+    }
+    if (effectiveFilter === "mine") {
+      return dayMatches.filter((m) => isFavorite(m.home.id) || isFavorite(m.away.id));
+    }
+    return dayMatches;
+  }, [dayMatches, effectiveFilter, isFavorite]);
+
   // Strip/calendar markers, one pass over the feed. The strip's dot marks ONLY
   // the days a followed club plays — a day full of fixtures the user doesn't
   // follow stays quiet — while the calendar sheet keeps its "has fixtures" dots,
@@ -199,7 +224,7 @@ export default function Matches() {
   // rest, earliest kickoff first. Within a group, kickoff order top-to-bottom.
   const leagueGroups = useMemo<DayLeagueGroup[]>(() => {
     const byLeague = new Map<string, Match[]>();
-    for (const match of dayMatches) {
+    for (const match of filteredMatches) {
       const list = byLeague.get(match.league);
       if (list) list.push(match);
       else byLeague.set(match.league, [match]);
@@ -223,7 +248,7 @@ export default function Matches() {
         const rankB = followOrder.get(b.league) ?? followOrder.size;
         return rankA - rankB || a.firstKickoff - b.firstKickoff;
       });
-  }, [dayMatches, followed.leagues]);
+  }, [dayMatches, followed.leagues, filteredMatches]);
 
   // First later day that has matches, for the empty state's shortcut.
   const nextMatchDay = useMemo(() => {
@@ -348,13 +373,20 @@ export default function Matches() {
         // the weekday and the number must track the picked day, not the boot
         // clock. Digits localize (Persian digits under fa), the word is an
         // i18n key, and the old standalone count chip is gone.
-        subtitle={t(
-          dayMatches.length === 1 ? "matches.headerCountOne" : "matches.headerCount",
-          {
-            date: headerDayFormatter.format(selectedDay),
-            count: digitsFormatter.format(dayMatches.length),
-          },
-        )}
+        subtitle={
+          /* The selected day, its count, and the ONE mention of Tehran time:
+             every clock on this screen is Tehran time, so it is stated here
+             and the per-row captions were removed. */
+          `${t(
+            dayMatches.length === 1 ? "matches.headerCountOne" : "matches.headerCount",
+            {
+              date: headerDayFormatter.format(selectedDay),
+              count: digitsFormatter.format(dayMatches.length),
+            },
+          )}${
+            dayMatches.length > 0 ? ` · ${t("matches.headerTz")}` : ""
+          }`
+        }
         right={
           // One header action: the calendar. Refresh's button went away — the
           // gesture above owns the resync, and the toast after every sync is
@@ -413,6 +445,62 @@ export default function Matches() {
           onSelect={setPicked}
           daysWithMatches={daysWithMatches}
         />
+
+        {/* State filter chips: all / live (with its count) / followed clubs.
+            A chip that can never show anything hides itself — the live chip
+            vanishes on a day without live football, the mine chip without
+            followed clubs, so the row only offers real views of this feed. */}
+        {dayMatches.length > 0 && (liveCount > 0 || favCount > 0) ? (
+          <div className="-mx-[var(--space-page-x,16px)] mt-sm flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
+            <button
+              type="button"
+              onClick={() => {
+                haptic("light");
+                setDayFilter("all");
+              }}
+              aria-pressed={dayFilter === "all"}
+              className={cx(LEAGUE_CHIP, dayFilter === "all" ? LEAGUE_CHIP_ON : LEAGUE_CHIP_OFF)}
+            >
+              {t("matches.filter.all")}
+            </button>
+            {liveCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("light");
+                  setDayFilter(dayFilter === "live" ? "all" : "live");
+                }}
+                aria-pressed={dayFilter === "live"}
+                className={cx(
+                  LEAGUE_CHIP,
+                  dayFilter === "live" ? "border-live text-live" : LEAGUE_CHIP_OFF,
+                )}
+              >
+                {t("matches.filter.live", {
+                  count: digitsFormatter.format(liveCount),
+                })}
+              </button>
+            ) : null}
+            {favCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic("light");
+                  setDayFilter(dayFilter === "mine" ? "all" : "mine");
+                }}
+                aria-pressed={dayFilter === "mine"}
+                className={cx(
+                  LEAGUE_CHIP,
+                  dayFilter === "mine"
+                    ? "border-volt bg-volt/15 text-volt"
+                    : LEAGUE_CHIP_OFF,
+                )}
+              >
+                {t("matches.filter.mine")}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Favorite leagues — the start page's own way in. One tap re-scopes
             the whole feed (concept pillar 1); the last chip opens the picker,
