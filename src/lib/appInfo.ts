@@ -6,6 +6,8 @@ export interface ReleaseNote {
   date: string;
   /** Plain-language lines — never the developer changelog verbatim. */
   lines: string[];
+  /** The same lines in Persian (strings.ts is per-UI, notes are per-release). */
+  linesFa: string[];
 }
 
 /**
@@ -22,6 +24,11 @@ export const WHATS_NEW: ReleaseNote[] = [
       "Calmer match cards with clear live status.",
       "League tables now fit on your phone.",
     ],
+    linesFa: [
+      "با نوار روزها هر روزی را انتخاب کن.",
+      "کارت‌های بازی آرام‌تر شدند؛ وضعیت زنده روشن است.",
+      "جدول‌های لیگ حالا در گوشی جا می‌شوند.",
+    ],
   },
   {
     version: "0.2.0",
@@ -32,6 +39,12 @@ export const WHATS_NEW: ReleaseNote[] = [
       "Season boards now use your unique @username, and highlight your row.",
       "Goal alerts respect your notification toggles for real.",
     ],
+    linesFa: [
+      "زمان تعویض‌ها با سوت نیمه قفل می‌شود — نیمه آخر مهلت است.",
+      "نظرات سنجاق‌شده آمد: وقتی نظر بده، ویدیو هم مجاز است.",
+      "تابلوهای فصل با @یوزرنیم یکتای خودت کار می‌کنند و ردیف تو برجسته است.",
+      "هشدار گل واقعاً به کلیدهای اعلان‌های تو احترام می‌گذارد.",
+    ],
   },
   {
     version: "0.1.0",
@@ -39,6 +52,10 @@ export const WHATS_NEW: ReleaseNote[] = [
     lines: [
       "Vkick is live: follow your clubs, catch every matchday,",
       "and check every table as the season unfolds.",
+    ],
+    linesFa: [
+      "وی‌کیک آمد: باشگاه‌هایت را دنبال کن، هیچ هفته‌ای را از دست نده",
+      "و همه جدول‌ها را با پیش‌رفت فصل ببین.",
     ],
   },
 ];

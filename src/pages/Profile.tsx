@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { BottomSheet, SheetActions } from "../components/BottomSheet";
+
+import { ChevronRightIcon, CloseIcon, PencilIcon } from "../components/icons";
 import { TopBar, LanguageToggle } from "../components/TopBar";
-import { ChevronRightIcon, CloseIcon, PencilIcon, ShareIcon } from "../components/icons";
 import { useToast } from "../components/toastContext";
-import { Avatar, Button, Card, Chip, EmptyState, ListRow, SectionHeading, Switch, TeamBadge } from "../components/ui";
+import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch, TeamBadge } from "../components/ui";
 import { useAuth } from "../hooks/authContext";
 import { useFavorites } from "../hooks/useFavorites";
 import { useNotificationPrefs, useReferral } from "../hooks/useApi";
+import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { useI18n } from "../i18n/context";
 import { PanelSkeleton } from "../components/Skeletons";
 import { api, serverErrorKey } from "../lib/api";
@@ -15,7 +17,7 @@ import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
 import { PREDICTIONS_ENABLED, RATINGS_ENABLED } from "../lib/features";
 import { LEGAL_ROUTES } from "../lib/legal";
 import { useLocalState } from "../lib/useLocalState";
-import { haptic, notifyHaptic, shareToTelegram } from "../lib/telegram";
+import { haptic, notifyHaptic } from "../lib/telegram";
 
 /**
  * Reject after `ms` so a request that never settles cannot pin the UI in a
@@ -37,6 +39,8 @@ export default function Profile() {
   const { user, logout, updateDisplayName } = useAuth();
   const navigate = useNavigate();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  // Saved leagues are edited in place: the same picker sheet Matches uses.
+  const [leaguesOpen, setLeaguesOpen] = useState(false);
 
   // Rename display name: draft state for the sheet, error mirrors the form
   // pattern on the Login screen.
@@ -53,6 +57,10 @@ export default function Profile() {
 
   /** Reset local data: a confirm sheet, no silent wipe. */
   const [resetOpen, setResetOpen] = useState(false);
+
+  // The runtime badge is a dev indicator: stripped entirely from production
+  // builds instead of just hidden, so no styling slip can resurrect it.
+  const isDev = import.meta.env.DEV;
 
   // Push preferences live on the SERVER (user_notification_prefs) — the bot
   // checks them before sending, so these toggles actually gate sends. Only
@@ -123,6 +131,11 @@ export default function Profile() {
     push({ text: t("profile.resetDone"), tone: "danger", icon: "⟲" });
   };
 
+  const openPicker = () => {
+    haptic("light");
+    navigate("/onboarding");
+  };
+
   const openNameEditor = () => {
     haptic("light");
     setNameDraft(displayName);
@@ -165,11 +178,17 @@ export default function Profile() {
         <div className="min-w-0 flex-1">
           <p className="truncate text-md font-bold text-ink">{displayName}</p>
           <p className="truncate text-xs text-ink-2">
-            {viaUsername && user?.username
-              ? `@${user.username}`
-              : viaTelegram
-                ? t("profile.telegram")
-                : t("profile.browser")}
+            {viaTelegram ? (
+              <span className="inline-flex items-center gap-1.5">
+                {/* The small always-on dot: this account is linked to Telegram. */}
+                <span aria-hidden="true" className="h-1.5 w-1.5 flex-none rounded-full bg-[var(--success,#22c55e)]" />
+                {t("profile.connectedTg")}
+              </span>
+            ) : viaUsername && user?.username ? (
+              `@${user.username}`
+            ) : isDev ? (
+              t("profile.browser")
+            ) : null}
           </p>
         </div>
         <button
@@ -187,27 +206,16 @@ export default function Profile() {
           />
           <PencilIcon />
         </button>
-        <Chip tone={viaTelegram ? "pitch" : "volt"}>
-          {viaTelegram ? t("profile.env") : t("profile.accountChip")}
-        </Chip>
       </Card>
 
+      <ClubSlots openPicker={openPicker} />
+
+      {/* One grouped list — every row that has a real destination. Rows are
+          inside a single rounded container separated by hairlines. */}
       <section className="mt-xl">
-        <SectionHeading title={t("profile.account")} />
-        <div className="space-y-sm">
-          <FavoriteTeamsStrip />
-          <ListRow
-            label={t("profile.telegram")}
-            hint={viaTelegram ? t("profile.signedIn") : t("profile.linkTelegram")}
-            right={
-              viaTelegram ? (
-                <Chip tone="pitch">{t("profile.linked")}</Chip>
-              ) : (
-                <Chip tone="muted">{t("profile.notLinked")}</Chip>
-              )
-            }
-          />
-          <ListRow
+        <SectionHeading title={t("profile.settings")} />
+        <div className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
+          <GroupRow
             label={t("profile.notifications")}
             hint={
               serverPrefs.goals ||
@@ -220,83 +228,47 @@ export default function Profile() {
               haptic("light");
               setNotificationsOpen(true);
             }}
-            right={<ChevronRightIcon className="text-ink-3" />}
           />
-          {/* My Teams is gone; the saved favorite team & leagues are edited
-              in the onboarding picker, reached from here. */}
-          <ListRow
-            label={t("onboarding.favoriteTitle")}
-            hint={t("onboarding.editPicksHint")}
+          <GroupRow
+            label={t("profile.myLeagues")}
             onClick={() => {
               haptic("light");
-              navigate("/onboarding");
+              setLeaguesOpen(true);
             }}
-            right={<ChevronRightIcon className="text-ink-3" />}
           />
-          {/* The "why did I get X" panel: every pick with the resolver's own
-              line items, reachable from where users check their account. */}
-
-        </div>
-      </section>
-
-      <ReferralSection />
-
-      <section className="mt-xl">
-        <SectionHeading title={t("profile.settings")} />
-        <div className="space-y-sm">
-          <ListRow label={t("profile.language")} right={<LanguageToggle />} />
-          <ListRow
+          <GroupRow right={<LanguageToggle />} label={t("profile.language")} />
+          <GroupRow
             label={t("profile.haptics")}
             hint={t("profile.hapticsHint")}
-            onToggle={() => setHapticsOn(!hapticsOn)}
             right={<Switch checked={hapticsOn} label={t("profile.haptics")} onChange={setHapticsOn} />}
           />
-          <ListRow
+          <GroupRow
             label={t("profile.resetLocal")}
             hint={t("profile.resetHint")}
             onClick={() => {
               haptic("light");
               setResetOpen(true);
             }}
-            right={<ChevronRightIcon className="text-ink-3" />}
           />
+          <GroupRow label={t("legal.privacyTitle")} onClick={() => navigate(LEGAL_ROUTES.privacy)} />
+          <GroupRow label={t("legal.termsTitle")} onClick={() => navigate(LEGAL_ROUTES.terms)} />
         </div>
+        {/* Version line: the About prose card is gone; one muted line under
+            the group suffices and doesn't compete with the rows. */}
+        <p className="mt-sm px-1 text-xs text-ink-3">
+          {t("profile.version")} v{APP_VERSION}
+        </p>
       </section>
 
-      <section className="mt-xl">
-        <SectionHeading title={t("profile.about")} />
-        <Card className="space-y-sm p-3">
-          <p className="text-sm text-ink-2">{t("profile.aboutBody")}</p>
-          <div className="flex items-center justify-between border-t border-line pt-2 text-xs text-ink-3">
-            <span>{t("profile.version")}</span>
-            <span>
-              v{APP_VERSION} · {t(viaTelegram ? "profile.platformTelegram" : "profile.platformWeb")}
-            </span>
-          </div>
-        </Card>
-      </section>
+      <InviteFriends />
 
-      <section className="mt-xl">
-        <SectionHeading title={t("profile.legal")} />
-        <div className="space-y-sm">
-          <ListRow
-            label={t("legal.privacyTitle")}
-            onClick={() => {
-              haptic("light");
-              navigate(LEGAL_ROUTES.privacy);
-            }}
-            right={<ChevronRightIcon className="text-ink-3" />}
-          />
-          <ListRow
-            label={t("legal.termsTitle")}
-            onClick={() => {
-              haptic("light");
-              navigate(LEGAL_ROUTES.terms);
-            }}
-            right={<ChevronRightIcon className="text-ink-3" />}
-          />
-        </div>
-      </section>
+      {user?.isAdmin ? (
+        <section className="mt-xl">
+          <Button variant="ghost" className="w-full" onClick={() => navigate("/admin")}>
+            {t("profile.admin")}
+          </Button>
+        </section>
+      ) : null}
 
       <WhatsNew />
 
@@ -317,19 +289,13 @@ export default function Profile() {
         />
       </section>
 
-      {user?.isAdmin ? (
-        <section className="mt-xl">
-          <Button variant="ghost" className="w-full" onClick={() => navigate("/admin")}>
-            Admin Dashboard
-          </Button>
-        </section>
-      ) : null}
-
       <section className="mt-xl mb-2">
         <Button variant="ghost" className="w-full text-danger" onClick={signOut}>
           {t("profile.signOut")}
         </Button>
       </section>
+
+      <LeaguePickerSheet open={leaguesOpen} onClose={() => setLeaguesOpen(false)} />
 
       <BottomSheet
         open={notificationsOpen}
@@ -441,12 +407,7 @@ export default function Profile() {
         subtitle={t("profile.deleteHint")}
         footer={
           <SheetActions>
-            <Button
-              variant="ghost"
-              className="flex-1"
-              onClick={() => setDeleteOpen(false)}
-              disabled={deleteBusy}
-            >
+            <Button variant="ghost" className="flex-1" onClick={() => setDeleteOpen(false)} disabled={deleteBusy}>
               {t("common.cancel")}
             </Button>
             <Button
@@ -497,151 +458,152 @@ export default function Profile() {
   );
 }
 
-/* --------------------------------------------------------- favorite teams */
+/* ---------------------------------------------------------------- settings */
 
-/**
- * The clubs the user follows, as a scrollable shelf of crest tiles. Profile
- * used to reach favorites only through the onboarding picker's edit link; the
- * shelf shows what is actually followed (and is the fastest way back to a club
- * page) without leaving the hub. Crest + short name only — this is a shortcut,
- * not the manager.
- *
- * Empty renders nothing: a first-run user with no picks gets the edit row
- * below, not an empty rail.
- */
-function FavoriteTeamsStrip() {
-  const { t, localize } = useI18n();
-  const { teams, loading } = useFavorites();
-  // First-run honest state: an empty rail with nothing at all read as a
-  // broken component — say that no clubs are picked and where to pick them.
-  // The strip reserves its own footprint while the favorites query resolves —
-  // silently returning null made the whole Account section jump when the
-  // shelf appeared (and read as a missing component on a slow connection).
-  if (loading) return <PanelSkeleton height={78} />;
-  if (teams.length === 0) {
-    return (
-      <EmptyState
-        icon="⭐"
-        title={t("profile.noClubs")}
-        hint={t("profile.noClubsHint")}
-      />
-    );
-  }
-
+/** A plain row inside the grouped settings container (no own card border). */
+function GroupRow({
+  label,
+  hint,
+  onClick,
+  right,
+}: {
+  label: string;
+  hint?: string;
+  onClick?: () => void;
+  right?: React.ReactNode;})  {
   return (
-    <ul className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
-      {teams.map((team) => (
-        <li key={team.id} className="flex-none">
-          <Link
-            to={`/team/${team.id}`}
-            onClick={() => haptic("light")}
-            className="flex w-[76px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
-          >
-            <TeamBadge team={team} size="sm" />
-            <span className="w-full truncate text-xs font-bold text-ink">{localize(team.shortName)}</span>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div
+      {...(onClick
+        ? {
+            onClick,
+            role: "button" as const,
+            tabIndex: 0,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            },
+          }
+        : {})}
+      className="flex min-h-12 cursor-pointer items-center gap-3 px-3 py-2.5 select-none active:bg-elevated"
+    >
+      <div className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-bold text-ink">{label}</span>
+        {hint ? <span className="block text-xs text-ink-3">{hint}</span> : null}
+      </div>
+      {right ?? <ChevronRightIcon className="text-ink-3" />}
+    </div>
   );
 }
 
-/* ------------------------------------------------------------ referrals */
+/* --------------------------------------------------------------- clubs */
 
 /**
- * Invite friends: the share code (copied to clipboard), the honest paid/cap
- * count, and — until the viewer has redeemed someone's code — the redeem
- * form. The server owns every rule (one code per user, one redemption per
- * account, capped rewards); this card only states what the state is.
+ * The five club slots, matching onboarding's 1 main club + 4 picks rule. The
+ * main club on top with a star outline; the rest follow. Tapping any slot
+ * (filled or not) opens the onboarding club picker. Empty: slots only — they
+ * are their own prompt.
  */
-function ReferralSection() {
+function ClubSlots({ openPicker }: { openPicker: () => void }) {
+  const { t, localize } = useI18n();
+  const { teams, anchorId, loading } = useFavorites();
+  // The anchored favorite is the main club (falls back to the first pick);
+  // the rest fill the small slots in follow order.
+  const main = teams.find((team) => team.id === anchorId) ?? teams[0] ?? null;
+  const rest = teams.filter((club) => club.id !== main?.id);
+
+  const open = openPicker;
+
+  return (
+    <section className="mt-xl">
+      <SectionHeading title={t("profile.myClubs")} />
+      {loading ? (
+        <PanelSkeleton height={78} />
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-card border border-line bg-surface p-4">
+          <Slot club={main} star onClick={open} localize={localize} />
+          {Array.from({ length: Math.max(4, teams.length - 1) }).map((_, i) => (
+            <Slot
+              key={i}
+              club={rest[i] ?? null}
+              onClick={open}
+              localize={localize}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Slot({
+  club,
+  star,
+  onClick,
+  localize,
+}: {
+  club: ReturnType<typeof useFavorites>["teams"][number] | null;
+  star?: boolean;
+  onClick: () => void;
+  localize: ReturnType<typeof useI18n>["localize"];
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={club ? localize(club.shortName) : undefined}
+      className="group relative grid h-16 w-16 flex-none place-items-center rounded-full border border-dashed border-line bg-elevated text-ink-3 transition-colors duration-[var(--t-fast)] hover:border-volt hover:text-volt"
+    >
+      {star ? (
+        <span aria-hidden="true" className="absolute -top-0.5 right-1.5 text-xs text-ink-3">
+          ★
+        </span>
+      ) : null}
+      {club ? (
+        <span className="grid place-items-center">
+          <TeamBadge team={club} size="sm" />
+        </span>
+      ) : (
+        <span aria-hidden="true" className="text-lg font-bold">
+          +
+        </span>
+      )}
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------ invite */
+
+/**
+ * Invite friends as one card with one action that copies the link to the
+ * clipboard. Kept above the tab bar's breathing room.
+ */
+function InviteFriends() {
   const { t } = useI18n();
   const { push } = useToast();
-  const { referral, loading, redeem, redeeming } = useReferral();
-  const [codeDraft, setCodeDraft] = useState("");
+  const { referral, loading } = useReferral();
 
-  const copy = async () => {
-    haptic("light");
-    try {
-      await navigator.clipboard.writeText(referral?.code ?? "");
-      push({ text: t("referral.copied"), tone: "volt", icon: "✓" });
-    } catch {
-      /* clipboard unavailable (private mode) — the code is visible to copy by hand */
-    }
-  };
-
-  const share = () => {
+  const copyInvite = async () => {
     haptic("light");
     const code = referral?.code;
     if (!code) return;
     const url = `${window.location.origin}?startapp=${code}`;
-    const ok = shareToTelegram(url, t("referral.shareText"));
-    if (!ok) {
-      void copy();
+    try {
+      await navigator.clipboard.writeText(url);
+      push({ text: t("referral.copied"), tone: "volt", icon: "✓" });
+    } catch {
+      /* clipboard unavailable (private mode) */
     }
   };
 
-  const submit = () => {
-    const code = codeDraft.trim();
-    if (!code || redeeming) return;
-    redeem.mutate(code, {
-      onSettled: () => setCodeDraft(""),
-    });
-  };
-
   return (
-    <section className="mt-xl">
-      <SectionHeading title={t("referral.title")} />
-      <Card className="space-y-3 p-3">
-        <p className="text-xs text-ink-2">{t("referral.hint")}</p>
-        <div className="flex items-center gap-2">
-          {/* Codes are Latin and typed by hand: always LTR, letterspaced so
-              the 8 characters stay readable at a glance. */}
-          <code
-            dir="ltr"
-            className="min-h-11 flex-1 rounded-card border border-line bg-elevated px-3 py-2.5 text-center text-sm font-black tracking-[0.3em] text-volt"
-          >
-            {loading || !referral ? "· · · · · · · ·" : referral.code}
-          </code>
-          <Button variant="ghost" onClick={() => void copy()} disabled={!referral}>
-            {t("referral.copy")}
-          </Button>
-          <Button variant="ghost" onClick={share} disabled={!referral}>
-            <ShareIcon className="h-4 w-4" />
-            {t("referral.share")}
-          </Button>
-        </div>
-        {referral ? (
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line pt-2 text-xs text-ink-3">
-            <span>{t("referral.statInvited", { invited: referral.invited })}</span>
-            <span>
-              {t("referral.statPaid", { rewarded: referral.rewarded, max: referral.maxPaidInvites })}
-            </span>
-          </div>
-        ) : null}
-        {referral && !referral.youRedeemed ? (
-          <div className="flex gap-2 border-t border-line pt-3">
-            <input
-              dir="ltr"
-              className="min-h-11 min-w-0 flex-1 rounded-card border border-line bg-surface px-3 text-sm font-bold uppercase tracking-widest text-ink placeholder:font-normal placeholder:tracking-normal placeholder:text-ink-3 focus:border-volt focus:outline-none"
-              placeholder={t("referral.redeemPlaceholder")}
-              value={codeDraft}
-              onChange={(e) => setCodeDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submit();
-              }}
-              maxLength={12}
-              autoComplete="off"
-              autoCapitalize="characters"
-              aria-label={t("referral.redeemPlaceholder")}
-            />
-            <Button onClick={submit} disabled={redeeming || !codeDraft.trim()}>
-              {redeeming ? t("common.loading") : t("referral.redeem")}
-            </Button>
-          </div>
-        ) : null}
-      </Card>
-    </section>
+    <Card className="mt-xl p-3">
+      <p className="text-sm font-bold text-ink">{t("referral.title")}</p>
+      <Button className="mt-sm w-full" onClick={() => void copyInvite()} disabled={loading || !referral}>
+        {t("referral.copyInvite")}
+      </Button>
+    </Card>
   );
 }
 
@@ -653,7 +615,7 @@ function ReferralSection() {
  * from CHANGELOG.md for players (see src/lib/appInfo.ts), never pasted.
  */
 function WhatsNew() {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const [seenRelease, setSeenRelease] = useLocalState<string>("verdikick.whatsNewSeen", "");
   const latest = WHATS_NEW[0];
   if (latest.version === seenRelease) return null;
@@ -679,7 +641,7 @@ function WhatsNew() {
           </button>
         </div>
         <ul className="mt-2 space-y-1.5">
-          {latest.lines.map((line, i) => (
+          {(lang === "fa" ? latest.linesFa : latest.lines).map((line, i) => (
             <li key={i} className="flex gap-2 text-xs text-ink-2">
               <span className="flex-none text-volt" aria-hidden="true">
                 •
