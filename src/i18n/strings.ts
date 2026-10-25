@@ -162,6 +162,7 @@ export const strings = {
     "ratings.points": "Points",
     "ratings.locked": "Rating opens at full time",
     "ratings.pending": "Waiting for more votes",
+
     "table.title": "League Tables",
     "table.subtitle": "Your leagues",
     "table.rank": "#",
@@ -190,13 +191,15 @@ export const strings = {
     "table.viewExpected": "Expected",
     "table.xpts": "xPts",
     "table.diff": "+/−",
+    "table.zoneUcl": "Champions League",
+    "table.zoneUel": "Europa League",
+    "table.zoneReleg": "Relegation",
     "table.expectedHint":
       "The table the chances say this season deserved: each club's xPts, with the gap to its real points. Overs is finishing above the chances.",
     "table.expectedEmpty": "No expected points for this league yet",
     "table.expectedEmptyHint":
       "Expected points come from Understat, which only covers Europe's big five leagues. Cups and other competitions have no xPts feed.",
     "profile.title": "Profile",
-    "profile.telegram": "Telegram account",
     "profile.browser": "Running in a browser",
     "profile.language": "Language",
     "profile.notifications": "Notifications",
@@ -851,6 +854,9 @@ export const strings = {
     "table.formW": "برد",
     "table.formD": "تساوی",
     "table.formL": "باخت",
+    "table.zoneUcl": "لیگ قهرمانان اروپا",
+    "table.zoneUel": "لیگ اروپا",
+    "table.zoneReleg": "سقوط",
     "table.viewActual": "جدول",
     "table.viewExpected": "انتظاری",
     "table.xpts": "xPts",
@@ -861,7 +867,7 @@ export const strings = {
     "table.expectedEmptyHint":
       "امتیاز انتظاری از Understat می‌آید و فقط پنج لیگ برتر اروپا را پوشش می‌دهد. جام‌ها و مسابقات دیگر داده xPts ندارند.",
     "profile.title": "پروفایل",
-    "profile.telegram": "حساب تلگرام",
+    "profile.connectedTg": "متصل با تلگرام",
     "profile.browser": "در حال اجرا در مرورگر",
     "profile.language": "زبان",
     "profile.notifications": "اعلان‌ها",

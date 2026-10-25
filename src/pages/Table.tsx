@@ -1,33 +1,174 @@
-import { useState, useMemo, type CSSProperties } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Link } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
-import { RowSkeleton, CompRowSkeleton } from "../components/Skeletons";
-import { EmptyState, ErrorState, Chip, SectionHeading, TeamBadge, LiveDot, Num, CountUp, Segmented } from "../components/ui";
+import { RowSkeleton } from "../components/Skeletons";
+import {
+  EmptyState,
+  ErrorState,
+  LiveDot,
+  Num,
+  SectionHeading,
+  Segmented,
+  TeamBadge,
+  CountUp,
+} from "../components/ui";
 import { cx } from "../lib/cx";
 
-import { ChevronRightIcon, StarFilledIcon } from "../components/icons";
-import { slugForLeague, useLeagueTabs, useStandings, useMatches, useCompetitions, type StandingRow } from "../hooks/useApi";
+import { StarFilledIcon } from "../components/icons";
+import { slugForLeague, useLeagueTabs, useStandings, useMatches, type StandingRow } from "../hooks/useApi";
 import { isCup } from "../lib/leagues";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
 import { haptic } from "../lib/telegram";
 import type { Match } from "../types";
 
-type TableView = "actual" | "expected";
-type BrowseView = "tables" | "browse";
-
 /**
  * League tables for the synced domestic leagues — straight from the standings.
- * Your clubs are highlighted in every table, and the summary strip jumps to the
- * league each of them plays in.
+ * Followed clubs are highlighted INSIDE the table (star + row tint); there is
+ * no separate "your clubs" rail above it, and with no picks the screen simply
+ * shows the league the default tab lands on.
  */
+
+/**
+ * Zone rules per big-five league, position ranges → zone. The standings feed
+ * carries no promotion/relegation metadata, so these are this app's own map —
+ * change the ranges here, not the table. Cups and group tables get no bars.
+ */
+const ZONES: Record<string, Record<Zone, [number, number]>> = {
+  "eng.1": { ucl: [1, 4], uel: [5, 5], relegation: [18, 20] },
+  "esp.1": { ucl: [1, 4], uel: [5, 6], relegation: [18, 20] },
+  "ita.1": { ucl: [1, 4], uel: [5, 6], relegation: [18, 20] },
+  "ger.1": { ucl: [1, 4], uel: [5, 5], relegation: [17, 18] },
+  "fra.1": { ucl: [1, 3], uel: [4, 4], relegation: [17, 18] },
+};
+
+type Zone = "ucl" | "uel" | "relegation";
+
+const ZONE_COLOR: Record<Zone, string> = {
+  ucl: "#3b82f6", // Champions League blue
+  uel: "#f97316", // Europa League orange
+  relegation: "var(--danger)", // relegation red
+};
+
+function zoneOf(leagueSlug: string, rank: number | null): Zone | null {
+  const rules = ZONES[leagueSlug];
+  if (!rules || rank == null) return null;
+  for (const zone of Object.keys(rules) as Zone[]) {
+    const [from, to] = rules[zone];
+    if (rank >= from && rank <= to) return zone;
+  }
+  return null;
+}
+
+/** The big-five alias a tab value maps to, for the zone lookup. */
+const ALIAS_SLUG: Record<string, string> = {
+  PL: "eng.1",
+  LL: "esp.1",
+  SA: "ita.1",
+  BL: "ger.1",
+  L1: "fra.1",
+};
+
+/** Small coloured dot + label for the legend line under the table. */
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        aria-hidden="true"
+        className="h-1.5 w-1.5 flex-none rounded-full"
+        style={{ backgroundColor: color }}
+      />
+      {label}
+    </span>
+  );
+}
+
+/**
+ * Horizontally scrollable league tabs with a fade on the edge where more tabs
+ * hide. The fade is a sticky gradient at the visual INLINE-END, which flips
+ * with direction — correct side for both RTL and LTR (the same trick the
+ * Segmented control uses).
+ */
+function LeagueTabRow({
+  tabs,
+  value,
+  onChange,
+}: {
+  tabs: Array<{ value: string; label: string }>;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { dir } = useI18n();
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const [overflows, setOverflows] = useState(true);
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const check = () => setOverflows(track.scrollWidth > track.clientWidth + 2);
+    check();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(check) : null;
+    observer?.observe(track);
+    return () => observer?.disconnect();
+  }, [tabs.length]);
+
+  return (
+    <div ref={trackRef} role="tablist" className="relative flex gap-1.5 overflow-x-auto py-1">
+      {overflows ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none sticky end-0 z-10 shrink-0"
+          style={{
+            width: 20,
+            marginInlineEnd: -8,
+            background:
+              dir === "rtl"
+                ? "linear-gradient(to left, transparent, var(--bg-base))"
+                : "linear-gradient(to right, transparent, var(--bg-base))",
+          }}
+        />
+      ) : null}
+      {tabs.map((tab) => (
+        <button
+          key={tab.value}
+          type="button"
+          role="tab"
+          aria-selected={value === tab.value}
+          onClick={() => {
+            if (value !== tab.value) haptic("light");
+            onChange(tab.value);
+          }}
+          className={cx(
+            "flex h-9 flex-none items-center rounded-full border px-3.5 text-xs font-bold transition-[color,border-color,background-color] duration-[var(--t-fast)]",
+            value === tab.value
+              ? "border-transparent bg-volt text-black"
+              : "border-line bg-surface text-ink-2 hover:bg-elevated hover:text-ink",
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function Table() {
-  const { t, localize } = useI18n();
+  const { t, lang } = useI18n();
   const { teams: clubs, isFavorite } = useFavorites();
   const tabs = useLeagueTabs();
   const [league, setLeague] = useState<string | null>(null);
-  const [view, setView] = useState<TableView>("actual");
-  const [browseView, setBrowseView] = useState<BrowseView>("tables");
+  // Actual / Expected view: renders ONLY when a league has xPts coverage —
+  // a switch with a single choice is chrome, not a control (the old
+  // single-option "جدول" pill is gone).
+  const [view, setView] = useState<"actual" | "expected">("actual");
+
+  // The sticky column header's offset is the live topbar's height, measured
+  // once so the pinned header slides in just under the header band (the band
+  // height varies with the title/subtitle it carries).
+  const [stickyTop, setStickyTop] = useState(56);
+  useEffect(() => {
+    const header = document.querySelector("header");
+    if (header instanceof HTMLElement) setStickyTop(header.offsetHeight + 1);
+  }, []);
 
   // Default to the league one of your clubs plays in, else the Premier League.
   // `clubs[].league` is a big-five alias (teamFromApi parks every other side
@@ -42,109 +183,45 @@ export default function Table() {
 
   // Expected points ride along on the standings payload (one left join
   // server-side, no extra request), and only the clubs Understat covers have
-  // them — so "no data" is a normal state here, never an error. Understat only
-  // scrapes the big five, so for any other league the Expected tab would open
-  // onto an empty board; in that case the tab is hidden rather than shown
-  // disabled, because a control that can never do anything is worse than an
-  // absent one.
+  // them — so "no data" is a normal state here, never an error.
   const hasExpected = rows.some((row) => row.xpts != null);
-  // Guard the view itself too: if it somehow renders without data (a league
-  // that gains coverage mid-session), fall back to the real table instead of
-  // a grid of dashes.
+  // Guard the view itself too: if it somehow renders without data, fall back
+  // to the real table instead of a grid of dashes.
   const showExpected = view === "expected" && hasExpected;
   // Ranked by xPts, with the uncovered clubs parked below in table order
   // (Array#sort is stable) rather than dropped or given a fake rank.
-  const expectedRows = [...rows].sort((a, b) => (b.xpts ?? -1) - (a.xpts ?? -1));
+  const expectedRows = useMemo(() => [...rows].sort((a, b) => (b.xpts ?? -1) - (a.xpts ?? -1)), [rows]);
+
+  // League heading, far end: "هفته ۸" — locale digits throughout.
+  const weekFormatter = useMemo(
+    () => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en", { useGrouping: false }),
+    [lang],
+  );
+  const gwLabel = standingsQuery.data?.length
+    ? t("table.gw", { gw: weekFormatter.format(standingsQuery.data[0]?.played ?? 0) })
+    : null;
+  const zoneSlug = ALIAS_SLUG[active] ?? active;
 
   return (
     <>
-      <TopBar title={t("table.title")} subtitle={t("table.subtitle")} />
+      <TopBar title={t("table.title")} />
 
-      {/* Tables / Browse is the FIRST control on the page, and the league chips
-          live only inside the Tables view — otherwise the chips sit above a
-          Browse list and look like they should filter it, but cannot. */}
+      {/* League tabs — scrollable when crowded, faded at the hidden edge. */}
       <div className="mt-md">
-        <Segmented
-          value={browseView}
-          onChange={setBrowseView}
-          options={[
-            { value: "tables", label: t("table.view.tables") },
-            { value: "browse", label: t("table.view.browse") },
-          ]}
-          className="rounded-full"
-        />
+        <LeagueTabRow tabs={tabs} value={active} onChange={setLeague} />
       </div>
 
-      {browseView === "tables" && (
-        <div className="mt-md">
-          <Segmented
-            value={active}
-            onChange={setLeague}
-            options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
-          className="rounded-full"
-        />
-        </div>
-      )}
-
-      {/* Tables view: standings + your clubs */}
-      {browseView === "tables" && (
-        <>
-          {/* Your clubs across all five leagues, with the position each sits in. */}
-          <section className="mt-lg">
-          <SectionHeading
-          title={t("table.myClubs")}
-          action={
-            clubs.length > 0 ? (
-              <Chip tone="volt">
-                <Num>{clubs.length}</Num>
-              </Chip>
-            ) : null
-          }
-        />
-        {clubs.length > 0 ? (
-          <ul className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
-            {clubs.map((club) => (
-              <li key={club.id} className="flex-none">
-                <button
-                  type="button"
-                  onClick={() => setLeague(club.league)}
-                  className={cx(
-                    "flex w-[76px] flex-col items-center gap-1 rounded-card border p-2.5 text-center transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
-                    club.league === active
-                      ? "border-volt bg-elevated"
-                      : "border-line bg-surface hover:bg-elevated",
-                  )}
-                >
-                  <TeamBadge team={club} size="sm" />
-                  <span className="w-full truncate text-xs font-bold text-ink">
-                    {localize(club.shortName)}
-                  </span>
-                  <span className="text-xs text-ink-3">{t(`league.${club.league}`)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <Link
-            to="/onboarding"
-            className="block rounded-card border border-dashed border-line px-3 py-4 text-center text-xs text-ink-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-          >
-            {t("table.noClubs")}
-          </Link>
-        )}
-      </section>
-
-          <section className="mt-lg">
+      <section className="mt-lg">
         {isCup(slug) ? (
-          <CupView slug={slug} rows={rows} />
+          <CupView slug={slug} rows={rows} stickyTop={stickyTop} />
         ) : (
           <>
             <SectionHeading
               title={tabLabel(active)}
               action={
-                standingsQuery.data?.length ? (
-                  <span className="text-xs text-ink-3">
-                    {t("table.gw", { gw: standingsQuery.data[0]?.played ?? 0 })}
+                gwLabel ? (
+                  <span className="text-xs font-bold text-ink-3">
+                    <Num>{gwLabel}</Num>
                   </span>
                 ) : null
               }
@@ -154,228 +231,86 @@ export default function Table() {
             ) : standingsQuery.isError ? (
               <ErrorState onRetry={() => standingsQuery.refetch()} />
             ) : rows.length === 0 ? (
-              <EmptyState
-                title={t("table.emptyTitle")}
-                hint={t("table.emptyHint")}
-                action={
-                  <Link
-                    to="/onboarding"
-                    className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
-                  >
-                    {t("table.emptyAction")}
-                  </Link>
-                }
-              />
+              <EmptyState title={t("table.emptyTitle")} hint={t("table.emptyHint")} />
             ) : (
               <>
-                <Segmented
-                  value={view}
-                  onChange={setView}
-                  className="mb-2"
-                  options={
-                    hasExpected
-                      ? [
-                          { value: "actual", label: t("table.viewActual") },
-                          { value: "expected", label: t("table.viewExpected") },
-                        ]
-                      : [{ value: "actual", label: t("table.viewActual") }]
-                  }
-                />
+                {hasExpected ? (
+                  <div className="mb-2">
+                    <Segmented
+                      value={view}
+                      onChange={setView}
+                      options={[
+                        { value: "actual", label: t("table.viewActual") },
+                        { value: "expected", label: t("table.viewExpected") },
+                      ]}
+                    />
+                  </div>
+                ) : null}
 
                 {showExpected ? (
-                  hasExpected ? (
-                    <>
-                      <div className="overflow-hidden rounded-card border border-line bg-surface">
-                        <div
-                          aria-hidden="true"
-                          className="grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] gap-1.5 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
-                        >
-                          <span>{t("table.rank")}</span>
-                          <span>{t("table.team")}</span>
-                          <span className="text-end">{t("table.played")}</span>
-                          <span className="text-end">{t("table.xpts")}</span>
-                          <span className="text-end">{t("table.pts")}</span>
-                          <span className="text-end">{t("table.diff")}</span>
-                        </div>
-                        <ul className="divide-y divide-line">
-                          {expectedRows.map((row, index) => (
-                            <ExpectedItem
-                              key={row.team.id}
-                              row={row}
-                              index={index}
-                              rank={row.xpts == null ? null : index + 1}
-                              mine={isFavorite(row.team.id)}
-                            />
-                          ))}
-                        </ul>
+                  <>
+                    <div className="overflow-hidden rounded-card border border-line bg-surface">
+                      <div
+                        aria-hidden="true"
+                        className="grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] gap-1.5 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
+                      >
+                        <span>{t("table.rank")}</span>
+                        <span>{t("table.team")}</span>
+                        <span className="text-end">{t("table.played")}</span>
+                        <span className="text-end">{t("table.xpts")}</span>
+                        <span className="text-end">{t("table.pts")}</span>
+                        <span className="text-end">{t("table.diff")}</span>
                       </div>
-                      <p className="mt-2 text-xs text-ink-3">{t("table.expectedHint")}</p>
-                    </>
-                  ) : (
-                    <EmptyState title={t("table.expectedEmpty")} hint={t("table.expectedEmptyHint")} />
-                  )
+                      <ul className="divide-y divide-line">
+                        {expectedRows.map((row, index) => (
+                          <ExpectedItem
+                            key={row.team.id}
+                            row={row}
+                            index={index}
+                            rank={row.xpts == null ? null : index + 1}
+                            mine={isFavorite(row.team.id)}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                    <p className="mt-2 text-xs text-ink-3">{t("table.expectedHint")}</p>
+                  </>
                 ) : null}
 
                 {view === "actual" ? (
-                  <div className="overflow-hidden rounded-card border border-line bg-surface">
-                    <StandingsHeader />
-                    <ul className="divide-y divide-line">
-                      {rows.map((row, index) => (
-                        <StandingItem
-                          key={row.team.id}
-                          row={row}
-                          index={index}
-                          mine={isFavorite(row.team.id)}
-                        />
-                      ))}
-                    </ul>
-                  </div>
+                  <>
+                    {/* overflow-clip (not hidden) clips the card's corners while
+                        staying a NON-scroll container, so the sticky header
+                        inside still pins to the page scroll. */}
+                    <div className="overflow-clip rounded-card border border-line bg-surface">
+                      <StandingsHeader stickyTop={stickyTop} />
+                      <ul className="divide-y divide-line">
+                        {rows.map((row, index) => (
+                          <StandingItem
+                            key={row.team.id}
+                            row={row}
+                            index={index}
+                            mine={isFavorite(row.team.id)}
+                            zone={zoneOf(zoneSlug, row.rank ?? index + 1)}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                    {/* Zone legend: one small line, same order as the bars. */}
+                    {ZONES[zoneSlug] ? (
+                      <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
+                        <LegendDot color={ZONE_COLOR.ucl} label={t("league.UCL")} />
+                        <LegendDot color={ZONE_COLOR.uel} label={t("league.UEL")} />
+                        <LegendDot color={ZONE_COLOR.relegation} label={t("table.zoneReleg")} />
+                      </p>
+                    ) : null}
+                  </>
                 ) : null}
               </>
             )}
           </>
         )}
-        </section>
-        </>
-      )}
-
-      {/* Browse view: league browser */}
-      {browseView === "browse" && <BrowseContent />}
-    </>
-  );
-}
-
-/**
- * Browse view: league/cup/tournament browser, merged from the old Browse page.
- */
-function BrowseContent() {
-  const { t, localize } = useI18n();
-  const navigate = useNavigate();
-  const query = useCompetitions();
-  const [filter, setFilter] = useState<"all" | "league" | "cup">("all");
-  const groups = useMemo(() => {
-    const comps = query.data?.competitions ?? [];
-    const visible = comps.filter((c) => (filter === "all" ? true : c.kind === filter));
-    return {
-      leagues: visible.filter((c) => c.kind === "league"),
-      cups: visible.filter((c) => c.kind === "cup"),
-      tournaments: visible.filter((c) => c.kind === "tournament"),
-    };
-  }, [query.data, filter]);
-
-  const sections = useMemo(() => [
-    { title: t("browse.leagues"), rows: groups.leagues },
-    { title: t("browse.cups"), rows: groups.cups },
-    ...(groups.tournaments.length > 0 ? [{ title: t("browse.tournaments"), rows: groups.tournaments }] : []),
-  ], [groups]);
-
-  const open = (slug: string, comingSoon: boolean | undefined, kind: string) => {
-    if (comingSoon) return;
-    haptic("light");
-    if (kind === "league") navigate(`/matches?league=${encodeURIComponent(slug)}`);
-    else navigate(`/cups?cup=${encodeURIComponent(slug)}`);
-  };
-
-  return (
-    <>
-      <div
-        className="mt-md grid grid-cols-3 gap-1 rounded-lg border border-line bg-surface p-1"
-        role="group"
-        aria-label={t("browse.filterLabel")}
-      >
-        {(
-          [
-            ["all", "browse.all"],
-            ["league", "browse.leagues"],
-            ["cup", "browse.cups"],
-          ] as const
-        ).map(([value, key]) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={filter === value}
-            onClick={() => {
-              haptic("light");
-              setFilter(value);
-            }}
-            className={cx(
-              "min-h-11 rounded-full text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
-              filter === value ? "bg-elevated text-volt" : "text-ink-2 hover:text-ink",
-            )}
-          >
-            {t(key)}
-          </button>
-        ))}
-      </div>
-
-      {query.isLoading ? (
-        <div className="mt-lg">
-          <CompRowSkeleton rows={6} />
-        </div>
-      ) : groups.leagues.length + groups.cups.length + groups.tournaments.length === 0 ? (
-        // The filter user picked (or the catalog) has nothing to list — say so
-        // instead of fading out into a silent blank panel.
-        <div className="mt-lg fade-swap">
-          <EmptyState icon="📈" title={t("browse.empty")} hint={t("browse.emptyHint")} />
-        </div>
-      ) : (
-        sections.map(
-          ({ title, rows }) =>
-            rows.length > 0 && (
-              <section key={title} className="mt-5 fade-swap">
-                <SectionHeading
-                  title={title}
-                  action={
-                    <Chip tone="muted">
-                      <Num>{rows.length}</Num>
-                    </Chip>
-                  }
-                />
-                <ul className="space-y-sm">
-                  {rows.map((comp) => {
-                    const soon = Boolean(comp.comingSoon);
-                    const Wrapper = soon ? "div" : "button";
-                    return (
-                      <li key={comp.slug}>
-                        <Wrapper
-                          {...(soon
-                            ? {}
-                            : {
-                                type: "button" as const,
-                                onClick: () => open(comp.slug, comp.comingSoon, comp.kind),
-                              })}
-                          className={cx(
-                            "flex w-full items-center gap-3 rounded-card border p-3 text-start transition-colors duration-[var(--t-fast)]",
-                            soon
-                              ? "border-dashed border-line bg-transparent opacity-70 rounded-full"
-                              : "border-line bg-surface hover:bg-elevated",
-                          )}
-                        >
-                          {/* No monogram tile: a single letter beside the full
-                              name reads as doubled text ("PPremier League") —
-                              the same call the onboarding league list made. */}
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-bold text-ink">
-                              {localize(comp.name)}
-                            </span>
-                            <span className="block truncate text-xs text-ink-3">
-                              {soon ? t("browse.comingSoon") : t("browse.liveScores")}
-                            </span>
-                          </span>
-                          {soon ? (
-                            <Chip tone="muted">{t("browse.soon")}</Chip>
-                          ) : (
-                            <ChevronRightIcon className="text-ink-3" />
-                          )}
-                        </Wrapper>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            ),
-        )
-      )}
+      </section>
     </>
   );
 }
@@ -389,7 +324,7 @@ function BrowseContent() {
  */
 const COLS = "grid-cols-[1.5rem_minmax(0,1fr)_1.75rem_2rem_2.25rem_3rem]";
 
-function StandingsHeader() {
+function StandingsHeader({ stickyTop }: { stickyTop: number }) {
   const { t } = useI18n();
   return (
     <div
@@ -397,8 +332,9 @@ function StandingsHeader() {
       className={cx(
         "grid",
         COLS,
-        "gap-2 border-b border-line bg-elevated px-3 py-2 text-xs font-bold text-ink-3",
+        "sticky z-10 gap-2 border-b border-line bg-elevated px-3 py-2 text-xs font-bold text-ink-3",
       )}
+      style={{ top: stickyTop }}
     >
       <span>{t("table.rank")}</span>
       <span>{t("table.team")}</span>
@@ -410,9 +346,28 @@ function StandingsHeader() {
   );
 }
 
-function StandingItem({ row, index, mine }: { row: StandingRow; index: number; mine: boolean }) {
-  const { localize } = useI18n();
+function StandingItem({
+  row,
+  index,
+  mine,
+  zone,
+}: {
+  row: StandingRow;
+  index: number;
+  mine: boolean;
+  zone: Zone | null;
+}) {
+  const { localize, lang } = useI18n();
+  // Persian digits: every figure renders through locale formatting — fa-IR
+  // gives the Persian-Indic glyphs (۱, +۱۱, ٫ separator for decimals); EN
+  // keeps Latin digits and the counting animation.
+  const fmt = (v: number, decimals = 0) =>
+    new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(v);
   const gd = (row.goalsFor ?? 0) - (row.goalsAgainst ?? 0);
+  const rank = row.rank ?? index + 1;
   return (
     <li
       className={cx(
@@ -423,8 +378,17 @@ function StandingItem({ row, index, mine }: { row: StandingRow; index: number; m
       )}
       style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
     >
-      <Num className={cx("text-sm", mine ? "text-volt" : index < 3 ? "text-gold" : "text-ink-3")}>
-        {row.rank ?? index + 1}
+      {/* Zone bar: a 3px pill on the row's START edge (flips with direction),
+          coloured by the zone's rule. */}
+      {zone ? (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-1.5 start-0 w-[3px] rounded-full"
+          style={{ backgroundColor: ZONE_COLOR[zone] }}
+        />
+      ) : null}
+      <Num className={cx("text-sm", mine ? "text-volt" : rank <= 3 ? "text-gold" : "text-ink-3")}>
+        {fmt(rank)}
       </Num>
       {/* Stretched link: the <a> sits in the team column (so the grid stays one
           row), and its ::after covers the whole row — every tap, rank to
@@ -439,14 +403,20 @@ function StandingItem({ row, index, mine }: { row: StandingRow; index: number; m
         </span>
         {mine ? <StarFilledIcon className="h-3 w-3 flex-none text-volt" /> : null}
       </Link>
-      <Num className="text-end text-xs text-ink-3">{row.played ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">
+        {row.played == null ? "–" : fmt(row.played)}
+      </Num>
       <Num className={cx("text-end text-xs", gd >= 0 ? "text-ink-2" : "text-ink-3")}>
-        {gd > 0 ? `+${gd}` : gd}
+        {gd > 0 ? `+${fmt(gd)}` : fmt(gd)}
       </Num>
       {row.points != null ? (
-        <CountUp value={row.points} className="text-end text-sm text-ink" />
+        lang === "fa" ? (
+          <Num className="text-end text-sm font-extrabold text-ink">{fmt(row.points)}</Num>
+        ) : (
+          <CountUp value={row.points} className="text-end text-sm font-extrabold text-ink" />
+        )
       ) : (
-        <Num className="text-end text-sm text-ink">–</Num>
+        <Num className="text-end text-sm font-extrabold text-ink">–</Num>
       )}
       {row.form ? <FormStrip form={row.form} /> : <span className="text-end text-xs text-ink-3">–</span>}
     </li>
@@ -454,11 +424,13 @@ function StandingItem({ row, index, mine }: { row: StandingRow; index: number; m
 }
 
 /**
- * The last five results, oldest first. Letters rather than dots: at this size a
- * 6px dot is a smudge, and "WWDLW" still fits beside a truncated club name on
- * the narrowest phone. One image for screen readers, so the label reads as a
- * sentence instead of five stray letters; `dir="ltr"` keeps the newest result
- * on the right in Farsi too, where a Latin run would otherwise be reordered.
+ * The last five results, oldest first — the server folds them from the stored
+ * finished matches (server/standings/form.ts), so the strip always matches the
+ * fixtures the club page shows; a club with fewer than five finished matches
+ * simply carries fewer dots. Dots rather than letters: green win, grey draw,
+ * red loss. One image for screen readers, so the label reads as a sentence
+ * instead of five stray letters; `dir="ltr"` keeps the order oldest→newest in
+ * Farsi too.
  */
 function FormStrip({ form }: { form: string }) {
   const { t } = useI18n();
@@ -471,15 +443,17 @@ function FormStrip({ form }: { form: string }) {
       role="img"
       aria-label={`${t("table.form")}: ${label}`}
       dir="ltr"
-      className="flex flex-none gap-0.5 text-xs font-black leading-none"
+      className="flex flex-none items-center justify-end gap-1"
     >
       {results.map((result, index) => (
         <span
           key={index}
-          className={cx(result === "W" ? "text-pitch" : result === "L" ? "text-danger" : "text-ink-3")}
-        >
-          {result}
-        </span>
+          aria-hidden="true"
+          className={cx(
+            "h-1.5 w-1.5 rounded-full",
+            result === "W" ? "bg-pitch" : result === "L" ? "bg-danger" : "bg-ink-3",
+          )}
+        />
       ))}
     </span>
   );
@@ -502,7 +476,12 @@ function ExpectedItem({
   rank: number | null;
   mine: boolean;
 }) {
-  const { t, localize } = useI18n();
+  const { t, localize, lang } = useI18n();
+  const fmt = (v: number, decimals = 0) =>
+    new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    }).format(v);
   const expected = row.xpts;
   const actual = row.points;
   const delta = expected != null && actual != null ? actual - expected : null;
@@ -518,7 +497,7 @@ function ExpectedItem({
       )}
       style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
     >
-      <Num className="text-xs text-ink-3">{rank ?? "–"}</Num>
+      <Num className="text-xs text-ink-3">{rank == null ? "–" : fmt(rank)}</Num>
       <Link
         to={`/team/${row.team.id}`}
         className="flex min-h-11 min-w-0 items-center gap-2 after:absolute after:inset-0"
@@ -529,12 +508,18 @@ function ExpectedItem({
         </span>
         {mine ? <StarFilledIcon className="h-3 w-3 flex-none text-volt" /> : null}
       </Link>
-      <Num className="text-end text-xs text-ink-3">{row.played ?? "–"}</Num>
+      <Num className="text-end text-xs text-ink-3">
+        {row.played == null ? "–" : fmt(row.played)}
+      </Num>
       {/* The header grid is decorative (aria-hidden, as in the real table), so
           every figure names itself; the wrappers keep the cell count even. */}
       <span className="text-end">
         {expected != null ? (
-          <CountUp value={expected} decimals={1} className="text-xs font-bold text-gold" />
+          lang === "fa" ? (
+            <Num className="text-xs font-bold text-gold">{fmt(expected, 1)}</Num>
+          ) : (
+            <CountUp value={expected} decimals={1} className="text-xs font-bold text-gold" />
+          )
         ) : (
           <Num className="text-xs font-bold text-gold">–</Num>
         )}
@@ -542,7 +527,11 @@ function ExpectedItem({
       </span>
       <span className="text-end">
         {actual != null ? (
-          <CountUp value={actual} className="text-xs text-ink" />
+          lang === "fa" ? (
+            <Num className="text-xs text-ink">{fmt(actual)}</Num>
+          ) : (
+            <CountUp value={actual} className="text-xs text-ink" />
+          )
         ) : (
           <Num className="text-xs text-ink">–</Num>
         )}
@@ -555,7 +544,7 @@ function ExpectedItem({
             delta == null ? "text-ink-3" : delta >= 0 ? "text-volt" : "text-danger",
           )}
         >
-          {delta == null ? "–" : `${delta >= 0 ? "+" : ""}${delta.toFixed(1)}`}
+          {delta == null ? "–" : `${delta >= 0 ? "+" : ""}${fmt(Math.abs(delta), 1)}`}
         </Num>
         <span className="sr-only"> {t("xg.expected")}</span>
       </span>
@@ -563,7 +552,15 @@ function ExpectedItem({
   );
 }
 
-function CupView({ slug, rows }: { slug: string; rows: StandingRow[] }) {
+function CupView({
+  slug,
+  rows,
+  stickyTop,
+}: {
+  slug: string;
+  rows: StandingRow[];
+  stickyTop: number;
+}) {
   const { localize } = useI18n();
   const { isFavorite } = useFavorites();
 
@@ -579,11 +576,18 @@ function CupView({ slug, rows }: { slug: string; rows: StandingRow[] }) {
         {Array.from(groups.entries()).map(([groupName, groupRows]) => (
           <section key={groupName}>
             <SectionHeading title={localize(groupName)} />
-            <div className="overflow-hidden rounded-card border border-line bg-surface">
-              <StandingsHeader />
+            {/* Group tables share the league's six columns; no zone bars. */}
+            <div className="overflow-clip rounded-card border border-line bg-surface">
+              <StandingsHeader stickyTop={stickyTop} />
               <ul className="divide-y divide-line">
                 {groupRows.map((row, index) => (
-                  <StandingItem key={row.team.id} row={row} index={index} mine={isFavorite(row.team.id)} />
+                  <StandingItem
+                    key={row.team.id}
+                    row={row}
+                    index={index}
+                    mine={isFavorite(row.team.id)}
+                    zone={null}
+                  />
                 ))}
               </ul>
             </div>
