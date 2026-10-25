@@ -5,6 +5,7 @@ import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
 import { BallIcon, CardIcon, SwapIcon } from "./icons";
 import { cx } from "../lib/cx";
+import { toFaDigits } from "../lib/format";
 import { formatScore, runningScore } from "../lib/timelineScore";
 import { LiveDot, Num } from "./ui";
 
@@ -111,13 +112,84 @@ function PinnedComment({
   );
 }
 
+/**
+ * The two spine cells. Both wrap (never truncate) and render: bold name, the
+ * second line under it, and the icon pinned to the spine edge. A goal gets a
+ * volt-tinted cell so it reads at a glance. Children = the comment trigger.
+ */
+function EventBody({ name, line2 }: { name: string; line2: string | null }) {
+  return name ? (
+    <span className="min-w-0 text-start" dir="auto">
+      <span className="block text-sm font-bold text-ink">{name}</span>
+      {line2 ? (
+        <span className="block text-xs text-ink-3">{line2}</span>
+      ) : null}
+    </span>
+  ) : null;
+}
+
+function HomeSpineCell({
+  parts,
+  goal,
+  children,
+}: {
+  parts: { icon: { glyph: ReactNode; className: string }; name: string; line2: string | null };
+  goal: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      className={cx(
+        "col-start-1 row-start-1 -me-2 flex min-w-0 items-center justify-end gap-2",
+        goal && "rounded-card border border-volt/30 bg-elevated px-2 py-1",
+      )}
+    >
+      {children}
+      <EventBody name={parts.name} line2={parts.line2} />
+      <span aria-hidden="true" className={cx("flex-none", parts.icon.className)}>
+        {parts.icon.glyph}
+      </span>
+    </div>
+  );
+}
+
+function AwaySpineCell({
+  parts,
+  goal,
+  children,
+}: {
+  parts: { icon: { glyph: ReactNode; className: string }; name: string; line2: string | null };
+  goal: boolean;
+  children?: ReactNode;
+}) {
+  return (
+    <div
+      className={cx(
+        "col-start-3 row-start-1 -ms-2 flex min-w-0 items-center justify-start gap-2",
+        goal && "rounded-card border border-volt/30 bg-elevated px-2 py-1",
+      )}
+    >
+      <span aria-hidden="true" className={cx("flex-none", parts.icon.className)}>
+        {parts.icon.glyph}
+      </span>
+      <EventBody name={parts.name} line2={parts.line2} />
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A timeline with a CENTER SPINE: minutes live in the middle column, home-team
+ * events hang on the home side of it (the home column — start edge in both
+ * directions, matching the home-first scoreboard), away events on the other.
+ * Each event cell hugs the spine: text reads toward the minute it happened at.
+ * Names never truncate — they wrap.
+ */
 export function TimelineList({
   events,
   comments = [],
   liveMinute,
   onOpenClip,
-  teamColor,
-  teamNames,
   homeTeamId,
   awayTeamId,
 }: {
@@ -127,18 +199,7 @@ export function TimelineList({
   liveMinute?: number;
   /** Handler for opening a comment's clip link (validated https by the server). */
   onOpenClip?: (comment: Comment) => void;
-  /**
-   * teamId → club colour. The 8px dot beside the player names the side, so a
-   * two-column read of who did what needs no names.
-   */
-  teamColor?: Record<string, string>;
-  /**
-   * teamId → localized club name. A row names the player(s) and the side, not
-   * the English sentence the feed carries ("… Yellow Card at 12'"), which in a
-   * Persian page scrambles the bidi run and repeats the player name.
-   */
-  teamNames?: Record<string, string>;
-  /** The match's two sides, so a goal can carry the scoreline it produced. */
+  /** The match's two sides: the event's teamId picks ITS column. */
   homeTeamId?: string;
   awayTeamId?: string;
 }) {
@@ -153,7 +214,8 @@ export function TimelineList({
   // The score beside each goal is a prefix count of the timeline's own goals,
   // credited to the side each event names (src/lib/timelineScore.ts), so a
   // goal reads "1–0" the moment it lands rather than leaving the reader to
-  // scroll up to the scoreboard.
+  // scroll up to the scoreboard. Displayed UNDER the event's minute, so the
+  // center spine shows when AND what the score became.
   const { byGoal } = useMemo(
     () => runningScore(events, homeTeamId ?? "", awayTeamId ?? ""),
     [events, homeTeamId, awayTeamId],
@@ -180,13 +242,72 @@ export function TimelineList({
     return vals.length > 0 ? vals[vals.length - 1]! : { home: 0, away: 0 };
   }, [byGoal]);
 
-  // Shared grid for a compact event row: minute | 16px icon | player(s) | right
-  // slot (running score for goals, comment count for rows that have them).
-  const ROW_GRID =
-    "grid min-h-12 grid-cols-[40px_20px_minmax(0,1fr)_auto] items-center gap-2 px-1 py-2";
+  /** Digits through locale conversion: Persian-Indic glyphs under FA, Latin
+      under EN (toFaDigits passes non-digits through untouched). */
+  const digits = (value: string) => (dir === "rtl" ? toFaDigits(value) : value);
+
+  /** Comment-thread trigger shared by event rows and the HT/FT separators:
+      36px visual with an invisible 44px+ hit band (the same pattern as the
+      feed's league chips). */
+  const commentTrigger = (eventId: string, count: number) => {
+    const commentsOpen = openCommentsId === eventId;
+    return (
+      <button
+        type="button"
+        aria-expanded={commentsOpen}
+        onClick={() => setOpenCommentsId(commentsOpen ? null : eventId)}
+        className="relative inline-flex h-9 flex-none items-center gap-1 rounded-lg px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
+      >
+        <span aria-hidden="true">💬</span>
+        <Num>{count}</Num>
+        <span className="sr-only">{t("comments.liveThread")}</span>
+      </button>
+    );
+  };
+
+  /** The event parts the side cells render: icon, bold name, second line
+      (assist / swap partner / card kind). No English feed sentence in the FA
+      page — the event kind is localized here, names come through the person
+      map with the English fallback, and neither ever truncates. */
+  function eventParts(event: TimelineEvent): {
+    icon: { glyph: ReactNode; className: string };
+    name: string;
+    line2: string | null;
+  } {
+    const icon = eventIcon(event.type, event.description);
+    const names = event.participants.map(localize);
+    const [first, second] = names;
+
+    // Second line: what the FIRST name did with the second one.
+    let line2: string | null = null;
+    if (event.type === "goal" && second) {
+      line2 = t("timeline.assist", { name: second });
+    } else if (event.type === "goal" && /\bown goal\b/i.test(event.description)) {
+      line2 = t("timeline.ownGoal");
+    } else if (event.type === "card") {
+      line2 = t(
+        /\bred card\b|second yellow/i.test(event.description)
+          ? "timeline.red"
+          : /yellow/i.test(event.description)
+            ? "timeline.yellow"
+            : "timeline.card",
+      );
+    } else if (event.type === "substitution" && second) {
+      // ESPN's sub direction varies by feed, so the pair reads as a swap (⇄)
+      // rather than the page asserting an off/on order it can't verify.
+      line2 = `⇄ ${second}`;
+    } else if (!first) {
+      line2 = t(typeKey[event.type]);
+    }
+    return { icon, name: first ?? "", line2 };
+  }
+
+  // Shared grid: side cells flex, fixed center for the minute (+ the score a
+  // goal produced, directly under its minute).
+  const SPINE_GRID = "grid grid-cols-[minmax(0,1fr)_56px_minmax(0,1fr)] items-center gap-2 px-1";
 
   return (
-    <ol>
+    <ol className="relative">
       {/* Live-minute indicator: a slim status row at the top, replaced by real
           events as they land. The dot is the shared --live pulse. */}
       {liveMinute !== undefined ? (
@@ -197,7 +318,7 @@ export function TimelineList({
           <LiveDot />
           <span>{t("status.live")}</span>
           <span dir="ltr">
-            <Num>{liveMinute}'</Num>
+            <Num>{digits(String(liveMinute))}′</Num>
           </span>
         </li>
       ) : null}
@@ -206,8 +327,12 @@ export function TimelineList({
         const isGoal = event.type === "goal";
         const isSeparator = event.type === "halftime" || event.type === "fulltime";
         const goalScore = byGoal.get(event.id);
-        const icon = eventIcon(event.type, event.description);
-        const club = event.teamId ? teamColor?.[event.teamId] : undefined;
+        const side: "home" | "away" | null =
+          event.teamId == null
+            ? null
+            : event.teamId === homeTeamId
+              ? "home"
+              : "away";
         const next = events[index + 1];
         // Comments pinned to this event, plus minute-pins falling in this
         // event's window [event.start, next.start).
@@ -238,117 +363,76 @@ export function TimelineList({
               <span className="h-px flex-1 bg-line" aria-hidden="true" />
               <span className="flex items-center gap-2">
                 <span>{label}</span>
+                {/* Home–away and LTR, so the numbers read home-first in both
+                    directions — Persian digits still read left-to-right. */}
                 <span dir="ltr" className="text-ink-2">
-                  <Num>{score}</Num>
+                  <Num>{digits(score)}</Num>
                 </span>
-                {count > 0 ? (
-                  <button
-                    type="button"
-                    aria-expanded={commentsOpen}
-                    onClick={() => setOpenCommentsId(commentsOpen ? null : event.id)}
-                    // 36px visual with an invisible 44px+ hit band (the same
-                    // pattern as the feed's league chips): a full 44px visual
-                    // control would balloon the row past the compact band.
-                    className="relative inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
-                  >
-                    <span aria-hidden="true">💬</span>
-                    <Num>{count}</Num>
-                    <span className="sr-only">{t("comments.liveThread")}</span>
-                  </button>
-                ) : null}
+                {count > 0 ? commentTrigger(event.id, count) : null}
               </span>
               <span className="h-px flex-1 bg-line" aria-hidden="true" />
             </li>
           );
         }
 
-        const who = event.participants.map(localize).join(" · ");
-        const team = event.teamId ? teamNames?.[event.teamId] : undefined;
+        // No side (kickoff): a small centered note carrying the minute.
+        if (side === null) {
+          return (
+            <li
+              key={event.id}
+              className="flex items-center justify-center gap-2 py-1.5 text-xs text-ink-3"
+            >
+              <span dir="ltr" className="text-sm font-extrabold text-ink-2">
+                <Num>{digits(event.minuteDisplay)}</Num>
+              </span>
+              <span>{t(typeKey[event.type])}</span>
+              {count > 0 ? commentTrigger(event.id, count) : null}
+            </li>
+          );
+        }
 
         return (
           <Fragment key={event.id}>
-            <li
-              className={cx(
-                ROW_GRID,
-                isGoal
-                  ? "my-1 rounded-card border border-volt/30 bg-elevated"
-                  : "border-b border-line",
-              )}
-            >
-              {/* The minute reads LTR everywhere — digits plus an apostrophe
-                  would mirror into Arabic-script order otherwise. */}
-              <span dir="ltr" className="text-center text-sm font-extrabold text-ink-2">
-                <Num>{event.minuteDisplay}</Num>
-              </span>
-              <span
-                aria-hidden="true"
-                className={cx("grid place-items-center", icon.className)}
-                // The substitution arrows read as "off → on" in LTR; mirror
-                // them in RTL so they keep reading against the text flow.
-                style={
-                  event.type === "substitution" && dir === "rtl"
-                    ? { transform: "scaleX(-1)" }
-                    : undefined
-                }
-              >
-                {icon.glyph}
-              </span>
-              <span className="min-w-0">
-                <span className="flex items-center gap-1.5">
-                  {club ? (
-                    <span
-                      className="h-2 w-2 flex-none rounded-full ring-1 ring-ink-3"
-                      style={{ backgroundColor: club }}
-                      aria-hidden="true"
-                    />
-                  ) : null}
-                  <span
-                    className="truncate text-sm font-bold text-ink"
-                    dir="auto"
-                    title={count > 0 ? t(typeKey[event.type]) : undefined}
-                  >
-                    {who || <bdi>{event.description}</bdi>}
-                  </span>
+            <li className={cx(SPINE_GRID, index === 0 ? "pt-2" : "py-2")}>
+              {/* MINUTE — the middle of the spine. Persian digits under FA. */}
+              <span className="flex flex-col items-center gap-0.5">
+                <span dir="ltr" className="text-sm font-extrabold text-ink-2">
+                  <Num>{digits(event.minuteDisplay)}</Num>
                 </span>
-                {team ? (
-                  <span className="block truncate text-xs text-ink-3">
-                    <bdi>{team}</bdi>
-                  </span>
-                ) : null}
-              </span>
-              <span className="flex items-center justify-end gap-2 text-end">
-                {/* The scoreline this goal produced. Always home–away and LTR,
-                    so the number reads the same whichever side scored it. */}
+                {/* The scoreline this goal produced: under its own minute. */}
                 {isGoal && goalScore ? (
                   <span dir="ltr">
-                    <Num className="text-sm font-extrabold text-volt">
-                      {formatScore(goalScore)}
+                    <Num className="text-xs font-extrabold text-volt">
+                      {digits(formatScore(goalScore))}
                     </Num>
                   </span>
                 ) : null}
-                {/* The crowd thread trigger lives in the same row — 44px tall,
-                    and rendered only on rows that actually have comments. */}
-                {count > 0 ? (
-                  <button
-                    type="button"
-                    aria-expanded={commentsOpen}
-                    onClick={() => setOpenCommentsId(commentsOpen ? null : event.id)}
-                    // 36px visual with an invisible 44px+ hit band (the same
-                    // pattern as the feed's league chips): a full 44px visual
-                    // control would balloon the row past the compact band.
-                    className="relative inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
-                  >
-                    <span aria-hidden="true">💬</span>
-                    <Num>{count}</Num>
-                    <span className="sr-only">{t("comments.liveThread")}</span>
-                  </button>
-                ) : null}
               </span>
+
+              {/* HOME — first column, content hugging the spine (its END edge
+                  in both directions): trigger, text, icon-at-spine. */}
+              {side === "home" ? (
+                <HomeSpineCell parts={eventParts(event)} goal={isGoal}>
+                  {count > 0 ? commentTrigger(event.id, count) : null}
+                </HomeSpineCell>
+              ) : (
+                <span aria-hidden="true" className="col-start-1 row-start-1" />
+              )}
+
+              {/* AWAY — third column, content hugging the spine: icon-at-spine,
+                  text, trigger. */}
+              {side === "away" ? (
+                <AwaySpineCell parts={eventParts(event)} goal={isGoal}>
+                  {count > 0 ? commentTrigger(event.id, count) : null}
+                </AwaySpineCell>
+              ) : (
+                <span aria-hidden="true" className="col-start-3 row-start-1" />
+              )}
             </li>
 
-            {/* The row's comment thread, once opened. Substitution arrows note
-                their direction explicitly in the name pair, so the icon swap is
-                cosmetic-only below. */}
+            {/* The row's comment thread, once opened. Substitution direction is
+                shown in the name pair, so the icon swap is cosmetic-only
+                below. */}
             {commentsOpen ? (
               <li className="px-1 pb-2">
                 {/* The composer is intentionally unmounted for now, so the

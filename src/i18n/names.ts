@@ -247,6 +247,16 @@ export const personNamesFa: Record<string, string> = {
   "FIFA World Cup Qualifying — UEFA": "مقدماتی جام جهانی — اروپا",
   "FIFA World Cup Qualifying — CONMEBOL": "مقدماتی جام جهانی — آمریکای جنوبی",
   "UEFA Nations League": "لیگ ملت‌های اروپا",
+  // Cup round labels (ESPN's `round`) — the match-detail subtitle and the Cups
+  // grouping headings show them; unknown rounds pass through as the English
+  // ESPN label, never truncated.
+  "Quarter-final": "یک‌چهارم نهایی",
+  "Semi-final": "نیمه‌نهایی",
+  "Final": "فینال",
+  "Round of 16": "مرحله ۱۶ تیمی",
+  "Round of 32": "مرحله ۳۲ تیمی",
+  "Qualifying round": "دور مقدماتی",
+  "Play-off": "پلی‌آف",
 };
 
 /** English string -> Persian, falling back to the input untouched. */
