@@ -11,10 +11,11 @@ const DAY_NAMES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
 interface DateStripProps {
   selected: Date;
   onSelect: (date: Date) => void;
-  /** Day keys (same format as `dayKey`) that have at least one match — the
-   *  chip carries a small dot so a quiet Saturday reads as quiet before the
-   *  tap. Absent = no dots (call sites without the data unchanged). */
-  daysWithMatches?: Set<string>;
+  /** Day keys (same format as `dayKey`) where at least one FOLLOWED club plays
+   *  — the chip carries a teal dot so the matchdays the user actually cares
+   *  about stand out; a day full of unrelated fixtures stays quiet.
+   *  Absent = no dots (call sites without the data unchanged). */
+  daysWithFavorites?: Set<string>;
 }
 
 const startOfDay = (d: Date) => {
@@ -87,7 +88,7 @@ function buildDays(today: Date, start: number): Date[] {
  * The calendar lives in the header now (see `Matches`) — a 44px icon button
  * wedged beside 56px chips made the row read as eight uneven targets.
  */
-export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProps) {
+export function DateStrip({ selected, onSelect, daysWithFavorites }: DateStripProps) {
   const { t, lang } = useI18n();
   const locale = lang === "fa" ? "fa-IR" : undefined;
   // Localized day number: Farsi reads ۱۴ not 14.
@@ -136,12 +137,16 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
     // half-step band left only 1px outside the visible edge (43.7px tappable at
     // 360). One step reaches 3px out on each side: 47.7px at 360, and the
     // neighbouring band still stops 3px short of it in the 6px gap.
-    <div role="group" aria-label={t("dateStrip.label")} className="flex items-stretch gap-1.5">
+    // gap-1 (4px), not gap-1.5: 7 chips at a 320px viewport give only ~36px
+    // per chip; the tighter gap buys back 12px so the smallest screens keep
+    // all seven days (never a second row, never a dropped day) while every
+    // chip stays ≥56px tall — well over the 40px tap floor.
+    <div role="group" aria-label={t("dateStrip.label")} className="flex items-stretch gap-1">
       {days.map((day) => {
         const key = dayKey(day);
         const isToday = key === todayKey;
         const isSelected = key === selectedKey;
-        const hasMatches = daysWithMatches?.has(key) ?? false;
+        const hasFavorites = daysWithFavorites?.has(key) ?? false;
         return (
           <button
             key={key}
@@ -160,20 +165,24 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
                   : "border-line bg-transparent text-ink-3 active:bg-line/20"
             }`}
           >
-            <span className="text-xs font-bold leading-[14px]">
+            {/* Both labels truncate instead of overflowing: at 320px a chip
+                is ~38px wide, and a large user font scale must never push a
+                glyph into the neighbour chip. */}
+            <span className="max-w-full truncate text-xs font-bold leading-[14px]">
               {t(`dates.day.${DAY_NAMES[day.getDay()]}` as never)}
             </span>
-            <span className="text-md font-extrabold leading-5">{digits.format(day.getDate())}</span>
+            <span className="max-w-full truncate text-md font-extrabold leading-5">{digits.format(day.getDate())}</span>
             {isToday ? (
               <span
                 aria-hidden="true"
                 className={`h-1 w-1 rounded-full ${isSelected ? "bg-on-volt" : "bg-volt"}`}
               />
-            ) : hasMatches && !isSelected ? (
-              // Days with fixtures get a dot so the user can scan without
-              // tapping; the selected chip needs no marker (the volt fill IS
-              // the marker).
-              <span aria-hidden="true" className="h-0.5 w-0.5 rounded-full bg-ink-3" />
+            ) : hasFavorites && !isSelected ? (
+              // Only days where a FOLLOWED club plays get the teal dot so the
+              // week reads at a glance; a day full of fixtures the user doesn't
+              // follow stays quiet. The selected chip needs no marker (the
+              // volt fill IS the marker).
+              <span aria-hidden="true" className="h-1 w-1 rounded-full bg-volt" />
             ) : null}
           </button>
         );

@@ -1,21 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { ConfettiBurst } from "../components/Confetti";
-import { MatchCard } from "../components/MatchCard";
 import { TopBar } from "../components/TopBar";
 import { useToast } from "../components/toastContext";
-import { Chip, CollapsibleSection, EmptyState, ErrorState, Num } from "../components/ui";
+import { EmptyState, ErrorState } from "../components/ui";
 import { useLocalState } from "../lib/useLocalState";
 import {
   BallIcon,
   CalendarIcon,
   CloseIcon,
   PlusIcon,
-  RefreshIcon,
   StarFilledIcon,
 } from "../components/icons";
-import { MatchCardSkeleton } from "../components/Skeletons";
+import { LeagueGroupSkeleton } from "../components/Skeletons";
 import { useNow } from "../hooks/useNow";
 import { cx } from "../lib/cx";
 import { useMatches, useFollowedLeagues, useSyncHealth } from "../hooks/useApi";
@@ -31,6 +29,7 @@ import { CalendarSheet } from "../components/panels/CalendarSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
 import { PullIndicator } from "../components/PullToRefresh";
+import { LeagueGroup } from "../components/LeagueGroup";
 import {
   addJalaliMonths,
   jalaliMonthLength,
@@ -89,25 +88,6 @@ function feedRange(lang: "en" | "fa"): { from: string; to: string } {
   };
 }
 
-function GroupHeader({ id, label, count, tone }: { id: string; label: string; count: number; tone: "live" | "gold" | "muted" }) {
-  return (
-    <div className="mb-3 flex items-baseline gap-2">
-      <h2
-        id={id}
-        className={cx(
-          "text-sm font-extrabold",
-          tone === "live" ? "text-live" : tone === "gold" ? "text-gold" : "text-ink-2",
-        )}
-      >
-        {label}
-      </h2>
-      <Chip tone={tone}>
-        <Num>{count}</Num>
-      </Chip>
-    </div>
-  );
-}
-
 /**
  * Local calendar-day key. NEVER use toISOString() for this: it is UTC, so east
  * of UTC (this app's users are UTC+3:30/+4) local midnight is still the previous
@@ -119,11 +99,6 @@ const startOfDay = (d: Date) => {
   x.setHours(0, 0, 0, 0);
   return x;
 };
-const STATUS_RANK: Record<string, number> = { live: 0, halftime: 0, scheduled: 1, finished: 2 };
-/** Live first, then upcoming by kickoff, then finished. */
-const byPlay = (a: Match, b: Match) =>
-  (STATUS_RANK[a.status] ?? 1) - (STATUS_RANK[b.status] ?? 1) ||
-  new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime();
 
 /**
  * Pick-banner dismiss is persisted so a user who already said “don’t show me
@@ -131,6 +106,14 @@ const byPlay = (a: Match, b: Match) =>
  * computed “we don’t have any favorites” default.
  */
 const PICK_BANNER_KEY = "verdikick.pickBannerDismissed";
+
+/** One competition's slice of the selected day; kickoff-sorted rows. */
+interface DayLeagueGroup {
+  league: string;
+  matches: Match[];
+  /** Earliest kickoff, numeric — group ordering's second key. */
+  firstKickoff: number;
+}
 
 export default function Matches() {
   const { t, lang, localize } = useI18n();
@@ -188,57 +171,59 @@ export default function Matches() {
   const selectedDay = picked ?? startOfDay(new Date(now));
   const selectedKey = dayKey(selectedDay);
 
-  // Filter by LOCAL calendar day, and order each day the way people read a
-  // matchday: what is on now, then what is next, then what already happened.
+  // Filter by LOCAL calendar day. The day's matches no longer group by state;
+  // grouping is by competition (see `leagueGroups`).
   const dayMatches = useMemo(
-    () => matches.filter((m) => dayKey(new Date(m.kickoffAt)) === selectedKey).sort(byPlay),
+    () => matches.filter((m) => dayKey(new Date(m.kickoffAt)) === selectedKey),
     [matches, selectedKey],
   );
 
-  const myTeamsMatches = useMemo(
-    () => dayMatches.filter((m) => isFavorite(m.home.id) || isFavorite(m.away.id)),
-    [dayMatches, isFavorite],
-  );
-
-  // Which strip chips carry a fixture dot: keys built with DateStrip's own
-  // exported dayKey, so the dot can never disagree with the chip it sits on.
-  const daysWithMatches = useMemo(() => {
-    const set = new Set<string>();
+  // Strip/calendar markers, one pass over the feed. The strip's dot marks ONLY
+  // the days a followed club plays — a day full of fixtures the user doesn't
+  // follow stays quiet — while the calendar sheet keeps its "has fixtures" dots,
+  // because there the user is hunting open dates, not their own matchdays.
+  const { daysWithMatches, daysWithFavorites } = useMemo(() => {
+    const all = new Set<string>();
+    const favorites = new Set<string>();
     for (const match of matches) {
-      set.add(chipDayKey(new Date(match.kickoffAt)));
+      const key = chipDayKey(new Date(match.kickoffAt));
+      all.add(key);
+      if (isFavorite(match.home.id) || isFavorite(match.away.id)) favorites.add(key);
     }
-    return set;
-  }, [matches]);
-  const otherMatches = useMemo(
-    () => dayMatches.filter((m) => !myTeamsMatches.includes(m)),
-    [dayMatches, myTeamsMatches],
-  );
+    return { daysWithMatches: all, daysWithFavorites: favorites };
+  }, [matches, isFavorite]);
 
-  // The rest of the day, grouped by state: a busy matchday is otherwise one
-  // column of twelve half-time borders. Live first, then the break, then what
-  // is still ahead, then the record. Parts of the day before group boundaries
-  // never repeat: `Match` folds a real `halftime` server status into `live`, so
-  // the break flag carves the half-time group out of the live column.
-  const groups = useMemo(() => {
-    const g = { live: [] as Match[], halftime: [] as Match[], scheduled: [] as Match[], finished: [] as Match[] };
-    for (const m of otherMatches) {
-      if (m.status === "finished") g.finished.push(m);
-      else if (m.isHalftime) g.halftime.push(m);
-      else if (m.status === "live") g.live.push(m);
-      else g.scheduled.push(m);
+  // THE GROUPING: the day's matches come together in one rounded container per
+  // competition. Followed leagues lead (in the user's own follow order — that
+  // IS their interest ranking, so it beats every computed heuristic); among the
+  // rest, earliest kickoff first. Within a group, kickoff order top-to-bottom.
+  const leagueGroups = useMemo<DayLeagueGroup[]>(() => {
+    const byLeague = new Map<string, Match[]>();
+    for (const match of dayMatches) {
+      const list = byLeague.get(match.league);
+      if (list) list.push(match);
+      else byLeague.set(match.league, [match]);
     }
-    return g;
-  }, [otherMatches]);
-  const isToday = selectedKey === dayKey(startOfDay(new Date(now)));
-  // Finished collapsed by default whenever anything sits above it (my teams
-  // included); expanded by default when it is the day's only content. A saved
-  // per-user choice always beats this computed default — useLocalState reads
-  // the stored value before it ever looks at `defaultOpen`.
-  const onlyFinishedHasContent =
-    myTeamsMatches.length === 0 &&
-    groups.live.length === 0 &&
-    groups.halftime.length === 0 &&
-    groups.scheduled.length === 0;
+    // The followed list is at most 5 slugs, so building an index map per render
+    // is cheaper than a `.find` inside the sort's comparator.
+    const followOrder = new Map(followed.leagues.map((l, i) => [l.league, i]));
+    return [...byLeague]
+      .map(([leagueSlug, list]) => {
+        const sorted = [...list].sort(
+          (a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime(),
+        );
+        return {
+          league: leagueSlug,
+          matches: sorted,
+          firstKickoff: new Date(sorted[0].kickoffAt).getTime(),
+        };
+      })
+      .sort((a, b) => {
+        const rankA = followOrder.get(a.league) ?? followOrder.size;
+        const rankB = followOrder.get(b.league) ?? followOrder.size;
+        return rankA - rankB || a.firstKickoff - b.firstKickoff;
+      });
+  }, [dayMatches, followed.leagues]);
 
   // First later day that has matches, for the empty state's shortcut.
   const nextMatchDay = useMemo(() => {
@@ -263,6 +248,24 @@ export default function Matches() {
   // No data AND an error: an error over cached matches would replace a usable
   // feed, so the error card is reserved for the cold-failure case.
   const hasFeedError = matchesQuery.isError && !matchesQuery.data;
+
+  // Localization: localized short-month header date and localized digits.
+  // calendar: "gregory" keeps fa-IR on the same month/day number the strip's
+  // chips print (fa-IR's default Persian calendar renames them).
+  const headerDayFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        weekday: "long",
+        day: "numeric",
+        month: "short",
+        calendar: "gregory",
+      }),
+    [locale],
+  );
+  const digitsFormatter = useMemo(
+    () => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en", { useGrouping: false }),
+    [lang],
+  );
 
   // Goal detection: when a refetch brings a new score for a match, fire the
   // volt sweep + toast. The server polls ESPN every minute; this picks that up.
@@ -318,75 +321,90 @@ export default function Matches() {
   }
 
   // Pull down from the top of the feed to resync: the gesture this screen's
-  // users expect on a live-score view. The TopBar icon stays as the equivalent
-  // for keyboard and screen-reader users, so this is an addition, never the
-  // only path.
+  // users expect on a live-score view. The hook grabs the downward drag only
+  // while the feed is at the very top and preventDefaults it, which is exactly
+  // the shape Telegram's swipe-to-claim needs to lose: the app also calls
+  // `disableVerticalSwipes()` once on boot (lib/telegram.ts), so the native
+  // collapse gesture never forms to begin with, and this manual refresh is the
+  // gesture that stays. Distance is capped and rubber-banded so the drag never
+  // reaches the header collapse threshold.
   const pull = usePullToRefresh(refresh, !refreshing);
 
   return (
-    <>
+    // ≥600px: the whole screen (header row, strip, feed) re-centres into a
+    // 480px column instead of stretching edge to edge — the companion web
+    // layout. The inline `--app-max-width` feeds TopBar's own max-w (its
+    // default is 768px), so the header's gutters land on the same column as
+    // everything below it; below 600px the cap is inert and nothing changes.
+    <div
+      className="mx-auto w-full max-w-[480px]"
+      style={{ "--app-max-width": "480px" } as CSSProperties}
+    >
       <ConfettiBurst trigger={burst} />
       <TopBar
         title={t("matches.title")}
-        // The subtitle is the SELECTED day, not today: the DateStrip below
-        // can move the feed a week, and a header that stayed on Wednesday
-        // while the cards showed Friday would be the one lying. calendar:
-        // "gregory" keeps fa-IR on the same month/day number the strip's
-        // chips print (fa-IR's default Persian calendar renames them).
-        subtitle={new Intl.DateTimeFormat(locale, {
-          weekday: "long",
-          day: "numeric",
-          month: "short",
-          calendar: "gregory",
-        }).format(selectedDay)}
+        // The subtitle is the SELECTED day plus its count: "یکشنبه ۲۵ اکتبر ·
+        // ۲۲ مسابقه" — the DateStrip below can move the feed a week, so both
+        // the weekday and the number must track the picked day, not the boot
+        // clock. Digits localize (Persian digits under fa), the word is an
+        // i18n key, and the old standalone count chip is gone.
+        subtitle={t(
+          dayMatches.length === 1 ? "matches.headerCountOne" : "matches.headerCount",
+          {
+            date: headerDayFormatter.format(selectedDay),
+            count: digitsFormatter.format(dayMatches.length),
+          },
+        )}
         right={
-          // Two header actions: the calendar first, then refresh. Both are 40px
-          // visual circles with an invisible 44px hit band (after:-inset-1), so
-          // the pair stays quiet next to the title while the thumb target never
-          // drops under the 44px floor. Refresh keeps the non-gesture path the
-          // pull-to-refresh comment promises: keyboard-reachable, named aloud.
-          <div className="flex flex-none items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                haptic("light");
-                setCalendarOpen(true);
-              }}
-              aria-haspopup="dialog"
-              aria-label={t("matches.pickDate")}
-              title={t("matches.pickDate")}
-              className="relative grid h-10 w-10 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated after:absolute after:-inset-1 after:content-['']"
-            >
-              <CalendarIcon className="h-[18px] w-[18px]" />
-            </button>
-            <button
-              type="button"
-              onClick={refresh}
-              disabled={refreshing}
-              aria-label={t("common.refresh")}
-              title={t("common.refresh")}
-              className="relative grid h-10 w-10 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated disabled:opacity-60 after:absolute after:-inset-1 after:content-['']"
-            >
-              <span className={cx(refreshing && "animate-spin")}>
-                <RefreshIcon />
-              </span>
-            </button>
-          </div>
+          // One header action: the calendar. Refresh's button went away — the
+          // gesture above owns the resync, and the toast after every sync is
+          // still the visible confirmation. The calendar keeps its 40px visual
+          // circle with an invisible 44px hit band (after:-inset-1) so the
+          // thumb target never drops under the 44px floor.
+          <button
+            type="button"
+            onClick={() => {
+              haptic("light");
+              setCalendarOpen(true);
+            }}
+            aria-haspopup="dialog"
+            aria-label={t("matches.pickDate")}
+            title={t("matches.pickDate")}
+            className="relative grid h-10 w-10 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated after:absolute after:-inset-1 after:content-['']"
+          >
+            <CalendarIcon className="h-[18px] w-[18px]" />
+          </button>
         }
       />
 
       {/* Everything below sits under the sticky header. The wrapper gives the
           pull-to-refresh marker an anchor so it slides in between header and
           feed instead of fighting the header for the same band. */}
-      <div className="relative">
+      <div className="relative" >
         <PullIndicator pull={pull} />
+        {/* A full refresh in flight: the subtle carousel is the only visible
+            state, since the header no longer carries a refresh button. */}
+        {refreshing ? (
+          <span
+            role="status"
+            aria-label={t("common.loading")}
+            className="absolute end-0 top-0 z-10 grid h-7 w-7 place-items-center"
+          >
+            <span
+              aria-hidden="true"
+              className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-volt"
+            />
+          </span>
+        ) : null}
 
         {/* Date strip: seven day chips across the full content width, today
             selected by default. mt-3 is the 12px gap under the header's bottom
             border; the calendar moved up into the header, and the sheet below
-            is rendered from here so the header button has one owner. */}
+            is rendered from here so the header button has one owner. The dots
+            under the chips mark the days a FOLLOWED club plays (teal), not
+            every fixture-bearing day. */}
         <div className="mt-3">
-          <DateStrip selected={selectedDay} onSelect={setPicked} daysWithMatches={daysWithMatches} />
+          <DateStrip selected={selectedDay} onSelect={setPicked} daysWithFavorites={daysWithFavorites} />
         </div>
         <CalendarSheet
           open={calendarOpen}
@@ -406,8 +424,8 @@ export default function Matches() {
             padding the extra target area above and below is unreachable. It is
             a plain 12px margin above now, not the old -my-1 compensation: the
             row is part of the 8px rhythm (12px under the strip, and the first
-            group header 16px under the row), and a -4px bottom margin was
-            eating 4px of that header gap. */}
+            group 16px under the row), and a -4px bottom margin was
+            eating 4px of that gap. */}
         {!league && (followed.count > 0 || favCount > 0) ? (
           <div className="-mx-[var(--space-page-x,16px)] mt-md flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
             {followed.count > 0 ? (
@@ -516,11 +534,8 @@ export default function Matches() {
             card only when there is nothing cached, and an empty day that offers
             the next day with football instead of a dead end. */}
         {matchesQuery.isLoading ? (
-          <ul className="mt-md space-y-2" aria-busy="true">
-            <MatchCardSkeleton />
-            <MatchCardSkeleton />
-            <MatchCardSkeleton />
-            <MatchCardSkeleton />
+          <ul className="mt-md space-y-3" aria-busy="true">
+            <LeagueGroupSkeleton />
           </ul>
         ) : hasFeedError ? (
           <div className="mt-md">
@@ -554,94 +569,30 @@ export default function Matches() {
           </div>
         ) : null}
 
-        {!matchesQuery.isLoading && !hasFeedError ? (
-          <div key={selectedKey} className="day-swap">
-            {/* My teams group: matches where a favorite team is playing. */}
-            {favCount > 0 && myTeamsMatches.length > 0 && (
-              <section className="mt-4">
-                <div className="mb-2 flex items-center gap-2">
-                  <StarFilledIcon className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
-                  <h2 className="text-sm font-bold text-ink-2">{t("matches.myTeams")}</h2>
-                </div>
-                <ul className="space-y-2">
-                  {myTeamsMatches.map((match, index) => (
-                    <MatchCard key={match.id} match={match} index={index} />
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {/* Inline ad between the two groups. */}
-            {favCount > 0 && myTeamsMatches.length > 0 && otherMatches.length > 0 && (
-              <InlineAd />
-            )}
-
-            {/* Everything else on the day, grouped by state. */}
-            {groups.live.length > 0 && (
-              <section aria-labelledby="feed-group-live">
-                <GroupHeader id="feed-group-live" label={t("matches.groupLive")} count={groups.live.length} tone="live" />
-                <ul className="space-y-2">
-                  {groups.live.map((match, index) => (
-                    <MatchCard key={match.id} match={match} index={index} />
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {groups.halftime.length > 0 && (
-              <section aria-labelledby="feed-group-halftime">
-                <GroupHeader
-                  id="feed-group-halftime"
-                  label={t("matches.groupHalftime")}
-                  count={groups.halftime.length}
-                  tone="gold"
+        {/* The day's matches, grouped by competition — followed leagues first
+            (the user's own follow order), then by earliest kickoff. Each group
+            is one rounded container: header row (teal square dot, league name,
+            count on the far end) over kick-off-sorted rows with hairline
+            dividers. The sponsored card keeps its between-groups slot, after
+            the leading group when there are several. */}
+        {!matchesQuery.isLoading && !hasFeedError && leagueGroups.length > 0 ? (
+          <div key={selectedKey} className="day-swap mt-4 space-y-3">
+            {leagueGroups.map((group, index) => (
+              <Fragment key={group.league}>
+                <LeagueGroup
+                  league={group.league}
+                  matches={group.matches}
+                  isFavoriteTeam={isFavorite}
+                  index={index}
                 />
-                <ul className="space-y-2">
-                  {groups.halftime.map((match, index) => (
-                    <MatchCard key={match.id} match={match} index={index} />
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {groups.scheduled.length > 0 && (
-              <section aria-labelledby="feed-group-scheduled">
-                <GroupHeader
-                  id="feed-group-scheduled"
-                  label={t(isToday ? "matches.groupLater" : "matches.groupUpcoming")}
-                  count={groups.scheduled.length}
-                  tone="muted"
-                />
-                <ul className="space-y-2">
-                  {groups.scheduled.map((match, index) => (
-                    <MatchCard key={match.id} match={match} index={index} />
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {groups.finished.length > 0 && (
-              <CollapsibleSection
-                id="feed-finished"
-                level={2}
-                // Same 16px between-group rhythm as GroupHeader's mt-4.
-                className="mt-4"
-                title={t("matches.groupFinished")}
-                count={groups.finished.length}
-                defaultOpen={onlyFinishedHasContent}
-              >
-                <ul className="space-y-2">
-                  {groups.finished.map((match, index) => (
-                    <MatchCard key={match.id} match={match} index={index} />
-                  ))}
-                </ul>
-              </CollapsibleSection>
-            )}
+                {index === 0 && leagueGroups.length > 1 ? <InlineAd /> : null}
+              </Fragment>
+            ))}
           </div>
         ) : null}
 
-        {/* Sync note, not a second refresh button: pull-to-refresh and the
-          TopBar icon already carry the action, so this line only reports it. */}
+        {/* Sync note: the feed resyncs through pull-to-refresh, so this line
+            only reports when the data last moved. */}
         <p className="mt-xl text-center text-xs text-ink-3">
           {t("matches.hint")}
           {syncStale
@@ -653,7 +604,6 @@ export default function Matches() {
                 : ""}
         </p>
       </div>
-    </>
+    </div>
   );
 }
-

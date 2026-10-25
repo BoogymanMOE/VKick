@@ -166,13 +166,19 @@ export function CollapsibleSection({
  * one fall back to their abbreviation on a club-coloured tile. Both states
  * share one shape so a list of fixtures reads as a single row rhythm.
  */
-export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md" | "lg" | "xl" }) {
-  const dims = {
-    sm: "h-6 w-6 text-xs",
-    md: "h-9 w-9 text-xs",
-    lg: "h-12 w-12 text-sm",
-    xl: "h-16 w-16 text-md",
-  }[size];
+export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md" | "lg" | "xl" | "xs" }) {
+  // `xs` is the Matchday feed row's crest: exactly 22px and fully round (the
+  // league-group spec); every other size keeps its square-rounded footprint.
+  // Radius lives in the size map so only the size decides the shape — no
+  // class-order-dependent override between rounded-md and rounded-full.
+  const dims: Record<string, string> = {
+    xs: "h-[22px] w-[22px] text-[10px] rounded-full",
+    sm: "h-6 w-6 text-xs rounded-md",
+    md: "h-9 w-9 text-xs rounded-md",
+    lg: "h-12 w-12 text-sm rounded-md",
+    xl: "h-16 w-16 text-md rounded-md",
+  };
+  const box = dims[size];
   const [broken, setBroken] = useState(false);
   const [remoteBroken, setRemoteBroken] = useState(false);
   // Crests that arrive over the network otherwise pop in from nothing; fade
@@ -196,8 +202,8 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
   return (
     <span
       className={cx(
-        "grid flex-none place-items-center font-num font-extrabold rounded-md border",
-        dims,
+        "grid flex-none place-items-center font-num font-extrabold border",
+        box,
       )}
       style={
         {

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "@mpociot/superdesign": {
+      "version": "1.0.0",
+      "installedAt": 1792535154661,
+      "ownerHandle": "mpociot"
+    }
+  }
+}

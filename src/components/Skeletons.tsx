@@ -2,6 +2,53 @@ import { cx } from "../lib/cx";
 
 const bar = "shimmer rounded";
 
+/**
+ * Matchday feed loading state, shaped exactly like the live layout's league
+ * group (rounded-16px container, teal-dot header band, kickoff-sorted rows
+ * with a 44px time column and 22px crests) so the real feed swaps in without
+ * a jump. Cups keeps the old MatchCardSkeleton — this one is Matches-only.
+ */
+export function LeagueGroupSkeleton({ groups = 2, rows = 3 }: { groups?: number; rows?: number }) {
+  return (
+    <div className="space-y-3" aria-hidden="true">
+      {Array.from({ length: groups }, (_, group) => (
+        <div key={group} className="overflow-hidden rounded-2xl border border-line bg-surface">
+          <div className="flex items-center gap-2 px-3.5 py-[7px]">
+            <span className={cx(bar, "h-2 w-2 rounded-sm")} />
+            <span className={cx(bar, "h-3 w-28")} />
+            <span className="flex-1" />
+            <span className={cx(bar, "h-2.5 w-12")} />
+          </div>
+          {Array.from({ length: rows }, (_, row) => (
+            <div
+              key={row}
+              className="flex items-center gap-3 border-t border-[#1d2b26] px-3.5 py-[9px]"
+            >
+              <div className="flex min-w-11 flex-none flex-col items-center gap-1">
+                <span className={cx(bar, "h-3.5 w-9")} />
+                <span className={cx(bar, "h-2 w-8")} />
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-[7px]">
+                <div className="flex items-center gap-[9px]">
+                  {/* Inline radius (not a rounded-full class): the shimmer's
+                      scoped `rounded` rule must not race it on CSS order. */}
+                  <span className={cx(bar, "h-[22px] w-[22px]")} style={{ borderRadius: "9999px" }} />
+                  <span className={cx(bar, "h-3.5 w-24")} />
+                </div>
+                <div className="flex items-center gap-[9px]">
+                  <span className={cx(bar, "h-[22px] w-[22px]")} style={{ borderRadius: "9999px" }} />
+                  <span className={cx(bar, "h-3.5 w-16")} />
+                </div>
+              </div>
+              <span className={cx(bar, "h-3 w-3")} />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Signature animation 8: 1.4s shimmer sweep, shaped like the real component.
  *  Height matches a filled match card (≈108px): verified in the Task 3 check. */
 export function MatchCardSkeleton() {

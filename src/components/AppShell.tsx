@@ -61,7 +61,7 @@ export function AppShell() {
         // safe-area inset — reserving only 56px left the last card tucked under
         // it. The extra 4px is the difference.
         style={{
-          paddingBottom: "calc(56px + max(env(safe-area-inset-bottom, 8px))",
+          paddingBottom: "calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom))",
         }}
       >
         <Suspense

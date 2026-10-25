@@ -75,11 +75,18 @@ export const strings = {
     "matches.groupLive": "Live now",
     "matches.groupHalftime": "Half-time",
     "matches.groupLater": "Later today",
-    "matches.groupUpcoming": "Upcoming",
-    "matches.groupFinished": "Finished",
-    "matches.emptyDay": "No matches on {day}",
-    "matches.emptyNext": "The next match day is {day}",
-    "matches.goToDay": "Go to {day}",
+    "matches.groupUpcoming": "Upcoming",  "matches.groupFinished": "Finished",
+  // Header subtitle: "Sunday, Oct 25 · 22 matches" — the selected day plus its count.
+  "matches.headerCount": "{date} · {count} matches",
+  "matches.headerCountOne": "{date} · {count} match",
+  // League-group header, far end: "22 matches" / "2 matches".
+  "matches.matchCount": "{count} matches",
+  "matches.matchCountOne": "{count} match",
+  // Tiny caption under the kickoff clock on feed rows.
+  "matches.tehranTime": "Tehran time",
+  "matches.emptyDay": "No matches on {day}",
+  "matches.emptyNext": "The next match day is {day}",
+  "matches.goToDay": "Go to {day}",
     "leagues.title": "Favorite leagues",
     "leagues.subtitle": "Follow a league or cup — its matches lead the feed and its alerts reach you.",
     "leagues.notifyHint":
@@ -733,6 +740,13 @@ export const strings = {
     "matches.groupLater": "بعداً امروز",
     "matches.groupUpcoming": "بازی‌های پیش‌رو",
     "matches.groupFinished": "تمام‌شده",
+    // ساب‌تایتل هدر: "یکشنبه ۲۵ اکتبر · ۲۲ مسابقه" — همین روز انتخاب‌شده و شمارشش.
+    "matches.headerCount": "{date} · {count} مسابقه",
+    "matches.headerCountOne": "{date} · {count} مسابقه",
+    "matches.matchCount": "{count} بازی",
+    "matches.matchCountOne": "{count} بازی",
+    // کپشن کوچک زیر ساعت شروع بازی در ردیف‌های فید.
+    "matches.tehranTime": "به وقت تهران",
     "matches.emptyDay": "در {day} بازی‌ای نیست",
     "matches.emptyNext": "روز بعدیِ بازی‌ها {day} است",
     "matches.goToDay": "برو به {day}",
