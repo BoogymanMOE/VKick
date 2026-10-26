@@ -86,7 +86,10 @@ export const MatchRow = memo(function MatchRow({
   const { t, lang, localize } = useI18n();
   const prefetchMatch = usePrefetchMatch();
   const isHalftime = match.isHalftime === true;
-  const isLive = match.status === "live";
+  // Halftime reaches here as status "live" + isHalftime (matchFromApi folds
+  // it), so "live" alone claims a break is running: isLive owns both the coral
+  // minute/dot and the status label, and must lose to the break.
+  const isLive = match.status === "live" && !isHalftime;
   const isFinished = match.status === "finished";
   const hasScore = isLive || isHalftime || isFinished;
   const home = localize(match.home.shortName);
