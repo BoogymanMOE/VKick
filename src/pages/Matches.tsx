@@ -275,15 +275,14 @@ export default function Matches() {
   const hasFeedError = matchesQuery.isError && !matchesQuery.data;
 
   // Localization: localized short-month header date and localized digits.
-  // calendar: "gregory" keeps fa-IR on the same month/day number the strip's
-  // chips print (fa-IR's default Persian calendar renames them).
+  // No explicit calendar: fa-IR's default Solar Hijri is what the strip's
+  // chips and the calendar sheet print, so the header matches them.
   const headerDayFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
         weekday: "long",
         day: "numeric",
         month: "short",
-        calendar: "gregory",
       }),
     [locale],
   );

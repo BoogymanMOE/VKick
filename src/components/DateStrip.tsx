@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useI18n } from "../i18n/context";
+import { toJalali } from "../lib/jalali";
 
 /**
  * Catalog keys, not display labels: `dates.day.*` carries the short day name in
@@ -93,16 +94,16 @@ export function DateStrip({ selected, onSelect, daysWithFavorites }: DateStripPr
   const locale = lang === "fa" ? "fa-IR" : undefined;
   // Localized day number: Farsi reads ۱۴ not 14.
   const digits = useMemo(() => new Intl.NumberFormat(locale, { useGrouping: false }), [locale]);
-  // The chip's accessible name is the full date. `calendar: "gregory"` keeps
-  // fa-IR on the same day number the chip prints (fa-IR's default Persian
-  // calendar would name a different day than the digits show).
+  // The chip's accessible name is the full date, in the calendar the chip
+  // prints: fa-IR's default Solar Hijri (which the header and the calendar
+  // sheet use too). An explicit `calendar: "gregory"` here used to name a
+  // different day than the Jalali digits show.
   const fullDate = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
         weekday: "long",
         day: "numeric",
         month: "long",
-        calendar: "gregory",
       }),
     [locale],
   );
@@ -147,6 +148,10 @@ export function DateStrip({ selected, onSelect, daysWithFavorites }: DateStripPr
         const isToday = key === todayKey;
         const isSelected = key === selectedKey;
         const hasFavorites = daysWithFavorites?.has(key) ?? false;
+        // Same calendar as the header and the calendar sheet: Solar Hijri
+        // under Persian. Only the PRINTED number changes; the window and the
+        // day keys stay Gregorian (they come from the feed's real dates).
+        const dayNum = lang === "fa" ? toJalali(day).jd : day.getDate();
         return (
           <button
             key={key}
@@ -171,7 +176,7 @@ export function DateStrip({ selected, onSelect, daysWithFavorites }: DateStripPr
             <span className="max-w-full truncate text-xs font-bold leading-[14px]">
               {t(`dates.day.${DAY_NAMES[day.getDay()]}` as never)}
             </span>
-            <span className="max-w-full truncate text-md font-extrabold leading-5">{digits.format(day.getDate())}</span>
+            <span className="max-w-full truncate text-md font-extrabold leading-5">{digits.format(dayNum)}</span>
             {isToday ? (
               <span
                 aria-hidden="true"
