@@ -28,16 +28,18 @@ const typeKey: Record<TimelineEvent["type"], StringKey> = {
  */
 function eventIcon(
   type: TimelineEvent["type"],
-  description: string,
-): { glyph: ReactNode; className: string } {
-  const isRedCard = /\bred card\b|second yellow/i.test(description);
+  description: string,) : { glyph: ReactNode; className: string } {
   switch (type) {
     case "goal":
       return { glyph: <BallIcon className="h-4 w-4" />, className: "text-volt" };
     case "card":
+      // The booking reads at a glance as the actual card: a filled rounded
+      // rectangle — yellow, red, or yellow-in-front-of-red (a second yellow
+      // turning). The stroke icon stays for the booking kinds the feed
+      // describes neither way (rare).
       return {
-        glyph: <CardIcon className="h-4 w-4" />,
-        className: isRedCard ? "text-danger" : "text-gold",
+        glyph: cardGlyph(description),
+        className: "",
       };
     case "substitution":
       return { glyph: <SwapIcon className="h-4 w-4" />, className: "text-ink-2" };
@@ -50,6 +52,28 @@ function eventIcon(
     default:
       return { glyph: "·", className: "text-ink-3" };
   }
+}
+
+/** The card itself, drawn: yellow, red, or the stacked yellow-over-red pair
+ *  ESPN describes as a "second yellow". Falls back to the stroke icon when
+ *  the description is too vague to pick a color. */
+function cardGlyph(description: string): ReactNode {
+  const isRed = /\bred card\b/i.test(description);
+  const isSecondYellow = /second yellow/i.test(description);
+  if (!isRed && !isSecondYellow) {
+    if (!/yellow/i.test(description)) return <CardIcon className="h-4 w-4 text-gold" />;
+    return <span aria-hidden="true" className="inline-block h-4 w-2.5 rounded-[2px] bg-gold shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />;
+  }
+  if (isSecondYellow) {
+    // Yellow-booked, then red: the pair overlaps — red behind, yellow front.
+    return (
+      <span aria-hidden="true" className="relative inline-block h-4 w-4">
+        <span className="absolute inset-y-0 end-0 w-2.5 rounded-[2px] bg-danger shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />
+        <span className="absolute inset-y-0 start-0 w-2.5 rounded-[2px] bg-gold shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />
+      </span>
+    );
+  }
+  return <span aria-hidden="true" className="inline-block h-4 w-2.5 rounded-[2px] bg-danger shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />;
 }
 
 /**
@@ -117,7 +141,7 @@ function PinnedComment({
  * second line under it, and the icon pinned to the spine edge. A goal gets a
  * volt-tinted cell so it reads at a glance. Children = the comment trigger.
  */
-function EventBody({ name, line2 }: { name: string; line2: string | null }) {
+function EventBody({ name, line2 }: { name: ReactNode; line2: ReactNode }) {
   return name ? (
     <span className="min-w-0 text-start" dir="auto">
       <span className="block text-sm font-bold text-ink">{name}</span>
@@ -133,7 +157,7 @@ function HomeSpineCell({
   goal,
   children,
 }: {
-  parts: { icon: { glyph: ReactNode; className: string }; name: string; line2: string | null };
+  parts: { icon: { glyph: ReactNode; className: string }; name: ReactNode; line2: ReactNode };
   goal: boolean;
   children?: ReactNode;
 }) {
@@ -158,7 +182,7 @@ function AwaySpineCell({
   goal,
   children,
 }: {
-  parts: { icon: { glyph: ReactNode; className: string }; name: string; line2: string | null };
+  parts: { icon: { glyph: ReactNode; className: string }; name: ReactNode; line2: ReactNode };
   goal: boolean;
   children?: ReactNode;
 }) {
@@ -271,19 +295,23 @@ export function TimelineList({
       map with the English fallback, and neither ever truncates. */
   function eventParts(event: TimelineEvent): {
     icon: { glyph: ReactNode; className: string };
-    name: string;
-    line2: string | null;
+    name: ReactNode;
+    line2: ReactNode;
   } {
     const icon = eventIcon(event.type, event.description);
     const names = event.participants.map(localize);
     const [first, second] = names;
+    let name: ReactNode = first ?? "";
 
-    // Second line: what the FIRST name did with the second one.
-    let line2: string | null = null;
-    if (event.type === "goal" && second) {
-      line2 = t("timeline.assist", { name: second });
-    } else if (event.type === "goal" && /\bown goal\b/i.test(event.description)) {
+    // Second line: what the FIRST name did with the second one. Own goal
+    // wins over the assist branch — with two participants (keeper whose
+    // deflection went in, etc.) calling the second name an assist would be
+    // flatly wrong, so the own-goal test must run first.
+    let line2: ReactNode = null;
+    if (event.type === "goal" && /\bown goal\b/i.test(event.description)) {
       line2 = t("timeline.ownGoal");
+    } else if (event.type === "goal" && second) {
+      line2 = t("timeline.assist", { name: second });
     } else if (event.type === "card") {
       line2 = t(
         /\bred card\b|second yellow/i.test(event.description)
@@ -293,13 +321,26 @@ export function TimelineList({
             : "timeline.card",
       );
     } else if (event.type === "substitution" && second) {
-      // ESPN's sub direction varies by feed, so the pair reads as a swap (⇄)
-      // rather than the page asserting an off/on order it can't verify.
-      line2 = `⇄ ${second}`;
+      // ESPN's documented sub order (server/espn/normalize.ts, and relied on
+      // by findSubMinute): participants[0] came ON, [1] went OFF. Render the
+      // direction explicitly instead of the ambiguous swap glyph: a volt ▲
+      // beside the on-player's name, a danger ▼ with the off-player below.
+      name = (
+        <span className="inline-flex items-center gap-1">
+          <span aria-hidden="true" className="font-bold text-volt">▲</span>
+          {first}
+        </span>
+      );
+      line2 = (
+        <span className="inline-flex items-center gap-1">
+          <span aria-hidden="true" className="font-bold text-danger">▼</span>
+          {second}
+        </span>
+      );
     } else if (!first) {
       line2 = t(typeKey[event.type]);
     }
-    return { icon, name: first ?? "", line2 };
+    return { icon, name, line2 };
   }
 
   // Shared grid: side cells flex, fixed center for the minute (+ the score a
