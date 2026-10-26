@@ -168,7 +168,9 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
 
     // Player stats + stat score
     const { players, stats } = normalizeRosters(json);
-    for (const p of players) upsert(db, "players", { ...p }, ["id"]);
+    // Match-summary rosters omit headshots for many athletes; coalescing stops
+    // a null here from wiping the photo the roster endpoint already stored.
+    for (const p of players) upsertCoalesce(db, "players", { ...p }, ["id"], ["headshot_url"]);
 
     const conceded: Record<string, number> = {};
     if (match.home_score !== null && match.away_score !== null) {
@@ -351,7 +353,9 @@ export function applyRoster(db: DB, json: unknown, _league: string): void {
   const players = normalizeRosterPlayers(json);
   const coach = normalizeCoach(json);
   tx(db, () => {
-    for (const p of players) upsert(db, "players", { ...p }, ["id"]);
+    // Coalesce the headshot: either of the two feeds (match summary or squad
+    // roster) can ship it null, and neither side should erase the other's photo.
+    for (const p of players) upsertCoalesce(db, "players", { ...p }, ["id"], ["headshot_url"]);
     if (coach) {
       run(
         db,

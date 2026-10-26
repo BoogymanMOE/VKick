@@ -275,16 +275,21 @@ export async function syncRosters(): Promise<void> {
   // Only roster big-five clubs: outside leagues are not polled, so no roster
   // endpoint is called for them. Non-big-five teams keep whatever squad data
   // they got from a cup/European fixture summary (if any).
+  // SQLite can't reference a SELECT alias (inferred_league) inside WHERE, so
+  // the query wraps the rows in a derived table to filter on that alias.
   const teams = all<{ id: string; league: string; inferred_league: string; name: string }>(
     db,
-    `SELECT t.id, t.league, t.name,
-            COALESCE((SELECT m.league FROM matches m
-                      WHERE m.home_team_id = t.id OR m.away_team_id = t.id
-                      ORDER BY m.kickoff_at DESC LIMIT 1), '') AS inferred_league
-     FROM teams t
-     WHERE t.league IN (${LEAGUES.map(() => "?").join(",")})
-        OR t.inferred_league IN (${LEAGUES.map(() => "?").join(",")})
-     ORDER BY t.name ASC`,
+    `SELECT s.id, s.league, s.inferred_league, s.name
+     FROM (
+       SELECT t.id, t.league, t.name,
+              COALESCE((SELECT m.league FROM matches m
+                        WHERE m.home_team_id = t.id OR m.away_team_id = t.id
+                        ORDER BY m.kickoff_at DESC LIMIT 1), '') AS inferred_league
+       FROM teams t
+     ) s
+     WHERE s.league IN (${LEAGUES.map(() => "?").join(",")})
+        OR s.inferred_league IN (${LEAGUES.map(() => "?").join(",")})
+     ORDER BY s.name ASC`,
     [...LEAGUES, ...LEAGUES],
   );
   let ok = 0;
