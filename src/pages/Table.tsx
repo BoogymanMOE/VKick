@@ -320,9 +320,15 @@ export default function Table() {
  * eleven-column grid carried W/D/L and GF/GA too, needed `min-w-[640px]` and
  * pushed Pts and Form off-screen behind a sideways scroll; those extra figures
  * live on the club page's Stats tab. The width string must stay ONE complete
- * literal so Tailwind can see it: 1.5rem rank, flexible team, then 1.75/2/2.25/3rem.
+ * literal so Tailwind can see it: 1.25rem rank, flexible team, then
+ * 1.5/1.75/2rem, and 5rem for the form strip (5×14px squares + 4×2px gaps
+ * = 78px, inside the 80px column so nothing clips). The numeric columns and
+ * the gap are deliberately one step tighter than the first draft of this grid:
+ * every pixel they give up goes to the team name, which is the only column
+ * that truncates — measured on a 390px phone, the name cell now has MORE room
+ * than before the form column grew (96px of text vs 92px).
  */
-const COLS = "grid-cols-[1.5rem_minmax(0,1fr)_1.75rem_2rem_2.25rem_3rem]";
+const COLS = "grid-cols-[1.25rem_minmax(0,1fr)_1.5rem_1.75rem_2rem_5rem]";
 
 function StandingsHeader({ stickyTop }: { stickyTop: number }) {
   const { t } = useI18n();
@@ -332,7 +338,7 @@ function StandingsHeader({ stickyTop }: { stickyTop: number }) {
       className={cx(
         "grid",
         COLS,
-        "sticky z-10 gap-2 border-b border-line bg-elevated px-3 py-2 text-xs font-bold text-ink-3",
+        "sticky z-10 gap-1 border-b border-line bg-elevated px-3 py-2 text-xs font-bold text-ink-3",
       )}
       style={{ top: stickyTop }}
     >
@@ -373,7 +379,7 @@ function StandingItem({
       className={cx(
         "list-in relative grid",
         COLS,
-        "items-center gap-2 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
+        "items-center gap-1 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
         mine ? "bg-elevated" : "hover:bg-elevated/60",
       )}
       style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
@@ -428,12 +434,16 @@ function StandingItem({
  * from the stored finished matches (server/standings/form.ts), so the strip
  * always matches the fixtures the club page shows; MatchDetail's Form tab feeds
  * it the per-match ESPN form instead. Either way a club with fewer than five
- * finished matches simply carries fewer dots. Dots rather than letters: green
- * win, grey draw, red loss. One image for screen readers, so the label reads as
- * a sentence instead of five stray letters; `dir="ltr"` keeps the order
- * oldest→newest in Farsi too.
+ * finished matches simply carries fewer squares.
  *
- * Exported because MatchDetail renders the very same strip.
+ * Squares, not dots: 14px with a tinted fill, a 1px inset ring for definition
+ * on the dark surface and the result letter inside, so the form reads as
+ * W / D / L (ب / ت / خ in Persian) instead of five colours to decode. One image
+ * for screen readers, so the label reads as a sentence instead of five stray
+ * letters; `dir="ltr"` keeps the order oldest→newest in Farsi too.
+ *
+ * Exported because MatchDetail's Form tab and the club page's header render
+ * the very same strip.
  */
 export function FormStrip({ form }: { form: string }) {
   const { t } = useI18n();
@@ -446,17 +456,27 @@ export function FormStrip({ form }: { form: string }) {
       role="img"
       aria-label={`${t("table.form")}: ${label}`}
       dir="ltr"
-      className="flex flex-none items-center justify-end gap-1"
+      className="flex flex-none items-center justify-end gap-0.5"
     >
       {results.map((result, index) => (
         <span
           key={index}
           aria-hidden="true"
           className={cx(
-            "h-1.5 w-1.5 rounded-full",
-            result === "W" ? "bg-pitch" : result === "L" ? "bg-danger" : "bg-ink-3",
+            "grid h-3.5 w-3.5 place-items-center rounded-md text-[10px] font-bold leading-none",
+            result === "W"
+              ? "bg-pitch/20 text-pitch ring-1 ring-inset ring-pitch/40"
+              : result === "L"
+                ? "bg-danger/20 text-danger ring-1 ring-inset ring-danger/40"
+                : "bg-ink-3/15 text-ink-3 ring-1 ring-inset ring-ink-3/30",
           )}
-        />
+        >
+          {result === "W"
+            ? t("table.formWShort")
+            : result === "L"
+              ? t("table.formLShort")
+              : t("table.formDShort")}
+        </span>
       ))}
     </span>
   );

@@ -190,6 +190,11 @@ export const strings = {
     "table.formW": "Win",
     "table.formD": "Draw",
     "table.formL": "Loss",
+    // The single letter inside each form square: W/D/L in EN, and the first
+    // letter of the Persian word (برد/تساوی/باخت) in FA, same convention.
+    "table.formWShort": "W",
+    "table.formDShort": "D",
+    "table.formLShort": "L",
     "table.view.tables": "Tables",
     "table.view.browse": "Browse",
     "table.viewActual": "Table",
@@ -876,6 +881,9 @@ export const strings = {
     "table.formW": "برد",
     "table.formD": "تساوی",
     "table.formL": "باخت",
+    "table.formWShort": "ب",
+    "table.formDShort": "ت",
+    "table.formLShort": "خ",
     "table.zoneUcl": "لیگ قهرمانان اروپا",
     "table.zoneUel": "لیگ اروپا",
     "table.zoneReleg": "سقوط",

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { PanelSkeleton } from "../components/Skeletons";
 import { NewsCard } from "../components/panels/NewsCard";
+import { FormStrip } from "./Table";
 import {
   Card,
   Chip,
@@ -114,6 +115,28 @@ export default function TeamPage() {
 
   const teamLeagueLabel = leagueId ? t(`league.${leagueId}`) : competitionName(team.league, lang);
 
+  // The club's last five results, oldest first, folded here from the same
+  // stored finished matches the standings strip folds on the server
+  // (server/standings/form.ts) — scoped to this club's own league so the two
+  // strips can never disagree about a club's form. Fewer than five finished
+  // matches simply means a shorter strip.
+  const form = fixtures
+    .filter(
+      (m) =>
+        m.status === "finished" &&
+        (!team.league || m.league === team.league) &&
+        m.home_score != null &&
+        m.away_score != null,
+    )
+    .slice(-5)
+    .map((m) => {
+      const forHome = m.home_team_id === team.id;
+      const goalsFor = (forHome ? m.home_score : m.away_score) ?? 0;
+      const goalsAgainst = (forHome ? m.away_score : m.home_score) ?? 0;
+      return goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "D";
+    })
+    .join("");
+
   return (
     <>
       <TopBar
@@ -154,6 +177,18 @@ export default function TeamPage() {
             </p>
           </div>
         </div>
+
+        {/* Form: the last five, same strip the table and the match page show.
+            The visible label is aria-hidden because the strip already announces
+            itself as "Form: win, win, draw…" — reading both would say it twice. */}
+        {form ? (
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
+            <span aria-hidden="true" className="text-xs font-bold text-ink-3">
+              {t("table.form")}
+            </span>
+            <FormStrip form={form} />
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-lg">
