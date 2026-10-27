@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useI18n } from "../../i18n/context";
-import type { LineupPlayer, MatchLineup, Team } from "../../types";
+import type { LineupPlayer, LineupPlayerEvents, MatchLineup, Team } from "../../types";
 import { Card, Chip, Num, PlayerAvatar, Segmented, TeamBadge } from "../ui";
+import { BallIcon } from "../icons";
+import { cx } from "../../lib/cx";
 import { placePublishedXI, type SlotCandidate } from "../../lib/formations";
 
 /** `LineupPlayer` → the shape the placement helpers reason about. */
@@ -34,7 +36,13 @@ const asCandidate = (player: LineupPlayer): SlotCandidate => ({
  * where they are: every one is horizontally centred, so a mirrored row of
  * players still lines up with the penalty areas and the halfway line.
  */
-function LineupPitch({ lineup }: { lineup: MatchLineup }) {
+function LineupPitch({
+  lineup,
+  playerEvents,
+}: {
+  lineup: MatchLineup;
+  playerEvents?: Record<string, LineupPlayerEvents>;
+}) {
   const { t, localize } = useI18n();
   // Carries the player itself plus the fields the placement helpers read, so a
   // placed slot can still render a face and a name.
@@ -57,6 +65,7 @@ function LineupPitch({ lineup }: { lineup: MatchLineup }) {
                   key={player ? player.id : `empty-${rowIndex}-${index}`}
                   player={player}
                   name={player ? localize(player.name) : ""}
+                  events={player ? playerEvents?.[player.id] : undefined}
                 />
               ))}
             </div>
@@ -82,8 +91,99 @@ function LineupPitch({ lineup }: { lineup: MatchLineup }) {
   );
 }
 
-/** One player on the pitch: face (or initials), shirt number, name. */
-function PitchSlot({ player, name }: { player: LineupPlayer | null; name: string }) {
+type CardKind = NonNullable<LineupPlayerEvents["card"]>;
+
+/** The booking itself, drawn the way the timeline draws it: a filled rectangle,
+ *  yellow or red, or the overlapping pair ESPN describes as a second yellow. */
+function CardMark({ kind }: { kind: CardKind }) {
+  if (kind === "second-yellow") {
+    return (
+      <span aria-hidden="true" className="relative inline-block h-3 w-3">
+        <span className="absolute inset-y-0 end-0 w-[7px] rounded-[1px] bg-danger shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />
+        <span className="absolute inset-y-0 start-0 w-[7px] rounded-[1px] bg-gold shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className={cx(
+        "inline-block h-3 w-2 rounded-[1px] shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]",
+        kind === "red" ? "bg-danger" : "bg-gold",
+      )}
+    />
+  );
+}
+
+/**
+ * What this player actually did, as small marks under his name: a ball per goal
+ * (the timeline's own --volt ball), an outlined "A" for an assist, and the
+ * booking's rectangle. Drawn marks, never emoji — the rule the timeline set.
+ *
+ * A brace is two balls rather than a count: at 12px a digit is unreadable, and
+ * one goal is the common case anyway. The whole cluster carries one label, so a
+ * screen reader hears "2 goals · Yellow card" once instead of per glyph.
+ */
+function PlayerMarks({ events }: { events?: LineupPlayerEvents }) {
+  const { t } = useI18n();
+  if (!events) return null;
+  const card =
+    events.card === "red" || events.card === "second-yellow"
+      ? t("timeline.red")
+      : events.card === "yellow"
+        ? t("timeline.yellow")
+        : "";
+  const label = [
+    events.goals > 0
+      ? events.goals === 1
+        ? t("lineups.goalsOne", { count: events.goals })
+        : t("lineups.goals", { count: events.goals })
+      : "",
+    events.assists > 0
+      ? events.assists === 1
+        ? t("lineups.assistsOne", { count: events.assists })
+        : t("lineups.assists", { count: events.assists })
+      : "",
+    card,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  if (!label) return null;
+
+  return (
+    <span
+      className="mt-0.5 flex flex-wrap items-center justify-center gap-0.5"
+      role="img"
+      aria-label={label}
+      title={label}
+    >
+      {Array.from({ length: events.goals }, (_, i) => (
+        <BallIcon key={`goal-${i}`} className="h-3 w-3 flex-none text-volt" />
+      ))}
+      {events.assists > 0 ? (
+        <span
+          aria-hidden="true"
+          className="grid h-3 min-w-3 place-items-center rounded-[2px] px-0.5 text-[9px] leading-none font-black text-ink-2 ring-1 ring-line"
+        >
+          A
+        </span>
+      ) : null}
+      {events.card ? <CardMark kind={events.card} /> : null}
+    </span>
+  );
+}
+
+/** One player on the pitch: face (or initials), shirt number, name, and — once
+ *  the match has been played — what he did in it. */
+function PitchSlot({
+  player,
+  name,
+  events,
+}: {
+  player: LineupPlayer | null;
+  name: string;
+  events?: LineupPlayerEvents;
+}) {
   if (!player) {
     return (
       <span className="flex min-w-0 flex-1 justify-center">
@@ -100,6 +200,7 @@ function PitchSlot({ player, name }: { player: LineupPlayer | null; name: string
         </Num>
       </span>
       <span className="mt-1 block w-full truncate text-center text-xs font-bold text-ink-2">{name}</span>
+      <PlayerMarks events={events} />
     </span>
   );
 }
@@ -113,16 +214,29 @@ export function LineupsPanel({
   home,
   away,
   lineups,
+  playerEvents,
 }: {
   home: Team;
   away: Team;
   lineups: { home: MatchLineup; away: MatchLineup };
+  /**
+   * Per-player goals/assists/bookings and sub minutes, keyed by player id.
+   * Absent (or empty) for a match that has not been played yet — the pitch then
+   * renders exactly as it did before the marks existed.
+   */
+  playerEvents?: Record<string, LineupPlayerEvents>;
 }) {
   const { t, localize } = useI18n();
   const [side, setSide] = useState<"home" | "away">("home");
 
   const team = side === "home" ? home : away;
   const lineup = side === "home" ? lineups.home : lineups.away;
+  // A bench player with a sub-on minute is a substitution that was actually
+  // made: he moves to "Subs used" with his minute, and the bench strip keeps
+  // the players who never came on. Without events (an upcoming fixture) every
+  // bench player stays on the bench, exactly as before.
+  const cameOn = lineup.subs.filter((player) => playerEvents?.[player.id]?.subInMinute);
+  const bench = lineup.subs.filter((player) => !playerEvents?.[player.id]?.subInMinute);
 
   return (
     <div className="space-y-3">
@@ -143,7 +257,7 @@ export function LineupsPanel({
           <Chip tone="pitch">{lineup.formation}</Chip>
         </div>
 
-        <LineupPitch lineup={lineup} />
+        <LineupPitch lineup={lineup} playerEvents={playerEvents} />
 
         {/* The coach is not in every feed, and the lineups route has no coach
             endpoint at all — a bare "Coach:" label is worse than no line. */}
@@ -154,15 +268,40 @@ export function LineupsPanel({
         ) : null}
       </Card>
 
+      {/* The bench, as far as it was used: who came on, and at what minute.
+            Only rendered when the timeline gave us a sub event, so a fixture
+            with no events still shows just the XI and the bench. */}
+      {cameOn.length > 0 ? (
+        <Card className="p-3">
+          <p className="mb-1 label text-ink-2">{t("lineups.subsUsed")}</p>
+          <ul className="divide-y divide-line">
+            {cameOn.map((player) => (
+              <li key={player.id} className="flex items-center gap-2 py-1.5">
+                <Num className="grid h-6 w-6 flex-none place-items-center rounded-full bg-elevated text-xs font-black text-ink-2">
+                  {player.number > 0 ? player.number : "–"}
+                </Num>
+                <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+                  {localize(player.name)}
+                </span>
+                <PlayerMarks events={playerEvents?.[player.id]} />
+                <span className="flex-none text-xs font-bold text-pitch">
+                  ↑ {playerEvents?.[player.id]?.subInMinute}′
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
       {/* The bench, as a horizontal strip of small chips: shirt number over
             the name's initial. A row per sub made the bench longer than the
             pitch; a scroll keeps it to one line. Chips are LTR-safe: numbers
             are figures and an initial is direction-neutral. */}
-      {lineup.subs.length > 0 ? (
+      {bench.length > 0 ? (
         <Card className="p-3">
           <p className="mb-2 label text-ink-2">{t("lineups.bench")}</p>
           <ul className="-mx-2 flex gap-2 overflow-x-auto px-2 pb-1">
-            {lineup.subs.map((player) => (
+            {bench.map((player) => (
               <li key={player.id} className="flex-none">
                 <div
                   className="flex w-[52px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center"

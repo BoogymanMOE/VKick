@@ -149,6 +149,23 @@ export interface LineupPlayer {
   subbedOff?: string;
 }
 
+/**
+ * What one player actually did in this match, read off the timeline and keyed by
+ * player id for the lineup pitch. Empty for a fixture that has not been played
+ * yet, which is what keeps an upcoming match's lineups looking exactly as they
+ * did before the badges existed.
+ */
+export interface LineupPlayerEvents {
+  goals: number;
+  assists: number;
+  /** Minute this player came off the bench (the sub event's display, "67"). */
+  subInMinute?: string;
+  /** Minute this player was replaced. */
+  subOutMinute?: string;
+  /** ESPN folds every sending-off into one type; the description picks the card. */
+  card?: "yellow" | "red" | "second-yellow";
+}
+
 export interface MatchLineup {
   formation: string;
   coach: string;

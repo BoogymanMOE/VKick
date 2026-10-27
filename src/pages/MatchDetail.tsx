@@ -9,6 +9,7 @@ import { LineupsSkeleton,
 } from "../components/Skeletons";
 import { TimelineList } from "../components/TimelineList";
 import { adaptComments } from "../lib/adaptComments";
+import { buildPlayerEvents } from "../lib/lineupEvents";
 import { TopBar } from "../components/TopBar";
 import { LineupsPanel } from "../components/panels/LineupsPanel";
 
@@ -763,6 +764,17 @@ function LineupsTab({
     queryKey: ["lineups", matchId],
     queryFn: () => api.getLineups(matchId),
   });
+  // The pitch shows what each player did, which lives on the timeline, not in
+  // the lineups payload. Shared query key with the Timeline tab, so whichever
+  // tab opens second reads the cache instead of refetching the same events.
+  const eventsQuery = useQuery({
+    queryKey: ["timeline", matchId],
+    queryFn: () => api.getTimeline(matchId),
+  });
+  const playerEvents = useMemo(
+    () => buildPlayerEvents(eventsQuery.data?.events ?? []),
+    [eventsQuery.data],
+  );
   const data = query.data;
   if (query.isLoading) return <LineupsSkeleton />;
   if (query.isError) {
@@ -826,7 +838,14 @@ function LineupsTab({
     subs: awayAll.filter((p) => !p.starter && p.minutes > 0),
   };
 
-  return <LineupsPanel home={homeTeam} away={awayTeam} lineups={{ home: homeLineup, away: awayLineup }} />;
+  return (
+    <LineupsPanel
+      home={homeTeam}
+      away={awayTeam}
+      lineups={{ home: homeLineup, away: awayLineup }}
+      playerEvents={playerEvents}
+    />
+  );
 }/* ------------------------------------------------------------ adapters */
 
 function adaptTimelineEvent(e: ApiTimelineEvent) {
