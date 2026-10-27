@@ -1,7 +1,27 @@
+import { execSync } from "node:child_process";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import pkg from "./package.json";
+
+/**
+ * The commit this bundle was built from, short form.
+ *
+ * Render exports RENDER_GIT_COMMIT for every push deploy, which is the exact
+ * answer and needs no shell. Elsewhere (local `npm run build`) ask git; a
+ * tarball or a dirty tree without git still has to build, so "dev" is the
+ * honest last resort rather than failing the build over a build stamp.
+ */
+function gitCommitShort(): string {
+  if (process.env.RENDER_GIT_COMMIT) return process.env.RENDER_GIT_COMMIT.slice(0, 7);
+  try {
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+  } catch {
+    return "dev";
+  }
+}
 
 export default defineConfig(() => {
   return {
@@ -10,6 +30,11 @@ export default defineConfig(() => {
     // Profile and usable anywhere via the global below.
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
+      // "Which build is this?". A stale Telegram webview and a fresh deploy
+      // look identical from the inside, so Profile states the commit and the
+      // build time outright instead of leaving it to be guessed.
+      __APP_COMMIT__: JSON.stringify(gitCommitShort()),
+      __APP_BUILT_AT__: JSON.stringify(new Date().toISOString()),
     },
     build: {
       // The app runs in Telegram's webview on low-end Android, which can lag the

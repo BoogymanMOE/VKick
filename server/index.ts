@@ -28,6 +28,7 @@ function findProjectRoot(start: string): string {
 
 const ROOT_DIR = findProjectRoot(__dirname);
 import { getDb, get } from "./db/index.js";
+import { APP_BUILT_AT, APP_COMMIT } from "./appInfo.js";
 import { pruneFootballDetail, pruneSessions, logCapKb, RotatingLogger } from "./db/retention.js";
 import { startSyncLoop } from "./sync/service.js";
 import { startBot } from "./bot/index.js";
@@ -97,11 +98,19 @@ app.use(express.json({ limit: "64kb" }));
  * Liveness probe. Unauthenticated and dependency-light: it says whether the
  * process is up and the database answers, which is all an uptime monitor or a
  * proxy health check needs. 503 on a broken DB so the check can actually fail.
+ *
+ * `commit` and `builtAt` are here so "is production running my push?" is one
+ * curl instead of a Render dashboard round trip.
  */
 app.get("/health", (_req, res) => {
   try {
     get<{ ok: number }>(db, "SELECT 1 AS ok", []);
-    res.json({ ok: true, uptime: Math.round(process.uptime()) });
+    res.json({
+      ok: true,
+      uptime: Math.round(process.uptime()),
+      commit: APP_COMMIT,
+      builtAt: APP_BUILT_AT,
+    });
   } catch (err) {
     res.status(503).json({ ok: false, error: String(err) });
   }

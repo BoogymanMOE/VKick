@@ -4,6 +4,10 @@ export {};
 declare global {
   /** Injected by vite.config `define` — the package.json version at build time. */
   const __APP_VERSION__: string;
+  /** Injected by vite.config `define` — short commit sha this bundle was built from. */
+  const __APP_COMMIT__: string;
+  /** Injected by vite.config `define` — ISO timestamp of this build. */
+  const __APP_BUILT_AT__: string;
 
   interface Window {
     /**

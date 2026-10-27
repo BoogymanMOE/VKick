@@ -1,6 +1,16 @@
 /** Injected at build time by vite.config `define` (package.json version). */
 export const APP_VERSION: string = __APP_VERSION__;
 
+/**
+ * Which build this bundle is, for the "did Telegram actually load the new
+ * deploy?" question. Read from the build, not from the network: a client that
+ * reports a commit older than the one you pushed is a cached bundle, full stop.
+ */
+export const APP_COMMIT: string = __APP_COMMIT__;
+
+/** ISO timestamp of the build. Pairs with APP_COMMIT; not shown to users. */
+export const APP_BUILT_AT: string = __APP_BUILT_AT__;
+
 export interface ReleaseNote {
   version: string;
   date: string;

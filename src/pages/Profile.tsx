@@ -13,7 +13,7 @@ import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { useI18n } from "../i18n/context";
 import { PanelSkeleton } from "../components/Skeletons";
 import { api, serverErrorKey } from "../lib/api";
-import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
+import { APP_COMMIT, APP_VERSION, WHATS_NEW } from "../lib/appInfo";
 import { PREDICTIONS_ENABLED, RATINGS_ENABLED } from "../lib/features";
 import { LEGAL_ROUTES } from "../lib/legal";
 import { useLocalState } from "../lib/useLocalState";
@@ -254,9 +254,12 @@ export default function Profile() {
           <GroupRow label={t("legal.termsTitle")} onClick={() => navigate(LEGAL_ROUTES.terms)} />
         </div>
         {/* Version line: the About prose card is gone; one muted line under
-            the group suffices and doesn't compete with the rows. */}
-        <p className="mt-sm px-1 text-xs text-ink-3">
-          {t("profile.version")} v{APP_VERSION}
+            the group suffices and doesn't compete with the rows. The commit
+            rides along so a stale webview is visible at a glance, and the
+            line is pinned LTR: in Persian the bidirectional algorithm would
+            otherwise detach the dot from the sha and scramble the order. */}
+        <p className="mt-sm px-1 text-xs text-ink-3" dir="ltr">
+          {t("profile.version")} v{APP_VERSION} · {APP_COMMIT}
         </p>
       </section>
 
