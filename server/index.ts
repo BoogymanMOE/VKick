@@ -153,7 +153,11 @@ app.use(
 // SPA fallback: any GET that didn't match an API route or a static file
 // falls through to index.html so React Router owns client-side routing.
 app.use((req, res, next) => {
-  if (req.method !== "GET") return next();
+  // HEAD too: a link checker, a CDN prefetch or an uptime monitor probes with
+  // HEAD, and falling through to `next()` answered those with a 404 on routes
+  // the browser happily loads. Express's own static handler serves HEAD, so
+  // the shell should as well.
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
   // Unmatched API paths answer in the API's dialect: a JSON client parsing an
   // HTML 404 turns a typo'd route into an opaque "Unexpected token" failure.
   if (req.path.startsWith("/api")) return res.status(404).json({ error: "not found" });
@@ -167,7 +171,13 @@ app.use((req, res, next) => {
   const telegramLaunchPath = req.path.includes("tgWebApp");
   if (!telegramLaunchPath && /\.[a-z0-9]+$/i.test(req.path))
     return res.status(404).type("text/plain").send("Not found");
-  return res.sendFile(path.join(ROOT_DIR, "dist", "index.html"), (err) => {
+  // Explicit, because res.sendFile does NOT inherit express.static's
+  // setHeaders callback above: left to itself the shell went out as
+  // "public, max-age=0", which lets a shared cache store it and is not the
+  // no-cache the static handler promises for index.html. cacheControl: false
+  // stops send() writing its own header over this one.
+  res.setHeader("Cache-Control", "no-cache");
+  return res.sendFile(path.join(ROOT_DIR, "dist", "index.html"), { cacheControl: false }, (err) => {
     if (err) next(err);
   });
 });
