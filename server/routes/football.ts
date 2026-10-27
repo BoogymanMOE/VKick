@@ -19,6 +19,8 @@ import { bad, requireUser } from "./shared.js";
 // Sync freshness for the ops surface: the client shows "data as of <time>"
 // rather than silently serving yesterday's football.
 import { syncHealthSnapshot } from "../sync/sentinel.js";
+import { syncMatchSummary } from "../sync/service.js";
+import type { LeagueSlug } from "../espn/types.js";
 
 const db = getDb();
 
@@ -215,22 +217,28 @@ matchesRouter.get("/api/matches/:id/team-stats", (req, res) => {
   });
 });
 
-matchesRouter.get("/api/matches/:id/lineups", (req, res) => {
-  const matchId = String(req.params.id);
-  if (!assertMatchAllowed(res, matchId)) return;
-  const match = get<{
-    home_team_id: string;
-    away_team_id: string;
-    home_formation: string | null;
-    away_formation: string | null;
-    status: string;
-  }>(
+/* ------------------------------------------------------------ lineups */
+
+interface MatchReadState {
+  home_team_id: string;
+  away_team_id: string;
+  home_formation: string | null;
+  away_formation: string | null;
+  status: string;
+  league: string;
+}
+
+function matchReadState(matchId: string): MatchReadState | undefined {
+  return get<MatchReadState>(
     db,
-    "SELECT home_team_id, away_team_id, home_formation, away_formation, status FROM matches WHERE id = ?",
+    `SELECT home_team_id, away_team_id, home_formation, away_formation, status, league
+     FROM matches WHERE id = ?`,
     [matchId],
   );
-  if (!match) return bad(res, "not found", 404);
-  const rows = all(
+}
+
+function lineupRows(matchId: string): Record<string, unknown>[] {
+  return all(
     db,
     `SELECT s.*, p.full_name, p.short_name, p.position, p.jersey_number, p.headshot_url,
             p.espn_position
@@ -239,6 +247,68 @@ matchesRouter.get("/api/matches/:id/lineups", (req, res) => {
      ORDER BY s.started DESC, s.minutes_played DESC, p.jersey_number ASC`,
     [matchId],
   );
+}
+
+function timelineRows(matchId: string): Record<string, unknown>[] {
+  return all(
+    db,
+    `SELECT e.*,
+       (SELECT COUNT(*) FROM timeline_comments c WHERE c.event_id = e.id) AS comment_count
+     FROM timeline_events e WHERE e.match_id = ?
+     ORDER BY e.minute_seconds ASC`,
+    [matchId],
+  );
+}
+
+/**
+ * A finished match can sit in the database with no player stats at all: the
+ * sync's "recent finishers" rule only re-summarizes while 1h < hoursSinceSync
+ * < 26h, so a match that ended while the box was down — or more than 26h ago —
+ * never gets its summary applied, and the lineups/timeline tabs read "not out
+ * yet" for football that has already been played.
+ *
+ * Both reads below repair that on demand: zero rows for a finished match buys
+ * one summary fetch, and because the summary writes match_player_stats and
+ * timeline_events itself, the next reader of that match gets the cached result.
+ *
+ * The cooldown keeps a public route from becoming a fetch amplifier: a fixture
+ * ESPN has no summary for keeps coming back empty, and without it every single
+ * request for that match would hit ESPN again. One attempt per match per 10
+ * minutes, in-memory on purpose — this server is one process, the same rule the
+ * sync's own reconcile backoff follows.
+ */
+const BACKFILL_RETRY_MS = 10 * 60_000;
+const backfillAttempts = new Map<string, number>();
+
+async function backfillSummary(league: string, matchId: string): Promise<void> {
+  const retriedAt = backfillAttempts.get(matchId) ?? 0;
+  if (retriedAt > Date.now()) return;
+  backfillAttempts.set(matchId, Date.now() + BACKFILL_RETRY_MS);
+  try {
+    await syncMatchSummary(league as LeagueSlug, matchId);
+  } catch (err) {
+    // A dead ESPN fetch must never 500 a read: the caller falls through to the
+    // empty state it would have shown before, exactly as if we had not tried.
+    console.error(`[lineups] backfill ${matchId} FAILED:`, String(err));
+  }
+}
+
+matchesRouter.get("/api/matches/:id/lineups", async (req, res) => {
+  const matchId = String(req.params.id);
+  if (!assertMatchAllowed(res, matchId)) return;
+  let match = matchReadState(matchId);
+  if (!match) return bad(res, "not found", 404);
+  let rows = lineupRows(matchId);
+
+  // Backfill: a finished match with no player stats means we missed the
+  // post-final sync. Fetch the summary now, then re-read (the status may have
+  // moved, and the summary is what writes the rows).
+  if (rows.length === 0 && match.status === "finished") {
+    await backfillSummary(match.league, matchId);
+    match = matchReadState(matchId) ?? match;
+    rows = lineupRows(matchId);
+  }
+
   res.json({
     home: { formation: match.home_formation },
     away: { formation: match.away_formation },
@@ -248,17 +318,20 @@ matchesRouter.get("/api/matches/:id/lineups", (req, res) => {
 
 /* ------------------------------------------------------------ timeline */
 
-matchesRouter.get("/api/matches/:id/timeline", (req, res) => {
+matchesRouter.get("/api/matches/:id/timeline", async (req, res) => {
   const matchId = String(req.params.id);
   if (!assertMatchAllowed(res, matchId)) return;
-  const events = all(
-    db,
-    `SELECT e.*,
-       (SELECT COUNT(*) FROM timeline_comments c WHERE c.event_id = e.id) AS comment_count
-     FROM timeline_events e WHERE e.match_id = ?
-     ORDER BY e.minute_seconds ASC`,
-    [matchId],
-  );
+  let events = timelineRows(matchId);
+
+  // Same missed-summary repair as the lineups read above.
+  if (events.length === 0) {
+    const match = matchReadState(matchId);
+    if (match?.status === "finished") {
+      await backfillSummary(match.league, matchId);
+      events = timelineRows(matchId);
+    }
+  }
+
   res.json({ events: events.map((e) => ({ ...e, participants: safeArr(e.participants) })) });
 });
 
