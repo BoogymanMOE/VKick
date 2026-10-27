@@ -35,6 +35,10 @@ export const teamNamesFa: Record<string, string> = {
   "Man City": "منچستر سیتی",
   "Spurs": "تاتنهام",
   "Man United": "منچستر یونایتد",
+  // ESPN's scoreboard shortName is "Man Utd", not "Man United" — the feed and
+  // the club header both key on that exact string, so without this alias the
+  // Premier League's most-searched club renders in English in FA.
+  "Man Utd": "منچستر یونایتد",
   "Newcastle": "نیوکاسل",
   "Villa": "استون ویلا",
   "Bournemouth": "بورن‌موت",
@@ -251,12 +255,24 @@ export const personNamesFa: Record<string, string> = {
   // grouping headings show them; unknown rounds pass through as the English
   // ESPN label, never truncated.
   "Quarter-final": "یک‌چهارم نهایی",
+  "Quarterfinal": "یک‌چهارم نهایی",
   "Semi-final": "نیمه‌نهایی",
+  "Semifinal": "نیمه‌نهایی",
   "Final": "فینال",
   "Round of 16": "مرحله ۱۶ تیمی",
   "Round of 32": "مرحله ۳۲ تیمی",
+  // roundFromEvent title-cases what it extracts ("round of 16" -> "Round Of 16"),
+  // so the emitted casing has to be a key of its own or it falls through.
+  "Round Of 16": "مرحله ۱۶ تیمی",
+  "Round Of 32": "مرحله ۳۲ تیمی",
   "Qualifying round": "دور مقدماتی",
   "Play-off": "پلی‌آف",
+  "Matchday": "هفته",
+  "Group Stage": "مرحله گروهی",
+  "Knockout Stage": "مرحله حذفی",
+  "League Phase": "مرحله لیگ",
+  "Leg 1": "دیدار رفت",
+  "Leg 2": "دیدار برگشت",
 };
 
 /** English string -> Persian, falling back to the input untouched. */
