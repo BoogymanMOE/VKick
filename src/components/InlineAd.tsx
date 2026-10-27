@@ -26,9 +26,14 @@ export function InlineAd() {
       >
         {t("ads.label")}
       </span>
+      {/* loading="lazy": the ad chain is ~1.6s of third-party work and the
+          slot usually sits below the fold. Deferring the iframe keeps that
+          cost off first paint, and a reader who never scrolls past the fold
+          never pays it at all. */}
       <iframe
         data-aa="2458182"
         src="//acceptable.a-ads.com/2458182/?size=Adaptive"
+        loading="lazy"
         style={{
           border: "0",
           padding: "0",
