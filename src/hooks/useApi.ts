@@ -665,6 +665,41 @@ export function useLeagueNews(league: string, teamId: string) {
   });
 }
 
+/* ------------------------------------------------- match detail extras */
+
+/**
+ * Head-to-head for a match: the two clubs' last five meetings. Barely moves
+ * while a match is being played, so five minutes of cache is plenty.
+ */
+export function useMatchH2H(matchId: string) {
+  return useQuery({
+    queryKey: ["h2h", matchId],
+    queryFn: () => api.getH2H(matchId),
+    enabled: Boolean(matchId),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** Both clubs' last-five form; changes only when one of them plays. */
+export function useMatchForm(matchId: string) {
+  return useQuery({
+    queryKey: ["form", matchId],
+    queryFn: () => api.getForm(matchId),
+    enabled: Boolean(matchId),
+    staleTime: 60_000,
+  });
+}
+
+/** Articles tagged to this match's clubs; news turns over a few times a day. */
+export function useMatchNews(matchId: string) {
+  return useQuery({
+    queryKey: ["match-news", matchId],
+    queryFn: () => api.getMatchNews(matchId),
+    enabled: Boolean(matchId),
+    staleTime: 5 * 60_000,
+  });
+}
+
 /* ------------------------------------------------------------------ squads */
 
 export interface SquadRow {

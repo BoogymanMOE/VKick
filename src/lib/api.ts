@@ -10,7 +10,7 @@
  */
 
 import { currentAuthToken, getDeviceId } from "./auth";
-import type { NewsArticle } from "../types";
+import type { MatchForm, MatchH2H, NewsArticle } from "../types";
 
 const BASE = "/api";
 
@@ -701,6 +701,15 @@ export const api = {
     }>(`/matches/${id}/lineups`),
 
   getTimeline: (id: string) => request<{ events: ApiTimelineEvent[] }>(`/matches/${id}/timeline`),
+
+  /** Last 5 meetings between this match's two clubs (ESPN seasonseries). */
+  getH2H: (id: string) => request<MatchH2H>(`/matches/${id}/h2h`),
+
+  /** Both clubs' last-5 results, oldest→newest. */
+  getForm: (id: string) => request<MatchForm>(`/matches/${id}/form`),
+
+  /** Articles from this match's ESPN summary news block. */
+  getMatchNews: (id: string) => request<{ articles: NewsArticle[] }>(`/matches/${id}/news`),
 
   getSquad: (teamId: string) =>
     request<{

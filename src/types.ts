@@ -240,3 +240,41 @@ export interface NewsArticle {
   webUrl: string | null;
   teamIds: string[];
 }
+
+/* ---------------------------------------------------- match detail extras */
+
+/** One previous meeting between two teams, as ESPN's seasonseries reports it. */
+export interface H2HEvent {
+  id: string;
+  date: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  winnerTeamId: string | null;
+  status: string;
+}
+
+/** H2H summary for a match — the headline line + last 5 meetings. */
+export interface MatchH2H {
+  summary: string | null;
+  seriesLabel: string | null;
+  events: H2HEvent[];
+}
+
+/** One game in a team's last-5 form. */
+export interface FormGame {
+  id: string;
+  date: string;
+  result: "W" | "D" | "L";
+  teamId: string;
+  opponentId: string;
+  teamScore: number | null;
+  opponentScore: number | null;
+}
+
+/** Both teams' last-5 form for a match. */
+export interface MatchForm {
+  home: { form: string; games: FormGame[] } | null;
+  away: { form: string; games: FormGame[] } | null;
+}
