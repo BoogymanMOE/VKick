@@ -12,6 +12,7 @@ import { adaptComments } from "../lib/adaptComments";
 import { buildPlayerEvents } from "../lib/lineupEvents";
 import { TopBar } from "../components/TopBar";
 import { LineupsPanel } from "../components/panels/LineupsPanel";
+import { NewsCard } from "../components/panels/NewsCard";
 
 import {
   Card,
@@ -1088,11 +1089,11 @@ function FormSide({
 /* ------------------------------------------------------------ match news */
 
 /**
- * Articles from this match's summary news block, rendered with the TeamPage
- * news card's layout — same NewsArticle shape, same arrow flip in RTL.
+ * Articles from this match's summary news block, on the shared NewsCard the
+ * club page's News tab uses — same NewsArticle shape, same open-link path.
  */
 function MatchNewsTab({ matchId }: { matchId: string }) {
-  const { t, lang, dir } = useI18n();
+  const { t, lang } = useI18n();
   const query = useMatchNews(matchId);
   if (query.isLoading) return <LineupsSkeleton />;
   if (query.isError) {
@@ -1105,59 +1106,13 @@ function MatchNewsTab({ matchId }: { matchId: string }) {
     return <EmptyState title={t("match.news.empty")} />;
   }
   const locale = lang === "fa" ? "fa-IR" : undefined;
-  const dateFmt = new Intl.DateTimeFormat(locale, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
   return (
     <ul className="space-y-2">
-      {articles.map((article) => {
-        const body = (
-          <>
-            {article.imageUrl ? (
-              <img
-                src={article.imageUrl}
-                alt=""
-                loading="lazy"
-                className="mb-2 h-32 w-full rounded-lg object-cover"
-              />
-            ) : null}
-            <h3 className="text-sm font-bold leading-snug text-ink">{article.headline}</h3>
-            {article.description ? (
-              <p className="mt-1 line-clamp-2 text-xs text-ink-2">{article.description}</p>
-            ) : null}
-            <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
-              <span>{article.published ? dateFmt.format(new Date(article.published)) : ""}</span>
-              {article.byline ? <span>{t("team.news.byline", { name: article.byline })}</span> : null}
-            </p>
-            {article.webUrl ? (
-              <p className="mt-1 text-[11px] font-bold text-volt">
-                {t("team.news.readMore")} {dir === "rtl" ? "←" : "→"}
-              </p>
-            ) : null}
-          </>
-        );
-        const className =
-          "block rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)]";
-        return (
-          <li key={article.id}>
-            {article.webUrl ? (
-              <a
-                href={article.webUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cx(className, "hover:bg-elevated")}
-              >
-                {body}
-              </a>
-            ) : (
-              <div className={className}>{body}</div>
-            )}
-          </li>
-        );
-      })}
+      {articles.map((article) => (
+        <li key={article.id}>
+          <NewsCard article={article} locale={locale} />
+        </li>
+      ))}
     </ul>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { PanelSkeleton } from "../components/Skeletons";
+import { NewsCard } from "../components/panels/NewsCard";
 import {
   Card,
   Chip,
@@ -653,7 +654,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
  * links out to the article on ESPN.
  */
 function NewsTab({ teamId, league }: { teamId: string; league: string }) {
-  const { t, lang, dir } = useI18n();
+  const { t, lang } = useI18n();
   const query = useLeagueNews(league, teamId);
 
   if (query.isLoading) return <PanelSkeleton height={192} />;
@@ -664,64 +665,14 @@ function NewsTab({ teamId, league }: { teamId: string; league: string }) {
     return <EmptyState title={t("team.news.empty")} hint={t("team.news.emptyHint")} />;
   }
 
-  const when = new Intl.DateTimeFormat(lang === "fa" ? "fa-IR" : undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  const cardClass =
-    "block rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)]";
-
+  const locale = lang === "fa" ? "fa-IR" : undefined;
   return (
     <ul className="space-y-2">
-      {articles.map((article) => {
-        const body = (
-          <>
-            {article.imageUrl ? (
-              <img
-                src={article.imageUrl}
-                alt=""
-                loading="lazy"
-                className="mb-2 h-32 w-full rounded-lg object-cover"
-              />
-            ) : null}
-            <h3 className="text-sm font-bold leading-snug text-ink">{article.headline}</h3>
-            {article.description ? (
-              <p className="mt-1 line-clamp-2 text-xs text-ink-2">{article.description}</p>
-            ) : null}
-            <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
-              {article.published ? <span>{when.format(new Date(article.published))}</span> : null}
-              {article.byline ? (
-                <span>{t("team.news.byline", { name: article.byline })}</span>
-              ) : null}
-            </p>
-            {article.webUrl ? (
-              <p className="mt-1 text-[11px] font-bold text-volt">
-                {t("team.news.readMore")} {dir === "rtl" ? "←" : "→"}
-              </p>
-            ) : null}
-          </>
-        );
-        return (
-          <li key={article.id}>
-            {/* An article with no web URL is still worth reading on the card —
-                it just is not a link, so it must not pretend to be one. */}
-            {article.webUrl ? (
-              <a
-                href={article.webUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cx(cardClass, "hover:bg-elevated")}
-              >
-                {body}
-              </a>
-            ) : (
-              <div className={cardClass}>{body}</div>
-            )}
-          </li>
-        );
-      })}
+      {articles.map((article) => (
+        <li key={article.id}>
+          <NewsCard article={article} locale={locale} />
+        </li>
+      ))}
     </ul>
   );
 }

@@ -29,6 +29,8 @@ interface TelegramWebApp {
   setBackgroundColor: (color: string) => void;
   disableVerticalSwipes?: () => void;
   openTelegramLink?: (url: string) => void;
+  /** Bot API 7.7+: `try_instant_view` asks for Telegram's in-app reader. */
+  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
   onEvent: (event: string, cb: () => void) => void;
   offEvent: (event: string, cb: () => void) => void;
   /** Android hardware back: a showable pill that can pop in-app history
@@ -158,6 +160,21 @@ export function selectionHaptic(): void {
 export function notifyHaptic(type: "error" | "success" | "warning"): void {
   if (!hapticsEnabled()) return;
   telegram()?.HapticFeedback?.notificationOccurred(type);
+}
+
+/**
+ * Open an external page inside the Telegram shell: openLink with
+ * try_instant_view renders Telegram's in-app reader (Instant View) when the
+ * page supports it, and Telegram's in-app browser when it doesn't — instead of
+ * ejecting the user to the system browser, which inside a Mini App means
+ * leaving the app entirely. Returns false when the SDK is unavailable (plain
+ * browser), so the caller can fall back to window.open.
+ */
+export function openInTelegram(url: string): boolean {
+  const app = telegram();
+  if (!app?.openLink) return false;
+  app.openLink(url, { try_instant_view: true });
+  return true;
 }
 
 /**
