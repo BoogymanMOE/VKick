@@ -156,7 +156,9 @@ export default function MatchDetail() {
 
   // Days, then hours+minutes in words — never a bare "335h 45m", whose Latin
   // h/m scramble the bidi run of a Persian sentence.
-  const nf = new Intl.NumberFormat(locale);
+  // Stable per locale: a fresh Intl.NumberFormat each render made the memo
+  // below recompute every time (the missing-dependency warning).
+  const nf = useMemo(() => new Intl.NumberFormat(locale), [locale]);
   const countdownLabel = useMemo(() => {
     if (!match || match.status !== "scheduled") return null;
     const ms = new Date(match.kickoff_at).getTime() - now;
@@ -173,7 +175,7 @@ export default function MatchDetail() {
           ? t("match.hoursMinutes", { h: nf.format(hours), m: nf.format(minutes) })
           : t("match.minutes", { m: nf.format(minutes) }),
     });
-  }, [match, now, t, locale]);
+  }, [match, now, t, nf]);
 
 
 

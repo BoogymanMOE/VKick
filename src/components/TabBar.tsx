@@ -15,7 +15,7 @@ const tabs: Array<{ to: string; key: StringKey; Icon: typeof BallIcon }> = [
   { to: "/profile", key: "nav.profile", Icon: UserIcon },
 ];
 
-export const TabBar = forwardRef<HTMLElement, {}>((_, ref) => {
+export const TabBar = forwardRef<HTMLElement>((_, ref) => {
   const { t } = useI18n();
   const { pathname } = useLocation();
   // A team sub-page belongs to no top-level tab: highlighting one would claim a

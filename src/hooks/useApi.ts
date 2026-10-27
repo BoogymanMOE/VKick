@@ -200,7 +200,10 @@ export function useFavorites() {
     select: favoritesView,
   });
 
-  const teams = favoritesQuery.data?.teams ?? [];
+  // Memoized on the query data, not on the array it produces: `?? []` mints a
+  // fresh array every render, which made `ids` (and everything keyed off it)
+  // a new value on each pass — exactly what exhaustive-deps flagged.
+  const teams = useMemo(() => favoritesQuery.data?.teams ?? [], [favoritesQuery.data]);
   const anchorId = favoritesQuery.data?.anchorId ?? null;
 
   const ids = useMemo(() => teams.map((t) => t.id), [teams]);
