@@ -26,17 +26,24 @@ import {
 import { cx } from "../lib/cx";
 import { api, type ApiTimelineEvent } from "../lib/api";
 import { TEAM_FALLBACK } from "../lib/colors";
-import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+import {
+  leagueIdOf,
+  useCompetitionLabel,
+  useMatchH2H,
+  useMatchForm,
+  useMatchNews,
+} from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
 import { RATINGS_ENABLED } from "../lib/features";
 import { flipIntoPlace, getFlipFirst } from "../lib/flip";
 import { formatClock, formatKickoffDate, kickoffParts, toFaDigits } from "../lib/format";
 import { useNow } from "../hooks/useNow";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
-import type { Team, TimelineEventType } from "../types";
+import type { FormGame, Team, TimelineEventType } from "../types";
+import { FormStrip } from "./Table";
 
-type Tab = "timeline" | "stats" | "lineups";
-const TABS: Tab[] = ["timeline", "stats", "lineups"];
+type Tab = "timeline" | "stats" | "lineups" | "h2h" | "form" | "news";
+const TABS: Tab[] = ["timeline", "stats", "lineups", "h2h", "form", "news"];
 
 export default function MatchDetail() {
   const { id = "" } = useParams();
@@ -332,6 +339,9 @@ export default function MatchDetail() {
           { value: "timeline", label: t("match.tabTimeline") },
           { value: "stats", label: t("match.tabStats") },
           { value: "lineups", label: t("match.tabLineups") },
+          { value: "h2h", label: t("match.tabH2H") },
+          { value: "form", label: t("match.tabForm") },
+          { value: "news", label: t("match.tabNews") },
         ]}
       />
 
@@ -355,6 +365,9 @@ export default function MatchDetail() {
         ) : null}
         {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
         {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
+        {tab === "h2h" ? <H2HTab matchId={id} home={home} away={away} /> : null}
+        {tab === "form" ? <FormTab matchId={id} home={home} away={away} /> : null}
+        {tab === "news" ? <MatchNewsTab matchId={id} /> : null}
       </section>
 
 
@@ -398,7 +411,7 @@ function UnderlineTabs<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div role="tablist" className="mt-md flex border-b border-line">
+    <div role="tablist" className="mt-md flex overflow-x-auto border-b border-line">
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -411,7 +424,7 @@ function UnderlineTabs<T extends string>({
             aria-controls={`${id}-panel`}
             onClick={() => onChange(option.value)}
             className={cx(
-              "relative min-h-11 flex-1 px-2 text-sm font-bold transition-colors duration-[var(--t-fast)]",
+              "relative min-h-11 flex-1 whitespace-nowrap px-2 text-sm font-bold transition-colors duration-[var(--t-fast)]",
               active ? "text-ink" : "text-ink-3 hover:text-ink-2",
             )}
           >
@@ -862,4 +875,287 @@ function adaptTimelineEvent(e: ApiTimelineEvent) {
     participants: e.participants.map((p) => p.name),
     commentCount: e.comment_count,
   };
+}
+
+/* ------------------------------------------------------------ head-to-head */
+
+/**
+ * The two clubs' last five meetings. ESPN's `seasonseries[0]` ships its own
+ * headline line ("LIV leads series 3-2"); when the payload omits it, the line
+ * is folded from the meetings themselves and localized, which is also what
+ * keeps this tab readable in Persian.
+ */
+function H2HTab({
+  matchId,
+  home,
+  away,
+}: {
+  matchId: string;
+  home: { id: string; shortName: string; color: string };
+  away: { id: string; shortName: string; color: string };
+}) {
+  const { t, lang, localize } = useI18n();
+  const fa = lang === "fa";
+  const query = useMatchH2H(matchId);
+  if (query.isLoading) return <LineupsSkeleton />;
+  if (query.isError) {
+    return (
+      <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />
+    );
+  }
+  const data = query.data;
+  const events = data?.events ?? [];
+  if (events.length === 0) {
+    return <EmptyState title={t("match.h2h.empty")} />;
+  }
+  const nameOf = (teamId: string) => {
+    if (teamId === home.id) return localize(home.shortName);
+    if (teamId === away.id) return localize(away.shortName);
+    return teamId;
+  };
+  const fmtScore = (v: number | null) => (v === null ? "–" : fa ? toFaDigits(v) : String(v));
+  const seriesLine =
+    data?.summary ??
+    (() => {
+      const homeWins = events.filter((e) => e.winnerTeamId === home.id).length;
+      const awayWins = events.filter((e) => e.winnerTeamId === away.id).length;
+      const score = `${fmtScore(homeWins)}-${fmtScore(awayWins)}`;
+      return homeWins === awayWins
+        ? t("match.h2h.even", { score })
+        : t("match.h2h.seriesLeads", {
+            name: nameOf(homeWins > awayWins ? home.id : away.id),
+            score,
+          });
+    })();
+  const dayFmt = new Intl.DateTimeFormat(fa ? "fa-IR" : undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+  return (
+    <Card className="overflow-hidden p-0">
+      {seriesLine ? (
+        <p className="border-b border-line px-3 py-2 text-sm font-bold text-ink">{seriesLine}</p>
+      ) : null}
+      <ul className="divide-y divide-line">
+        {events.map((e) => {
+          const hasScore = e.homeScore !== null || e.awayScore !== null;
+          return (
+            <li
+              key={e.id}
+              className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
+            >
+              <span className="flex-none text-ink-3">
+                {e.date ? dayFmt.format(new Date(e.date)) : ""}
+              </span>
+              <span className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
+                <span
+                  className={cx(
+                    "truncate",
+                    e.winnerTeamId === e.homeTeamId ? "font-bold text-ink" : "text-ink-2",
+                  )}
+                >
+                  {nameOf(e.homeTeamId)}
+                </span>
+                {hasScore ? (
+                  <span dir="ltr" className="flex-none font-bold text-ink">
+                    {fmtScore(e.homeScore)}–{fmtScore(e.awayScore)}
+                  </span>
+                ) : (
+                  <span className="flex-none text-ink-3">{t("match.form.vs")}</span>
+                )}
+                <span
+                  className={cx(
+                    "truncate",
+                    e.winnerTeamId === e.awayTeamId ? "font-bold text-ink" : "text-ink-2",
+                  )}
+                >
+                  {nameOf(e.awayTeamId)}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+/* -------------------------------------------------------------- form tab */
+
+/** Both clubs' last-five results, one card per side. */
+function FormTab({
+  matchId,
+  home,
+  away,
+}: {
+  matchId: string;
+  home: { id: string; shortName: string; color: string };
+  away: { id: string; shortName: string; color: string };
+}) {
+  const { t, localize } = useI18n();
+  const query = useMatchForm(matchId);
+  if (query.isLoading) return <LineupsSkeleton />;
+  if (query.isError) {
+    return (
+      <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />
+    );
+  }
+  const data = query.data;
+  if (!data || (!data.home && !data.away)) {
+    return <EmptyState title={t("match.form.empty")} />;
+  }
+  return (
+    <div className="space-y-3">
+      <p className="label label-lg text-ink-2">{t("match.form.lastFive")}</p>
+      {data.home ? (
+        <FormSide
+          label={localize(home.shortName)}
+          color={home.color}
+          form={data.home.form}
+          games={data.home.games}
+        />
+      ) : null}
+      {data.away ? (
+        <FormSide
+          label={localize(away.shortName)}
+          color={away.color}
+          form={data.away.form}
+          games={data.away.games}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * One club's last-5: the shared FormStrip (dots) over the compact list of
+ * recent results. `result` is already from this club's perspective and the
+ * score is oriented to it too, so a row reads "W 2–1" whichever end of the
+ * fixture the club played.
+ */
+function FormSide({
+  label,
+  color,
+  form,
+  games,
+}: {
+  label: string;
+  color: string;
+  form: string;
+  games: FormGame[];
+}) {
+  const { t, lang } = useI18n();
+  const fa = lang === "fa";
+  return (
+    <Card className="p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className="h-2 w-2 flex-none rounded-full"
+            style={{ backgroundColor: color }}
+            aria-hidden="true"
+          />
+          <span className="truncate text-sm font-bold text-ink">{label}</span>
+        </div>
+        <FormStrip form={form} />
+      </div>
+      <ul className="divide-y divide-line">
+        {games.map((g) => {
+          const score = `${g.teamScore ?? "–"}–${g.opponentScore ?? "–"}`;
+          return (
+            <li key={g.id} className="flex items-center justify-between py-1.5 text-xs">
+              <span className="text-ink-2">
+                {g.result === "W"
+                  ? t("table.formW")
+                  : g.result === "L"
+                    ? t("table.formL")
+                    : t("table.formD")}
+              </span>
+              <span dir="ltr" className="font-bold text-ink">
+                {fa ? toFaDigits(score) : score}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------ match news */
+
+/**
+ * Articles from this match's summary news block, rendered with the TeamPage
+ * news card's layout — same NewsArticle shape, same arrow flip in RTL.
+ */
+function MatchNewsTab({ matchId }: { matchId: string }) {
+  const { t, lang, dir } = useI18n();
+  const query = useMatchNews(matchId);
+  if (query.isLoading) return <LineupsSkeleton />;
+  if (query.isError) {
+    return (
+      <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />
+    );
+  }
+  const articles = query.data?.articles ?? [];
+  if (articles.length === 0) {
+    return <EmptyState title={t("match.news.empty")} />;
+  }
+  const locale = lang === "fa" ? "fa-IR" : undefined;
+  const dateFmt = new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return (
+    <ul className="space-y-2">
+      {articles.map((article) => {
+        const body = (
+          <>
+            {article.imageUrl ? (
+              <img
+                src={article.imageUrl}
+                alt=""
+                loading="lazy"
+                className="mb-2 h-32 w-full rounded-lg object-cover"
+              />
+            ) : null}
+            <h3 className="text-sm font-bold leading-snug text-ink">{article.headline}</h3>
+            {article.description ? (
+              <p className="mt-1 line-clamp-2 text-xs text-ink-2">{article.description}</p>
+            ) : null}
+            <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
+              <span>{article.published ? dateFmt.format(new Date(article.published)) : ""}</span>
+              {article.byline ? <span>{t("team.news.byline", { name: article.byline })}</span> : null}
+            </p>
+            {article.webUrl ? (
+              <p className="mt-1 text-[11px] font-bold text-volt">
+                {t("team.news.readMore")} {dir === "rtl" ? "←" : "→"}
+              </p>
+            ) : null}
+          </>
+        );
+        const className =
+          "block rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)]";
+        return (
+          <li key={article.id}>
+            {article.webUrl ? (
+              <a
+                href={article.webUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cx(className, "hover:bg-elevated")}
+              >
+                {body}
+              </a>
+            ) : (
+              <div className={className}>{body}</div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
 }

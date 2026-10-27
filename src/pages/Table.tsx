@@ -424,15 +424,18 @@ function StandingItem({
 }
 
 /**
- * The last five results, oldest first — the server folds them from the stored
- * finished matches (server/standings/form.ts), so the strip always matches the
- * fixtures the club page shows; a club with fewer than five finished matches
- * simply carries fewer dots. Dots rather than letters: green win, grey draw,
- * red loss. One image for screen readers, so the label reads as a sentence
- * instead of five stray letters; `dir="ltr"` keeps the order oldest→newest in
- * Farsi too.
+ * The last five results, oldest first. On the Table page the server folds them
+ * from the stored finished matches (server/standings/form.ts), so the strip
+ * always matches the fixtures the club page shows; MatchDetail's Form tab feeds
+ * it the per-match ESPN form instead. Either way a club with fewer than five
+ * finished matches simply carries fewer dots. Dots rather than letters: green
+ * win, grey draw, red loss. One image for screen readers, so the label reads as
+ * a sentence instead of five stray letters; `dir="ltr"` keeps the order
+ * oldest→newest in Farsi too.
+ *
+ * Exported because MatchDetail renders the very same strip.
  */
-function FormStrip({ form }: { form: string }) {
+export function FormStrip({ form }: { form: string }) {
   const { t } = useI18n();
   const results = [...form];
   const label = results
