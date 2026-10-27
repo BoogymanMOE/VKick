@@ -650,6 +650,21 @@ export function useTeamUnderstat(teamId: string) {
   });
 }
 
+/**
+ * Recent ESPN coverage for one club. Served from the league news feed and
+ * narrowed by team id, because ESPN publishes no per-team soccer news. Five
+ * minutes is plenty fresh for "what happened today" and keeps a tab switch
+ * off the network.
+ */
+export function useLeagueNews(league: string, teamId: string) {
+  return useQuery({
+    queryKey: ["league-news", league, teamId],
+    queryFn: () => api.getLeagueNews(league, teamId),
+    enabled: Boolean(league && teamId),
+    staleTime: 5 * 60_000,
+  });
+}
+
 /* ------------------------------------------------------------------ squads */
 
 export interface SquadRow {

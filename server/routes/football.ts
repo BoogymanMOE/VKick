@@ -9,6 +9,7 @@ import { getDb, all, get } from "../db/index.js";
 import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
 
 import { isAllowedLeague } from "../espn/catalog.js";
+import { fetchLeagueNews } from "../espn/client.js";
 import { competitionCatalogWithMatches } from "../espn/competitions.js";
 import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
 import { foldForm, type FormMatchRow } from "../standings/form.js";
@@ -542,6 +543,105 @@ matchesRouter.get("/api/leagues/:league/teams", (req, res) => {
     [league, season],
   );
   res.json({ season, teams: rows });
+});
+
+/* ------------------------------------------------------------ league news */
+
+interface NewsArticle {
+  id: string;
+  headline: string;
+  description: string;
+  /** ISO. */
+  published: string;
+  byline: string | null;
+  imageUrl: string | null;
+  webUrl: string | null;
+  /** ESPN club ids the article is tagged with — the ids the app already uses. */
+  teamIds: string[];
+}
+
+/**
+ * One league's news for one minute. A club page asks for its club's slice of
+ * the league feed, so without this cache twenty clubs in one league would mean
+ * twenty identical ESPN calls for the same six articles.
+ */
+const newsCache = new Map<string, { at: number; payload: NewsArticle[] }>();
+const NEWS_TTL_MS = 60_000;
+
+/**
+ * ESPN article → our shape. Every field is optional at the edge, and the feed
+ * mixes in non-story cards, so anything without an id is dropped rather than
+ * rendered as an empty row.
+ */
+function toNewsArticle(raw: unknown): NewsArticle | null {
+  if (!raw || typeof raw !== "object") return null;
+  const a = raw as {
+    id?: unknown;
+    headline?: unknown;
+    description?: unknown;
+    published?: unknown;
+    byline?: unknown;
+    images?: unknown;
+    links?: { web?: { href?: unknown } };
+    categories?: unknown;
+  };
+  if (a.id == null || String(a.id) === "") return null;
+
+  const images = Array.isArray(a.images) ? a.images : [];
+  // The "header" crop is the wide one; a logo or a square thumb letterboxes.
+  const image =
+    images.find((i) => (i as { type?: unknown } | null)?.type === "header") ?? images[0];
+  const imageUrl = (image as { url?: unknown } | undefined)?.url;
+
+  const categories = Array.isArray(a.categories) ? a.categories : [];
+  const teamIds = categories.flatMap((c) => {
+    const cat = c as { type?: unknown; team?: { id?: unknown } } | null;
+    return cat?.type === "team" && cat.team?.id != null ? [String(cat.team.id)] : [];
+  });
+
+  return {
+    id: String(a.id),
+    headline: typeof a.headline === "string" ? a.headline : "",
+    description: typeof a.description === "string" ? a.description : "",
+    published: typeof a.published === "string" ? a.published : "",
+    byline: typeof a.byline === "string" && a.byline ? a.byline : null,
+    imageUrl: typeof imageUrl === "string" && imageUrl ? imageUrl : null,
+    webUrl: typeof a.links?.web?.href === "string" ? a.links.web.href : null,
+    teamIds,
+  };
+}
+
+async function getLeagueNews(league: LeagueSlug): Promise<NewsArticle[]> {
+  const cached = newsCache.get(league);
+  if (cached && Date.now() - cached.at < NEWS_TTL_MS) return cached.payload;
+  const raw = (await fetchLeagueNews(league)) as { articles?: unknown };
+  const payload = (Array.isArray(raw.articles) ? raw.articles : [])
+    .map(toNewsArticle)
+    .filter((a): a is NewsArticle => a != null);
+  newsCache.set(league, { at: Date.now(), payload });
+  return payload;
+}
+
+/**
+ * League news, optionally narrowed to one club. The team-scoped ESPN path
+ * (/teams/{id}/news) returns nothing for soccer — ESPN only populates it for
+ * US sports — so a league feed plus a team.id filter is the only route to
+ * per-club news. Public: it is the same content ESPN serves to anyone.
+ */
+matchesRouter.get("/api/leagues/:league/news", (req, res) => {
+  const league = String(req.params.league);
+  if (!isAllowedLeague(league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+  const team = req.query.team ? String(req.query.team) : null;
+  getLeagueNews(league as LeagueSlug)
+    .then((articles) => {
+      res.json({ articles: team ? articles.filter((a) => a.teamIds.includes(team)) : articles });
+    })
+    .catch((err) => {
+      // News is decoration on a page that is otherwise complete: an ESPN
+      // outage should empty the tab, not 500 the club page.
+      console.error(`[news] ${league} FAILED:`, String(err));
+      res.json({ articles: [] });
+    });
 });
 
 function getSeasonKeyDb(league: string): string {

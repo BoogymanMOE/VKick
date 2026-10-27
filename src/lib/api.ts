@@ -10,6 +10,7 @@
  */
 
 import { currentAuthToken, getDeviceId } from "./auth";
+import type { NewsArticle } from "../types";
 
 const BASE = "/api";
 
@@ -595,6 +596,14 @@ export const api = {
 
   getLeagueTeamStats: (league: string) =>
     request<{ season: string; teams: LeagueTeamStatRow[] }>(`/leagues/${encodeURIComponent(league)}/teams`),
+
+  /** League news feed, narrowed to one club when `teamId` is given. */
+  getLeagueNews: (league: string, teamId?: string) => {
+    const qs = teamId ? `?team=${encodeURIComponent(teamId)}` : "";
+    return request<{ articles: NewsArticle[] }>(
+      `/leagues/${encodeURIComponent(league)}/news${qs}`,
+    );
+  },
 
   getMatchPlayers: (matchId: string) =>
     request<{ players: Record<string, unknown>[] }>(`/matches/${matchId}/players`),

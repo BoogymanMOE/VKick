@@ -14,7 +14,14 @@ import {
   TeamBadge,
 } from "../components/ui";
 import { cx } from "../lib/cx";
-import { matchFromApi, useSquad, useTeamDetail, useTeamUnderstat, type SquadRow } from "../hooks/useApi";
+import {
+  matchFromApi,
+  useLeagueNews,
+  useSquad,
+  useTeamDetail,
+  useTeamUnderstat,
+  type SquadRow,
+} from "../hooks/useApi";
 import type { StringKey } from "../i18n/strings";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { TEAM_FALLBACK } from "../lib/colors";
@@ -26,7 +33,7 @@ import type { ApiMatch } from "../lib/api";
 import type { Position } from "../types";
 import { competitionName } from "../lib/leagues";
 
-type Tab = "squad" | "fixtures" | "season" | "xg";
+type Tab = "squad" | "fixtures" | "season" | "xg" | "news";
 
 const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
 
@@ -158,6 +165,7 @@ export default function TeamPage() {
             { value: "fixtures", label: t("team.tab.fixtures") },
             { value: "season", label: t("team.tab.season") },
             { value: "xg", label: t("team.tab.xg") },
+            { value: "news", label: t("team.tab.news") },
           ]}
         />
       </div>
@@ -180,6 +188,7 @@ export default function TeamPage() {
             points={seasonStats ? seasonStats.wins * 3 + seasonStats.draws : null}
           />
         ) : null}
+        {tab === "news" ? <NewsTab teamId={team.id} league={team.league ?? ""} /> : null}
       </section>
     </>
   );
@@ -632,5 +641,87 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
         </Card>
       ) : null}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------ news */
+
+/**
+ * Recent ESPN coverage for this club. ESPN publishes no per-team soccer news
+ * feed, so the server takes the league's feed and narrows it by this club's
+ * id — the result is real coverage rather than a stub list, and every card
+ * links out to the article on ESPN.
+ */
+function NewsTab({ teamId, league }: { teamId: string; league: string }) {
+  const { t, lang, dir } = useI18n();
+  const query = useLeagueNews(league, teamId);
+
+  if (query.isLoading) return <PanelSkeleton height={192} />;
+  if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
+
+  const articles = query.data?.articles ?? [];
+  if (articles.length === 0) {
+    return <EmptyState title={t("team.news.empty")} hint={t("team.news.emptyHint")} />;
+  }
+
+  const when = new Intl.DateTimeFormat(lang === "fa" ? "fa-IR" : undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const cardClass =
+    "block rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)]";
+
+  return (
+    <ul className="space-y-2">
+      {articles.map((article) => {
+        const body = (
+          <>
+            {article.imageUrl ? (
+              <img
+                src={article.imageUrl}
+                alt=""
+                loading="lazy"
+                className="mb-2 h-32 w-full rounded-lg object-cover"
+              />
+            ) : null}
+            <h3 className="text-sm font-bold leading-snug text-ink">{article.headline}</h3>
+            {article.description ? (
+              <p className="mt-1 line-clamp-2 text-xs text-ink-2">{article.description}</p>
+            ) : null}
+            <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
+              {article.published ? <span>{when.format(new Date(article.published))}</span> : null}
+              {article.byline ? (
+                <span>{t("team.news.byline", { name: article.byline })}</span>
+              ) : null}
+            </p>
+            {article.webUrl ? (
+              <p className="mt-1 text-[11px] font-bold text-volt">
+                {t("team.news.readMore")} {dir === "rtl" ? "←" : "→"}
+              </p>
+            ) : null}
+          </>
+        );
+        return (
+          <li key={article.id}>
+            {/* An article with no web URL is still worth reading on the card —
+                it just is not a link, so it must not pretend to be one. */}
+            {article.webUrl ? (
+              <a
+                href={article.webUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cx(cardClass, "hover:bg-elevated")}
+              >
+                {body}
+              </a>
+            ) : (
+              <div className={cardClass}>{body}</div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

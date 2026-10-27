@@ -220,3 +220,23 @@ export interface LeaderboardRow {
   predictionPoints: number;
   isYou?: boolean;
 }
+
+/* ------------------------------------------------------------------- news */
+
+/**
+ * One ESPN news article, forwarded by the API as-is. `teamIds` are ESPN club
+ * ids — the same ones used for matches, rosters and standings — so narrowing
+ * the league feed to one club needs no mapping table.
+ */
+export interface NewsArticle {
+  id: string;
+  headline: string;
+  description: string;
+  /** ISO timestamp. */
+  published: string;
+  byline: string | null;
+  imageUrl: string | null;
+  /** Full ESPN article URL, opened in a new tab. Null when the feed omits it. */
+  webUrl: string | null;
+  teamIds: string[];
+}

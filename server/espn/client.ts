@@ -66,6 +66,22 @@ export async function fetchTeamRoster(league: LeagueSlug, teamId: string): Promi
   return fetchJson(`${BASE}/${league}/teams/${encodeURIComponent(teamId)}/roster`);
 }
 
+/**
+ * League news feed. Returns up to ~6 articles per league, refreshed
+ * throughout the day. Each article carries headline, description,
+ * published (ISO), byline, images[] (with a.espncdn.com URLs), and a
+ * links.web.href (full ESPN URL for "read on ESPN →"), plus a
+ * categories[] array where each article tags the teams it covers with
+ * team.id — the SAME id this app already uses everywhere else.
+ *
+ * The team-specific path /teams/{id}/news returns 0 articles for
+ * soccer (ESPN only populates it for US sports), so callers fetch the
+ * league feed and filter by team.id themselves.
+ */
+export async function fetchLeagueNews(league: LeagueSlug): Promise<unknown> {
+  return fetchJson(`${BASE}/${league}/news`);
+}
+
 export function allLeagueSlugs(): LeagueSlug[] {
   return [...LEAGUES];
 }
