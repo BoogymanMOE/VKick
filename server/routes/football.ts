@@ -336,6 +336,122 @@ matchesRouter.get("/api/matches/:id/timeline", async (req, res) => {
   res.json({ events: events.map((e) => ({ ...e, participants: safeArr(e.participants) })) });
 });
 
+/* ------------------------------------------------------------ head-to-head */
+
+interface H2HEventView {
+  id: string;
+  date: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  winnerTeamId: string | null;
+  status: string;
+}
+
+/**
+ * Last 5 meetings between the two teams (summary `seasonseries[0]`), stored by
+ * the summary sync. The same missed-summary repair as the lineups read: no row
+ * yet buys one summary fetch (the shared 10-minute cooldown), then re-reads.
+ * ESPN serves this block for upcoming fixtures too, so a match not yet played
+ * answers just as well as a finished one.
+ */
+matchesRouter.get("/api/matches/:id/h2h", async (req, res) => {
+  const matchId = String(req.params.id);
+  if (!assertMatchAllowed(res, matchId)) return;
+  const select =
+    "SELECT summary, series_label, events_json FROM match_head_to_head WHERE match_id = ?";
+  let row = get<{ summary: string | null; series_label: string | null; events_json: string }>(
+    db,
+    select,
+    [matchId],
+  );
+  if (!row) {
+    const match = matchReadState(matchId);
+    if (match) await backfillSummary(match.league, matchId);
+    row = get(db, select, [matchId]);
+  }
+  if (!row) return res.json({ summary: null, seriesLabel: null, events: [] });
+  res.json({
+    summary: row.summary,
+    seriesLabel: row.series_label,
+    events: safeArr(row.events_json) as unknown as H2HEventView[],
+  });
+});
+
+/* ------------------------------------------------------------ form */
+
+/**
+ * Both teams' last 5 results (`lastFiveGames[0..1]`). ESPN's home side is
+ * block 0; the form string reads oldest→newest and the games carry the club's
+ * own scoreline. Same on-demand backfill as the reads above.
+ */
+matchesRouter.get("/api/matches/:id/form", async (req, res) => {
+  const matchId = String(req.params.id);
+  if (!assertMatchAllowed(res, matchId)) return;
+  const select =
+    "SELECT home_form, away_form, home_games_json, away_games_json FROM match_form WHERE match_id = ?";
+  let row = get<{
+    home_form: string | null;
+    away_form: string | null;
+    home_games_json: string | null;
+    away_games_json: string | null;
+  }>(db, select, [matchId]);
+  if (!row) {
+    const match = matchReadState(matchId);
+    if (match) await backfillSummary(match.league, matchId);
+    row = get(db, select, [matchId]);
+  }
+  if (!row) return res.json({ home: null, away: null });
+  res.json({
+    home: row.home_form ? { form: row.home_form, games: safeArr(row.home_games_json) } : null,
+    away: row.away_form ? { form: row.away_form, games: safeArr(row.away_games_json) } : null,
+  });
+});
+
+/* ------------------------------------------------------------ per-match news */
+
+interface MatchNewsRow {
+  article_id: string;
+  headline: string;
+  description: string | null;
+  published: string | null;
+  byline: string | null;
+  image_url: string | null;
+  web_url: string | null;
+  team_ids_json: string;
+}
+
+/**
+ * Articles from the summary `news` block — the same NewsArticle shape the
+ * league-news route serves, so the TeamPage card renders these unchanged.
+ * A match with no stored articles gets the same one-shot backfill.
+ */
+matchesRouter.get("/api/matches/:id/news", async (req, res) => {
+  const matchId = String(req.params.id);
+  if (!assertMatchAllowed(res, matchId)) return;
+  const select = `SELECT article_id, headline, description, published, byline, image_url, web_url, team_ids_json
+     FROM match_news WHERE match_id = ? ORDER BY published DESC`;
+  let rows = all<MatchNewsRow>(db, select, [matchId]);
+  if (rows.length === 0) {
+    const match = matchReadState(matchId);
+    if (match) await backfillSummary(match.league, matchId);
+    rows = all<MatchNewsRow>(db, select, [matchId]);
+  }
+  res.json({
+    articles: rows.map((r) => ({
+      id: r.article_id,
+      headline: r.headline,
+      description: r.description ?? "",
+      published: r.published ?? "",
+      byline: r.byline,
+      imageUrl: r.image_url,
+      webUrl: r.web_url,
+      teamIds: safeArr(r.team_ids_json),
+    })),
+  });
+});
+
 /* ------------------------------------------------------------ teams */
 
 /*
