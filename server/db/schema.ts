@@ -112,6 +112,48 @@ export function migrate(db: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_timeline_match ON timeline_events(match_id, minute_seconds);
 
+    -- Head-to-head: last 5 meetings between the two teams, as ESPN's summary
+    -- seasonseries[0] reports them. Refreshed on every summary sync, so the
+    -- MatchDetail H2H tab reads from the DB instead of refetching.
+    CREATE TABLE IF NOT EXISTS match_head_to_head (
+      match_id     TEXT PRIMARY KEY REFERENCES matches(id) ON DELETE CASCADE,
+      summary      TEXT,                          -- "PSG leads series 4-1"
+      series_label TEXT,                          -- "Head-to-Head"
+      events_json  TEXT NOT NULL,                 -- JSON array of H2HEvent
+      updated_at   TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_h2h_match ON match_head_to_head(match_id);
+
+    -- Last 5 games form for both teams in a match. ESPN's lastFiveGames[0] is
+    -- the home side, [1] is away. Stored as a compact W/D/L string plus recent
+    -- game summaries so the FormStrip + a list can render from the DB.
+    CREATE TABLE IF NOT EXISTS match_form (
+      match_id     TEXT PRIMARY KEY REFERENCES matches(id) ON DELETE CASCADE,
+      home_form    TEXT,        -- 5-char "WWDLW" string (oldest→newest)
+      away_form    TEXT,
+      home_games_json TEXT,     -- JSON array of last 5 game summaries
+      away_games_json TEXT,
+      updated_at   TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_form_match ON match_form(match_id);
+
+    -- News tagged to BOTH teams in this match (ESPN's summary news block).
+    -- Articles share the league-news cache shape; the TeamPage news card
+    -- renders them unchanged.
+    CREATE TABLE IF NOT EXISTS match_news (
+      match_id    TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+      article_id  TEXT NOT NULL,
+      headline    TEXT NOT NULL,
+      description TEXT,
+      published   TEXT,
+      byline      TEXT,
+      image_url   TEXT,
+      web_url     TEXT,
+      team_ids_json TEXT,       -- JSON array of team ids
+      PRIMARY KEY (match_id, article_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_news_match ON match_news(match_id);
+
     CREATE TABLE IF NOT EXISTS standings (
       league        TEXT NOT NULL,
       season        TEXT NOT NULL,

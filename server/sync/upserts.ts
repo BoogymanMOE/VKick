@@ -10,6 +10,9 @@ import {
   normalizeCommentary,
   normalizeRosterPlayers,
   normalizeCoach,
+  normalizeHeadToHead,
+  normalizeLastFiveGames,
+  normalizeSummaryNews,
 } from "../espn/normalize.js";
 import { statScore } from "../scoring/statScore.js";
 import {
@@ -267,6 +270,67 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
         },
         ["match_id", "sequence"],
       );
+    }
+
+    // Head-to-head (last 5 meetings between these two teams).
+    const h2h = normalizeHeadToHead(json);
+    if (h2h.events.length > 0) {
+      upsert(
+        db,
+        "match_head_to_head",
+        {
+          match_id: match.id,
+          summary: h2h.summary,
+          series_label: h2h.seriesLabel,
+          events_json: JSON.stringify(h2h.events),
+          updated_at: new Date().toISOString(),
+        },
+        ["match_id"],
+      );
+    }
+
+    // Last 5 games form for both teams.
+    const form = normalizeLastFiveGames(json);
+    if (form.home || form.away) {
+      upsert(
+        db,
+        "match_form",
+        {
+          match_id: match.id,
+          home_form: form.home?.form ?? null,
+          away_form: form.away?.form ?? null,
+          home_games_json: form.home ? JSON.stringify(form.home.games) : null,
+          away_games_json: form.away ? JSON.stringify(form.away.games) : null,
+          updated_at: new Date().toISOString(),
+        },
+        ["match_id"],
+      );
+    }
+
+    // News tagged to BOTH teams in this match.
+    const matchNews = normalizeSummaryNews(json);
+    if (matchNews.length > 0) {
+      // Replace strategy: articles churn between syncs, so the stored set is
+      // rebuilt rather than merged (a stale headline must not linger).
+      run(db, "DELETE FROM match_news WHERE match_id = ?", [match.id]);
+      for (const a of matchNews) {
+        upsert(
+          db,
+          "match_news",
+          {
+            match_id: match.id,
+            article_id: a.id,
+            headline: a.headline,
+            description: a.description,
+            published: a.published,
+            byline: a.byline,
+            image_url: a.imageUrl,
+            web_url: a.webUrl,
+            team_ids_json: JSON.stringify(a.teamIds),
+          },
+          ["match_id", "article_id"],
+        );
+      }
     }
   });
 

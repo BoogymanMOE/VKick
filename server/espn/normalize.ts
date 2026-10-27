@@ -191,13 +191,76 @@ interface EspnSummaryHeader extends EspnNotes {
   competitions?: EspnCompetition[];
 }
 
-/** The `/summary` endpoint: header, boxscore, rosters, keyEvents, commentary. */
+/** One previous meeting from `seasonseries[0].events[]`. */
+interface EspnSeriesEvent {
+  id?: string | number;
+  date?: unknown;
+  /** ESPN's coarse state ("post"), the sibling of statusType. */
+  status?: unknown;
+  statusType?: { detail?: unknown; state?: unknown };
+  competitors?: Array<{
+    homeAway?: string;
+    winner?: boolean;
+    score?: unknown;
+    team?: { id?: string | number };
+  }>;
+}
+
+/** ESPN's head-to-head block: a headline line plus the last N meetings. */
+interface EspnSeries {
+  summary?: unknown;
+  seriesLabel?: unknown;
+  events?: EspnSeriesEvent[];
+}
+
+/** One game of a side's `lastFiveGames` list. */
+interface EspnFormEvent {
+  id?: string | number;
+  /** ESPN uses `gameDate`; tolerate a bare `date` from older payloads. */
+  gameDate?: unknown;
+  date?: unknown;
+  gameResult?: unknown;
+  /** ESPN nests the opponent as `opponent`, other payloads as `opponent.team`. */
+  opponent?: { id?: string | number; team?: { id?: string | number } };
+  homeTeamId?: string | number;
+  awayTeamId?: string | number;
+  homeTeamScore?: unknown;
+  awayTeamScore?: unknown;
+}
+
+/** One side of `lastFiveGames`: the team plus its five most recent results. */
+interface EspnFormBlock {
+  displayOrder?: number;
+  team?: { id?: string | number };
+  events?: EspnFormEvent[];
+}
+
+/** An article in the summary `news` block (same shape as the league feed). */
+interface EspnNewsArticle {
+  id?: string | number;
+  headline?: unknown;
+  description?: unknown;
+  published?: unknown;
+  byline?: unknown;
+  images?: unknown;
+  links?: { web?: { href?: unknown } };
+  categories?: unknown;
+}
+
+/**
+ * The `/summary` endpoint: header, boxscore, rosters, keyEvents, commentary,
+ * plus the three blocks we extract for MatchDetail — seasonseries (H2H),
+ * lastFiveGames (form) and news (articles tagged to this match's clubs).
+ */
 interface EspnSummary {
   header?: EspnSummaryHeader;
   boxscore?: { teams?: { team?: EspnTeamRef }[] };
   rosters?: EspnRosterSide[];
   keyEvents?: EspnKeyEvent[];
   commentary?: EspnCommentaryLine[];
+  seasonseries?: EspnSeries[];
+  lastFiveGames?: EspnFormBlock[];
+  news?: { articles?: EspnNewsArticle[] };
 }
 
 interface EspnCoachRow {
@@ -745,6 +808,175 @@ export function normalizeCommentary(raw: unknown): NormCommentaryLine[] {
     });
   }
   return out;
+}
+
+/* ------------------------------------- head-to-head, form, per-match news */
+
+/** One previous meeting between two teams, as ESPN's seasonseries reports it. */
+export interface H2HEvent {
+  id: string;
+  date: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  winnerTeamId: string | null;
+  status: string;
+}
+
+export interface MatchHeadToHead {
+  summary: string | null;
+  seriesLabel: string | null;
+  events: H2HEvent[];
+}
+
+/**
+ * `seasonseries[0]` — the last five meetings between this fixture's two clubs,
+ * with ESPN's own headline line ("LIV leads series 3-2"). The events keep
+ * ESPN's newest-first order; `winnerTeamId` is read off the competitor ESPN
+ * flags, never derived from the scoreline.
+ */
+export function normalizeHeadToHead(raw: unknown): MatchHeadToHead {
+  const json = raw as EspnSummary;
+  const series = json.seasonseries?.[0];
+  const events: H2HEvent[] = [];
+  for (const ev of series?.events ?? []) {
+    const comps = ev.competitors ?? [];
+    const id = ev.id == null ? "" : String(ev.id);
+    if (!id) continue;
+    const home = comps.find((c) => c.homeAway === "home");
+    const away = comps.find((c) => c.homeAway === "away");
+    const winner = comps.find((c) => c.winner === true);
+    events.push({
+      id,
+      date: typeof ev.date === "string" ? ev.date : "",
+      homeTeamId: String(home?.team?.id ?? ""),
+      awayTeamId: String(away?.team?.id ?? ""),
+      homeScore: parseScore(home?.score),
+      awayScore: parseScore(away?.score),
+      winnerTeamId: winner?.team?.id != null ? String(winner.team.id) : null,
+      status: String(ev.status ?? ev.statusType?.detail ?? ev.statusType?.state ?? ""),
+    });
+  }
+  return {
+    summary: typeof series?.summary === "string" && series.summary ? series.summary : null,
+    seriesLabel: typeof series?.seriesLabel === "string" && series.seriesLabel ? series.seriesLabel : null,
+    events,
+  };
+}
+
+/** One game in a team's last-5 form, from the team's own perspective. */
+export interface FormGame {
+  id: string;
+  date: string;
+  result: "W" | "D" | "L";
+  teamId: string;
+  opponentId: string;
+  teamScore: number | null;
+  opponentScore: number | null;
+}
+
+export interface FormSide {
+  /** Compact W/D/L string, oldest→newest ("WWDLL"), capped at five. */
+  form: string;
+  games: FormGame[];
+}
+
+/**
+ * `lastFiveGames[0..1]` — both clubs' five most recent results. ESPN lists the
+ * home side first and each side's games oldest→newest, which is the order a
+ * form strip reads in. `gameResult` is already that club's own result, so it is
+ * trusted over the scoreline; the score is oriented home/away for the club.
+ */
+export function normalizeLastFiveGames(raw: unknown): {
+  home: FormSide | null;
+  away: FormSide | null;
+} {
+  const json = raw as EspnSummary;
+  const arr = json.lastFiveGames ?? [];
+  const parse = (block: EspnFormBlock | undefined): FormSide | null => {
+    if (!block) return null;
+    const teamId = String(block.team?.id ?? "");
+    if (!teamId) return null;
+    let formStr = "";
+    const games: FormGame[] = [];
+    for (const ev of block.events ?? []) {
+      const id = ev.id == null ? "" : String(ev.id);
+      if (!id) continue;
+      const result: FormGame["result"] =
+        ev.gameResult === "W" || ev.gameResult === "L" ? ev.gameResult : "D";
+      // The club's own score, whichever end of the fixture it played.
+      const atHome = String(ev.homeTeamId ?? "") === teamId;
+      formStr += result;
+      games.push({
+        id,
+        date:
+          typeof ev.gameDate === "string"
+            ? ev.gameDate
+            : typeof ev.date === "string"
+              ? ev.date
+              : "",
+        result,
+        teamId,
+        opponentId: String(ev.opponent?.id ?? ev.opponent?.team?.id ?? ""),
+        teamScore: parseScore(atHome ? ev.homeTeamScore : ev.awayTeamScore),
+        opponentScore: parseScore(atHome ? ev.awayTeamScore : ev.homeTeamScore),
+      });
+    }
+    if (games.length === 0) return null;
+    return { form: formStr.toUpperCase().slice(0, 5), games };
+  };
+  return {
+    home: parse(arr[0]),
+    away: parse(arr[1]),
+  };
+}
+
+export interface MatchNewsArticle {
+  id: string;
+  headline: string;
+  description: string;
+  published: string;
+  byline: string | null;
+  imageUrl: string | null;
+  webUrl: string | null;
+  teamIds: string[];
+}
+
+/**
+ * The summary `news` block. Same shape the league-news route serves (the
+ * TeamPage card renders both), so the mapping mirrors `toNewsArticle` in
+ * routes/football.ts — header crop preferred, team categories collected.
+ */
+export function normalizeSummaryNews(raw: unknown): MatchNewsArticle[] {
+  const root = raw as EspnSummary;
+  const articles = root.news?.articles;
+  if (!Array.isArray(articles)) return [];
+  return articles
+    .map((a) => {
+      const images = Array.isArray(a.images) ? a.images : [];
+      const header =
+        images.find((i) => (i as { type?: unknown } | null)?.type === "header") ?? images[0];
+      const imgUrl = (header as { url?: unknown } | undefined)?.url;
+      const cats = Array.isArray(a.categories) ? a.categories : [];
+      const teamIds = cats.flatMap((c) => {
+        const cat = c as { type?: unknown; teamId?: unknown; team?: { id?: unknown } } | null;
+        if (cat?.type !== "team") return [];
+        const id = cat.team?.id ?? cat.teamId;
+        return id != null ? [String(id)] : [];
+      });
+      return {
+        id: a.id == null ? "" : String(a.id),
+        headline: typeof a.headline === "string" ? a.headline : "",
+        description: typeof a.description === "string" ? a.description : "",
+        published: typeof a.published === "string" ? a.published : "",
+        byline: typeof a.byline === "string" && a.byline ? a.byline : null,
+        imageUrl: typeof imgUrl === "string" && imgUrl ? imgUrl : null,
+        webUrl: typeof a.links?.web?.href === "string" ? a.links.web.href : null,
+        teamIds,
+      };
+    })
+    .filter((a) => a.id);
 }
 
 /* ------------------------------------------------------------ rosters */
