@@ -216,7 +216,7 @@ export default function TeamPage() {
       >
         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
         {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
-        {tab === "season" ? <StatsTab stats={seasonStats} /> : null}
+        {tab === "season" ? <StatsTab stats={seasonStats} fixtures={fixtures} teamId={team.id} /> : null}
         {tab === "lineup" ? <RecentLineupTab teamId={team.id} /> : null}
         {tab === "news" ? <NewsTab teamId={team.id} league={team.league ?? ""} /> : null}
       </section>
@@ -439,49 +439,122 @@ function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: strin
 
 type SeasonStats = NonNullable<ReturnType<typeof useTeamDetail>["data"]>["seasonStats"];
 
-function StatsTab({ stats }: { stats: SeasonStats }) {
-  const { t } = useI18n();
-  if (!stats) return <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />;
+function StatsTab({
+  stats,
+  fixtures,
+  teamId,
+}: {
+  stats: SeasonStats;
+  fixtures: ApiMatch[];
+  teamId: string;
+}) {
+  const { t, lang, localize } = useI18n();
+  const locale = lang === "fa" ? "fa-IR" : undefined;
+  const dateFmt = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" });
+  const recentResults = fixtures.filter((match) => match.status === "finished").slice(-5);
+  if (!stats && recentResults.length === 0) {
+    return <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />;
+  }
 
   // Two reads instead of one dump: what the side creates, and what it concedes
   // or controls. The flat list said everything at once and ranked nothing.
-  const attackRows: Array<{ label: string; value: string }> = [
-    { label: t("stats.goals"), value: `${stats.goals_for}` },
-    { label: t("stats.shots"), value: `${stats.total_shots}` },
-    { label: t("stats.onTarget"), value: `${stats.total_shots_on_target}` },
-    { label: t("stats.corners"), value: `${stats.total_corners}` },
-  ];
-  const controlRows: Array<{ label: string; value: string }> = [
-    { label: t("stats.conceded"), value: `${stats.goals_against}` },
-    { label: t("stats.possession"), value: `${Math.round(stats.avg_possession)}%` },
-    { label: t("stats.passAccuracy"), value: `${Math.round(stats.avg_pass_accuracy)}%` },
-    { label: t("stats.fouls"), value: `${stats.total_fouls}` },
-  ];
+  const attackRows: Array<{ label: string; value: string }> = stats
+    ? [
+        { label: t("stats.goals"), value: `${stats.goals_for}` },
+        { label: t("stats.shots"), value: `${stats.total_shots}` },
+        { label: t("stats.onTarget"), value: `${stats.total_shots_on_target}` },
+        { label: t("stats.corners"), value: `${stats.total_corners}` },
+      ]
+    : [];
+  const controlRows: Array<{ label: string; value: string }> = stats
+    ? [
+        { label: t("stats.conceded"), value: `${stats.goals_against}` },
+        { label: t("stats.possession"), value: `${Math.round(stats.avg_possession)}%` },
+        { label: t("stats.passAccuracy"), value: `${Math.round(stats.avg_pass_accuracy)}%` },
+        { label: t("stats.fouls"), value: `${stats.total_fouls}` },
+      ]
+    : [];
 
   // The season in one line. The grouped cards below say what the side does;
   // only the record says how it went, so it leads the tab rather than hiding
   // as row one of a list nobody scanned to the bottom of.
-  const record: Array<{ letter: string; value: number }> = [
-    { letter: "W", value: stats.wins },
-    { letter: "D", value: stats.draws },
-    { letter: "L", value: stats.losses },
-  ];
+  const record: Array<{ letter: string; value: number }> = stats
+    ? [
+        { letter: "W", value: stats.wins },
+        { letter: "D", value: stats.draws },
+        { letter: "L", value: stats.losses },
+      ]
+    : [];
 
   return (
     <div className="space-y-lg">
-      <Card className="flex items-center justify-between gap-3 p-4">
-        <span className="label text-ink-3">{t("statsPage.teams")}</span>
-        <span className="flex items-baseline gap-2">
-          {record.map(({ letter, value }) => (
-            <span key={letter} className="flex items-baseline gap-0.5">
-              <Num className="text-lg font-black text-ink">{value}</Num>
-              <span className="label text-ink-3">{letter}</span>
+      {recentResults.length > 0 ? (
+        <Card className="p-3">
+          <SectionHeading title={t("team.recentResults")} />
+          <ul className="divide-y divide-line">
+            {recentResults.map((match) => {
+              const { home, away } = matchFromApi(match);
+              const isHome = home.id === teamId;
+              const gf = isHome ? match.home_score ?? 0 : match.away_score ?? 0;
+              const ga = isHome ? match.away_score ?? 0 : match.home_score ?? 0;
+              const result = gf > ga ? "W" : gf < ga ? "L" : "D";
+              const opponent = isHome ? away : home;
+              const resultLabel =
+                result === "W"
+                  ? t("table.formWShort")
+                  : result === "L"
+                    ? t("table.formLShort")
+                    : t("table.formDShort");
+              return (
+                <li key={match.id} className="flex items-center gap-2 py-2">
+                  <span
+                    className={cx(
+                      "grid h-6 w-6 flex-none place-items-center rounded text-[10px] font-bold",
+                      result === "W"
+                        ? "bg-pitch/20 text-pitch"
+                        : result === "L"
+                          ? "bg-danger/20 text-danger"
+                          : "bg-ink-3/15 text-ink-3",
+                    )}
+                  >
+                    {resultLabel}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-ink-2">
+                    {isHome ? `${t("team.vs")} ` : ""}
+                    {localize(opponent.shortName)}
+                    {!isHome ? ` ${t("team.vs")}` : ""}
+                  </span>
+                  <span dir="ltr" className="flex-none text-xs font-bold text-ink">
+                    {lang === "fa" ? toFaDigits(`${gf}–${ga}`) : `${gf}–${ga}`}
+                  </span>
+                  <span className="flex-none text-[10px] text-ink-3">
+                    {dateFmt.format(new Date(match.kickoff_at))}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      ) : null}
+      {stats ? (
+        <>
+          <Card className="flex items-center justify-between gap-3 p-4">
+            <span className="label text-ink-3">{t("statsPage.teams")}</span>
+            <span className="flex items-baseline gap-2">
+              {record.map(({ letter, value }) => (
+                <span key={letter} className="flex items-baseline gap-0.5">
+                  <Num className="text-lg font-black text-ink">{value}</Num>
+                  <span className="label text-ink-3">{letter}</span>
+                </span>
+              ))}
             </span>
-          ))}
-        </span>
-      </Card>
-      <StatCard title={t("team.statsAttack")} rows={attackRows} />
-      <StatCard title={t("team.statsDefense")} rows={controlRows} />
+          </Card>
+          <StatCard title={t("team.statsAttack")} rows={attackRows} />
+          <StatCard title={t("team.statsDefense")} rows={controlRows} />
+        </>
+      ) : (
+        <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />
+      )}
     </div>
   );
 }
