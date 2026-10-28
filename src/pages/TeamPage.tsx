@@ -369,69 +369,80 @@ function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: strin
   const locale = lang === "fa" ? "fa-IR" : undefined;
   if (fixtures.length === 0) return <EmptyState title={t("team.noFixtures")} />;
 
-  return (
-    <ul className="space-y-2">
-      {fixtures.map((match) => {
-        // One scoreline per fixture: crest, club, the result or the kickoff,
-        // club, crest. The club whose page this is wears volt, so picking your
-        // side out of a neutral fixture list needs no reading.
-        const { home, away } = matchFromApi(match);
-        return (
-          <li key={match.id}>
-            <Link
-              to={`/match/${match.id}`}
-              onPointerDown={() => prefetchMatch(match.id)}
-              aria-label={`${localize(home.shortName)} ${t("common.versus")} ${localize(away.shortName)}`}
-              className="flex items-center justify-between gap-2 rounded-card border border-line bg-surface p-2.5 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+  const played = fixtures.filter((match) => match.status === "finished");
+  const upcoming = fixtures.filter((match) => match.status !== "finished");
+  const renderMatch = (match: ApiMatch) => {
+    // One scoreline per fixture: crest, club, the result or the kickoff, club, crest.
+    const { home, away } = matchFromApi(match);
+    return (
+      <li key={match.id}>
+        <Link
+          to={`/match/${match.id}`}
+          onPointerDown={() => prefetchMatch(match.id)}
+          aria-label={`${localize(home.shortName)} ${t("common.versus")} ${localize(away.shortName)}`}
+          className="flex items-center justify-between gap-2 rounded-card border border-line bg-surface p-2.5 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+        >
+          <span className="flex min-w-0 flex-1 items-center gap-2">
+            <TeamBadge team={home} size="sm" />
+            <span
+              className={cx(
+                "min-w-0 truncate text-xs font-bold",
+                home.id === teamId ? "text-volt" : "text-ink",
+              )}
             >
-              <span className="flex min-w-0 flex-1 items-center gap-2">
-                <TeamBadge team={home} size="sm" />
-                <span
-                  className={cx(
-                    "min-w-0 truncate text-xs font-bold",
-                    home.id === teamId ? "text-volt" : "text-ink",
-                  )}
-                >
-                  {localize(home.shortName)}
-                </span>
-              </span>
-              <span className="flex-none">
-                {match.status === "finished" ? (
-                  <Chip tone="muted">
-                    <Num>
-                      {match.home_score ?? 0}–{match.away_score ?? 0}
-                    </Num>
-                  </Chip>
-                ) : match.status === "live" ? (
-                  <Chip tone="live">
-                    <Num>{match.minute_display ?? ""}</Num>
-                  </Chip>
-                ) : (
-                  /* Kickoff carries the date AND the time, so a fixture weeks
-                     out is unambiguous at a glance. */
-                  <Chip tone="volt">
-                    <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
-                    {" · "}
-                    <Num>{formatKickoff(new Date(match.kickoff_at), locale)}</Num>
-                  </Chip>
-                )}
-              </span>
-              <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
-                <span
-                  className={cx(
-                    "min-w-0 truncate text-end text-xs font-bold",
-                    away.id === teamId ? "text-volt" : "text-ink",
-                  )}
-                >
-                  {localize(away.shortName)}
-                </span>
-                <TeamBadge team={away} size="sm" />
-              </span>
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
+              {localize(home.shortName)}
+            </span>
+          </span>
+          <span className="flex-none">
+            {match.status === "finished" ? (
+              <Chip tone="muted">
+                <Num>
+                  {match.home_score ?? 0}–{match.away_score ?? 0}
+                </Num>
+              </Chip>
+            ) : match.status === "live" ? (
+              <Chip tone="live">
+                <Num>{match.minute_display ?? ""}</Num>
+              </Chip>
+            ) : (
+              <Chip tone="volt">
+                <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
+                {" · "}
+                <Num>{formatKickoff(new Date(match.kickoff_at), locale)}</Num>
+              </Chip>
+            )}
+          </span>
+          <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            <span
+              className={cx(
+                "min-w-0 truncate text-end text-xs font-bold",
+                away.id === teamId ? "text-volt" : "text-ink",
+              )}
+            >
+              {localize(away.shortName)}
+            </span>
+            <TeamBadge team={away} size="sm" />
+          </span>
+        </Link>
+      </li>
+    );
+  };
+
+  return (
+    <div className="space-y-lg">
+      {played.length > 0 ? (
+        <div>
+          <SectionHeading title={t("team.recentResults")} />
+          <ul className="space-y-2">{played.map((match) => renderMatch(match))}</ul>
+        </div>
+      ) : null}
+      {upcoming.length > 0 ? (
+        <div>
+          <SectionHeading title={t("team.upcomingFixtures")} />
+          <ul className="space-y-2">{upcoming.map((match) => renderMatch(match))}</ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
