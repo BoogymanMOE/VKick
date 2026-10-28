@@ -87,6 +87,17 @@ export function applyScoreboard(db: DB, json: unknown, league: string): void {
         (existing?.status === "finished" || existing?.status === "halftime") && m.status === "scheduled"
           ? existing.status
           : m.status;
+      // The scoreboard is the first reliable signal that a fixture is final.
+      // Fill an existing fixture row before the upsert flips its status, so
+      // form reads do not wait for a later summary sync.
+      if (m.status === "finished" && m.home_score !== null && m.away_score !== null) {
+        run(
+          db,
+          `UPDATE matches SET status = 'finished', home_score = ?, away_score = ?, last_synced_at = ?
+           WHERE id = ? AND status != 'finished'`,
+          [m.home_score, m.away_score, new Date().toISOString(), m.id],
+        );
+      }
       upsert(
         db,
         "matches",

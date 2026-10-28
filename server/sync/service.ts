@@ -197,7 +197,7 @@ export async function syncSummaries(): Promise<GoalAlert[]> {
       // Never-synced finished matches count as fresh (backfill), then settle.
       if (!m.last_synced_at)
         should = hoursToKickoff > -24 * 30; // current season window
-      else should = hoursSinceSync > 1 && hoursSinceSync < 26;
+      else should = hoursSinceSync > 1 && hoursSinceSync < 24 * 7;
     } else if (m.status === "scheduled" && hoursToKickoff < 3 && hoursToKickoff > -0.25) {
       // Inside ~90 min of kickoff ESPN ships the official XI around the hour
       // mark, and the lineup gate opens the shot/watch/versus/sub mechanics at
