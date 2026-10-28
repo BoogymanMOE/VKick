@@ -13,6 +13,8 @@ import { currentAuthToken, getDeviceId } from "./auth";
 import type { LineupPlayer, MatchForm, MatchH2H, NewsArticle } from "../types";
 
 const BASE = "/api";
+/** A stalled API request must not leave a screen loading indefinitely. */
+const REQUEST_TIMEOUT_MS = 15_000;
 
 /**
  * Every non-2xx response is thrown as one of these, so callers can branch on
@@ -27,6 +29,7 @@ export interface ApiRequestError extends Error {
 async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...opts,
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     headers: {
       "content-type": "application/json",
       authorization: `Bearer ${currentAuthToken()}`,
