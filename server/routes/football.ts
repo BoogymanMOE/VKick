@@ -538,6 +538,59 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
   res.json({ team, seasonStats: seasonStats ?? null, standing: standing ?? null, fixtures });
 });
 
+/** Recent completed-match XI and used substitutes for a club. */
+matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
+  const teamId = String(req.params.id);
+  if (isBlockedTeamId(teamId)) return bad(res, "not found", 404);
+  const team = get<{ league: string }>(db, "SELECT league FROM teams WHERE id = ?", [teamId]);
+  if (!team) return bad(res, "not found", 404);
+  if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+
+  const matchQuery = `SELECT id, league, home_team_id, away_team_id, home_formation, away_formation, kickoff_at
+    FROM matches
+    WHERE (home_team_id = ? OR away_team_id = ?) AND status = 'finished'
+    ORDER BY kickoff_at DESC LIMIT 1`;
+  let match = get<{
+    id: string;
+    league: string;
+    home_team_id: string;
+    away_team_id: string;
+    home_formation: string | null;
+    away_formation: string | null;
+    kickoff_at: string;
+  }>(db, matchQuery, [teamId, teamId]);
+  if (!match) return res.json({ match: null, starters: [], subs: [] });
+
+  let rows = lineupRows(match.id);
+  if (rows.length === 0) {
+    await backfillSummary(match.league, match.id);
+    match = get(db, matchQuery, [teamId, teamId]) ?? match;
+    rows = lineupRows(match.id);
+  }
+
+  const isHome = match.home_team_id === teamId;
+  const formation = isHome ? match.home_formation : match.away_formation;
+  const players = rows
+    .filter((row) => row.team_id === teamId)
+    .map((row) => ({
+      id: String(row.player_id),
+      name: String(row.full_name),
+      position: String(row.position ?? "MID"),
+      number: typeof row.jersey_number === "number" ? row.jersey_number : 0,
+      headshot: typeof row.headshot_url === "string" ? row.headshot_url : null,
+      espnPosition: typeof row.espn_position === "string" ? row.espn_position : null,
+      started: Number(row.started) === 1,
+      minutesPlayed: typeof row.minutes_played === "number" ? row.minutes_played : 0,
+    }));
+  const toPlayer = ({ started: _started, minutesPlayed: _minutesPlayed, ...player }: (typeof players)[number]) => player;
+
+  res.json({
+    match: { id: match.id, kickoffAt: match.kickoff_at, formation },
+    starters: players.filter((player) => player.started).map(toPlayer),
+    subs: players.filter((player) => !player.started && player.minutesPlayed > 0).map(toPlayer),
+  });
+});
+
 /** Full squad for one club, position-grouped and shirt-number ordered. */
 matchesRouter.get("/api/teams/:id/players", (req, res) => {
   const teamId = String(req.params.id);

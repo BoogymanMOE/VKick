@@ -10,7 +10,7 @@
  */
 
 import { currentAuthToken, getDeviceId } from "./auth";
-import type { MatchForm, MatchH2H, NewsArticle } from "../types";
+import type { LineupPlayer, MatchForm, MatchH2H, NewsArticle } from "../types";
 
 const BASE = "/api";
 
@@ -586,6 +586,13 @@ export const api = {
       standing: { rank: number | null; points: number | null } | null;
       fixtures: ApiMatch[];
     }>(`/teams/${encodeURIComponent(id)}`),
+
+  getRecentLineup: (teamId: string) =>
+    request<{
+      match: { id: string; kickoffAt: string; formation: string | null } | null;
+      starters: LineupPlayer[];
+      subs: LineupPlayer[];
+    }>(`/teams/${encodeURIComponent(teamId)}/recent-lineup`),
 
   getLeaguePlayers: (league: string, sort: string, limit = 50) =>
     request<{

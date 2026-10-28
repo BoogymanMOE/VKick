@@ -631,6 +631,15 @@ export function useLeagueTeamStats(league: string) {
 }
 
 /** Per-team season stat line + recent fixtures. */
+export function useRecentLineup(teamId: string) {
+  return useQuery({
+    queryKey: ["recent-lineup", teamId],
+    queryFn: () => api.getRecentLineup(teamId),
+    enabled: Boolean(teamId),
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useTeamDetail(teamId: string) {
   return useQuery({
     queryKey: ["team", teamId],

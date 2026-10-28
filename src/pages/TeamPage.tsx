@@ -21,10 +21,9 @@ import {
   useLeagueNews,
   useSquad,
   useTeamDetail,
-  useTeamUnderstat,
+  useRecentLineup,
   type SquadRow,
 } from "../hooks/useApi";
-import type { StringKey } from "../i18n/strings";
 import { usePrefetchMatch } from "../hooks/usePrefetch";
 import { TEAM_FALLBACK } from "../lib/colors";
 import { useLocalState } from "../lib/useLocalState";
@@ -32,10 +31,11 @@ import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
 import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate, toFaDigits } from "../lib/format";
 import type { ApiMatch } from "../lib/api";
+import type { LineupPlayer } from "../types";
 import type { Position } from "../types";
 import { competitionName } from "../lib/leagues";
 
-type Tab = "squad" | "fixtures" | "season" | "xg" | "news";
+type Tab = "squad" | "fixtures" | "season" | "lineup" | "news";
 
 const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
 
@@ -200,7 +200,7 @@ export default function TeamPage() {
             { value: "squad", label: t("team.tab.squad") },
             { value: "fixtures", label: t("team.tab.fixtures") },
             { value: "season", label: t("team.tab.season") },
-            { value: "xg", label: t("team.tab.xg") },
+            { value: "lineup", label: t("team.tab.lineup") },
             { value: "news", label: t("team.tab.news") },
           ]}
         />
@@ -217,13 +217,7 @@ export default function TeamPage() {
         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
         {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
         {tab === "season" ? <StatsTab stats={seasonStats} /> : null}
-        {tab === "xg" ? (
-          <XgTab
-            teamId={team.id}
-            played={seasonStats?.played ?? 0}
-            points={seasonStats ? seasonStats.wins * 3 + seasonStats.draws : null}
-          />
-        ) : null}
+        {tab === "lineup" ? <RecentLineupTab teamId={team.id} /> : null}
         {tab === "news" ? <NewsTab teamId={team.id} league={team.league ?? ""} /> : null}
       </section>
     </>
@@ -511,176 +505,67 @@ function StatCard({ title, rows }: { title: string; rows: Array<{ label: string;
   );
 }
 
-/* ------------------------------------------------------------ expected goals */
+/* ------------------------------------------------------------ recent lineup */
 
-/** Understat stores these display labels; map them to our own copy. */
-const SITUATION_KEY: Record<string, StringKey> = {
-  "Open play": "xg.sitOpenPlay",
-  "From corner": "xg.sitCorner",
-  "Set piece": "xg.sitSetPiece",
-  "Direct Freekick": "xg.sitFreekick",
-  Penalty: "xg.sitPenalty",
-};
-
-/**
- * Expected goals, from Understat (a different source to the ESPN stat sheet).
- * A club's xG against its actual goals is the read that separates a good
- * attacking side from a lucky one, and the per-type split is the part the
- * broadcaster graphics never show.
- *
- * Empty is a normal outcome, not a failure: the scraper only runs for followed
- * big-five clubs, so cups and the long tail have nothing here.
- */
-function XgTab({ teamId, played, points }: { teamId: string; played: number; points: number | null }) {
-  const { t, localize } = useI18n();
-  const query = useTeamUnderstat(teamId);
-
+function RecentLineupTab({ teamId }: { teamId: string }) {
+  const { t, lang, localize } = useI18n();
+  const query = useRecentLineup(teamId);
   if (query.isLoading) return <PanelSkeleton height={192} />;
   if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
+  const data = query.data;
+  if (!data?.match) return <EmptyState title={t("team.lineupEmpty")} hint={t("team.lineupEmptyHint")} />;
 
-  const teamXg = query.data?.teamStats?.xg ?? null;
-  const teamXga = query.data?.teamStats?.xga ?? null;
-  const expected = query.data?.teamStats?.xpts ?? null;
-  const ppda = query.data?.teamStats?.ppda ?? null;
-  const deep = query.data?.teamStats?.deep ?? null;
-  const situations = query.data?.situations ?? [];
-  const players = [...(query.data?.players ?? [])].sort((a, b) => (b.xg ?? 0) - (a.xg ?? 0));
-
-  if (teamXg == null && situations.length === 0 && players.length === 0) {
-    return <EmptyState title={t("xg.emptyTitle")} hint={t("xg.emptyHint")} />;
-  }
-
-  const fixed = (value: number | null) => (value == null ? "–" : value.toFixed(2));
-  const perMatch = (value: number | null) =>
-    value != null && played > 0 ? (value / played).toFixed(2) : null;
-  // Actual minus expected: the over/under-performance read.
-  const delta = points != null && expected != null ? points - expected : null;
-  const extra = [
-    ppda != null ? { label: t("xg.ppda"), value: ppda.toFixed(2), hint: t("xg.ppdaHint") } : null,
-    deep != null ? { label: t("xg.deep"), value: String(deep), hint: t("xg.deepHint") } : null,
-  ].filter((row): row is { label: string; value: string; hint: string } => row != null);
-  // Scale the bars against the biggest type so they read as shares of the total.
-  const widest = Math.max(0.01, ...situations.map((s) => Math.max(s.xg ?? 0, s.xga ?? 0)));
+  const locale = lang === "fa" ? "fa-IR" : undefined;
+  const dateFmt = new Intl.DateTimeFormat(locale, { weekday: "short", month: "short", day: "numeric" });
+  const number = (value: number) => (lang === "fa" ? toFaDigits(value) : value);
+  const playerRows = (players: LineupPlayer[]) =>
+    players.map((player) => (
+      <li key={player.id} className="flex items-center gap-2 py-2">
+        <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-xs font-bold text-ink-2">
+          {player.number > 0 ? number(player.number) : "–"}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>
+        <span className="text-xs text-ink-3">{t(`pos.${player.position}`)}</span>
+      </li>
+    ));
 
   return (
-    <div className="space-y-lg">
-      <Card className="p-4">
-        <SectionHeading title={t("xg.title")} />
-        <div className="mt-md grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs font-semibold text-ink-3">{t("xg.for")}</p>
-            <Num className="text-lg font-black text-volt">{fixed(teamXg)}</Num>
-            {perMatch(teamXg) ? (
-              <p className="text-xs text-ink-3">
-                <Num>{perMatch(teamXg)}</Num> {t("xg.perMatch")}
-              </p>
-            ) : null}
-          </div>
-          <div className="text-end">
-            <p className="text-xs font-semibold text-ink-3">{t("xg.against")}</p>
-            <Num className="text-lg font-black text-ink-2">{fixed(teamXga)}</Num>
-            {perMatch(teamXga) ? (
-              <p className="text-xs text-ink-3">
-                <Num>{perMatch(teamXga)}</Num> {t("xg.perMatch")}
-              </p>
-            ) : null}
-          </div>
+    <div className="space-y-3">
+      <Card className="p-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-ink-3">{dateFmt.format(new Date(data.match.kickoffAt))}</span>
+          {data.match.formation ? <Chip tone="pitch">{data.match.formation}</Chip> : null}
         </div>
-
-        {delta != null ? (
-          <div className="mt-md flex items-baseline justify-between gap-2 border-t border-line pt-3">
-            <span className="text-xs text-ink-2">{t("xg.points")}</span>
-            <span className="text-xs text-ink-3">
-              <Num className="text-sm font-bold text-ink">{points}</Num>
-              {" · "}
-              {t("xg.expected")} <Num className="text-sm font-bold text-gold">{expected?.toFixed(1)}</Num>{" "}
-              <Num className={cx("font-bold", delta >= 0 ? "text-volt" : "text-danger")}>
-                {delta >= 0 ? "+" : ""}
-                {delta.toFixed(1)}
-              </Num>
-            </span>
-          </div>
-        ) : null}
-
-        {extra.length > 0 ? (
-          <dl className="mt-md grid grid-cols-2 gap-3 border-t border-line pt-3">
-            {extra.map((row) => (
-              <div key={row.label}>
-                <dt className="text-xs font-semibold text-ink-3">{row.label}</dt>
-                <dd>
-                  <Num className="text-sm font-bold text-ink">{row.value}</Num>
-                </dd>
-              </div>
-            ))}
-          </dl>
-        ) : null}
       </Card>
-
-      {situations.length > 0 ? (
-        <Card className="p-4">
-          <SectionHeading title={t("xg.situations")} />
-          <p className="mt-1 text-xs text-ink-3">{t("xg.situationsHint")}</p>
-          <ul className="mt-md space-y-3">
-            {situations.map((situation) => {
-              const key = SITUATION_KEY[situation.situation];
-              return (
-                <li key={situation.situation}>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-xs text-ink-2">{key ? t(key) : situation.situation}</span>
-                    <span className="text-xs text-ink-3">
-                      <Num>{situation.shots ?? 0}</Num> {t("stats.shots")} · <Num>{situation.goals ?? 0}</Num>{" "}
-                      {t("stats.goals")}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-elevated">
-                      <span
-                        className="block h-full rounded-full bg-volt"
-                        style={{ width: `${(((situation.xg ?? 0) / widest) * 100).toFixed(1)}%` }}
-                      />
-                    </span>
-                    <Num className="w-9 flex-none text-end text-xs font-bold text-ink">
-                      {fixed(situation.xg ?? 0)}
-                    </Num>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-      ) : null}
-
-      {players.length > 0 ? (
-        <Card className="p-0">
-          <div className="px-3 pt-3">
-            <SectionHeading title={t("xg.players")} />
-          </div>
-          <ul className="mt-2 divide-y divide-line">
-            {players.slice(0, 10).map((player) => (
-              <li key={player.id} className="flex items-center gap-3 px-3 py-2">
-                <Num className="grid h-6 w-6 flex-none place-items-center rounded-full bg-elevated text-xs text-ink-2">
-                  {player.jersey ?? "–"}
-                </Num>
-                <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">
-                  {localize(player.name)}
+      <Card className="p-3">
+        <SectionHeading title={t("team.lineupStarters")} />
+        <ul className="divide-y divide-line">{playerRows(data.starters)}</ul>
+      </Card>
+      {data.subs.length > 0 ? (
+        <Card className="p-3">
+          <SectionHeading title={t("team.lineupSubs")} />
+          <ul className="divide-y divide-line">
+            {data.subs.map((player) => (
+              <li key={player.id} className="flex items-center gap-2 py-2">
+                <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-xs font-bold text-ink-2">
+                  {player.number > 0 ? number(player.number) : "–"}
                 </span>
-                <span className="flex-none text-xs text-ink-3">
-                  <Num className="me-2 text-ink-2">
-                    {t("xg.xa")} {fixed(player.xa ?? 0)}
-                  </Num>
-                  <Num className="font-bold text-volt">{fixed(player.xg ?? 0)}</Num>
-                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>
+                <span className="flex-none text-xs font-bold text-pitch">↑</span>
               </li>
             ))}
           </ul>
-          <p className="px-3 pb-3 pt-2 text-xs text-ink-3">{t("xg.source")}</p>
         </Card>
       ) : null}
+      <Link
+        to={`/match/${data.match.id}`}
+        className="block rounded-card border border-line bg-surface p-3 text-center text-xs font-bold text-volt transition-colors hover:bg-elevated"
+      >
+        {t("team.lineupViewMatch")} →
+      </Link>
     </div>
   );
 }
-
-/* ------------------------------------------------------------ news */
 
 /**
  * Recent ESPN coverage for this club. ESPN publishes no per-team soccer news
