@@ -25,9 +25,43 @@ async function fetchJsonWithRetry(url: string, options: RequestInit = {}, attemp
       Referer: BASE + "/",
       ...options.headers,
     };
-    const res = await fetch(url, { ...options, headers });
+
+    let res: Response;
+    try {
+      res = await fetch(url, { ...options, headers, signal: AbortSignal.timeout(15_000) });
+    } catch (err) {
+      // Network failures and timeouts are transient; retry with backoff.
+      if (i === attempts - 1) throw err;
+      await new Promise((r) => setTimeout(r, 5000 * (i + 1)));
+      continue;
+    }
+
     if (res.ok) return res.json();
+    // Understat doesn't cover this team/season — not an error, just empty.
     if (res.status === 404) return null;
+
+    if (res.status === 429) {
+      // Honor Retry-After (seconds or HTTP date), capped to avoid a long stall.
+      const retryAfter = res.headers.get("retry-after");
+      const retryAt = retryAfter === null ? Number.NaN : Date.parse(retryAfter);
+      const retrySeconds = retryAfter === null ? Number.NaN : Number(retryAfter);
+      const waitMs = Number.isFinite(retrySeconds)
+        ? retrySeconds * 1000
+        : Number.isFinite(retryAt)
+          ? Math.max(0, retryAt - Date.now())
+          : 5000 * (i + 1);
+      if (i === attempts - 1) throw new Error(`Understat 429 after ${attempts} attempts: ${url}`);
+      await new Promise((r) => setTimeout(r, Math.min(Math.max(waitMs, 0), 30_000)));
+      continue;
+    }
+
+    // Other 4xx responses are permanent — retrying will not help.
+    if (res.status >= 400 && res.status < 500) {
+      throw new Error(`Understat ${res.status} (permanent): ${url}`);
+    }
+
+    // Server errors are transient; back off before trying again.
+    if (i === attempts - 1) throw new Error(`Understat HTTP ${res.status} after ${attempts} attempts: ${url}`);
     await new Promise((r) => setTimeout(r, 5000 * (i + 1)));
   }
   throw new Error(`Understat failed after ${attempts} attempts: ${url}`);
