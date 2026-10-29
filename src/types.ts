@@ -89,6 +89,8 @@ export interface TimelineEvent {
 export interface PlayerRating {
   playerId: string;
   name: string;
+  avatarUrl?: string | null;
+  headshotUrl?: string | null;
   teamId: string;
   position: Position;
   fantasyPoints: number;
@@ -155,8 +157,10 @@ export interface LineupPlayer {
   /** ESPN headshot URL; missing for some players, so every render falls back
    *  to initials (`PlayerAvatar`). */
   headshot?: string | null;
-  /** URL of the player's local headshot (fallback to initials). */
+  /** API-selected local image URL. */
   avatarUrl?: string | null;
+  /** ESPN remote image fallback when the local file fails. */
+  headshotUrl?: string | null;
   /** Set once the sub predictor resolves. */
   subbedOff?: string;
 }

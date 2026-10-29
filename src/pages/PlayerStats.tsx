@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { TopBar } from "../components/TopBar";
 import { RowSkeleton } from "../components/Skeletons";
-import { EmptyState, ErrorState } from "../components/ui";
+import { EmptyState, ErrorState, PlayerAvatar } from "../components/ui";
 import { cx } from "../lib/cx";
 import { Card, Chip, Num, SectionHeading, Segmented, TeamBadge } from "../components/ui";
 import {
@@ -12,7 +12,7 @@ import {
   type LeaderPlayerRow,
   type LeaderSort,
 } from "../hooks/useApi";
-import { TEAM_FALLBACK, readableInk } from "../lib/colors";
+import { TEAM_FALLBACK } from "../lib/colors";
 import { useI18n } from "../i18n/context";
 import { Link } from "react-router-dom";
 import { haptic } from "../lib/telegram";
@@ -158,13 +158,12 @@ function PlayerBoard({
               >
                 {index + 1}
               </Num>
-              <div
-                className="grid h-9 w-9 flex-none place-items-center rounded-full text-xs font-bold"
-                style={{ backgroundColor: row.teamColor ?? TEAM_FALLBACK, color: readableInk(row.teamColor) }}
-                aria-hidden="true"
-              >
-                {row.jersey ?? row.position[0]}
-              </div>
+              <PlayerAvatar
+                name={localize(row.name)}
+                src={row.avatarUrl}
+                fallbackSrc={row.headshot}
+                size="sm"
+              />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-ink">{localize(row.name)}</p>
                 <p className="truncate text-xs text-ink-3">

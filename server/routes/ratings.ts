@@ -6,6 +6,7 @@ import express from "express";
 import { getDb, all, get, run } from "../db/index.js";
 import { writeLimiter } from "../auth/rateLimit.js";
 import { bad, currentUser, requireUser } from "./shared.js";
+import { localHeadshotUrl } from "./football.js";
 
 const db = getDb();
 
@@ -31,7 +32,7 @@ ratingsRouter.get("/api/matches/:id/ratings", requireUser, (req, res) => {
   const rows = all<RatingAggRow>(
     db,
     `SELECT s.player_id, p.full_name AS name, p.short_name, s.team_id, p.position,
-            s.stat_score, s.stat_breakdown, s.started, s.minutes_played,
+            p.headshot_url, s.stat_score, s.stat_breakdown, s.started, s.minutes_played,
             AVG(r.rating) AS avg_rating, COUNT(r.rating) AS votes,
             (SELECT rating FROM crowd_ratings WHERE user_id = ? AND player_id = s.player_id AND match_id = s.match_id) AS my_rating,
             (SELECT rc.comment FROM crowd_ratings rc
@@ -55,6 +56,7 @@ ratingsRouter.get("/api/matches/:id/ratings", requireUser, (req, res) => {
   );
   const withRatings = rows.map((r) => ({
     ...r,
+    avatarUrl: localHeadshotUrl(typeof r.headshot_url === "string" ? r.headshot_url : null, String(r.player_id)),
     // votes >= 3 implies avg_rating is non-null (COUNT and AVG see the same
     // NOT NULL rating column), so the null check only satisfies the compiler.
     crowd_rating:

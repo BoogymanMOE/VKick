@@ -245,7 +245,7 @@ export interface LeaguePlayerStatRow {
   headshot_url: string | null;
   /** Local-first face URL: /headshots/<id>.webp when the file exists, else the
       remote headshot_url, else null (avatar falls back to initials). */
-  avatar_url: string | null;
+  avatar_url?: string | null;
   jersey_number: number | null;
   appearances?: number | null;
   goals?: number | null;
@@ -361,7 +361,7 @@ export interface ApiSquadPlayer {
   espn_position: string | null;
   jersey_number: number | null;
   headshot_url: string | null;
-  avatar_url: string | null;
+  avatar_url?: string | null;
   appearances: number | null;
   season_goals: number | null;
   season_assists: number | null;
@@ -424,6 +424,8 @@ export interface ApiPlayerRating {
   short_name: string | null;
   team_id: string;
   position: string;
+  avatarUrl: string | null;
+  headshot_url: string | null;
   stat_score: number | null;
   stat_breakdown: string | null;
   started: number;
@@ -715,9 +717,10 @@ export const api = {
         short_name: string | null;
         position: string;
         jersey_number: number | null;
-        /** ESPN headshot URL for the pitch/bench avatars; null for the players
-         *  the feed carries no artwork for (the UI shows initials). */
+        /** ESPN headshot URL for fallback if a local image fails or is absent. */
         headshot_url: string | null;
+        /** Local-first face URL from the server, or the remote URL as fallback. */
+        avatarUrl: string | null;
         /** ESPN's granular role ("CD-L", "AM-R") — places a player on a side
          *  of their line. Null for feeds that don't publish one. */
         espn_position: string | null;

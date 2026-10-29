@@ -3,7 +3,7 @@ import type { PlayerRating, Team } from "../types";
 import { useI18n } from "../i18n/context";
 import { haptic, selectionHaptic } from "../lib/telegram";
 import { cx } from "../lib/cx";
-import { Chip, Num, TeamBadge } from "./ui";
+import { Chip, Num, PlayerAvatar, TeamBadge } from "./ui";
 import { ReportButton } from "./ReportButton";
 
 /**
@@ -50,6 +50,12 @@ export function RatingRow({
         )}
       >
         <TeamBadge team={team} size="sm" />
+        <PlayerAvatar
+          name={localize(rating.name)}
+          src={rating.avatarUrl}
+          fallbackSrc={rating.headshotUrl}
+          size="sm"
+        />
 
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-bold text-ink">{localize(rating.name)}</p>

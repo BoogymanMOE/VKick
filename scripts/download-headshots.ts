@@ -1,15 +1,22 @@
 import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import path from 'node:path';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
+import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
 
-const execAsync = promisify(exec);
-
-const DB_PATH = path.resolve('data/matchday.db');
-const OUT_DIR = path.resolve('public/headshots');
-const MISSING_PATH = path.resolve('scripts/headshots-missing.json');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const option = (name: string, fallback: string) => {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] ?? fallback : fallback;
+};
+const DB_PATH = process.env.SQLITE_PATH ?? path.resolve(ROOT, option('--db', 'data/matchday.db'));
+const OUT_DIR = path.join(ROOT, 'public/headshots');
+const MISSING_PATH = path.join(ROOT, 'scripts/headshots-missing.json');
+const MISSING_TMP_PATH = `${MISSING_PATH}.tmp`;
+const limitArg = Number(option('--limit', '0'));
+const LIMIT = Number.isSafeInteger(limitArg) && limitArg > 0 ? limitArg : null;
+const ALL = process.argv.includes('--all');
 
 const ESPN_HEADSHOT = (id: string | number) =>
   `https://a.espncdn.com/i/headshots/soccer/players/full/${id}.png`;
@@ -23,6 +30,7 @@ interface Player {
   id: string;
   name: string;
   league: string;
+  headshot_url: string | null;
 }
 
 interface MissingEntry {
@@ -54,13 +62,14 @@ async function probe(
         signal: AbortSignal.timeout(timeoutMs),
       });
       return { ok: res.ok, status: res.status };
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (attempt === RETRIES) {
+        const code =
+          typeof err === 'object' && err !== null && 'code' in err ? err.code : undefined;
+        const name = err instanceof Error ? err.name : undefined;
         return {
           ok: false,
-          status: err?.code === 'ABORT_ERR' || err?.name === 'AbortError'
-            ? 0
-            : -1,
+          status: code === 'ABORT_ERR' || name === 'AbortError' ? 0 : -1,
         };
       }
       const waited = Date.now() - start;
@@ -94,7 +103,7 @@ async function downloadBinary(
         continue;
       }
       return buf;
-    } catch (err: any) {
+    } catch {
       if (attempt === RETRIES) return null;
       await sleep(Math.max(500, Math.min(2000, Date.now() - start)));
     }
@@ -102,44 +111,14 @@ async function downloadBinary(
   return null;
 }
 
-async function isWebPAlready(bytes: Buffer): Promise<boolean> {
-  // webp magic bytes: 52 49 46 37 0D 0A 1A 0A
-  return (
-    bytes.length >= 12 &&
-    bytes[0] === 0x52 &&
-    bytes[1] === 0x49 &&
-    bytes[2] === 0x46 &&
-    bytes[3] === 0x37 &&
-    bytes[8] === 0x57 &&
-    bytes[9] === 0x45 &&
-    bytes[10] === 0x42 &&
-    bytes[11] === 0x50
-  );
-}
-
 async function resizeWebP(srcBytes: Buffer, dstPath: string): Promise<void> {
-  // cwebp -quiet -mt -size 160x160 -jpeg_quality 75 -qstamp 1 -o out.webp in.png
-  // Fallback: if cwebp absent, write png (we still deliver locally, just bigger).
-  const tmp = dstPath + '.tmp.png';
-  await writeFile(tmp, srcBytes);
-
-  try {
-    const { stdout, stderr } = await execAsync(
-      `cwebp -quiet -mt -size 160x160 -jpeg_quality 75 -mt -o "${dstPath}" "${tmp}"`,
-      { timeout: 25_000 },
-    );
-    await fs.promises.rm(tmp, { force: true });
-    if (!stdout && !stderr) return;
-    bullet(`  cwebp stdout/stderr: ${stdout || stderr}`);
-  } catch (err: any) {
-    // If cwebp is missing or failed, keep the original PNG — later steps will
-    // still serve it locally and it is still better than nothing.
-    if (err?.code === 'ENOENT' || /not found|cwebp/.test(String(err))) {
-      bullet(`  cwebp not available; keeping original PNG for ${path.basename(dstPath)}`);
-      return;
-    }
-    throw err;
-  }
+  const tmpPath = `${dstPath}.tmp`;
+  const webp = await sharp(srcBytes)
+    .resize(160, 160, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: 75 })
+    .toBuffer();
+  await writeFile(tmpPath, webp);
+  await rename(tmpPath, dstPath);
 }
 
 async function ensureDir(dir: string) {
@@ -147,6 +126,10 @@ async function ensureDir(dir: string) {
 }
 
 async function main() {
+  if (!LIMIT && !ALL) {
+    throw new Error('Refusing an unbounded download; pass --limit <count> or explicitly pass --all.');
+  }
+
   bullet(`DB: ${DB_PATH}`);
   bullet(`OUT: ${OUT_DIR}`);
   bullet(`Pattern: ${ESPN_HEADSHOT('000000')}`);
@@ -155,17 +138,19 @@ async function main() {
   await ensureDir(OUT_DIR);
 
   const db = new DatabaseSync(DB_PATH);
-  const rows = db
+  const allRows = db
     .prepare(
-      `SELECT p.id, p.full_name, t.league
+      `SELECT p.id, p.full_name AS name, t.league, p.headshot_url
        FROM players p
        JOIN teams t ON t.id = p.team_id
-       WHERE p.active = 1 AND (p.headshot_url IS NULL OR p.headshot_url = '')
-       ORDER BY t.league, p.full_name`,
+       WHERE p.active = 1
+       ORDER BY (p.headshot_url IS NULL OR p.headshot_url = ''), t.league, p.full_name`,
     )
-    .all() as Player[];
+    .all() as unknown as Player[];
+  const rows = LIMIT ? allRows.slice(0, LIMIT) : allRows;
 
-  bullet(`Active players without stored headshot_url: ${rows.length}`);
+  bullet(`Active players queued for local headshots: ${allRows.length}`);
+  if (LIMIT) bullet(`Limited run: processing first ${rows.length} players`);
   bullet('');
 
   // Count per league
@@ -185,7 +170,7 @@ async function main() {
 
   let downloaded = 0;
   let skipped = 0;
-  let missing: MissingEntry[] = [];
+  const missing: MissingEntry[] = [];
   let errors = 0;
 
   async function worker() {
@@ -197,17 +182,16 @@ async function main() {
 
       const playerId = String(p.id);
       const outFile = path.join(OUT_DIR, `${playerId}.webp`);
-      const alreadyExists = await fs.promises.stat(outFile).then(
-        () => true,
-        () => false,
-      );
+      const alreadyExists = await sharp(outFile)
+        .metadata()
+        .then((metadata) => metadata.format === 'webp', () => false);
 
       if (alreadyExists) {
         skipped += 1;
         continue;
       }
 
-      const url = ESPN_HEADSHOT(playerId);
+      const url = p.headshot_url || ESPN_HEADSHOT(playerId);
       bullet(
         `[${String(idx).padStart(5)}/${queue.length}] ${p.name.padEnd(30)} ${playerId} — probing ${url}`,
       );
@@ -230,30 +214,16 @@ async function main() {
         continue;
       }
 
-      // 3) If already webp, just save.
-      if (await isWebPAlready(bytes)) {
-        await writeFile(outFile, bytes);
+      // 3) Resize and convert to a valid webp regardless of the source format.
+      try {
+        await resizeWebP(bytes, outFile);
         downloaded += 1;
-        bullet(`  -> saved webp ${bytes.length} bytes`);
-      } else {
-        // 4) Resize to webp.
-        try {
-          await resizeWebP(bytes, outFile);
-          downloaded += 1;
-          const after = await fs.promises.stat(outFile);
-          bullet(`  -> resized webp ${after.size} bytes`);
-        } catch (err) {
-          // Leave the tmp file or saved PNG as fallback.
-          const tmp = outFile + '.tmp.png';
-          try {
-            await fs.promises.stat(tmp);
-            await fs.promises.rename(tmp, outFile);
-            bullet(`  -> kept original PNG (resize failed)`);
-          } catch {
-            missing.push({ id: playerId, name: p.name, league: p.league, probeUrl: url, status: -2 });
-            errors += 1;
-          }
-        }
+        const after = await fs.promises.stat(outFile);
+        bullet(`  -> resized webp ${after.size} bytes`);
+      } catch (err) {
+        missing.push({ id: playerId, name: p.name, league: p.league, probeUrl: url, status: -2 });
+        errors += 1;
+        bullet(`  -> image conversion failed: ${String(err)}`);
       }
 
       await sleep(DELAY_MS);
@@ -266,12 +236,13 @@ async function main() {
 
   await Promise.all(workers);
 
-  // Write missing report (always, even empty, so callers can diff).
-  await writeFile(MISSING_PATH, JSON.stringify({ generated: new Date().toISOString(), missing }, null, 2) + '\n');
+  // Write the report atomically so interruption never leaves malformed JSON.
+  await writeFile(MISSING_TMP_PATH, JSON.stringify({ generated: new Date().toISOString(), missing }, null, 2) + '\n');
+  await rename(MISSING_TMP_PATH, MISSING_PATH);
 
   bullet('');
   bullet('=== SUMMARY ===');
-  bullet(`Total players without stored URL : ${queue.length}`);
+  bullet(`Total active players processed     : ${queue.length}`);
   bullet(`Downloaded (saved to public/headshots) : ${downloaded}`);
   bullet(`Skipped (already existed)           : ${skipped}`);
   bullet(`Missing / dead / error              : ${missing.length}  (see ${MISSING_PATH})`);

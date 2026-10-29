@@ -647,6 +647,12 @@ function RecentLineupTab({ teamId }: { teamId: string }) {
         <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-xs font-bold text-ink-2">
           {player.number > 0 ? number(player.number) : "–"}
         </span>
+        <PlayerAvatar
+          name={localize(player.name)}
+          src={player.avatarUrl}
+          fallbackSrc={player.headshot ?? player.headshotUrl}
+          size="sm"
+        />
         <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>
         <span className="text-xs text-ink-3">{t(`pos.${player.position}`)}</span>
         {player.availability ? <AvailabilityBadge status={player.availability.status} reason={player.availability.reason ?? player.availability.expected_return} /> : null}
@@ -686,6 +692,12 @@ function RecentLineupTab({ teamId }: { teamId: string }) {
                 <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-xs font-bold text-ink-2">
                   {player.number > 0 ? number(player.number) : "–"}
                 </span>
+                <PlayerAvatar
+                  name={localize(player.name)}
+                  src={player.avatarUrl}
+                  fallbackSrc={player.headshot ?? player.headshotUrl}
+                  size="sm"
+                />
                 <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>
                 {player.availability ? <AvailabilityBadge status={player.availability.status} reason={player.availability.reason ?? player.availability.expected_return} /> : null}
                 {player.minutesPlayed ? <span className="flex-none text-xs font-bold text-pitch">↑</span> : null}

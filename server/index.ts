@@ -136,6 +136,16 @@ app.use(apiNotFound);
 
 /* ------------------------------------------------------------ static frontend */
 
+// Runtime roster syncs write newly found faces into public/headshots after the
+// build. Serve that directory directly; Vite also serves public/ in development
+// and copies its contents into dist/ during production builds.
+app.use(
+  "/headshots",
+  express.static(path.join(ROOT_DIR, "public", "headshots"), {
+    setHeaders: (res) => res.setHeader("Cache-Control", "public, max-age=86400"),
+  }),
+);
+
 // Serve the built Vite frontend (dist/) so the React app loads in production.
 app.use(
   express.static(path.join(ROOT_DIR, "dist"), {

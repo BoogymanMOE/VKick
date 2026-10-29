@@ -320,28 +320,33 @@ export function Num({ children, className }: { children: ReactNode; className?: 
  * player's initials on the same footprint — a roster reads evenly either way,
  * and a squad with no artwork at all still looks deliberate. The image is
  * decorative (the name is always rendered next to it) and lazy, since a squad
- * list is 25 of these.
+ * list is 25 of these. A failed local URL falls through to the remote URL,
+ * then initials.
  */
 export function PlayerAvatar({
   name,
   src,
+  fallbackSrc,
   size = "md",
   className,
 }: {
   name: string;
   src?: string | null;
+  fallbackSrc?: string | null;
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
-  const [broken, setBroken] = useState(false);
+  const [brokenSources, setBrokenSources] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const dims = { sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm" }[size];
-  // Local-first: if the bundled headshot exists for this player id, prefer it.
-  // Falls back to the remote headshot_url, then initials. The URL is derived
-  // from the player id, so callers should pass a stable id via `src` (or a
-  // headshot_url that equals the ESPN CDN URL — same shape).
-  const photo = (!broken && src) ?? null;
-  const resolved = photo ?? null;
+  // The API selects local before remote; a failed source advances to fallback.
+  const candidates = [src, fallbackSrc].filter((candidate): candidate is string => Boolean(candidate));
+  const resolved = candidates.find((candidate) => !brokenSources.includes(candidate)) ?? null;
+  useEffect(() => setLoaded(false), [resolved]);
+  const onImageError = () => {
+    if (resolved) setBrokenSources((sources) => [...sources, resolved]);
+    setLoaded(false);
+  };
   return (
     <span
       className={cx(
@@ -355,7 +360,7 @@ export function PlayerAvatar({
         <img
           src={resolved}
           alt=""
-          onError={() => setBroken(true)}
+          onError={onImageError}
           onLoad={() => setLoaded(true)}
           loading="lazy"
           decoding="async"

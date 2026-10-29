@@ -8,6 +8,7 @@ import express, { type Response } from "express";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { getDb, all, get } from "../db/index.js";
+import { PROJECT_ROOT } from "../env.js";
 import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
 
 import { isAllowedLeague } from "../espn/catalog.js";
@@ -32,10 +33,10 @@ const db = getDb();
  * 2) the remote ESPN headshot_url the sync stored
  * 3) null so the UI falls back to initials.
  */
-function localHeadshotUrl(headshotUrl: string | null, playerId: string | number): string | null {
+export function localHeadshotUrl(headshotUrl: string | null, playerId: string | number): string | null {
   const id = String(playerId);
   try {
-    const headshotPath = path.join(process.cwd(), "public", "headshots", `${id}.webp`);
+    const headshotPath = path.join(PROJECT_ROOT, "public", "headshots", `${id}.webp`);
     if (existsSync(headshotPath)) {
       return `/headshots/${id}.webp`;
     }
@@ -259,12 +260,23 @@ function matchReadState(matchId: string): MatchReadState | undefined {
   );
 }
 
-function lineupRows(matchId: string): Record<string, unknown>[] {
-  return all(
+interface MatchPlayerRow extends Record<string, unknown> {
+  player_id: string;
+  team_id: string;
+  headshot_url: string | null;
+  availability_status: string | null;
+  availability_reason: string | null;
+  availability_expected_return: string | null;
+}
+
+function lineupRows(matchId: string): MatchPlayerRow[] {
+  return all<MatchPlayerRow>(
     db,
     `SELECT s.*, p.full_name, p.short_name, p.position, p.jersey_number, p.headshot_url,
-            p.espn_position
+            p.espn_position, a.status AS availability_status, a.reason AS availability_reason,
+            a.expected_return AS availability_expected_return
      FROM match_player_stats s JOIN players p ON p.id = s.player_id
+     LEFT JOIN team_availability a ON a.team_id = s.team_id AND a.player_id = s.player_id
      WHERE s.match_id = ?
      ORDER BY s.started DESC, s.minutes_played DESC, p.jersey_number ASC`,
     [matchId],
@@ -602,10 +614,18 @@ matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
       position: String(row.position ?? "MID"),
       number: typeof row.jersey_number === "number" ? row.jersey_number : 0,
       headshot: typeof row.headshot_url === "string" ? row.headshot_url : null,
+      avatarUrl: localHeadshotUrl(
+        typeof row.headshot_url === "string" ? row.headshot_url : null,
+        row.player_id as string | number,
+      ),
       espnPosition: typeof row.espn_position === "string" ? row.espn_position : null,
       started: Number(row.started) === 1,
-      availability: row.availability
-        ? { status: row.availability.status as "injured" | "suspended" | "doubtful", reason: row.availability.reason, expected_return: row.availability.expected_return }
+      availability: row.availability_status
+        ? {
+            status: row.availability_status as "injured" | "suspended" | "doubtful",
+            reason: row.availability_reason,
+            expected_return: row.availability_expected_return,
+          }
         : null,
     }));
   // Split into starters, subs, and bench (all non-starters are on the bench)
@@ -646,10 +666,25 @@ matchesRouter.get("/api/teams/:id/players", (req, res) => {
     [team.league, season, teamId],
   );
   const coach = get<{ name: string }>(db, "SELECT name FROM team_coaches WHERE team_id = ?", [teamId]);
-  res.json({ season, players: rows, coach: coach?.name ?? null });
+  res.json({
+    season,
+    players: rows.map((row) => ({
+      ...row,
+      avatar_url: localHeadshotUrl(row.headshot_url as string | null, row.id as string | number),
+    })),
+    coach: coach?.name ?? null,
+  });
 });
 
 /** Availability for one team (injured/suspended/doubtful), cached 30 min; empty result also cached. */
+type AvailabilityCacheEntry = {
+  players: { player_id: string; status: "injured" | "suspended" | "doubtful"; reason: string | null; expected_return: string | null }[];
+  stale: boolean;
+  ts: number;
+};
+
+const availabilityCache = new Map<string, AvailabilityCacheEntry>();
+
 matchesRouter.get("/api/teams/:id/availability", async (req, res) => {
   const teamId = String(req.params.id);
   if (isBlockedTeamId(teamId)) return bad(res, "not found", 404);
@@ -659,7 +694,7 @@ matchesRouter.get("/api/teams/:id/availability", async (req, res) => {
 
   // Check cache first (simple in-memory store shared across requests in one process)
   const cacheKey = `avail:${teamId}`;
-  const cached = globalThis.availabilityCache?.[cacheKey];
+  const cached = availabilityCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < 30 * 60_000) {
     return res.json({ players: cached.players, stale: cached.stale });
   }
@@ -679,8 +714,7 @@ matchesRouter.get("/api/teams/:id/availability", async (req, res) => {
   const hasData = rows.length > 0;
 
   // Cache the result (even if empty) for 30 minutes
-  if (!globalThis.availabilityCache) globalThis.availabilityCache = {};
-  globalThis.availabilityCache[cacheKey] = { players, stale: !hasData, ts: Date.now() };
+  availabilityCache.set(cacheKey, { players, stale: !hasData, ts: Date.now() });
 
   res.json({ players, stale: !hasData });
 });
@@ -762,7 +796,14 @@ matchesRouter.get("/api/leagues/:league/players", (req, res) => {
      LIMIT ?`,
     [league, season, limit],
   );
-  res.json({ season, sort: col, players: rows });
+  res.json({
+    season,
+    sort: col,
+    players: rows.map((row) => ({
+      ...row,
+      avatar_url: localHeadshotUrl(row.headshot_url as string | null, row.player_id as string | number),
+    })),
+  });
 });
 
 // Season team stats table per league.

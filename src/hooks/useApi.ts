@@ -512,6 +512,7 @@ export interface LeaderPlayerRow {
   teamShort: string | null;
   teamColor: string | null;
   headshot: string | null;
+  avatarUrl: string | null;
   jersey: number | null;
   appearances: number;
   goals: number;

@@ -254,6 +254,8 @@ function adapt(p: import("../lib/api").ApiPlayerRating, league: string): PlayerR
   return {
     playerId: p.player_id,
     name: p.name,
+    avatarUrl: p.avatarUrl,
+    headshotUrl: p.headshot_url,
     teamId: p.team_id,
     position: (p.position ?? "MID") as PlayerRating["position"],
     fantasyPoints: p.stat_score ?? 0,
