@@ -1,0 +1,880 @@
+From 0dbf4e07a2d8f79c01bffe076b8c766f6108caae Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 15:45:24 +0330
+Subject: [PATCH 165/230] chore: commit or revert pre-existing uncommitted
+ changes (cleanup)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+All orphans audited; nothing reverted — every file is real work:
+
+- The API-facing competition catalog now also lists any cup or tournament
+  the database actually has a fixture for (server/espn/competitions.ts,
+  used by /api/competitions; the pinned big-five base catalog is untouched),
+  with tests covering the new shape.
+- Cups page: names the competition its fixtures belong to and drops the
+  empty "Live now" heading that read as a failure.
+- fixtures.json + scripts/collect-code.mjs + scripts/ui-review.mjs: the
+  UI/UX review round's fixture notes and 390px screenshot collectors.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ fixtures.json               |  20 +++
+ scripts/collect-code.mjs    |  78 +++++++++++
+ scripts/ui-review.mjs       | 261 ++++++++++++++++++++++++++++++++++++
+ server/espn/catalog.ts      |   5 +-
+ server/espn/competitions.ts | 111 +++++++++++++++
+ server/routes/football.ts   |  11 +-
+ src/pages/Cups.tsx          | 165 +++++++++++------------
+ tests/competitions.test.ts  |  49 ++++++-
+ 8 files changed, 609 insertions(+), 91 deletions(-)
+ create mode 100644 fixtures.json
+ create mode 100644 scripts/collect-code.mjs
+ create mode 100644 scripts/ui-review.mjs
+ create mode 100644 server/espn/competitions.ts
+
+diff --git a/fixtures.json b/fixtures.json
+new file mode 100644
+index 0000000..e0db7da
+--- /dev/null
++++ b/fixtures.json
+@@ -0,0 +1,20 @@
++{
++  "feed": [
++    {"id": "m1", "status": "live", "description": "Match in progress at minute 45"},
++    {"id": "m2", "status": "halftime", "description": "Half-time break"},
++    {"id": "m3", "status": "finished", "description": "Match completed: home 2 - away 1"},
++    {"id": "m4", "status": "scheduled", "description": "Scheduled for later today, kickoff 20:00"},
++    {"id": "m5", "status": "scheduled", "description": "Scheduled more than a day away, kickoff 2026-10-21"}
++  ],
++  "matchDetail": {
++    "live": {"id": "m1", "status": "live", "minute": "45"},
++    "halftime": {"id": "m2", "status": "halftime"},
++    "finished": {"id": "m3", "status": "finished", "home_score": 2, "away_score": 1},
++    "scheduledToday": {"id": "m4", "status": "scheduled", "kickoff_at": "2026-10-20T20:00:00.000Z"},
++    "scheduledTomorrow": {"id": "m5", "status": "scheduled", "kickoff_at": "2026-10-21T20:00:00.000Z"}
++  },
++  "cups": {
++    "uefa.champions": "cup with fixtures in DB",
++    "ned.1": "league with fixtures in DB"
++  }
++}
+diff --git a/scripts/collect-code.mjs b/scripts/collect-code.mjs
+new file mode 100644
+index 0000000..9da4c0b
+--- /dev/null
++++ b/scripts/collect-code.mjs
+@@ -0,0 +1,78 @@
++/**
++ * UI/UX review, part B+C: assemble the requested source files into one
++ * markdown bundle (.ui-shots/review/code-bundle.md), each file fenced with a
++ * path header. Broken paths are reported, not skipped silently.
++ *
++ * Run: node scripts/collect-code.mjs
++ */
++import { readFileSync, writeFileSync } from "fs";
++
++const ENTRIES = [
++  // Part B — components
++  ["src/components/TabBar.tsx", "src/components/TabBar.tsx"],
++  ["src/components/AppShell.tsx", "src/components/AppShell.tsx"],
++  ["src/components/TopBar.tsx", "src/components/TopBar.tsx"],
++  ["src/components/ui.tsx", "src/components/ui.tsx — Button, Chip, Segmented, ListRow, EmptyState, ErrorState, TeamBadge, Num (full file)"],
++  ["src/components/BottomSheet.tsx", "src/components/BottomSheet.tsx"],
++  ["src/components/DateStrip.tsx", "src/components/DateStrip.tsx"],
++  ["src/components/InlineAd.tsx", "src/components/InlineAd.tsx"],
++  ["src/components/panels/LeaguePickerSheet.tsx", "src/components/panels/LeaguePickerSheet.tsx"],
++  ["src/components/panels/LineupsPanel.tsx", "src/components/panels/LineupsPanel.tsx"],
++  ["src/components/TimelineList.tsx", "src/components/TimelineList.tsx"],
++  ["src/components/panels/CommentaryPanel.tsx", "src/components/panels/CommentaryPanel.tsx"],
++  // tokens: the file the user guessed as src/styles/tokens.css actually lives at the repo root
++  ["tokens.css", "tokens.css (imported by src/index.css as ../tokens.css — there is no src/styles/)"],
++  ["src/index.css", "src/index.css — includes the Tailwind @theme mapping of the tokens"],
++  // Part B — i18n direction handling (where dir="rtl" is set)
++  ["src/i18n/I18nProvider.tsx", "src/i18n/I18nProvider.tsx — the ONLY place documentElement.dir is set"],
++  // Part C — Telegram SDK
++  ["src/lib/telegram.ts", "src/lib/telegram.ts — readiness/auth, theme params, viewport, haptics, share"],
++  ["src/hooks/useBackNavigation.ts", "src/hooks/useBackNavigation.ts — Telegram BackButton wiring (mounted from AppShell)"],
++];
++
++const ICON_RE = /(?:^export const (ChevronLeftIcon|ChevronRightIcon|ChevronDownIcon|ArrowIcon))[\s\S]*?^\)/m;
++
++function extractArrows(source) {
++  // Take the named arrow/chevron exports plus whatever they interleave with
++  // between them in that band of the file.
++  const lines = source.split(/\r?\n/);
++  const wanted = new Set(["ChevronRightIcon", "ChevronLeftIcon", "ChevronDownIcon", "ArrowIcon"]);
++  const out = [];
++  let collecting = false;
++  let depth = 0;
++  for (const line of lines) {
++    const header = line.match(/^export const (\w+)/);
++    if (header) {
++      collecting = wanted.has(header[1]);
++      depth = 0;
++    }
++    if (collecting) out.push(line);
++    if (collecting && /[{(]/.test(line)) depth += (line.match(/[{(]/g) ?? []).length;
++    if (collecting && /[})]/.test(line)) depth -= (line.match(/[})]/g) ?? []).length;
++    if (collecting && depth <= 0 && /\)\s*;\s*$/.test(line)) collecting = false;
++  }
++  return out.join("\n");
++}
++
++let md = `# UI/UX review — code bundle (part B + C)\n\nGenerated from the working tree. Screenshot set lives beside this file (.ui-shots/review/).\n\n`;
++let missing = [];
++for (const [path, label] of ENTRIES) {
++  let body;
++  try {
++    body = readFileSync(path, "utf8");
++  } catch {
++    missing.push(path);
++    continue;
++  }
++  md += `\n\n---\n\n## \`${path}\`\n\n${label}\n\n\`\`\`\n${body}\n\`\`\`\n`;
++}
++// icons: chevron/arrow band only
++md += `\n\n---\n\n## \`src/components/icons.tsx\` (excerpt)\n\n\nThe chevron/arrow icons only, as requested. For the full 216-line file see the repo.\n\n\`\`\`tsx\n${extractArrows(readFileSync("src/components/icons.tsx", "utf8"))}\n\`\`\`\n`;
++
++if (missing.length > 0) {
++  md += `\n\n---\n\n## MISSING — requested but not present in the repo\n\n${missing.map((m) => `- \`${m}\``).join("\n")}\n`;
++  console.error("MISSING:", missing.join(", "));
++}
++
++writeFileSync(".ui-shots/review/code-bundle.md", md);
++console.log(`bundle written: .ui-shots/review/code-bundle.md (${(md.length / 1024).toFixed(1)} KB), missing: ${missing.length}`);
+diff --git a/scripts/ui-review.mjs b/scripts/ui-review.mjs
+new file mode 100644
+index 0000000..7e9a954
+--- /dev/null
++++ b/scripts/ui-review.mjs
+@@ -0,0 +1,261 @@
++/**
++ * UI/UX review collector: screenshots at 390x844 for EN and FA, plus the
++ * full-code bundle path handled separately (see collect-code.mjs).
++ *
++ * Pages: Login, Onboarding (all steps), Matches (live/upcoming/finished mix,
++ * empty, loading, toast), MatchDetail (timeline/stats/lineups x live/finished/
++ * upcoming), Tables (tables + browse), Cups, TeamPage (squad/form/stats/xg),
++ * Profile (page, notification sheet, reset sheet), NotFound.
++ *
++ * Run: SMOKE_CHANNEL=msedge node scripts/ui-review.mjs
++ * Output: .ui-shots/review/ (gitignored)
++ */
++import { mkdirSync, writeFileSync } from "fs";
++import { chromium } from "playwright";
++
++const BASE = process.env.SMOKE_BASE_URL ?? "http://localhost:5173";
++const API = process.env.SMOKE_API_URL ?? "http://localhost:8787";
++const CHANNEL = process.env.SMOKE_CHANNEL ?? "";
++const OUT = ".ui-shots/review";
++mkdirSync(OUT, { recursive: true });
++
++function devUserId() {
++  return Number(`9${Date.now() % 10_000_000_000_000}${String(Math.floor(Math.random() * 100)).padStart(2, "0")}`);
++}
++function appUrl(user, hash) {
++  return `${BASE}/?devUser=${encodeURIComponent(user)}#${hash}`;
++}
++
++async function waitReady() {
++  const deadline = Date.now() + 90_000;
++  for (;;) {
++    try {
++      const h = await fetch(`${API}/health`);
++      const app = await fetch(`${BASE}/`);
++      if (h.ok && app.ok) return;
++    } catch {
++      /* not up yet */
++    }
++    if (Date.now() > deadline) {
++      console.error(`servers never came up: ${API} / ${BASE}`);
++      process.exit(1);
++    }
++    await new Promise((r) => setTimeout(r, 1000));
++  }
++}
++
++await waitReady();
++
++const PAGEW = 390, PAGEH = 844;
++
++const browser = CHANNEL
++  ? await chromium.launch({ headless: true, args: ["--no-sandbox"], channel: CHANNEL })
++  : await chromium.launch({ headless: true, args: ["--no-sandbox"] });
++
++// ---------------------------------------------------------------- fixtures
++const res = await fetch(`${API}/api/matches?limit=300`);
++const { matches } = await res.json();
++const live = matches.find((m) => m.status === "live" || m.status === "halftime") ?? null;
++const finished = matches.find((m) => m.status === "finished") ?? matches.at(-1);
++const upcoming = matches.find((m) => m.status === "scheduled") ?? null;
++const teamId = matches[0]?.home_team_id;
++console.log(`fixtures: live=${live?.id} finished=${finished?.id} upcoming=${upcoming?.id} team=${teamId}`);
++
++async function newPage(lang, { lcp = false } = {}) {
++  const ctx = await browser.newContext({ viewport: { width: PAGEW, height: PAGEH } });
++  await ctx.addInitScript(
++    ([lang, ]) => {
++      localStorage.setItem("matchday.lang", lang);
++      localStorage.removeItem("matchday.loggedOut");
++      localStorage.setItem("verdikick.onboarded", "1");
++      localStorage.setItem("verdikick.introSeen", "1");
++      localStorage.setItem("verdikick.whatsNewSeen", "9.9.9");
++    },
++    [lang, lcp],
++  );
++  return ctx.newPage();
++}
++
++let shotCount = 0;
++async function shot(page, name, { fullPage = false, wait = 600 } = {}) {
++  await page.waitForTimeout(wait);
++  await page.screenshot({ path: `${OUT}/${name}.png`, fullPage });
++  shotCount += 1;
++}
++
++async function settle(page, url, ms = 3000) {
++  await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
++  await page.waitForTimeout(ms);
++}
++
++// ------------------------------------------------------------------ pages
++for (const lang of ["en", "fa"]) {
++  const L = lang;
++
++  // 1. Login (on its own, signed out)
++  {
++    const ctx = await browser.newContext({ viewport: { width: PAGEW, height: PAGEH } });
++    await ctx.addInitScript(([lang]) => {
++      localStorage.setItem("matchday.lang", lang);
++      localStorage.setItem("matchday.loggedOut", "1");
++    }, [lang]);
++    const page = await ctx.newPage();
++    await settle(page, appUrl(devUserId(), "/login"), 2000);
++    await shot(page, `login-${L}`, { fullPage: true });
++    await ctx.close();
++  }
++
++  // 2. Onboarding: step 1 (pick), step 2 (more clubs), step 3 (leagues)
++  {
++    const page = await newPage(L);
++    await settle(page, appUrl(devUserId(), "/onboarding"), 3500);
++    await shot(page, `onboarding-step1-pick-${L}`, { fullPage: true });
++    await page.evaluate(() => {
++      const cards = [...document.querySelectorAll("ul button")];
++      const b = cards.find((x) => (x.textContent ?? "").trim().length > 1);
++      if (b) b.click();
++    });
++    await page.waitForTimeout(2500);
++    const cont = { en: "Continue", fa: "ادامه" }[lang];
++    await page.evaluate(([t]) => {
++      const b = [...document.querySelectorAll("button")].find((x) => (x.textContent ?? "").trim() === t);
++      if (b) b.click();
++    }, [cont]);
++    await page.waitForTimeout(2000);
++    await shot(page, `onboarding-step2-clubs-${L}`, { fullPage: true });
++    await page.evaluate(([t]) => {
++      const b = [...document.querySelectorAll("button")].find((x) => (x.textContent ?? "").trim() === t);
++      if (b) b.click();
++    }, [cont]);
++    await page.waitForTimeout(2000);
++    await shot(page, `onboarding-step3-leagues-${L}`, { fullPage: true });
++    await page.context().close();
++  }
++
++  // 3. Matches feed: mixed day + loading + empty + toast
++  {
++    const page = await newPage(L);
++    // loading state: hard-block one fetch and shoot early
++    await page.route(`**/api/matches**`, async (route) => {
++      await new Promise((r) => setTimeout(r, 2500));
++      await route.continue();
++    });
++    page.goto(appUrl(devUserId(), "/matches"), { waitUntil: "domcontentloaded" });
++    await page.waitForTimeout(700);
++    await shot(page, `matches-loading-${L}`);
++    await page.unroute(`**/api/matches**`);
++    await page.waitForTimeout(3500);
++    await shot(page, `matches-feed-mixed-${L}`, { fullPage: true });
++    // empty day
++    await settle(page, appUrl(devUserId(), "/matches?date=2031-05-05"), 2500);
++    await shot(page, `matches-empty-${L}`, { fullPage: true });
++    // toast via refresh
++    await settle(page, appUrl(devUserId(), "/matches"), 2500);
++    await page.evaluate(() => {
++      const b = [...document.querySelectorAll("button")].find(
++        (x) => x.getAttribute("aria-label") === "Refresh" || x.getAttribute("aria-label") === "تحديث",
++      );
++      if (b) b.click();
++    });
++    await page.waitForTimeout(500);
++    await shot(page, `toast-refresh-${L}`);
++    await page.context().close();
++  }
++
++  // 4. MatchDetail: live / finished / upcoming x timeline / stats / lineups
++  for (const [kind, match] of [["live", live], ["finished", finished], ["upcoming", upcoming]]) {
++    if (!match) continue;
++    for (const tab of ["timeline", "stats", "lineups"]) {
++      const page = await newPage(L);
++      await settle(page, appUrl(devUserId(), `/match/${match.id}?tab=${tab}`), 3500);
++      await shot(page, `match-${kind}-${tab}-${L}`, { fullPage: true });
++      await page.context().close();
++    }
++  }
++
++  // 5. Tables view (a real league table) + Browse view: the All/Leagues/Cups
++  //    group chips, then the Cups group itself. KNOWN REVIEW FINDING, captured
++  //    on purpose: with the live catalog exposing only league rows, selecting
++  //    "Cups" renders NO rows and NO empty-state hint — the section is blank.
++  //    The cup group WITH fixtures is on the Cups page (see /cups shots).
++  for (const view of ["tables", "browse"]) {
++    const page = await newPage(L);
++    await settle(page, appUrl(devUserId(), "/table"), 3500);
++    const label = view === "browse" ? { en: "Browse", fa: "مرور" }[lang] : { en: "Tables", fa: "جدول‌ها" }[lang];
++    await page.evaluate((label) => {
++      const b = [...document.querySelectorAll("button")].find((x) => (x.textContent ?? "").trim() === label);
++      if (b) b.click();
++    }, [label]);
++    await page.waitForTimeout(2000);
++    await shot(page, `table-${view}-${L}`, { fullPage: true });
++    if (view === "browse") {
++      const cupsLabel = { en: "Cups", fa: "جام‌ها" }[lang];
++      await page.evaluate((cupsLabel) => {
++        const b = [...document.querySelectorAll("button")].find((x) => (x.textContent ?? "").trim() === cupsLabel);
++        if (b) b.click();
++      }, [cupsLabel]);
++      await page.waitForTimeout(2000);
++      await shot(page, `table-browse-cups-selected-${L}`, { fullPage: true });
++    }
++    await page.context().close();
++  }
++
++  // 6. Cups
++  {
++    const page = await newPage(L);
++    await settle(page, appUrl(devUserId(), "/cups"), 3500);
++    await shot(page, `cups-${L}`, { fullPage: true });
++    await page.context().close();
++  }
++
++  // 7. TeamPage: all four tabs
++  for (const tab of ["squad", "form", "stats", "xg"]) {
++    const page = await newPage(L);
++    await settle(page, appUrl(devUserId(), `/team/${teamId}?tab=${tab}`), 3500);
++    await shot(page, `team-${tab}-${L}`, { fullPage: true });
++    await page.context().close();
++  }
++
++  // 8. Profile: page, notification sheet, reset sheet
++  {
++    const page = await newPage(L);
++    await settle(page, appUrl(devUserId(), "/profile"), 3500);
++    await shot(page, `profile-page-${L}`, { fullPage: true });
++    // openRow is defined INSIDE the browser context: helpers from the Node
++    // scope do not exist where these callbacks execute.
++    const openRow = (rowTexts) =>
++      page.evaluate((texts) => {
++        const els = [...document.querySelectorAll("div, li, button")];
++        const el = els.find(
++          (b) => texts.some((t) => (b.textContent ?? "").includes(t)) && (b.textContent ?? "").length < 140,
++        );
++        if (el) {
++          el.click();
++          return true;
++        }
++        return false;
++      }, rowTexts);
++    await openRow(L === "fa" ? ["اعلان‌ها", "اطلاع‌رسانی"] : ["Notifications"]);
++    await page.waitForTimeout(1200);
++    await shot(page, `profile-sheet-notifications-${L}`);
++    await page.keyboard.press("Escape");
++    await page.waitForTimeout(800);
++    // reset sheet
++    await openRow(L === "fa" ? ["بازنشانی تنظیمات", "بازنشانی"] : ["Reset local"]);
++    await page.waitForTimeout(1200);
++    await shot(page, `profile-sheet-reset-${L}`);
++    await page.context().close();
++  }
++
++  // 9. NotFound
++  {
++    const page = await newPage(L);
++    await settle(page, appUrl(devUserId(), "/no-such-screen-xyz"), 3000);
++    await shot(page, `notfound-${L}`, { fullPage: true });
++    await page.context().close();
++  }
++}
++
++await browser.close();
++writeFileSync(`${OUT}/fixtures.json`, JSON.stringify({ live, finished, upcoming, teamId }, null, 2));
++console.log(`DONE: ${shotCount} screenshots in ${OUT}`);
+diff --git a/server/espn/catalog.ts b/server/espn/catalog.ts
+index f4927a7..6903e50 100644
+--- a/server/espn/catalog.ts
++++ b/server/espn/catalog.ts
+@@ -2,12 +2,13 @@
+  * The Browse catalog: the 5 big-five leagues, each with its display name.
+  * No cups, no internationals, no extra competitions.
+  */
+-import { COMPETITIONS, isCup, type LeagueSlug } from "./types.js";
++import { COMPETITIONS, isCup } from "./types.js";
+ 
+ export type CompetitionKind = "league" | "cup" | "tournament";
+ 
+ export interface CatalogEntry {
+-  slug: LeagueSlug;
++  /** Big-five slugs for the synced leagues; any slug the DB carries for cups. */
++  slug: string;
+   name: string;
+   kind: CompetitionKind;
+   /** True when the competition owns a league table (always true for leagues). */
+diff --git a/server/espn/competitions.ts b/server/espn/competitions.ts
+new file mode 100644
+index 0000000..8a00d4b
+--- /dev/null
++++ b/server/espn/competitions.ts
+@@ -0,0 +1,111 @@
++/**
++ * The Browse/Cups catalog as the API serves it: the synced big five PLUS any
++ * cup or tournament that actually has a match in the database. The DB is the
++ * source of truth for what exists — a competition with no fixture is noise on
++ * the Cups strip, while one with fixtures and no catalog entry is invisible.
++ *
++ * Names are the English keys `src/i18n/names.ts` maps to Persian, so a cup the
++ * client localizes never shows a raw slug. An unknown slug is humanized (never
++ * printed as a dotted code) and defaults to `league`, because showing a league
++ * on the Cups page is a worse mistake than hiding an unrecognised knockout.
++ */
++import { all, type DB } from "../db/index.js";
++import { competitionCatalog, type CatalogEntry, type CompetitionKind } from "./catalog.js";
++
++/** slug -> the English name `toFa` knows. */
++const COMPETITION_NAMES: Record<string, string> = {
++  "uefa.champions": "UEFA Champions League",
++  "uefa.europa": "UEFA Europa League",
++  "uefa.europa.conf": "UEFA Conference League",
++  "uefa.champions_qual": "UEFA Champions League Qualifying",
++  "uefa.super_cup": "UEFA Super Cup",
++  "eng.fa": "English FA Cup",
++  "eng.league_cup": "English Carabao Cup",
++  "esp.copa_del_rey": "Spanish Copa del Rey",
++  "ger.dfb_pokal": "German Cup",
++  "ita.coppa_italia": "Coppa Italia",
++  "fra.coupe_de_france": "Coupe de France",
++  "fifa.world": "FIFA World Cup",
++  "fifa.cwc": "FIFA Club World Cup",
++  "fifa.worldq.uefa": "FIFA World Cup Qualifying — UEFA",
++  "fifa.worldq.conmebol": "FIFA World Cup Qualifying — CONMEBOL",
++  "uefa.euro": "UEFA European Championship",
++  "uefa.euroq": "UEFA European Championship Qualifying",
++  "uefa.nations": "UEFA Nations League",
++  "caf.nations": "Africa Cup of Nations",
++  "concacaf.gold": "CONCACAF Gold Cup",
++  "conmebol.america": "Copa América",
++  "ned.1": "Dutch Eredivisie",
++  "por.1": "Portuguese Primeira Liga",
++  "tur.1": "Turkish Super Lig",
++  "sco.1": "Scottish Premiership",
++};
++
++/** Domestic cup slugs (knockout). */
++const CUP_SLUGS = new Set([
++  "uefa.champions",
++  "uefa.europa",
++  "uefa.europa.conf",
++  "uefa.champions_qual",
++  "uefa.super_cup",
++  "eng.fa",
++  "eng.league_cup",
++  "esp.copa_del_rey",
++  "ger.dfb_pokal",
++  "ita.coppa_italia",
++  "fra.coupe_de_france",
++]);
++
++/** National-team tournament slugs. */
++const TOURNAMENT_SLUGS = new Set([
++  "fifa.world",
++  "fifa.cwc",
++  "fifa.worldq.uefa",
++  "fifa.worldq.conmebol",
++  "uefa.euro",
++  "uefa.euroq",
++  "uefa.nations",
++  "caf.nations",
++  "concacaf.gold",
++  "conmebol.america",
++]);
++
++export function kindForCompetition(slug: string): CompetitionKind {
++  if (CUP_SLUGS.has(slug)) return "cup";
++  if (TOURNAMENT_SLUGS.has(slug)) return "tournament";
++  return "league";
++}
++
++/** English display name for a slug; humanized when unknown (never the raw code). */
++export function competitionNameFor(slug: string): string {
++  const known = COMPETITION_NAMES[slug];
++  if (known) return known;
++  const parts = slug.split(".").slice(1);
++  const joined = (parts.length ? parts.join(" ") : slug)
++    .replace(/[_-]+/g, " ")
++    .trim();
++  return joined ? joined.replace(/\b\w/g, (c) => c.toUpperCase()) : slug;
++}
++
++/**
++ * The synced catalog plus every competition the database has a match for.
++ * `competitionCatalog()` alone is deliberately big-five-only (pinned by
++ * tests/competitions.test.ts); this is the API-facing view.
++ */
++export function competitionCatalogWithMatches(db: DB): CatalogEntry[] {
++  const entries = competitionCatalog();
++  const seen = new Set(entries.map((e) => e.slug));
++  const extra = all<{ league: string }>(db, "SELECT DISTINCT league FROM matches ORDER BY league ASC");
++  for (const row of extra) {
++    if (seen.has(row.league)) continue;
++    entries.push({
++      slug: row.league,
++      name: competitionNameFor(row.league),
++      kind: kindForCompetition(row.league),
++      hasTable: false,
++      comingSoon: false,
++    });
++    seen.add(row.league);
++  }
++  return entries;
++}
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index c05d092..b942976 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -8,7 +8,8 @@ import express, { type Response } from "express";
+ import { getDb, all, get } from "../db/index.js";
+ import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
+ 
+-import { competitionCatalog, isAllowedLeague } from "../espn/catalog.js";
++import { isAllowedLeague } from "../espn/catalog.js";
++import { competitionCatalogWithMatches } from "../espn/competitions.js";
+ import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
+ import { foldForm, type FormMatchRow } from "../standings/form.js";
+ import { buildFeedQuery } from "../matches/feed.js";
+@@ -68,9 +69,13 @@ function assertMatchAllowed(res: Response, matchId: string): boolean {
+ 
+ /* ------------------------------------------------------------ catalog */
+ 
+-/** All competitions: synced ones plus extra ESPN ones marked coming-soon. */
++/**
++ * All competitions: the synced big five plus any cup/tournament the database
++ * actually has a fixture for (Cups/Browse otherwise list nothing, and a match
++ * could never say which competition it belonged to).
++ */
+ matchesRouter.get("/api/competitions", (_req, res) => {
+-  res.json({ competitions: competitionCatalog() });
++  res.json({ competitions: competitionCatalogWithMatches(db) });
+ });
+ 
+ /**
+diff --git a/src/pages/Cups.tsx b/src/pages/Cups.tsx
+index aabfd53..ae623f8 100644
+--- a/src/pages/Cups.tsx
++++ b/src/pages/Cups.tsx
+@@ -15,6 +15,7 @@ import {
+ import { buildBracket, type BracketTie } from "../lib/bracket";
+ import { useKnockoutCompetitions, useMatches } from "../hooks/useApi";
+ import { useI18n } from "../i18n/context";
++import { competitionName } from "../lib/leagues";
+ import { formatKickoff } from "../lib/format";
+ import { haptic } from "../lib/telegram";
+ import type { Match } from "../types";
+@@ -33,7 +34,7 @@ import type { Match } from "../types";
+  * open straight onto the International tab.
+  */
+ export default function Cups() {
+-  const { t, localize } = useI18n();
++  const { t, lang, localize } = useI18n();
+ 
+   const compsQuery = useKnockoutCompetitions();
+   const comps = compsQuery.data ?? [];
+@@ -107,6 +108,13 @@ export default function Cups() {
+         </div>
+       )}
+ 
++      {/* Name the competition the fixtures below belong to — without it a strip
++          of knockout fixtures has no context. */}
++      <h2 className="mt-4 text-base font-extrabold text-ink">
++        {localize(comps.find((c) => c.slug === active)?.name ?? "") ||
++          competitionName(active, lang)}
++      </h2>
++
+       {bracket.rounds.length > 0 ? (
+         /* Round structure when the sync carries it: live first, then the
+            bracket from the first round to the final. */
+@@ -180,45 +188,34 @@ export default function Cups() {
+       ) : (
+         /* No round labels in the window: the original status sections. */
+         <>
+-          <section className="mt-4">
+-            <SectionHeading
+-              title={t("matches.live")}
+-              action={
+-                live.length > 0 ? (
+-                  <Chip tone="live">
+-                    <LiveDot />
+-                    <Num>{live.length}</Num>
+-                  </Chip>
+-                ) : null
+-              }
+-            />
+-            {matchesQuery.isLoading ? (
++          {/* "Live now" only exists when something is live — an empty heading
++              with a "Try again" button reads as a failure that never happened.
++              Loading/error still render (they are states, not emptiness). */}
++          {matchesQuery.isLoading ? (
++            <section className="mt-4">
++              <SectionHeading title={t("matches.live")} />
+               <ul className="space-y-2">
+                 <MatchCardSkeleton />
+               </ul>
+-            ) : matchesQuery.isError ? (
++            </section>
++          ) : matchesQuery.isError ? (
++            <div className="mt-4">
+               <ErrorState onRetry={() => matchesQuery.refetch()} />
+-            ) : live.length > 0 ? (
+-              <CupMatchList matches={live} />
+-            ) : (
+-              <EmptyState
+-                title={t("cups.empty")}
+-                hint={t("cups.emptyHint")}
++            </div>
++          ) : live.length > 0 ? (
++            <section className="mt-4">
++              <SectionHeading
++                title={t("matches.live")}
+                 action={
+-                  <button
+-                    type="button"
+-                    onClick={() => {
+-                      haptic("light");
+-                      matchesQuery.refetch();
+-                    }}
+-                    className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+-                  >
+-                    {t("common.retry")}
+-                  </button>
++                  <Chip tone="live">
++                    <LiveDot />
++                    <Num>{live.length}</Num>
++                  </Chip>
+                 }
+               />
+-            )}
+-          </section>
++              <CupMatchList matches={live} />
++            </section>
++          ) : null}
+ 
+           <section className="mt-6">
+             <SectionHeading title={t("matches.upcoming")} />
+@@ -229,18 +226,16 @@ export default function Cups() {
+             )}
+           </section>
+ 
+-          <CollapsibleSection
+-            id="cups-finished"
+-            level={2}
+-            title={t("matches.previous")}
+-            count={finished.length}
+-          >
+-            {finished.length > 0 ? (
++          {finished.length > 0 ? (
++            <CollapsibleSection
++              id="cups-finished"
++              level={2}
++              title={t("matches.previous")}
++              count={finished.length}
++            >
+               <CupMatchList matches={finished} />
+-            ) : (
+-              <EmptyState title={t("cups.empty")} hint={t("cups.emptyHint")} />
+-            )}
+-          </CollapsibleSection>
++            </CollapsibleSection>
++          ) : null}
+         </>
+       )}
+ 
+@@ -259,51 +254,51 @@ function CupMatchList({ matches, bare = false }: { matches: Match[]; bare?: bool
+   const { t, lang, localize } = useI18n();
+   return (
+     <ul className={bare ? undefined : "space-y-2"}>
+-      {matches.map((match) => (
+-        <li
+-          key={match.id}
+-          className={
+-            bare
+-              ? "border-t border-line px-3 py-2 first:border-t-0"
+-              : "rounded-card border border-line bg-surface p-3"
+-          }
+-        >
+-          <div className="flex items-center gap-2">
+-            <span className="min-w-0 flex-1 truncate text-end text-sm font-bold text-ink">
+-              {localize(match.home.shortName)}
+-            </span>
+-            <span className="flex-none">
+-              {match.status === "live" ? (
+-                <Chip tone="live">
+-                  <LiveDot />
+-                  <Num>{match.minute ?? ""}</Num>
+-                </Chip>
+-              ) : match.status === "finished" ? (
+-                <Chip tone="muted">
+-                  <Num>
+-                    {match.homeScore ?? 0}–{match.awayScore ?? 0}
+-                  </Num>
+-                </Chip>
+-              ) : (
+-                <Chip tone="volt">
+-                  <Num>{formatKickoff(new Date(match.kickoffAt), lang === "fa" ? "fa-IR" : undefined)}</Num>
+-                </Chip>
+-              )}
+-            </span>
+-            <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+-              {localize(match.away.shortName)}
+-            </span>
+-          </div>
+-          <div className="mt-2 flex min-h-11 items-center justify-end gap-4 border-t border-line pt-1">
++      {matches.map((match) => {
++        const home = localize(match.home.shortName);
++        const away = localize(match.away.shortName);
++        return (
++          <li
++            key={match.id}
++            className={
++              bare
++                ? "border-t border-line first:border-t-0"
++                : "rounded-card border border-line bg-surface"
++            }
++          >
++            {/* The whole card is the link: one tap target, no redundant footer
++                row that only repeated the card. */}
+             <Link
+               to={`/match/${match.id}`}
+-              className="inline-flex h-11 items-center text-[11px] font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:text-ink"
++              aria-label={`${home} ${t("common.versus")} ${away}`}
++              className="flex min-h-14 items-center gap-2 px-3 py-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated"
+             >
+-              {t("match.summary")}
++              <span className="min-w-0 flex-1 truncate text-end text-sm font-bold text-ink">{home}</span>
++              <span className="flex-none">
++                {match.status === "live" ? (
++                  <Chip tone="live">
++                    <LiveDot />
++                    <Num>{match.minute ?? ""}</Num>
++                  </Chip>
++                ) : match.status === "finished" ? (
++                  <Chip tone="muted">
++                    <Num>
++                      {match.homeScore ?? 0}–{match.awayScore ?? 0}
++                    </Num>
++                  </Chip>
++                ) : (
++                  <Chip tone="volt">
++                    <Num>
++                      {formatKickoff(new Date(match.kickoffAt), lang === "fa" ? "fa-IR" : undefined)}
++                    </Num>
++                  </Chip>
++                )}
++              </span>
++              <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{away}</span>
+             </Link>
+-          </div>
+-        </li>
+-      ))}
++          </li>
++        );
++      })}
+     </ul>
+   );
+ }
+diff --git a/tests/competitions.test.ts b/tests/competitions.test.ts
+index b156dfa..5dbe7d4 100644
+--- a/tests/competitions.test.ts
++++ b/tests/competitions.test.ts
+@@ -14,7 +14,13 @@
+  * below pin that boundary so the trim cannot drift back one slug at a time.
+  */
+ import { strict as assert } from "node:assert";
++import fs from "node:fs";
++import os from "node:os";
++import path from "node:path";
++import { DatabaseSync } from "node:sqlite";
++import { migrate } from "../server/db/schema.js";
+ import { competitionCatalog } from "../server/espn/catalog.js";
++import { competitionCatalogWithMatches } from "../server/espn/competitions.js";
+ import { COMPETITIONS, CUPS, INTERNATIONALS, LEAGUES, isCup } from "../server/espn/types.js";
+ import { EXTRA_COMPETITIONS } from "../server/espn/extra.js";
+ 
+@@ -82,6 +88,44 @@ function testTrimmedScopeStaysRemoved(): void {
+   }
+ }
+ 
++/**
++ * The API-facing catalog is the big five PLUS whatever the DB has a match for:
++ * a cup with fixtures must be listed (so Cups/Browse name it), and the base
++ * catalog must not have changed to include it on its own.
++ */
++function testCatalogIncludesDbCups(): void {
++  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-comps-"));
++  const db = new DatabaseSync(path.join(dir, "c.db"));
++  try {
++    migrate(db);
++    db.exec(`
++      INSERT INTO teams (id, name, short_name, league) VALUES
++        ('H', 'Home FC', 'Home', 'uefa.champions'),
++        ('A', 'Away FC', 'Away', 'uefa.champions'),
++        ('N', 'Ned FC', 'Ned', 'ned.1');
++      INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status) VALUES
++        ('c1', 'uefa.champions', 'H', 'A', '2026-10-18T18:00:00.000Z', 'live'),
++        ('l1', 'ned.1', 'N', 'A', '2026-10-18T18:00:00.000Z', 'live');
++    `);
++    const catalog = competitionCatalogWithMatches(db);
++    const bySlug = new Map(catalog.map((c) => [c.slug, c]));
++
++    assert.ok(bySlug.has("uefa.champions"), "the cup with a match is listed");
++    assert.equal(bySlug.get("uefa.champions")?.kind, "cup", "uefa.champions is a cup");
++    assert.equal(bySlug.get("uefa.champions")?.name, "UEFA Champions League", "a known cup gets its name");
++    assert.ok(bySlug.has("ned.1"), "the league with a match is listed");
++    assert.equal(bySlug.get("ned.1")?.kind, "league", "ned.1 is a league");
++    assert.equal(bySlug.get("ned.1")?.name, "Dutch Eredivisie", "a known league gets its name");
++
++    // The base catalog is untouched: the cup is added by the API layer, not by
++    // silently widening the pinned big-five list.
++    assert.equal(competitionCatalog().some((c) => c.slug === "uefa.champions"), false);
++  } finally {
++    db.close();
++    fs.rmSync(dir, { recursive: true, force: true });
++  }
++}
++
+ export function runCompetitionsTests(): void {
+   testCatalogHasNoDuplicates();
+   testCatalogIsExactlyTheBigFive();
+@@ -89,5 +133,8 @@ export function runCompetitionsTests(): void {
+   testSyncedEntriesArePolled();
+   testExtrasAreComingSoon();
+   testTrimmedScopeStaysRemoved();
+-  console.log("  competitions: big-five-only catalog, no duplicate slugs, nothing polled missing OK");
++  testCatalogIncludesDbCups();
++  console.log(
++    "  competitions: big-five-only catalog, no duplicate slugs, DB cups listed, nothing polled missing OK",
++  );
+ }
+-- 
+2.54.0.windows.1
+

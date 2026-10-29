@@ -1,0 +1,967 @@
+From ccefd68e074e83a6db08edf5b49f287d27ac3da9 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 5 Oct 2026 01:46:00 +0330
+Subject: [PATCH 020/230] Unify prediction windows and open the gate on the
+ real lineup signal
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The hub and the match page each re-derived which mechanics were tappable, so
+cards stayed live after kickoff and the lineup gate could lag ESPN's XI by a
+full sync sweep. One clock-injected state machine now drives both, windows
+self-describe their lineup requirement, the published check falls back to
+recorded starters, and a tighter near-kickoff poll opens the gate within
+minutes. Dead teaser strings and the stale lock-window docs go too.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ README.md                                |   4 +-
+ server/routes/predictions.ts             |  86 ++++++++-
+ server/sync/service.ts                   |  27 ++-
+ src/components/panels/PredictionsHub.tsx |  85 +++------
+ src/components/panels/ShotPredictor.tsx  |   2 +-
+ src/i18n/strings.ts                      |  14 +-
+ src/lib/api.ts                           |   9 +
+ src/lib/predictionWindow.ts              | 104 ++++++++++
+ src/pages/MatchDetail.tsx                |   9 +-
+ tests/predictionWindow.test.ts           |  82 ++++++++
+ tests/predictionsGate.test.ts            | 233 +++++++++++++++++++++++
+ tests/run.ts                             |   4 +
+ 12 files changed, 584 insertions(+), 75 deletions(-)
+ create mode 100644 src/lib/predictionWindow.ts
+ create mode 100644 tests/predictionWindow.test.ts
+ create mode 100644 tests/predictionsGate.test.ts
+
+diff --git a/README.md b/README.md
+index 6bb5a22..3766de0 100644
+--- a/README.md
++++ b/README.md
+@@ -101,11 +101,11 @@ fixtures and live scores from ESPN scoreboards, lineups/timelines/player stats f
+ 
+ **Built end-to-end** (this list is the source of truth — older phase notes in `roadmap.md` are stale):
+ 
+-- All five prediction mechanics with per-mechanic lock windows, payload validation, and a server-side resolver that settles picks into the points ledger — lineup (2h pre-kickoff), sub board (lineup-drop → half-time lock, enforced by a real `halftime` match status), shot predictor (6-zone grid, kickoff lock), player to watch (stat gate + crowd gate + MVP bonus, 24h settle window), versus (user-chosen pair, stat-score duel)
++- All five prediction mechanics with per-mechanic lock windows, payload validation, and a server-side resolver that settles picks into the points ledger — lineup (2h pre-kickoff), sub board (lineup-drop → half-time lock, enforced by a real `halftime` match status), shot predictor (6-zone grid, kickoff lock), player to watch (stat gate + crowd gate + MVP bonus, 24h settle window), versus (user-chosen pair, stat-score duel) — every mechanic but the Lineup Predictor only accepts writes once ESPN's official lineup is published (`LINEUP_NOT_PUBLISHED`), the same `home_formation` signal the lineup-drop push uses (with a documented fallback: both sides having a starter in `match_player_stats` counts as published, so competitions that never emit a formation aren't stranded). Each window is self-describing (`requires: "lineup"`), and scheduled matches within ~90 min of kickoff refresh on a tighter sync lane so the gate opens within minutes of the XI landing
+ - Points ledger + the three season leaderboards (global / per-league / per-club) with the first-to-reach tiebreak; boards render the unique `@username` identity, highlight your own row, and lead with your rank and points as a summary line (the below-page "you" row folds into it)
+ - Favorite-club streak tracking (3/5/10 thresholds, once per season) with the settle-then-read sweep
+ - The 3-card rating system (pick any 3 players, 1–10 + comment, cap enforced server-side) with aggregate crowd ratings shown beside the stat score, and a divergence-sorting eye-test page
+-- ESPN sync loops (live 1m, scoreboards 10m, fixture window 6h, standings daily, rosters + Understat weekly), goal alerts with per-club fan-out, and the manual CLI fallback (`npm run sync -- …`)
++- ESPN sync loops (live 1m, near-kickoff ~2.5m, scoreboards 10m, fixture window 6h, standings daily, rosters + Understat weekly), goal alerts with per-club fan-out, and the manual CLI fallback (`npm run sync -- …`)
+ - Server-enforced push preferences (`user_notification_prefs`) — the Profile toggles actually gate the bot's sends, at queue time *and* at send time, per push kind
+ - Matchday notifications (`server/notifications.ts`): goal alerts, the lineup drop, the last call before kickoff, the half-time lock and the rating-window open — each claimed once per user/match/stage so the minute loop never repeats itself, and each mapped to its own Profile switch
+ - Localized bot pushes (`server/messages.ts`): copy is rendered per **recipient** from `users.language`, which each device reports via `POST /api/me/language`, so the bot speaks the same language as the app
+diff --git a/server/routes/predictions.ts b/server/routes/predictions.ts
+index a1313d3..ae17b0f 100644
+--- a/server/routes/predictions.ts
++++ b/server/routes/predictions.ts
+@@ -13,16 +13,54 @@ const db = getDb();
+ 
+ const MECHANICS: Mechanic[] = ["lineup", "shot_predict", "sub", "player_watch", "versus"];
+ 
++/**
++ * Mechanics that only open once ESPN's official lineup is out. The Lineup
++ * Predictor is deliberately excluded — predicting the XI *before* release is
++ * its whole point, and it runs on its own 2h-before-kickoff lock.
++ */
++const LINEUP_GATED: Mechanic[] = ["sub", "shot_predict", "player_watch", "versus"];
++
++/**
++ * Whether the match's official lineup has been published.
++ *
++ * Primary signal: `home_formation`, set by the summary sync exactly when ESPN
++ * ships the starting XI + formation (the same flag the lineup-drop push and
++ * the Sub window use — see notifications.ts). Not a wall-clock guess.
++ *
++ * Fallback: some competitions send the starting XI in `match_player_stats`
++ * without ever writing a formation string, which would otherwise strand the
++ * gated mechanics forever behind a signal that league never emits. Once BOTH
++ * sides have at least one starter recorded, the XI is de facto public.
++ */
++export function isLineupPublished(matchId: string): boolean {
++  const row = get<{ home_formation: string | null }>(
++    db,
++    "SELECT home_formation FROM matches WHERE id = ?",
++    [matchId],
++  );
++  if (row?.home_formation) return true;
++  const starters = get<{ teams: number }>(
++    db,
++    "SELECT COUNT(DISTINCT team_id) AS teams FROM match_player_stats WHERE match_id = ? AND started = 1",
++    [matchId],
++  );
++  return (starters?.teams ?? 0) >= 2;
++}
++
+ export const predictionsRouter = express.Router();
+ 
+ /**
+  * Per-mechanic lock windows, relative to each match's kickoff
+  * (`prediction-mechanics.md`). The old single gameweek deadline is gone.
+- *   lineup:       2h before kickoff (deliberately earlier than ESPN's ~1h release)
+- *   shot_predict: kickoff
+- *   player_watch: kickoff
+- *   versus:       kickoff
+- *   sub:          handled separately — opens at lineup, locks at half-time
++ *
++ *   lineup:       opens now (no scheduled open time), locks 2h before kickoff
++ *                 — deliberately earlier than ESPN's ~1h XI release, because
++ *                 predicting the XI before it is out is the whole game.
++ *   shot_predict: opens once the OFFICIAL lineup is published (the GET path
++ *   player_watch: clears `opensAt` then); the kickoff − 1h value here is only
++ *   versus:       the pre-publication clock proxy. All three lock at kickoff.
++ *   sub:          the same lineup gate opens it; the live first half keeps it
++ *                 editable and half-time closes it (status-driven, not clock).
+  */
+ function lockWindowFor(mechanic: string, kickoffAt: string): { lockAt: string; opensAt: string | null } {
+   const kickoff = new Date(kickoffAt).getTime();
+@@ -52,10 +90,35 @@ predictionsRouter.get("/api/matches/:id/predictions", requireUser, (req, res) =>
+     "SELECT kickoff_at, status FROM matches WHERE id = ?",
+     [matchId],
+   );
++  const lineupPublished = isLineupPublished(matchId);
+   const windows = kickoffRow
+-    ? Object.fromEntries(MECHANICS.map((m) => [m, lockWindowFor(m, kickoffRow.kickoff_at)]))
++    ? Object.fromEntries(
++        MECHANICS.map((m) => {
++          const w = lockWindowFor(m, kickoffRow.kickoff_at);
++          const gated = LINEUP_GATED.includes(m);
++          // Self-describing: the client renders the gate from this flag rather
++          // than carrying its own copy of the set. Gated mechanics open with
++          // the OFFICIAL lineup, not the kickoff-1h estimate — once it is out
++          // their window is open now (opensAt null = no scheduled open time),
++          // which is what lets a pick land in the ~1h before kickoff even when
++          // the earlier clock-proxy would still have it shut.
++          return [
++            m,
++            {
++              ...w,
++              requires: gated ? ("lineup" as const) : null,
++              ...(gated && lineupPublished ? { opensAt: null } : {}),
++            },
++          ];
++        }),
++      )
+     : {};
+-  res.json({ predictions: rows, windows, matchStatus: kickoffRow?.status ?? null });
++  res.json({
++    predictions: rows,
++    windows,
++    matchStatus: kickoffRow?.status ?? null,
++    lineupPublished,
++  });
+ });
+ 
+ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter, (req, res) => {
+@@ -75,6 +138,13 @@ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter
+   );
+   if (!match) return bad(res, "unknown match", 404);
+ 
++  // The lineup-gated mechanics require the OFFICIAL lineup to be published —
++  // the same signal the first-half Sub window opens on. No wall-clock proxy:
++  // without ESPN's XI there is nothing to shoot/watch/duel against.
++  if (LINEUP_GATED.includes(mechanic as Mechanic) && !isLineupPublished(matchId)) {
++    return bad(res, "LINEUP_NOT_PUBLISHED");
++  }
++
+   const now = new Date();
+   const window = lockWindowFor(mechanic, match.kickoff_at);
+ 
+@@ -115,4 +185,4 @@ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter
+   res.json({ ok: true, lockAt: window.lockAt, opensAt: window.opensAt });
+ });
+ 
+-export { MECHANICS, lockWindowFor };
++export { MECHANICS, LINEUP_GATED, lockWindowFor };
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index a0ef83e..f8cc61a 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -139,8 +139,15 @@ export async function syncSummaries(): Promise<GoalAlert[]> {
+       if (!m.last_synced_at)
+         should = hoursToKickoff > -24 * 30; // current season window
+       else should = hoursSinceSync > 1 && hoursSinceSync < 26;
+-    } else if (m.status === "scheduled" && hoursToKickoff < 3 && hoursToKickoff > -0.25)
+-      should = hoursSinceSync > 0.25;
++    } else if (m.status === "scheduled" && hoursToKickoff < 3 && hoursToKickoff > -0.25) {
++      // Inside ~90 min of kickoff ESPN ships the official XI around the hour
++      // mark, and the lineup gate opens the shot/watch/versus/sub mechanics at
++      // that instant. Polling on the wider 15-min sweep left the gate shut for
++      // up to a quarter of an hour after the XI was actually out, so the final
++      // stretch runs on its own tighter lane.
++      const cadenceHours = hoursToKickoff < 1.5 ? NEAR_KICKOFF_SECONDS / 3_600 : 0.25;
++      should = hoursSinceSync > cadenceHours;
++    }
+ 
+     if (!should) continue;
+     goals.push(...(await syncMatchSummary(m.league as LeagueSlug, m.id)));
+@@ -268,6 +275,20 @@ export const LIVE_PULSE_SECONDS = (() => {
+   return Math.min(3600, Math.max(10, n));
+ })();
+ 
++/**
++ * The near-kickoff lane: how often `syncSummaries` re-checks a SCHEDULED match
++ * once it is within ~90 min of kickoff, in seconds. Default 150 (~every 2.5
++ * min), floor 60. This is a narrow slice of the schedule (a handful of matches
++ * at once), so the tighter cadence costs a few extra summary fetches, not a
++ * sweep — and it is what lets the official-lineup gate open within minutes of
++ * ESPN publishing the XI instead of waiting out the 15-min sweep.
++ */
++export const NEAR_KICKOFF_SECONDS = (() => {
++  const n = parseInt(process.env.NEAR_KICKOFF_SECONDS ?? "", 10);
++  if (!Number.isFinite(n)) return 150;
++  return Math.min(3600, Math.max(60, n));
++})();
++
+ /**
+  * Overlap guards. cron has no idea a pass overran its tick: a slow ESPN
+  * response (>60s) used to stack a second summary pass on the first, doubling
+@@ -402,6 +423,6 @@ export function startSyncLoop(): void {
+   });
+ 
+   log(
+-    `loops started (live pulse ${LIVE_PULSE_SECONDS}s, summaries ${LIVE_SUMMARY_SECONDS}s, scoreboards 10m, window 6h per-competition, standings daily @${hour}:00, rosters weekly, understat weekly)`,
++    `loops started (live pulse ${LIVE_PULSE_SECONDS}s, summaries ${LIVE_SUMMARY_SECONDS}s, near-kickoff ${NEAR_KICKOFF_SECONDS}s, scoreboards 10m, window 6h per-competition, standings daily @${hour}:00, rosters weekly, understat weekly)`,
+   );
+ }
+diff --git a/src/components/panels/PredictionsHub.tsx b/src/components/panels/PredictionsHub.tsx
+index 4d0d321..8106275 100644
+--- a/src/components/panels/PredictionsHub.tsx
++++ b/src/components/panels/PredictionsHub.tsx
+@@ -4,7 +4,6 @@ import { api, serverErrorKey, type ApiPrediction } from "../../lib/api";
+ import { useI18n } from "../../i18n/I18nProvider";
+ import { haptic, notifyHaptic, selectionHaptic } from "../../lib/telegram";
+ import { pickSummary } from "../../lib/breakdown";
+-import { useLocalState } from "../../lib/useLocalState";
+ import { useToast } from "../Toast";
+ import { BottomSheet } from "../BottomSheet";
+ import { RulesButton } from "../RulesSheet";
+@@ -14,6 +13,7 @@ import { SubBoard } from "./SubBoard";
+ import { LineupPicker } from "./LineupPicker";
+ import { ShotPredictor } from "./ShotPredictor";
+ import { StarFilledIcon, SwapIcon, TargetIcon } from "../icons";
++import { isOpen, requiresLineup, type MatchStatus } from "../../lib/predictionWindow";
+ 
+ type Mechanic = ApiPrediction["mechanic"];
+ type PredictionsData = Awaited<ReturnType<typeof api.getMyPredictions>>;
+@@ -85,7 +85,10 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+   });
+   const rows = query.data?.predictions ?? [];
+   const windows = query.data?.windows ?? {};
+-  const matchStatus = query.data?.matchStatus ?? "scheduled";
++  const matchStatus = (query.data?.matchStatus ?? "scheduled") as MatchStatus;
++  // True once the official lineup is out — the gate the lineup-dependent
++  // mechanics wait on, alongside their own clock windows.
++  const lineupsPublished = query.data?.lineupPublished ?? false;
+   const live = matchStatus === "live";
+   const halftime = matchStatus === "halftime";
+   const finished = matchStatus === "finished";
+@@ -177,45 +180,22 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+ 
+   const mechanics: Mechanic[] = ["lineup", "sub", "shot_predict", "player_watch", "versus"];
+ 
+-  /* --- Progressive disclosure ------------------------------------------------
+-     The full 5-mechanic board is a lot before a user's first real match. The
+-     count of distinct matchdays the user has ever predicted on (persisted in
+-     localStorage) opens the set up in tiers; any mechanic with an existing
+-     pick and any mechanic whose window is open right now always shows. */
+-  // Distinct days on which the user has ever submitted a prediction — a
+-  // lightweight, local proxy for "returned and played real matchdays".
+-  const [daysPlayed, setDaysPlayed] = useLocalState<string[]>("verdikick.matchdaysPredicted", []);
+-  const matchdaysPlayed = daysPlayed.length;
+-  const tier = matchdaysPlayed >= 2 ? 2 : matchdaysPlayed; // 0 | 1 | 2+
+-  const recordMatchday = () => {
+-    const today = new Date().toISOString().slice(0, 10);
+-    setDaysPlayed((prev) => (prev.includes(today) ? prev : [...prev.slice(-49), today]));
+-  };
+-  const alwaysVisible = new Set<Mechanic>(["lineup"]);
+-  for (const m of mechanics) {
+-    if (byMechanic(m)) alwaysVisible.add(m);
+-    const w = windows[m];
+-    const opensAt = w?.opensAt ? new Date(w.opensAt).getTime() : null;
+-    const windowOpen =
+-      opensAt !== null && Date.now() >= opensAt && new Date(w?.lockAt ?? 0).getTime() > Date.now();
+-    if (windowOpen) alwaysVisible.add(m);
+-    if (live || halftime) alwaysVisible.add("sub");
+-  }
+-  const visible = mechanics.filter((m) => alwaysVisible.has(m) || mechanics.indexOf(m) < 1 + tier * 2);
+-  const hiddenCount = mechanics.length - visible.length;
++  // One state machine for the whole app (src/lib/predictionWindow.ts): the
++  // same rules the server enforces, so a card never looks tappable when the
++  // POST would answer LOCKED_MATCH_STARTED. Notably this closes every non-Sub
++  // mechanic the instant the match kicks off, instead of trusting opensAt.
++  const opensNow = (m: Mechanic) => isOpen(m, windows[m], { matchStatus, lineupsPublished });
+ 
+-  // A mechanic's window counts as open when it has no scheduled open time, or
+-  // that time has passed, or the match is under way / over. Shared by the
+-  // disabled state below and the single primary action picked here.
+-  const opensNow = (m: Mechanic) => {
+-    const w = windows[m];
+-    const opensAt = w?.opensAt ? new Date(w.opensAt).getTime() : null;
+-    return opensAt === null || Date.now() >= opensAt || live || finished;
+-  };
+-  // One action leads, not five: the first visible mechanic that is open and
+-  // still unpicked wears volt. Five identical primary buttons read as a
+-  // checklist with no next step, which is the opposite of a deadline.
+-  const primaryMechanic = visible.find((m) => !byMechanic(m) && opensNow(m));
++  // Open-and-unpicked first: the list reads as the next step, not a five-row
++  // checklist. The rest keep the canonical order (sort is stable).
++  const ordered = [...mechanics].sort(
++    (a, b) => Number(!(opensNow(a) && !byMechanic(a))) - Number(!(opensNow(b) && !byMechanic(b))),
++  );
++
++  // One action leads, not five: the first mechanic that is open and still
++  // unpicked wears volt. Five identical primary buttons read as a checklist
++  // with no next step, which is the opposite of a deadline.
++  const primaryMechanic = ordered.find((m) => !byMechanic(m) && opensNow(m));
+ 
+   return (
+     <div className="space-y-2">
+@@ -233,10 +213,13 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+       {query.isLoading ? (
+         <PredictionsHubSkeleton />
+       ) : (
+-        visible.map((m) => {
++        ordered.map((m) => {
+           const meta = MECHANIC_META[m];
+           const row = byMechanic(m);
+           const notOpenYet = !opensNow(m);
++          // Gated and still waiting on ESPN's XI: the card explains itself
++          // rather than showing a kickoff countdown that hasn't started.
++          const lineupLocked = !finished && requiresLineup(m, windows[m]) && !lineupsPublished;
+           return (
+             <Card key={m} className={cx("p-3", row && "border-volt/40")}>
+               <div className="flex items-center gap-2">
+@@ -262,9 +245,11 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+ 
+               <div className="mt-2 flex items-center justify-between gap-2">
+                 <span className="label text-ink-3">
+-                  {m === "sub"
+-                    ? t("predict.lockHT")
+-                    : `${t(meta.lockKey as never)}${!notOpenYet && !live && !finished ? ` · ${windowInfo(m) ?? ""}` : ""}`}
++                  {lineupLocked
++                    ? t("predict.waitLineupHint")
++                    : m === "sub"
++                      ? t("predict.lockHT")
++                      : `${t(meta.lockKey as never)}${!notOpenYet && !live && !finished ? ` · ${windowInfo(m) ?? ""}` : ""}`}
+                 </span>
+                 {row?.payload ? <MechanicSummary mechanic={m} payload={row.payload} nameOf={nameOf} /> : null}
+                 {!finished && !halftime ? (
+@@ -286,13 +271,6 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+         })
+       )}
+ 
+-      {!query.isLoading && hiddenCount > 0 ? (
+-        <div className="rounded-card border border-dashed border-line p-3">
+-          <p className="text-sm font-bold text-ink-2">{t("predict.teaserTitle", { count: hiddenCount })}</p>
+-          <p className="mt-0.5 text-[11px] text-ink-3">{t("predict.teaserHint")}</p>
+-        </div>
+-      ) : null}
+-
+       {editor ? (
+         <MechanicEditor
+           mechanic={editor}
+@@ -301,7 +279,6 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+           existing={byMechanic(editor)}
+           onClose={() => setEditor(null)}
+           onSaved={() => {
+-            recordMatchday();
+             // Invalidate (don't await): the optimistic row already shows; the
+             // refetch replaces it with server truth (lock windows, ids).
+             invalidate();
+@@ -474,7 +451,7 @@ function WatchEditor({
+   if (featured.length === 0) {
+     return (
+       <div className="py-4">
+-        <EmptyState title={t("lineups.loadingHint")} hint={t("lineups.emptyHint")} />
++        <EmptyState title={t("predict.awaitLineupTitle")} hint={t("predict.awaitLineupHint")} />
+       </div>
+     );
+   }
+@@ -555,7 +532,7 @@ function VersusEditor({
+   if (featured.length === 0 || teams.length < 2) {
+     return (
+       <div className="py-4">
+-        <EmptyState title={t("lineups.loadingHint")} hint={t("lineups.emptyHint")} />
++        <EmptyState title={t("predict.awaitLineupTitle")} hint={t("predict.awaitLineupHint")} />
+       </div>
+     );
+   }
+diff --git a/src/components/panels/ShotPredictor.tsx b/src/components/panels/ShotPredictor.tsx
+index 765de5c..9d4930b 100644
+--- a/src/components/panels/ShotPredictor.tsx
++++ b/src/components/panels/ShotPredictor.tsx
+@@ -43,7 +43,7 @@ export function ShotPredictor({
+   if (lineupsQuery.isLoading) return <PanelSkeleton height={160} />;
+   if (lineupsQuery.isError) return <ErrorState onRetry={() => lineupsQuery.refetch()} />;
+   if (featured.length === 0) {
+-    return <EmptyState title={t("lineups.loadingHint")} hint={t("lineups.emptyHint")} />;
++    return <EmptyState title={t("predict.awaitLineupTitle")} hint={t("predict.awaitLineupHint")} />;
+   }
+ 
+   const cells = Array.from({ length: GRID_ROWS * GRID_COLS }, (_, i) => ({
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index f0e90fb..06bce9a 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -464,12 +464,13 @@ export const strings = {
+     "ratings.pickThree": "Pick any 3 players and pass your verdict",
+     "predict.hub": "Predictions",
+     "predict.hubHint": "Five calls per match — all points feed the season leaderboards",
+-    "predict.teaserTitle": "{count} more calls unlock as you play",
+-    "predict.teaserHint":
+-      "Each matchday you predict opens more of the full set. Your open picks are always shown here.",
+     "predict.lockLineup": "Locks 2h before kickoff",
+     "predict.lockKickoff": "Locks at kickoff",
+     "predict.lockHT": "Opens at lineup, editable until half-time",
++    "predict.waitLineup": "Opens with the official lineup",
++    "predict.waitLineupHint": "Opens with the official lineup — usually about an hour before kickoff",
++    "predict.awaitLineupTitle": "Waiting on the official lineup",
++    "predict.awaitLineupHint": "Opens the moment ESPN publishes the starting XI.",
+     "predict.shotNew": "Shot Predictor",
+     "predict.shotNewHint": "One player, one spot on the pitch",
+     "predict.subNewHint": "The whole sub board, editable until half-time",
+@@ -962,12 +963,13 @@ export const strings = {
+     "ratings.pickThree": "هر ۳ بازیکن را انتخاب کن و نظرت را بگو",
+     "predict.hub": "پیش‌بینی‌ها",
+     "predict.hubHint": "پنج پیش‌بینی در هر بازی — همه امتیازها به جدول فصل می‌رود",
+-    "predict.teaserTitle": "با هر هفته پیش‌بینی، {count} پیش‌بینی دیگر باز می‌شود",
+-    "predict.teaserHint":
+-      "هر هفته‌ای که پیش‌بینی کنی، بخش بیشتری از مجموعه باز می‌شود. پیش‌بینی‌های بازت همیشه همین‌جا هستند.",
+     "predict.lockLineup": "۲ ساعت قبل از شروع قفل می‌شود",
+     "predict.lockKickoff": "در شروع بازی قفل می‌شود",
+     "predict.lockHT": "با اعلام ترکیب باز می‌شود، تا پایان نیمه اول قابل ویرایش است",
++    "predict.waitLineup": "با اعلام ترکیب رسمی باز می‌شود",
++    "predict.waitLineupHint": "با اعلام ترکیب رسمی باز می‌شود — معمولاً حدود یک ساعت قبل از شروع بازی",
++    "predict.awaitLineupTitle": "در انتظار ترکیب رسمی",
++    "predict.awaitLineupHint": "همان لحظه‌ای که ESPN ترکیب اصلی را اعلام کند باز می‌شود.",
+     "predict.shotNew": "پیش‌بینی شوت",
+     "predict.shotNewHint": "یک بازیکن، یک نقطه از زمین",
+     "predict.subNewHint": "کل تخته تعویض‌ها، قابل ویرایش تا پایان نیمه اول",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 3f5b354..061f341 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -57,6 +57,7 @@ export function serverErrorKey(err: unknown): string {
+     SUB_NOT_OPEN: "sub.windowLive",
+     SUB_LOCKED_HALFTIME: "sub.lockedHalftime",
+     SUB_CAP_REACHED: "sub.capReached",
++    LINEUP_NOT_PUBLISHED: "predict.waitLineup",
+     INVALID_PAYLOAD: "common.error",
+     // ratings (3-card rule)
+     RATING_CAP_REACHED: "ratings.capReached",
+@@ -175,6 +176,12 @@ export interface ApiReferral {
+ export interface ApiPredictionWindow {
+   opensAt: string | null;
+   lockAt: string;
++  /**
++   * What this window waits on before it can open. `"lineup"` = the official XI
++   * must be published first; `null` = clock-only. Self-describing so the UI
++   * doesn't carry its own copy of the gated set.
++   */
++  requires?: "lineup" | null;
+ }
+ 
+ export interface ApiLeaderRow {
+@@ -651,6 +658,8 @@ export const api = {
+       predictions: ApiPrediction[];
+       windows: Record<string, ApiPredictionWindow>;
+       matchStatus: string | null;
++      /** True once ESPN's official lineup is out — shot/watch/versus/sub wait on it. */
++      lineupPublished: boolean;
+     }>(`/matches/${matchId}/predictions`),
+ 
+   submitPrediction: (matchId: string, mechanic: ApiPrediction["mechanic"], payload: unknown) =>
+diff --git a/src/lib/predictionWindow.ts b/src/lib/predictionWindow.ts
+new file mode 100644
+index 0000000..2b3b249
+--- /dev/null
++++ b/src/lib/predictionWindow.ts
+@@ -0,0 +1,104 @@
++/**
++ * The prediction-window state machine, in one pure place.
++ *
++ * The server is the authority (server/routes/predictions.ts owns the lock
++ * rules and rejects out-of-window writes), but the UI has to render the same
++ * verdicts: which cards are tappable, which lead the list, and whether the
++ * sticky "still can pick" CTA is honest. Two components duplicating those
++ * rules is how they drift — a gated mechanic opening a beat early, or a card
++ * looking live after kickoff when the POST would answer LOCKED_MATCH_STARTED.
++ * So both read this helper, and it is unit-tested on its own
++ * (tests/predictionWindow.test.ts).
++ *
++ * Nothing here touches the DOM or the clock: callers pass `now`, which keeps
++ * the states deterministic in tests.
++ */
++
++export type Mechanic = "lineup" | "shot_predict" | "sub" | "player_watch" | "versus";
++
++export type MatchStatus = "scheduled" | "live" | "halftime" | "finished";
++
++/** One mechanic's window as returned by GET /api/matches/:id/predictions. */
++export interface PredictionWindow {
++  /** null = no scheduled open time (open as soon as the gate allows). */
++  opensAt: string | null;
++  lockAt: string;
++  /**
++   * What the window is waiting on before it can open. `"lineup"` means the
++   * official XI must be published; omitted/null means clock-only. The server
++   * fills this in so the client is self-describing; when absent we fall back
++   * to the canonical gated set below.
++   */
++  requires?: "lineup" | null;
++}
++
++/**
++ * Mechanics that cannot open before ESPN publishes the official lineup. The
++ * Lineup Predictor is deliberately excluded — predicting the XI before release
++ * is its whole point, and it runs on its own 2h-before-kickoff lock.
++ */
++export const LINEUP_GATED: readonly Mechanic[] = ["sub", "shot_predict", "player_watch", "versus"];
++
++/**
++ * Whether this window waits on the official lineup. Prefers the server's
++ * self-describing `requires` flag; falls back to the canonical set when the
++ * payload predates the flag (or windows are empty).
++ */
++export function requiresLineup(
++  mechanic: Mechanic,
++  window?: PredictionWindow | null,
++): boolean {
++  if (window && window.requires !== undefined) return window.requires === "lineup";
++  return LINEUP_GATED.includes(mechanic);
++}
++
++export interface OpenContext {
++  matchStatus: MatchStatus;
++  /** True once the official lineup is out (server: GET lineupPublished). */
++  lineupsPublished: boolean;
++  /** Injectable clock for tests; defaults to Date.now(). */
++  now?: number;
++}
++
++/**
++ * Whether a mechanic's window is open for writing, mirroring the server:
++ *
++ *   lineup        scheduled only, until kickoff − 2h
++ *   shot/watch/vs scheduled only, until kickoff — AND only once the official
++ *                 lineup is published
++ *   sub           scheduled (once the lineup is out) or the live first half;
++ *                 half-time and full-time close it
++ *
++ * A `finished` or `halftime` match closes every mechanic. Non-sub mechanics
++ * close the instant the match kicks off: the server rejects them with
++ * LOCKED_MATCH_STARTED, so a card that still looks tappable in play is a bug.
++ */
++export function isOpen(
++  mechanic: Mechanic,
++  window: PredictionWindow | undefined | null,
++  ctx: OpenContext,
++): boolean {
++  const now = ctx.now ?? Date.now();
++  const { matchStatus, lineupsPublished } = ctx;
++
++  if (matchStatus === "finished" || matchStatus === "halftime") return false;
++  if (requiresLineup(mechanic, window) && !lineupsPublished) return false;
++
++  if (mechanic === "sub") {
++    // Live first half: the board stays editable (server: SUB rule).
++    if (matchStatus === "live") return true;
++    if (matchStatus !== "scheduled") return false;
++    // The server clears `opensAt` the moment the XI is published; before that
++    // the kickoff-1h proxy applies.
++    if (!window?.opensAt) return true;
++    return now >= new Date(window.opensAt).getTime();
++  }
++
++  // Clock-gated mechanics only run before kickoff.
++  if (matchStatus !== "scheduled") return false;
++  if (!window) return true;
++  // A scheduled open time (the pre-publication clock proxy) still holds; the
++  // server clears it to null when the official lineup arrives.
++  if (window.opensAt && now < new Date(window.opensAt).getTime()) return false;
++  return now < new Date(window.lockAt).getTime();
++}
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 9ce9e86..935834e 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -41,6 +41,7 @@ import { TaskAdCard } from "../components/TaskAdCard";
+ import { useAuth } from "../hooks/useAuth";
+ import { useI18n } from "../i18n/I18nProvider";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
++import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+ import type { Team } from "../types";
+ import type { StringKey } from "../i18n/strings";
+@@ -175,8 +176,14 @@ export default function MatchDetail() {
+   // unpicked mechanic whose lock has already passed is a dead end rather than
+   // an invitation, so the bar reads the same windows the Predict tab renders.
+   const picked = new Set<string>((predictionsQuery.data?.predictions ?? []).map((row) => row.mechanic));
++  const lineupsPublished = predictionsQuery.data?.lineupPublished ?? false;
++  const predictionStatus = (predictionsQuery.data?.matchStatus ?? match.status ?? "scheduled") as MatchStatus;
++  // The Predict tab's own state machine (src/lib/predictionWindow.ts), so the
++  // sticky CTA and the cards can never disagree — it honours the lineup gate
++  // and closes non-Sub mechanics the moment kickoff passes.
+   const pickStillOpen = Object.entries(predictionsQuery.data?.windows ?? {}).some(
+-    ([mechanic, w]) => !picked.has(mechanic) && new Date(w.lockAt).getTime() > Date.now(),
++    ([mechanic, w]) =>
++      !picked.has(mechanic) && isOpen(mechanic as Mechanic, w, { matchStatus: predictionStatus, lineupsPublished }),
+   );
+   const picksMade = predictionsQuery.data?.predictions.length ?? 0;
+   const showPickCta = match.status !== "finished" && tab !== "predict" && pickStillOpen;
+diff --git a/tests/predictionWindow.test.ts b/tests/predictionWindow.test.ts
+new file mode 100644
+index 0000000..aea395a
+--- /dev/null
++++ b/tests/predictionWindow.test.ts
+@@ -0,0 +1,82 @@
++/**
++ * The prediction-window state machine (src/lib/predictionWindow.ts).
++ *
++ * Pure and clock-injected: every case passes an explicit `now`, so these are
++ * exact assertions about who can pick what, when — the same verdicts the
++ * Predict tab renders and the server enforces. This is what pins the bug fixed
++ * in the hub: after kickoff, non-Sub mechanics must read closed rather than
++ * still looking tappable until the POST rejects them.
++ */
++import { strict as assert } from "node:assert";
++import { isOpen, requiresLineup, LINEUP_GATED, type Mechanic } from "../src/lib/predictionWindow.js";
++
++const HOUR = 3_600_000;
++const T0 = Date.UTC(2026, 0, 1, 12, 0, 0); // a fixed "now"
++const at = (ms: number) => new Date(ms).toISOString();
++
++/** Kickoff three hours from T0; each mechanic locks relative to it. */
++const kickoff = T0 + 3 * HOUR;
++const windows = {
++  lineup: { opensAt: null, lockAt: at(kickoff - 2 * HOUR), requires: null },
++  sub: { opensAt: at(kickoff - HOUR), lockAt: at(kickoff + HOUR), requires: "lineup" as const },
++  shot_predict: { opensAt: at(kickoff - HOUR), lockAt: at(kickoff), requires: "lineup" as const },
++  player_watch: { opensAt: at(kickoff - HOUR), lockAt: at(kickoff), requires: "lineup" as const },
++  versus: { opensAt: at(kickoff - HOUR), lockAt: at(kickoff), requires: "lineup" as const },
++};
++const open = (
++  m: Mechanic,
++  status: "scheduled" | "live" | "halftime" | "finished",
++  published: boolean,
++  now = T0,
++) => isOpen(m, windows[m], { matchStatus: status, lineupsPublished: published, now });
++
++export function runPredictionWindowTests(): void {
++  // --- the lineup gate -----------------------------------------------------
++  assert.equal(open("shot_predict", "scheduled", false), false, "shot waits for the XI");
++  assert.equal(open("player_watch", "scheduled", false), false, "watch waits for the XI");
++  assert.equal(open("versus", "scheduled", false), false, "versus waits for the XI");
++  assert.equal(open("sub", "scheduled", false), false, "sub waits for the XI");
++  // The Lineup Predictor is exempt: predicting before release is its point.
++  assert.equal(open("lineup", "scheduled", false), true, "lineup predictor is not gated");
++
++  // --- scheduled, published: clock windows still apply ---------------------
++  assert.equal(open("shot_predict", "scheduled", true, kickoff - 2 * HOUR), false, "before the pre-kickoff open");
++  assert.equal(open("shot_predict", "scheduled", true, kickoff - 30 * 60_000), true, "open inside the window");
++  assert.equal(open("shot_predict", "scheduled", true, kickoff + 1), false, "locked at kickoff");
++  assert.equal(open("lineup", "scheduled", false, kickoff - 3 * HOUR), true, "lineup opens immediately");
++  assert.equal(open("lineup", "scheduled", false, kickoff - 2 * HOUR + 1), false, "lineup locks 2h out");
++  assert.equal(open("sub", "scheduled", true, kickoff - 2 * HOUR), false, "sub not open before the hour mark");
++  assert.equal(open("sub", "scheduled", true, kickoff - 30 * 60_000), true, "sub open in the hour before kickoff");
++
++  // --- the fix: kickoff closes every non-Sub mechanic ----------------------
++  assert.equal(open("shot_predict", "live", true, kickoff + 5 * 60_000), false, "shot closed in play");
++  assert.equal(open("player_watch", "live", true, kickoff + 5 * 60_000), false, "watch closed in play");
++  assert.equal(open("versus", "live", true, kickoff + 5 * 60_000), false, "versus closed in play");
++  assert.equal(open("lineup", "live", false, kickoff + 5 * 60_000), false, "lineup closed in play");
++  // Sub is the one live exception — editable through the first half.
++  assert.equal(open("sub", "live", true, kickoff + 5 * 60_000), true, "sub editable while live");
++  assert.equal(open("sub", "halftime", true, kickoff + 50 * 60_000), false, "sub closed at the break");
++  assert.equal(open("sub", "finished", true, kickoff + 2 * HOUR), false, "sub closed at full time");
++  assert.equal(open("shot_predict", "finished", true, kickoff + 2 * HOUR), false, "shot closed at full time");
++
++  // --- self-describing requires + fallback ---------------------------------
++  assert.equal(requiresLineup("shot_predict", windows.shot_predict), true, "server flag read");
++  assert.equal(requiresLineup("lineup", windows.lineup), false, "null flag = clock-only");
++  assert.equal(requiresLineup("shot_predict", undefined), true, "falls back to the gated set");
++  assert.equal(
++    LINEUP_GATED.includes("shot_predict") && !LINEUP_GATED.includes("lineup"),
++    true,
++    "gated set membership",
++  );
++  assert.equal(
++    isOpen(
++      "shot_predict",
++      { opensAt: null, lockAt: at(kickoff) },
++      { matchStatus: "scheduled", lineupsPublished: false, now: T0 },
++    ),
++    false,
++    "a window with no requires flag still honours the canonical gate",
++  );
++
++  console.log("  predictionWindow: gate, clock windows, kickoff lock, self-describing requires OK");
++}
+diff --git a/tests/predictionsGate.test.ts b/tests/predictionsGate.test.ts
+new file mode 100644
+index 0000000..f4994c2
+--- /dev/null
++++ b/tests/predictionsGate.test.ts
+@@ -0,0 +1,233 @@
++/**
++ * The official-lineup gate on the prediction write path.
++ *
++ * Shot / Watch / Versus / the Sub board only open once ESPN's official lineup
++ * is out — the same `matches.home_formation` signal the lineup-drop push uses,
++ * not a wall-clock guess. This drives the REAL predictions router over HTTP so
++ * the gate is proven at the handler, not in a reimplementation: before the
++ * formation lands a gated write is refused with LINEUP_NOT_PUBLISHED, and the
++ * Lineup Predictor — which exists precisely to be picked BEFORE release — still
++ * goes through.
++ *
++ * WHY A CHILD PROCESS: the route modules call `getDb()` at module scope and
++ * capture the handle in a module-level const, and ESM caches modules for the
++ * life of the process. Two router-driving suites cannot coexist — the second
++ * one to import gets the first one's already-closed handle (the same reason
++ * `guestMerge.test.ts` runs in a child). So this suite re-invokes itself in a
++ * child process and reports the child's verdict.
++ */
++import { strict as assert } from "node:assert";
++import fs from "node:fs";
++import os from "node:os";
++import path from "node:path";
++import { spawnSync } from "node:child_process";
++import { fileURLToPath, pathToFileURL } from "node:url";
++import type { AddressInfo } from "node:net";
++import express from "express";
++import { closeDb, getDb, run, get } from "../server/db/index.js";
++
++const CHILD_FLAG = "VKICK_PREDICTIONS_GATE_CHILD";
++const SUMMARY =
++  "  predictionsGate: shot/watch/versus/sub need the official lineup, lineup exempt OK";
++
++interface Res {
++  status: number;
++  body: Record<string, unknown>;
++}
++
++/** Express's default error handler answers with HTML; keep that diagnosable. */
++function parseBody(buf: string): Record<string, unknown> {
++  if (!buf) return {};
++  try {
++    return JSON.parse(buf) as Record<string, unknown>;
++  } catch {
++    return { raw: buf.slice(0, 120) };
++  }
++}
++
++async function request(
++  port: number,
++  method: "GET" | "POST",
++  url: string,
++  body: unknown,
++  headers: Record<string, string>,
++): Promise<Res> {
++  const res = await fetch(`http://127.0.0.1:${port}${url}`, {
++    method,
++    headers,
++    body: body === undefined ? undefined : JSON.stringify(body),
++  });
++  return { status: res.status, body: parseBody(await res.text()) };
++}
++
++/** The actual assertions, run inside the child process. */
++async function suite(): Promise<void> {
++  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-gate-"));
++  const previousDb = process.env.SQLITE_PATH;
++  // getDb() caches one handle for the process — close it before repointing.
++  closeDb();
++  process.env.SQLITE_PATH = path.join(dir, "gate.db");
++  try {
++    // Imported AFTER SQLITE_PATH is set: the router calls getDb() at module
++    // scope, so a stale path here would point the suite at the dev database.
++    const { predictionsRouter } = await import("../server/routes/predictions.js");
++
++    const app = express();
++    app.use(express.json());
++    app.use(predictionsRouter);
++    const server = app.listen(0);
++    await new Promise<void>((r) => server.once("listening", () => r()));
++    const port = (server.address() as AddressInfo).port;
++
++    try {
++      const db = getDb();
++      const now = new Date().toISOString();
++      run(db, "INSERT INTO users (telegram_id, display_name, created_at) VALUES ('555001', 'Gate Test', ?)", [
++        now,
++      ]);
++      const user = get<{ id: number }>(db, "SELECT id FROM users WHERE telegram_id = '555001'");
++      assert.ok(user, "test user created");
++      const token = "mg_lineup_gate_test";
++      run(db, "INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES (?, ?, ?, ?)", [
++        token,
++        user!.id,
++        now,
++        now,
++      ]);
++      const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
++
++      run(db, "INSERT INTO teams (id, name, league) VALUES ('T1', 'Home FC', 'eng.1')");
++      run(db, "INSERT INTO teams (id, name, league) VALUES ('T2', 'Away FC', 'eng.1')");
++      // Kickoff 3h out: the Lineup Predictor's 2h-before lock is still ahead.
++      const kickoff = new Date(Date.now() + 3 * 3_600_000).toISOString();
++      run(
++        db,
++        `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status)
++         VALUES ('GATE1', 'eng.1', 'T1', 'T2', ?, 'scheduled')`,
++        [kickoff],
++      );
++
++      const read = () => request(port, "GET", "/api/matches/GATE1/predictions", undefined, headers);
++      const post = (mechanic: string, payload: unknown) =>
++        request(port, "POST", "/api/matches/GATE1/predictions", { mechanic, payload }, headers);
++      const shotPayload = { playerId: "1001", grid: { gridX: 0, gridY: 0 } };
++
++      // Before the official lineup: nothing gated can be written.
++      const before = await read();
++      assert.equal(before.status, 200, `read failed: ${JSON.stringify(before.body)}`);
++      assert.equal(before.body.lineupPublished, false, "no formation yet = not published");
++      const beforeWindows = before.body.windows as Record<
++        string,
++        { opensAt: string | null; requires: string | null }
++      >;
++      assert.equal(typeof beforeWindows.shot_predict?.opensAt, "string", "pre-lineup window is clock-gated");
++      assert.equal(beforeWindows.shot_predict?.requires, "lineup", "gated window is self-describing");
++      assert.equal(beforeWindows.lineup?.requires, null, "lineup predictor window is clock-only");
++
++      for (const [mechanic, payload] of [
++        ["shot_predict", shotPayload],
++        ["player_watch", { playerId: "1001" }],
++        ["versus", { playerAId: "1001", playerBId: "1002" }],
++        ["sub", { subs: [{ offId: "1001", onId: "1002" }] }],
++      ] as const) {
++        const res = await post(mechanic, payload);
++        assert.equal(res.status, 400, `${mechanic}: refused before lineup`);
++        assert.equal(res.body.error, "LINEUP_NOT_PUBLISHED", `${mechanic}: error code`);
++      }
++
++      // The Lineup Predictor is deliberately NOT gated — it is the pre-release pick.
++      const lineup = await post("lineup", {
++        playerIds: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
++        formation: "4-3-3",
++      });
++      assert.equal(lineup.status, 200, `lineup must survive the gate: ${JSON.stringify(lineup.body)}`);
++
++      // Official lineup published (the sync sets home_formation with the XI).
++      run(db, "UPDATE matches SET home_formation = '4-3-3' WHERE id = 'GATE1'");
++      const after = await read();
++      assert.equal(after.body.lineupPublished, true, "formation present = published");
++      const afterWindows = after.body.windows as Record<string, { opensAt: string | null }>;
++      assert.equal(
++        afterWindows.shot_predict?.opensAt,
++        null,
++        "published lineup opens shot now, not at the kickoff-1h estimate",
++      );
++
++      // Now the gated mechanics are accepted.
++      const shot = await post("shot_predict", shotPayload);
++      assert.equal(shot.status, 200, `shot open after lineup: ${JSON.stringify(shot.body)}`);
++      const watch = await post("player_watch", { playerId: "1002" });
++      assert.equal(watch.status, 200, `watch open after lineup: ${JSON.stringify(watch.body)}`);
++      const versus = await post("versus", { playerAId: "1001", playerBId: "1002" });
++      assert.equal(versus.status, 200, `versus open after lineup: ${JSON.stringify(versus.body)}`);
++
++      // Fallback: a competition that never writes a formation string must not
++      // strand the gate. Once BOTH sides have a starter in match_player_stats,
++      // the XI is de facto public and the gated mechanics open.
++      run(db, "INSERT INTO players (id, team_id, full_name) VALUES ('9001', 'T1', 'Home Starter')");
++      run(db, "INSERT INTO players (id, team_id, full_name) VALUES ('9002', 'T2', 'Away Starter')");
++      run(
++        db,
++        `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status)
++         VALUES ('GATE2', 'eng.1', 'T1', 'T2', ?, 'scheduled')`,
++        [kickoff],
++      );
++      run(
++        db,
++        "INSERT INTO match_player_stats (match_id, player_id, team_id, started) VALUES ('GATE2', '9001', 'T1', 1)",
++      );
++      run(
++        db,
++        "INSERT INTO match_player_stats (match_id, player_id, team_id, started) VALUES ('GATE2', '9002', 'T2', 1)",
++      );
++      const fallback = await request(port, "GET", "/api/matches/GATE2/predictions", undefined, headers);
++      assert.equal(
++        fallback.body.lineupPublished,
++        true,
++        "starters on both sides count as published without a formation",
++      );
++      const fallbackPost = await request(
++        port,
++        "POST",
++        "/api/matches/GATE2/predictions",
++        { mechanic: "player_watch", payload: { playerId: "9001" } },
++        headers,
++      );
++      assert.equal(fallbackPost.status, 200, "gated write accepted via the starters fallback");
++    } finally {
++      await new Promise<void>((r) => server.close(() => r()));
++    }
++  } finally {
++    if (previousDb === undefined) delete process.env.SQLITE_PATH;
++    else process.env.SQLITE_PATH = previousDb;
++    // Windows refuses to delete an open file: close the handle first, then sweep.
++    closeDb();
++    try {
++      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
++    } catch {
++      /* a leftover temp dir must not fail a passing suite */
++    }
++  }
++}
++
++export async function runPredictionsGateTests(): Promise<void> {
++  if (process.env[CHILD_FLAG] === "1") {
++    await suite();
++    return;
++  }
++
++  // Parent: hand the whole suite to a child process and adopt its verdict.
++  const result = spawnSync(process.execPath, ["--import", "tsx", fileURLToPath(import.meta.url)], {
++    stdio: "inherit",
++    env: { ...process.env, [CHILD_FLAG]: "1" },
++  });
++  if (result.error) throw result.error;
++  assert.equal(result.status, 0, `predictionsGate child process failed (exit ${result.status})`);
++  console.log(SUMMARY);
++}
++
++// Run ONLY when this file is the process entry point — i.e. the child spawned
++// above. Importing it from tests/run.ts must not fire the suite a second time.
++if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
++  await runPredictionsGateTests();
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 0c1606b..2c82666 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -27,7 +27,9 @@ import { runReferralTests } from "./referral.test.js";
+ import { runSeedDemoTests } from "./seedDemo.test.js";
+ import { runGuestMergeTests } from "./guestMerge.test.js";
+ import { runRateLimitTests } from "./rateLimit.test.js";
++import { runPredictionsGateTests } from "./predictionsGate.test.js";
+ import { runPickSummaryTests } from "./pickSummary.test.js";
++import { runPredictionWindowTests } from "./predictionWindow.test.js";
+ import { runOptimisticTests } from "./optimistic.test.js";
+ import { runCompetitionsTests } from "./competitions.test.js";
+ 
+@@ -59,7 +61,9 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   // for the whole process and cannot be reopened once a suite closes it.
+   ["guestMerge", runGuestMergeTests],
+   ["rateLimit", runRateLimitTests],
++  ["predictionsGate", runPredictionsGateTests],
+   ["pickSummary", runPickSummaryTests],
++  ["predictionWindow", runPredictionWindowTests],
+   ["optimistic", runOptimisticTests],
+   ["competitions", runCompetitionsTests],
+ ];
+-- 
+2.54.0.windows.1
+

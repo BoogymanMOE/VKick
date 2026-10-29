@@ -1,0 +1,55 @@
+From 15741f489f94626d2bae84d3dc391cf474e7cf67 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 13 Oct 2026 12:18:38 +0330
+Subject: [PATCH 072/230] Pin A-ADS unit to the viewport bottom so the app
+ can't cover it
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The React shell was overlapping the static ad, which A-ADS rejects as
+"partly or fully hidden". Fix the wrapper to the bottom center with a
+high z-index and add a spacer below it so app content never sits behind
+the ad.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ index.html | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/index.html b/index.html
+index b7d5ac9..3620876 100644
+--- a/index.html
++++ b/index.html
+@@ -98,7 +98,17 @@
+     <!-- BEGIN AADS AD UNIT 2458182 -->
+     <div
+       id="aads-frame"
+-      style="margin: 16px auto; max-width: 468px; padding-bottom: 80px; position: relative; z-index: 1"
++      style="
++        position: fixed;
++        bottom: 0;
++        left: 50%;
++        transform: translateX(-50%);
++        width: 100%;
++        max-width: 468px;
++        z-index: 9999;
++        background: transparent;
++        padding: 8px 0;
++      "
+     >
+       <iframe
+         data-aa="2458182"
+@@ -114,6 +124,8 @@
+         "
+       ></iframe>
+     </div>
++    <!-- Spacer so the app's content doesn't hide behind the fixed ad. -->
++    <div style="height: 80px; width: 100%"></div>
+     <!-- END AADS AD UNIT 2458182 -->
+   </body>
+ </html>
+-- 
+2.54.0.windows.1
+

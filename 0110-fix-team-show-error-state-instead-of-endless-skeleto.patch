@@ -1,0 +1,51 @@
+From d3e018cd9516045ce8ed604718c49daadb612f44 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 17 Oct 2026 22:34:44 +0330
+Subject: [PATCH 110/230] fix(team): show error state instead of endless
+ skeleton
+
+---
+ src/pages/TeamPage.tsx | 17 +++++++++++------
+ 1 file changed, 11 insertions(+), 6 deletions(-)
+
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 5ab800c..c838878 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -40,22 +40,27 @@ export default function TeamPage() {
+ 
+   const [tab, setTab] = useState<Tab>("squad");
+ 
+-  if (detailQuery.isLoading || !detailQuery.data) {
++  // Error BEFORE the loading check: `data` is undefined when the request
++  // fails, so a `isLoading || !data` branch placed first would swallow the error
++  // and leave the skeleton on screen forever. `!detailQuery.data` on the error
++  // branch is deliberate — a failed background refetch keeps the data already
++  // on screen instead of replacing a good page with an error card.
++  if (detailQuery.isError && !detailQuery.data) {
+     return (
+       <>
+         <TopBar title={t("team.title")} back />
+-        <PanelSkeleton height={160} />
++        <div className="mt-3">
++          <ErrorState onRetry={() => detailQuery.refetch()} />
++        </div>
+       </>
+     );
+   }
+ 
+-  if (detailQuery.isError) {
++  if (detailQuery.isLoading || !detailQuery.data) {
+     return (
+       <>
+         <TopBar title={t("team.title")} back />
+-        <div className="mt-3">
+-          <ErrorState onRetry={() => detailQuery.refetch()} />
+-        </div>
++        <PanelSkeleton height={160} />
+       </>
+     );
+   }
+-- 
+2.54.0.windows.1
+

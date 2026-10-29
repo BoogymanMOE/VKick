@@ -1,0 +1,44 @@
+From 6de355851e4c07f5c6bf09fa748a6eaec6a69a4f Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 13 Oct 2026 12:23:35 +0330
+Subject: [PATCH 073/230] Load the Tapsell ad loader alongside A-ADS
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Tapsell serves its inventory through a loader script that must run from
+the document head, so inject it there rather than bundling it with the
+app.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ index.html | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/index.html b/index.html
+index 3620876..39366e4 100644
+--- a/index.html
++++ b/index.html
+@@ -61,6 +61,18 @@
+     <meta property="og:image:height" content="360" />
+     <meta name="twitter:card" content="summary_large_image" />
+     <title>Vkick</title>
++    <!-- BEGIN Tapsell ad loader -->
++    <script type="text/javascript">
++      (function () {
++        const head = document.getElementsByTagName("head")[0];
++        const script = document.createElement("script");
++        script.type = "text/javascript";
++        script.async = true;
++        script.src = "https://s1.mediaad.org/serve/vkick.onrender.com/loader.js";
++        head.appendChild(script);
++      })();
++    </script>
++    <!-- END Tapsell ad loader -->
+   </head>
+   <body>
+     <div id="boot" aria-hidden="true">
+-- 
+2.54.0.windows.1
+

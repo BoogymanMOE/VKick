@@ -1,0 +1,250 @@
+From 6888488a770cea1e6f52a600533f384f88f42bac Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 00:33:16 +0330
+Subject: [PATCH 122/230] chore(copy): remove ratings promises from visible
+ text
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+About, referral, legal and metadata copy now describe only what the app still offers — following clubs and leagues, live scores, fixtures and tables.
+---
+ index.html              |  6 +++---
+ public/site.webmanifest |  2 +-
+ src/i18n/strings.ts     | 44 ++++++++++++++++++++---------------------
+ src/lib/appInfo.ts      |  4 ++--
+ 4 files changed, 28 insertions(+), 28 deletions(-)
+
+diff --git a/index.html b/index.html
+index 36df7ec..c68cdf3 100644
+--- a/index.html
++++ b/index.html
+@@ -43,7 +43,7 @@
+     </style>
+     <meta
+       name="description"
+-      content="Follow your clubs, check live scores and tables, and rate the players who mattered — live matchday, every table and crowd ratings for every league ESPN covers."
++      content="Follow your clubs and check live scores, fixtures and every table — live matchday for every league ESPN covers."
+     />
+     <!-- Link previews when the app URL is shared. The image path is
+          root-relative on purpose: the deployed origin is not known at build
+@@ -51,10 +51,10 @@
+          resolve it against this page — swap in an absolute URL if yours
+          insists. 640x360 is Telegram's recommended preview ratio. -->
+     <meta property="og:type" content="website" />
+-    <meta property="og:title" content="Vkick — live scores &amp; crowd ratings" />
++    <meta property="og:title" content="Vkick — live scores &amp; league tables" />
+     <meta
+       property="og:description"
+-      content="Follow your clubs, check live scores and tables, then rate the players who mattered."
++      content="Follow your clubs, check live scores and every table."
+     />
+     <meta property="og:image" content="/og-cover.png" />
+     <meta property="og:image:width" content="640" />
+diff --git a/public/site.webmanifest b/public/site.webmanifest
+index 322eae0..9262f70 100644
+--- a/public/site.webmanifest
++++ b/public/site.webmanifest
+@@ -1,7 +1,7 @@
+ {
+   "name": "Vkick",
+   "short_name": "Vkick",
+-  "description": "Follow your clubs, check live scores and tables, rate the eye test.",
++  "description": "Follow your clubs, check live scores and tables.",
+   "start_url": ".",
+   "display": "standalone",
+   "background_color": "#081613",
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index d2c1750..e4bdcf1 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -173,7 +173,7 @@ export const strings = {
+     "profile.notificationsOff": "Off",
+     "profile.about": "About",
+     "profile.aboutBody":
+-      "Follow your clubs and leagues, follow live scores and every table, and rate the players who mattered.",
++      "Follow your clubs and leagues, and catch live scores and every table.",
+     "profile.env": "Runtime",
+     "common.close": "Close",
+     "common.cancel": "Cancel",
+@@ -270,7 +270,7 @@ export const strings = {
+     "referral.copy": "Copy",
+     "referral.copied": "Code copied",
+     "referral.share": "Share to Telegram",
+-    "referral.shareText": "Join me on Vkick! ⚽ Live scores, tables and player ratings.",
++    "referral.shareText": "Join me on Vkick! ⚽ Live scores, tables and fixtures.",
+     "referral.bannerTitle": "Invite friends & earn points!",
+     "referral.bannerCta": "Invite",
+     "referral.statInvited": "{invited} friend(s) joined",
+@@ -328,7 +328,7 @@ export const strings = {
+     "profile.notifRatings": "Rating window",
+     "profile.notifRatingsHint": "When a match opens for crowd ratings",
+     "profile.haptics": "Haptics",
+-    "profile.hapticsHint": "Light feedback on pins, ratings and tabs",
++    "profile.hapticsHint": "Light feedback on taps and selections",
+     "profile.version": "Version",
+     "profile.platformTelegram": "Telegram Mini App",
+     "profile.platformWeb": "Web",
+@@ -336,7 +336,7 @@ export const strings = {
+     "whatsNew.dismiss": "Got it",
+     "profile.resetLocal": "Reset local settings",
+     "profile.resetDone": "Local data cleared",
+-    "profile.resetHint": "Clears pins, ratings, comments and picks on this device",
++    "profile.resetHint": "Clears pins, comments and saved preferences on this device",
+     "profile.signedIn": "Signed in via Telegram",
+     "profile.linkTelegram": "Open in Telegram to link your account",
+     "profile.linked": "Linked",
+@@ -354,7 +354,7 @@ export const strings = {
+     "profile.deleteHint": "Removes your account and everything in it — permanently",
+     "profile.deleteConfirmTitle": "Delete account?",
+     "profile.deleteConfirmBody":
+-      "This permanently deletes your account, favorites, ratings and comments. It cannot be undone, and the data cannot be recovered.",
++      "This permanently deletes your account, favorites and everything saved in it. It cannot be undone, and the data cannot be recovered.",
+     "profile.deleteConfirm": "Delete forever",
+     "profile.deleting": "Deleting…",
+     "profile.legal": "Legal",
+@@ -363,7 +363,7 @@ export const strings = {
+     "legal.updated": "Last updated: October 2026",
+     "legal.privacy.stored.title": "What we store",
+     "legal.privacy.stored.body":
+-      "Your sign-in identity (Telegram or username), display name, language, favorite clubs and leagues, player ratings, comments, notification preferences, invite codes, and anything you saved earlier in the app. Nothing else.",
++      "Your sign-in identity (Telegram or username), display name, language, favorite clubs and leagues, any comments and player scores you submitted earlier, notification preferences, invite codes, and anything you saved earlier in the app. Nothing else.",
+     "legal.privacy.where.title": "Where it lives",
+     "legal.privacy.where.body":
+       "On this app's own server, in a single database. We don't sell or share your data.",
+@@ -374,18 +374,18 @@ export const strings = {
+     "legal.privacy.ads.body": "This app displays ads provided by A-ADS and Tapsell to support development.",
+     "legal.privacy.delete.title": "Deleting your data",
+     "legal.privacy.delete.body":
+-      "Profile → Delete account removes your account and everything in it — favorites, ratings, comments and any earlier activity — immediately and permanently.",
++      "Profile → Delete account removes your account and everything in it — favorites, comments you posted earlier and any earlier activity — immediately and permanently.",
+     "legal.privacy.contact.title": "Contact",
+     "legal.privacy.contact.body": "Questions or data requests: loslocrian@gmail.com",
+     "legal.terms.use.title": "Using the app",
+     "legal.terms.use.body":
+-      "Vkick is a football companion for following clubs, checking scores and tables, and rating players. Use it as a fan — don't abuse, scrape or automate it.",
++      "Vkick is a football companion for following clubs, checking scores, fixtures and tables. Use it as a fan — don't abuse, scrape or automate it.",
+     "legal.terms.content.title": "Your content",
+     "legal.terms.content.body":
+-      "Comments and ratings you post are yours, but you give us permission to display them in the app. Don't post unlawful, hateful or spam content, and expect reported content to be removed.",
++      "Comments you post are yours, but you give us permission to display them in the app. Don't post unlawful, hateful or spam content, and expect reported content to be removed.",
+     "legal.terms.espn.title": "Football data",
+     "legal.terms.espn.body":
+-      "Scores, fixtures and stats come from ESPN's public API and may be delayed, incomplete or wrong. Ratings are for fun and have no monetary value.",
++      "Scores, fixtures and stats come from ESPN's public API and may be delayed, incomplete or wrong.",
+     "legal.terms.ads.title": "Ads",
+     "legal.terms.ads.body":
+       "Inside Telegram, sponsored cards may appear through Adsgram. They are always labelled as sponsored.",
+@@ -431,7 +431,7 @@ export const strings = {
+     "auth.createAccount": "Create account",
+     "auth.username": "Username",
+     "auth.displayName": "Display name",
+-    "auth.displayNamePlaceholder": "Shown on comments and ratings",
++    "auth.displayNamePlaceholder": "Shown on your comments",
+     "auth.createHint": "No email needed. You'll sign in with this username and password.",
+     "auth.password": "Password",
+     "auth.passwordPlaceholder": "8 or more characters",
+@@ -782,7 +782,7 @@ export const strings = {
+     "profile.notificationsOff": "خاموش",
+     "profile.about": "درباره",
+     "profile.aboutBody":
+-      "باشگاه‌ها و لیگ‌هایت را دنبال کن، نتایج زنده و همه جدول‌ها را ببین و به بازیکنان مؤثر امتیاز بده.",
++      "باشگاه‌ها و لیگ‌هایت را دنبال کن و نتایج زنده و همه جدول‌ها را ببین.",
+     "profile.env": "محیط اجرا",
+     "common.close": "بستن",
+     "common.cancel": "انصراف",
+@@ -880,7 +880,7 @@ export const strings = {
+     "referral.copied": "کد کپی شد",
+     "referral.share": "اشتراک در تلگرام",
+     "referral.shareText":
+-      "من رو در وی‌کیک همراهی کن! ⚽ نتایج زنده، جدول‌ها و امتیاز بازیکنان.",
++      "من رو در وی‌کیک همراهی کن! ⚽ نتایج زنده، جدول‌ها و برنامه بازی‌ها.",
+     "referral.bannerTitle": "دعوت دوستان و گرفتن امتیاز!",
+     "referral.bannerCta": "دعوت",
+     "referral.statInvited": "{invited} دوست پیوست",
+@@ -938,7 +938,7 @@ export const strings = {
+     "profile.notifRatings": "پنجره امتیازدهی",
+     "profile.notifRatingsHint": "وقتی یک بازی برای امتیازدهی باز می‌شود",
+     "profile.haptics": "لرزش لمسی",
+-    "profile.hapticsHint": "بازخورد لمس روی سنجاق‌ها، امتیازها و تب‌ها",
++    "profile.hapticsHint": "بازخورد لمس کوتاه روی انتخاب‌ها و تب‌ها",
+     "profile.version": "نسخه",
+     "profile.platformTelegram": "مینی‌اپ تلگرام",
+     "profile.platformWeb": "وب",
+@@ -946,7 +946,7 @@ export const strings = {
+     "whatsNew.dismiss": "روشن است",
+     "profile.resetLocal": "بازنشانی تنظیمات محلی",
+     "profile.resetDone": "داده‌های محلی پاک شد",
+-    "profile.resetHint": "سنجاق‌ها، امتیازها، دیدگاه‌ها و انتخاب‌های این دستگاه را پاک می‌کند",
++    "profile.resetHint": "سنجاق‌ها، دیدگاه‌ها و تنظیمات ذخیره‌شده این دستگاه را پاک می‌کند",
+     "profile.signedIn": "ورود با تلگرام",
+     "profile.linkTelegram": "برای وصل کردن حسابت، برنامه رو توی تلگرام باز کن",
+     "profile.linked": "متصل",
+@@ -968,7 +968,7 @@ export const strings = {
+     "profile.deleteHint": "حساب و همه محتوای آن برای همیشه پاک می‌شود",
+     "profile.deleteConfirmTitle": "حساب حذف شود؟",
+     "profile.deleteConfirmBody":
+-      "این کار حساب، تیم‌های محبوب، امتیازها و دیدگاه‌هایت را برای همیشه پاک می‌کند. قابل بازگشت نیست و داده‌ها بازیابی نمی‌شوند.",
++      "این کار حساب، تیم‌های محبوب و همه چیز ذخیره‌شده در آن را برای همیشه پاک می‌کند. قابل بازگشت نیست و داده‌ها بازیابی نمی‌شوند.",
+     "profile.deleteConfirm": "حذف برای همیشه",
+     "profile.deleting": "در حال حذف…",
+     "profile.legal": "حقوقی",
+@@ -977,7 +977,7 @@ export const strings = {
+     "legal.updated": "آخرین به‌روزرسانی: مهر ۱۴۰۵",
+     "legal.privacy.stored.title": "چه چیزی ذخیره می‌کنیم",
+     "legal.privacy.stored.body":
+-      "هویت ورودت (تلگرام یا نام کاربری)، نام نمایشی، زبان، باشگاه‌ها و لیگ‌های محبوب، امتیازهایی که به بازیکنان می‌دهی، دیدگاه‌ها، تنظیمات اعلان، کدهای دعوت و هر چیزی که پیش‌تر در برنامه ذخیره کرده‌ای. چیز دیگری نه.",
++      "هویت ورودت (تلگرام یا نام کاربری)، نام نمایشی، زبان، باشگاه‌ها و لیگ‌های محبوب، دیدگاه‌ها و نمره‌هایی که پیش‌تر به بازیکنان داده‌ای، تنظیمات اعلان، کدهای دعوت و هر چیزی که پیش‌تر در برنامه ذخیره کرده‌ای. چیز دیگری نه.",
+     "legal.privacy.where.title": "کجا نگه داشته می‌شود",
+     "legal.privacy.where.body":
+       "روی سرور همین برنامه، در یک پایگاه داده. داده‌ات را نمی‌فروشیم و به اشتراک نمی‌گذاریم.",
+@@ -989,18 +989,18 @@ export const strings = {
+       "این برنامه برای حمایت از توسعه، تبلیغاتی را که A-ADS و Tapsell ارائه می‌دهند نمایش می‌دهد.",
+     "legal.privacy.delete.title": "حذف داده‌ها",
+     "legal.privacy.delete.body":
+-      "پروفایل ← حذف حساب، حسابت و همه‌چیز درونش — باشگاه‌های محبوب، امتیازها، دیدگاه‌ها و هر فعالیت قبلی — را فوراً و برای همیشه پاک می‌کند.",
++      "پروفایل ← حذف حساب، حسابت و همه‌چیز درونش — باشگاه‌های محبوب، دیدگاه‌هایت و هر فعالیت قبلی — را فوراً و برای همیشه پاک می‌کند.",
+     "legal.privacy.contact.title": "تماس",
+     "legal.privacy.contact.body": "پرسش یا درخواست داده: loslocrian@gmail.com",
+     "legal.terms.use.title": "استفاده از برنامه",
+     "legal.terms.use.body":
+-      "وی‌کیک یک همراه فوتبالی برای دنبال‌کردن باشگاه‌ها، دیدن نتایج و جدول‌ها و امتیازدادن به بازیکنان است. مثل یک هوادار از آن استفاده کن — سوءاستفاده، استخراج داده یا خودکارسازی نکن.",
++      "وی‌کیک یک همراه فوتبالی برای دنبال‌کردن باشگاه‌ها و دیدن نتایج، برنامه بازی‌ها و جدول‌هاست. مثل یک هوادار از آن استفاده کن — سوءاستفاده، استخراج داده یا خودکارسازی نکن.",
+     "legal.terms.content.title": "محتوای شما",
+     "legal.terms.content.body":
+-      "دیدگاه‌ها و امتیازهایی که می‌گذاری مال خودت است، اما به ما اجازه می‌دهی آن‌ها را در برنامه نمایش دهیم. محتوای غیرقانونی، نفرت‌پراکن یا اسپم نگذار و بدان محتوای گزارش‌شده حذف می‌شود.",
++      "دیدگاه‌هایی که می‌گذاری مال خودت است، اما به ما اجازه می‌دهی آن‌ها را در برنامه نمایش دهیم. محتوای غیرقانونی، نفرت‌انگیز یا اسپم نگذار و بدان محتوای گزارش‌شده حذف می‌شود.",
+     "legal.terms.espn.title": "داده فوتبال",
+     "legal.terms.espn.body":
+-      "نتایج، برنامه بازی‌ها و آمار از API عمومی ESPN می‌آید و ممکن است با تأخیر، ناقص یا نادرست باشد. امتیازها فقط برای سرگرمی‌اند و ارزش مالی ندارند.",
++      "نتایج، برنامه بازی‌ها و آمار از API عمومی ESPN می‌آید و ممکن است با تأخیر، ناقص یا نادرست باشد.",
+     "legal.terms.ads.title": "تبلیغات",
+     "legal.terms.ads.body":
+       "داخل تلگرام، کارت‌های اسپانسری ممکن است از طریق Adsgram نمایش داده شوند. همیشه با برچسب اسپانسری مشخص می‌شوند.",
+@@ -1033,7 +1033,7 @@ export const strings = {
+     "auth.createAccount": "ساخت حساب",
+     "auth.username": "نام کاربری",
+     "auth.displayName": "نام نمایشی",
+-    "auth.displayNamePlaceholder": "در دیدگاه‌ها و امتیازها نمایش داده می‌شود",
++    "auth.displayNamePlaceholder": "در دیدگاه‌هایت نمایش داده می‌شود",
+     "auth.createHint": "ایمیل لازم نیست. با همین نام کاربری و گذرواژه وارد می‌شوی.",
+     "auth.password": "گذرواژه",
+     "auth.passwordPlaceholder": "۸ نویسه یا بیشتر",
+diff --git a/src/lib/appInfo.ts b/src/lib/appInfo.ts
+index 04760a9..be5d85b 100644
+--- a/src/lib/appInfo.ts
++++ b/src/lib/appInfo.ts
+@@ -28,8 +28,8 @@ export const WHATS_NEW: ReleaseNote[] = [
+     version: "0.1.0",
+     date: "2026-09-01",
+     lines: [
+-      "Vkick is live: follow your clubs, call every match before kickoff,",
+-      "rate the players after the whistle, and climb the season boards.",
++      "Vkick is live: follow your clubs, catch every matchday,",
++      "and check every table as the season unfolds.",
+     ],
+   },
+ ];
+-- 
+2.54.0.windows.1
+

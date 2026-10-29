@@ -1,0 +1,397 @@
+From 2f8fcd70dff4d69873da50c71019d252060df96c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 17 Oct 2026 23:02:58 +0330
+Subject: [PATCH 114/230] fix(feed): local-day grouping, loading/error/empty
+ states, live-first order, calmer feed
+
+---
+ src/i18n/strings.ts   |   4 +
+ src/pages/Matches.tsx | 265 ++++++++++++++++++++++++++++--------------
+ 2 files changed, 180 insertions(+), 89 deletions(-)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 3d4155d..e26b903 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -50,6 +50,7 @@ export const strings = {
+     "matches.upcoming": "Upcoming",
+     "matches.previous": "Previous matches",
+     "matches.empty": "No matches in this gameweek yet.",
++    "matches.nextDay": "Next match day",
+     "matches.emptyTitle": "No matches available right now",
+     "matches.emptyFeedHint": "Syncing live scores — check back shortly!",
+     "matches.emptyAction": "Sync now",
+@@ -343,6 +344,7 @@ export const strings = {
+     "profile.notLinked": "Not linked",
+     "profile.notificationsSub": "Delivered by the Telegram bot",
+     "common.done": "Done",
++    "common.refresh": "Refresh",
+     "common.versus": "v",
+     "ratings.rateLabel": "Rate 1 to 10",
+     "profile.guest": "Guest",
+@@ -658,6 +660,7 @@ export const strings = {
+     "matches.upcoming": "پیش رو",
+     "matches.previous": "بازی‌های قبلی",
+     "matches.empty": "هنوز بازی‌ای برای این هفته نیست.",
++    "matches.nextDay": "روز بعدیِ بازی‌ها",
+     "matches.emptyTitle": "الان بازی‌ای در دسترس نیست",
+     "matches.emptyFeedHint": "نتایج زنده در حال همگام‌سازی است — کمی بعد سر بزن!",
+     "matches.emptyAction": "همگام‌سازی",
+@@ -950,6 +953,7 @@ export const strings = {
+     "profile.notLinked": "متصل نیست",
+     "profile.notificationsSub": "ارسال از طریق ربات تلگرام",
+     "common.done": "تمام",
++    "common.refresh": "تازه‌سازی",
+     "common.versus": "در برابر",
+     "predict.morePairs": "+{n} مورد دیگر",
+     "errorBoundary.title": "مشکلی پیش آمد",
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index c823fa3..3bda9e5 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -1,12 +1,13 @@
+ import { useEffect, useMemo, useRef, useState } from "react";
+-import { useNavigate, useSearchParams } from "react-router-dom";
+-import { Link } from "react-router-dom";
++import { Link, useNavigate, useSearchParams } from "react-router-dom";
+ import { useQueryClient } from "@tanstack/react-query";
+ import { ConfettiBurst } from "../components/Confetti";
+ import { MatchCard } from "../components/MatchCard";
+ import { TopBar } from "../components/TopBar";
+ import { useToast } from "../components/toastContext";
+-import { Card } from "../components/ui";
++import { Card, EmptyState, ErrorState } from "../components/ui";
++import { MatchCardSkeleton } from "../components/Skeletons";
++import { useNow } from "../hooks/useNow";
+ import { cx } from "../lib/cx";
+ import { useMatches, useFollowedLeagues } from "../hooks/useApi";
+ import { useFavorites } from "../hooks/useFavorites";
+@@ -18,7 +19,7 @@ import {
+   BallIcon,
+   PlusIcon,
+   RefreshIcon,
+-  ShareIcon,
++  StarFilledIcon,
+ } from "../components/icons";
+ import { DateStrip } from "../components/DateStrip";
+ import { InlineAd } from "../components/InlineAd";
+@@ -28,14 +29,36 @@ import { useLiveUpdates } from "../hooks/useLiveUpdates";
+ import { PullIndicator } from "../components/PullToRefresh";
+ import type { Match } from "../types";
+ 
+-/** One chip in the league scope row: same shape, tone flips with the state. */
++/**
++ * One chip in the league scope row: smaller than a 44px target on purpose, with
++ * an invisible `after:` band that keeps the real hit area at 44px — the visual
++ * language wanted a tighter pill without shrinking what a thumb can hit.
++ */
+ const LEAGUE_CHIP =
+-  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]";
++  "relative h-9 flex-none rounded-full border px-3.5 text-[13px] font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97] after:absolute after:-inset-x-0.5 after:-inset-y-1 after:content-['']";
+ 
+ /** Selected league chip: filled volt pill — the row's one "picked" affordance. */
+ const LEAGUE_CHIP_ON = "border-volt bg-volt/15 text-volt";
+ const LEAGUE_CHIP_OFF = "border-line text-ink-3";
+ 
++const pad = (n: number) => String(n).padStart(2, "0");
++/**
++ * Local calendar-day key. NEVER use toISOString() for this: it is UTC, so east
++ * of UTC (this app's users are UTC+3:30/+4) local midnight is still the previous
++ * UTC day and every match would be filed under the wrong date.
++ */
++const dayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
++const startOfDay = (d: Date) => {
++  const x = new Date(d);
++  x.setHours(0, 0, 0, 0);
++  return x;
++};
++const STATUS_RANK: Record<string, number> = { live: 0, halftime: 0, scheduled: 1, finished: 2 };
++/** Live first, then upcoming by kickoff, then finished. */
++const byPlay = (a: Match, b: Match) =>
++  (STATUS_RANK[a.status] ?? 1) - (STATUS_RANK[b.status] ?? 1) ||
++  new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime();
++
+ export default function Matches() {
+   const { t, lang, localize } = useI18n();
+   const { push } = useToast();
+@@ -57,7 +80,9 @@ export default function Matches() {
+   const activeLeague = league ?? leagueFilter ?? undefined;
+ 
+   const matchesQuery = useMatches({ league: activeLeague });
+-  const matches = matchesQuery.data ?? [];
++  // Stable identity: every memo below keys on it, and `data ?? []` would hand
++  // them a fresh array on each render (query data is stable between refetches).
++  const matches = useMemo(() => matchesQuery.data ?? [], [matchesQuery.data]);
+ 
+   // The Favorite Leagues sheet. Local to the feed (not a route) so opening and
+   // closing it never loses the scroll position or the selected league chip.
+@@ -66,24 +91,43 @@ export default function Matches() {
+   const [lastSync, setLastSync] = useState<Date | null>(null);
+   const [burst, setBurst] = useState(0);
+ 
+-  // Date strip: 5 day chips, today selected by default.
+-  const today = new Date();
+-  today.setHours(0, 0, 0, 0);
+-  const [selectedDay, setSelectedDay] = useState<Date>(today);
+-  
+-  // Filter matches by selected day (compare kickoff date).
+-  const selectedDateStr = selectedDay.toISOString().slice(0, 10);
+-  const dayMatches = useMemo(() => {
+-    return matches.filter((m) => {
+-      const kickoff = new Date(m.kickoffAt);
+-      const kickoffStr = kickoff.toISOString().slice(0, 10);
+-      return kickoffStr === selectedDateStr;
+-    });
+-  }, [matches, selectedDateStr]);
+-  
+-  const inMyTeams = (match: Match) => isFavorite(match.home.id) || isFavorite(match.away.id);
+-  const myTeamsMatches = useMemo(() => dayMatches.filter(inMyTeams), [dayMatches]);
+-  const otherMatches = useMemo(() => dayMatches.filter((m) => !inMyTeams(m)), [dayMatches]);
++  // Date strip: 5 day chips. `picked` is null while "today" is selected — the
++  // day is then recomputed from the clock every minute, so an app left open
++  // past local midnight rolls over to the new day instead of sticking on the
++  // one it booted with.
++  const now = useNow(60_000);
++  const [picked, setPicked] = useState<Date | null>(null);
++  const selectedDay = picked ?? startOfDay(new Date(now));
++  const selectedKey = dayKey(selectedDay);
++
++  // Filter by LOCAL calendar day, and order each day the way people read a
++  // matchday: what is on now, then what is next, then what already happened.
++  const dayMatches = useMemo(
++    () => matches.filter((m) => dayKey(new Date(m.kickoffAt)) === selectedKey).sort(byPlay),
++    [matches, selectedKey],
++  );
++
++  const myTeamsMatches = useMemo(
++    () => dayMatches.filter((m) => isFavorite(m.home.id) || isFavorite(m.away.id)),
++    [dayMatches, isFavorite],
++  );
++  const otherMatches = useMemo(
++    () => dayMatches.filter((m) => !myTeamsMatches.includes(m)),
++    [dayMatches, myTeamsMatches],
++  );
++
++  // First later day that has matches, for the empty state's shortcut.
++  const nextMatchDay = useMemo(() => {
++    const later = matches
++      .map((m) => new Date(m.kickoffAt))
++      .filter((d) => dayKey(d) > selectedKey)
++      .sort((a, b) => a.getTime() - b.getTime());
++    return later[0] ? startOfDay(later[0]) : null;
++  }, [matches, selectedKey]);
++
++  // No data AND an error: an error over cached matches would replace a usable
++  // feed, so the error card is reserved for the cold-failure case.
++  const hasFeedError = matchesQuery.isError && !matchesQuery.data;
+ 
+   // Goal detection: when a refetch brings a new score for a match, fire the
+   // volt sweep + toast. The server polls ESPN every minute; this picks that up.
+@@ -145,9 +189,30 @@ export default function Matches() {
+ 
+   return (
+     <>
+-      <ConfettiBurst trigger={burst} />          <TopBar
++      <ConfettiBurst trigger={burst} />
++      <TopBar
+         title={t("matches.title")}
+-        subtitle={new Date().toLocaleDateString(lang === "fa" ? "fa-IR" : undefined, { weekday: "short", day: "numeric", month: "short" })}
++        subtitle={new Date().toLocaleDateString(lang === "fa" ? "fa-IR" : undefined, {
++          weekday: "short",
++          day: "numeric",
++          month: "short",
++        })}
++        right={
++          // The non-gesture refresh path the pull-to-refresh comment promises:
++          // a real 44px button, reachable by keyboard and announced by name.
++          <button
++            type="button"
++            onClick={refresh}
++            disabled={refreshing}
++            aria-label={t("common.refresh")}
++            title={t("common.refresh")}
++            className="grid h-11 w-11 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated disabled:opacity-60"
++          >
++            <span className={cx(refreshing && "animate-spin")}>
++              <RefreshIcon />
++            </span>
++          </button>
++        }
+       />
+ 
+       {/* Everything below sits under the sticky header. The wrapper gives the
+@@ -156,15 +221,19 @@ export default function Matches() {
+       <div className="relative">
+         <PullIndicator pull={pull} />
+ 
+-        {/* Date strip: 5 day chips. Today is teal-filled and selected by default. */}
+-        <DateStrip selected={selectedDay} onSelect={setSelectedDay} />
++        {/* Date strip: 5 day chips, today selected by default. */}
++        <DateStrip selected={selectedDay} onSelect={setPicked} />
+ 
+         {/* Favorite leagues — the start page's own way in. One tap re-scopes
+             the whole feed (concept pillar 1); the last chip opens the picker,
+             and the row is here even with nothing followed so leagues are
+-            pickable from the feed rather than only during onboarding. */}
++            pickable from the feed rather than only during onboarding.
++
++            py-1 with -my-1 keeps the chips' 4px invisible hit band INSIDE this
++            scroll container: overflow-x-auto clips vertically too, so without
++            the padding the extra target area above and below is unreachable. */}
+         {!league ? (
+-          <div className="-mx-[var(--space-page-x,16px)] mt-4 flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] pb-1">
++          <div className="-mx-[var(--space-page-x,16px)] -my-1 mt-4 flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
+             {followed.count > 0 ? (
+               <>
+                 <button
+@@ -234,46 +303,8 @@ export default function Matches() {
+           </div>
+         ) : null}
+ 
+-        {/* The picks feed, one row per favorite club: live game, else next
+-          fixture, else last result. Five rows max, anchor first — the whole
+-          answer to "what are my teams doing" without a card flood. */}
+-        {/* Live leads (product principle 1): whenever a game is running it is the
+-          first thing on screen, above every other block. Collapsible so a quiet
+-          matchday can fold it away; the pulsing badge keeps the folded header
+-          honest while games are running. */}
+-        {/* My teams group: matches where a favorite team is playing */}
+-        {favCount > 0 && myTeamsMatches.length > 0 && (
+-          <section className="mt-4">
+-            <div className="flex items-center gap-2 mb-2">
+-              <span className="text-[12px]" aria-hidden="true">★</span>
+-              <h2 className="text-[13px] font-bold text-ink-2">{t("matches.myTeams")}</h2>
+-            </div>
+-            <ul className="space-y-2">
+-              {myTeamsMatches.map((match, index) => (
+-                <MatchCard key={match.id} match={match} index={index} />
+-              ))}
+-            </ul>
+-          </section>
+-        )}
+-
+-        {/* Inline ad between groups */}
+-        {favCount > 0 && myTeamsMatches.length > 0 && otherMatches.length > 0 && (
+-          <InlineAd />
+-        )}
+-
+-        {/* Other matches group */}
+-        {otherMatches.length > 0 && (
+-          <section className="mt-4">
+-            <h2 className="text-[13px] font-bold text-ink-2 mb-2">{t("matches.otherMatches")}</h2>
+-            <ul className="space-y-2">
+-              {otherMatches.map((match, index) => (
+-                <MatchCard key={match.id} match={match} index={index} />
+-              ))}
+-            </ul>
+-          </section>
+-        )}
+-
+-        {/* No favorites yet */}
++        {/* No favorites yet: above the groups, because it is the answer to an
++            empty feed rather than a footnote under one. */}
+         {favCount === 0 ? (
+           <Card className="pitch-watermark mt-4 flex items-center justify-between gap-3 p-4">
+             <div className="min-w-0">
+@@ -288,24 +319,80 @@ export default function Matches() {
+             </Link>
+           </Card>
+         ) : null}
+-        {/* Referral banner — the invite system's only entry on the feed, parked
+-          at the foot of the page so it never pushes the live scores down. */}
+-        <Link
+-          to="/profile"
+-          onClick={() => haptic("light")}
+-          className="mt-6 flex items-center gap-3 rounded-card border border-volt/40 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+-        >
+-          <span className="grid h-10 w-10 flex-none place-items-center rounded-full bg-volt/15 text-volt">
+-            <ShareIcon className="h-5 w-5" />
+-          </span>
+-          <span className="min-w-0 flex-1">
+-            <span className="block text-sm font-bold text-ink">{t("referral.bannerTitle")}</span>
+-            <span className="block text-xs text-ink-3">{t("referral.hint")}</span>
+-          </span>
+-          <span className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-xs font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95">
+-            {t("referral.bannerCta")}
+-          </span>
+-        </Link>
++
++        {/* Feed states: three skeletons while the first payload lands, an error
++            card only when there is nothing cached, and an empty day that offers
++            the next day with football instead of a dead end. */}
++        {matchesQuery.isLoading ? (
++          <ul className="mt-4 space-y-2" aria-busy="true">
++            <MatchCardSkeleton />
++            <MatchCardSkeleton />
++            <MatchCardSkeleton />
++          </ul>
++        ) : hasFeedError ? (
++          <div className="mt-4">
++            <ErrorState onRetry={() => matchesQuery.refetch()} />
++          </div>
++        ) : dayMatches.length === 0 ? (
++          <div className="mt-4">
++            <EmptyState
++              title={t("matches.empty")}
++              hint={t("matches.emptyHint")}
++              action={
++                nextMatchDay ? (
++                  <button
++                    type="button"
++                    onClick={() => {
++                      haptic("light");
++                      setPicked(nextMatchDay);
++                    }}
++                    className="min-h-11 rounded-full border border-volt px-5 text-sm font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++                  >
++                    {t("matches.nextDay")}
++                  </button>
++                ) : null
++              }
++            />
++          </div>
++        ) : null}
++
++        {!matchesQuery.isLoading && !hasFeedError ? (
++          <>
++            {/* My teams group: matches where a favorite team is playing. */}
++            {favCount > 0 && myTeamsMatches.length > 0 && (
++              <section className="mt-4">
++                <div className="mb-2 flex items-center gap-2">
++                  <StarFilledIcon className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
++                  <h2 className="text-[13px] font-bold text-ink-2">{t("matches.myTeams")}</h2>
++                </div>
++                <ul className="space-y-2">
++                  {myTeamsMatches.map((match, index) => (
++                    <MatchCard key={match.id} match={match} index={index} />
++                  ))}
++                </ul>
++              </section>
++            )}
++
++            {/* Inline ad between the two groups. */}
++            {favCount > 0 && myTeamsMatches.length > 0 && otherMatches.length > 0 && (
++              <InlineAd />
++            )}
++
++            {/* Everything else on the day. */}
++            {otherMatches.length > 0 && (
++              <section className="mt-4">
++                <h2 className="mb-2 text-[13px] font-bold text-ink-2">
++                  {t("matches.otherMatches")}
++                </h2>
++                <ul className="space-y-2">
++                  {otherMatches.map((match, index) => (
++                    <MatchCard key={match.id} match={match} index={index} />
++                  ))}
++                </ul>
++              </section>
++            )}
++          </>
++        ) : null}
+ 
+         {/* Sync note, not a second refresh button: pull-to-refresh and the
+           TopBar icon already carry the action, so this line only reports it. */}
+-- 
+2.54.0.windows.1
+

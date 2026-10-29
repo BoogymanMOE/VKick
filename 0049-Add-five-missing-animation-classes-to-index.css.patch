@@ -1,0 +1,112 @@
+From 9f043dff08ca2fc6fd13bc3e7ad7cb33cd07ffcd Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 10 Oct 2026 20:10:36 +0330
+Subject: [PATCH 049/230] Add five missing animation classes to index.css
+
+Introduce fade-swap, star-pop, list-in, backdrop-fade-out, and sheet-out
+@keyframes and class definitions near the existing shell-motion block, using
+the existing motion tokens (--t-fast, --t-std, --ease-out, --ease-pop) and
+respecting prefers-reduced-motion.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/index.css | 76 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 76 insertions(+)
+
+diff --git a/src/index.css b/src/index.css
+index afee23c..1fc56e0 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -415,6 +415,18 @@
+     }
+   }
+ 
++  .backdrop-fade-out {
++    animation: backdrop-fade-out var(--t-fast) var(--ease-out) both;
++  }
++  @keyframes backdrop-fade-out {
++    from {
++      opacity: 1;
++    }
++    to {
++      opacity: 0;
++    }
++  }
++
+   .sheet-in {
+     animation: sheet-in var(--t-std) var(--ease-out) both;
+   }
+@@ -429,6 +441,70 @@
+     }
+   }
+ 
++  .sheet-out {
++    animation: sheet-out var(--t-fast) var(--ease-out) both;
++  }
++  @keyframes sheet-out {
++    from {
++      opacity: 1;
++      transform: translateY(0);
++    }
++    to {
++      opacity: 0;
++      transform: translateY(24px);
++    }
++  }
++
++  .fade-swap {
++    animation: fade-swap var(--t-fast) var(--ease-out) both;
++  }
++  @keyframes fade-swap {
++    from {
++      opacity: 0;
++    }
++    to {
++      opacity: 1;
++    }
++  }
++
++  .star-pop {
++    animation: star-pop var(--t-std) var(--ease-pop) both;
++  }
++  @keyframes star-pop {
++    from {
++      opacity: 0;
++      transform: scale(0.4);
++    }
++    to {
++      opacity: 1;
++      transform: scale(1);
++    }
++  }
++
++  .list-in {
++    animation: list-in var(--t-std) var(--ease-out) both;
++  }
++  @keyframes list-in {
++    from {
++      opacity: 0;
++      transform: translateY(8px);
++    }
++    to {
++      opacity: 1;
++      transform: none;
++    }
++  }
++
++  @media (prefers-reduced-motion: reduce) {
++    .backdrop-fade-out,
++    .sheet-out,
++    .fade-swap,
++    .star-pop,
++    .list-in {
++      animation-duration: 1ms;
++    }
++  }
++
+   .toast-in {
+     animation: toast-in var(--t-std) var(--ease-pop) both;
+   }
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,303 @@
+From 203a672b0d71e8207bb032d6dbd0dbe548804ab1 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 15 Oct 2026 22:32:15 +0330
+Subject: [PATCH 097/230] Polish Profile and TeamPage: favorite teams shelf,
+ fixture scorelines, grouped season stats
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Profile reached favorites only through the onboarding picker's edit link;
+a crest shelf in the Account section shows what is actually followed and gets
+back to a club page in one tap. The club page's fixtures were a text line, so
+they now read as crest-to-crest scorelines with the current club in volt, and
+the flat season list is split into Attack and Defense & control cards so the
+numbers are grouped by what they mean instead of stacked. The old flat list's
+W/D/L record row is not part of either card.
+
+Generated with Codebuff 🤖
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/strings.ts    |   4 ++
+ src/pages/Profile.tsx  |  41 +++++++++++-
+ src/pages/TeamPage.tsx | 137 ++++++++++++++++++++++++++++-------------
+ 3 files changed, 136 insertions(+), 46 deletions(-)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index d22fc47..6f6121b 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -217,6 +217,8 @@ export const strings = {
+     "team.statsEmpty": "No season stats yet",
+     "team.statsEmptyHint": "Team averages fill in after the next completed round.",
+     "team.tabXg": "xG",
++    "team.statsAttack": "Attack",
++    "team.statsDefense": "Defense & control",
+     "xg.title": "Expected goals",
+     "xg.for": "xG for",
+     "xg.against": "xG against",
+@@ -786,6 +788,8 @@ export const strings = {
+     "team.statsEmpty": "هنوز آمار فصل موجود نیست",
+     "team.statsEmptyHint": "میانگین‌های تیم بعد از هفته کامل بعدی پر می‌شوند.",
+     "team.tabXg": "گل انتظاری",
++    "team.statsAttack": "حمله",
++    "team.statsDefense": "دفاع و کنترل",
+     "xg.title": "گل‌های انتظاری",
+     "xg.for": "xG زده",
+     "xg.against": "xG خورده",
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index ae62f1a..92ec22c 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -1,11 +1,12 @@
+ import { useState } from "react";
+-import { useNavigate } from "react-router-dom";
++import { Link, useNavigate } from "react-router-dom";
+ import { BottomSheet, SheetActions } from "../components/BottomSheet";
+ import { TopBar } from "../components/TopBar";
+ import { ChevronRightIcon, CloseIcon, PencilIcon, ShareIcon } from "../components/icons";
+ import { useToast } from "../components/toastContext";
+-import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch } from "../components/ui";
++import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch, TeamBadge } from "../components/ui";
+ import { useAuth } from "../hooks/authContext";
++import { useFavorites } from "../hooks/useFavorites";
+ import { useNotificationPrefs, useReferral } from "../hooks/useApi";
+ import { LANG_LABEL, type Lang } from "../i18n/strings";
+ import { useI18n } from "../i18n/context";
+@@ -167,6 +168,7 @@ export default function Profile() {
+       <section className="mt-6">
+         <SectionHeading title={t("profile.account")} />
+         <div className="space-y-2">
++          <FavoriteTeamsStrip />
+           <ListRow
+             label={t("profile.telegram")}
+             hint={viaTelegram ? t("profile.signedIn") : t("profile.linkTelegram")}
+@@ -478,6 +480,41 @@ export default function Profile() {
+   );
+ }
+ 
++/* --------------------------------------------------------- favorite teams */
++
++/**
++ * The clubs the user follows, as a scrollable shelf of crest tiles. Profile
++ * used to reach favorites only through the onboarding picker's edit link; the
++ * shelf shows what is actually followed (and is the fastest way back to a club
++ * page) without leaving the hub. Crest + short name only — this is a shortcut,
++ * not the manager.
++ *
++ * Empty renders nothing: a first-run user with no picks gets the edit row
++ * below, not an empty rail.
++ */
++function FavoriteTeamsStrip() {
++  const { localize } = useI18n();
++  const { teams, loading } = useFavorites();
++  if (loading || teams.length === 0) return null;
++
++  return (
++    <ul className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
++      {teams.map((team) => (
++        <li key={team.id} className="flex-none">
++          <Link
++            to={`/team/${team.id}`}
++            onClick={() => haptic("light")}
++            className="flex w-[76px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
++          >
++            <TeamBadge team={team} size="sm" />
++            <span className="w-full truncate text-[10px] font-bold text-ink">{localize(team.shortName)}</span>
++          </Link>
++        </li>
++      ))}
++    </ul>
++  );
++}
++
+ /* ------------------------------------------------------------ referrals */
+ 
+ /**
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 8b02783..b60b515 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -13,7 +13,7 @@ import {
+   TeamBadge,
+ } from "../components/ui";
+ import { cx } from "../lib/cx";
+-import { useSquad, useTeamDetail, useTeamUnderstat } from "../hooks/useApi";
++import { matchFromApi, useSquad, useTeamDetail, useTeamUnderstat } from "../hooks/useApi";
+ import type { StringKey } from "../i18n/strings";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { TEAM_FALLBACK } from "../lib/colors";
+@@ -116,7 +116,7 @@ export default function TeamPage() {
+ 
+       <section className="panel-in mt-4" key={tab}>
+         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
+-        {tab === "form" ? <FixturesTab fixtures={fixtures} /> : null}
++        {tab === "form" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
+         {tab === "stats" ? <StatsTab stats={seasonStats} /> : null}
+         {tab === "xg" ? (
+           <XgTab
+@@ -194,7 +194,7 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+ 
+ /* ------------------------------------------------------------ fixtures */
+ 
+-function FixturesTab({ fixtures }: { fixtures: ApiMatch[] }) {
++function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: string }) {
+   const { t, lang, localize } = useI18n();
+   const prefetchMatch = usePrefetchMatch();
+   const locale = lang === "fa" ? "fa-IR" : undefined;
+@@ -202,35 +202,66 @@ function FixturesTab({ fixtures }: { fixtures: ApiMatch[] }) {
+ 
+   return (
+     <ul className="space-y-2">
+-      {fixtures.map((match) => (
+-        <li key={match.id} className="flex items-center gap-2 rounded-card border border-line bg-surface p-3">
+-          <Num className="w-14 flex-none text-[11px] text-ink-3">
+-            {formatKickoff(new Date(match.kickoff_at), locale)}
+-          </Num>
+-          <Link
+-            to={`/match/${match.id}`}
+-            onPointerDown={() => prefetchMatch(match.id)}
+-            className="min-w-0 flex-1 truncate text-xs font-bold text-ink transition-colors duration-[var(--t-fast)] hover:text-volt"
+-          >
+-            {localize(match.home_short ?? "")} {t("common.versus")} {localize(match.away_short ?? "")}
+-          </Link>
+-          {match.status === "finished" ? (
+-            <Chip tone="muted" className="flex-none">
+-              <Num>
+-                {match.home_score ?? 0}–{match.away_score ?? 0}
+-              </Num>
+-            </Chip>
+-          ) : match.status === "live" ? (
+-            <Chip tone="live" className="flex-none">
+-              <Num>{match.minute_display ?? ""}</Num>
+-            </Chip>
+-          ) : (
+-            <Chip tone="volt" className="flex-none">
+-              <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
+-            </Chip>
+-          )}
+-        </li>
+-      ))}
++      {fixtures.map((match) => {
++        // One scoreline per fixture: crest, club, the result or the kickoff,
++        // club, crest. The club whose page this is wears volt, so picking your
++        // side out of a neutral fixture list needs no reading.
++        const { home, away } = matchFromApi(match);
++        return (
++          <li key={match.id}>
++            <Link
++              to={`/match/${match.id}`}
++              onPointerDown={() => prefetchMatch(match.id)}
++              aria-label={`${localize(home.shortName)} ${t("common.versus")} ${localize(away.shortName)}`}
++              className="flex items-center justify-between gap-2 rounded-card border border-line bg-surface p-2.5 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++            >
++              <span className="flex min-w-0 flex-1 items-center gap-2">
++                <TeamBadge team={home} size="sm" />
++                <span
++                  className={cx(
++                    "min-w-0 truncate text-xs font-bold",
++                    home.id === teamId ? "text-volt" : "text-ink",
++                  )}
++                >
++                  {localize(home.shortName)}
++                </span>
++              </span>
++              <span className="flex-none">
++                {match.status === "finished" ? (
++                  <Chip tone="muted">
++                    <Num>
++                      {match.home_score ?? 0}–{match.away_score ?? 0}
++                    </Num>
++                  </Chip>
++                ) : match.status === "live" ? (
++                  <Chip tone="live">
++                    <Num>{match.minute_display ?? ""}</Num>
++                  </Chip>
++                ) : (
++                  /* Kickoff carries the date AND the time, so a fixture weeks
++                     out is unambiguous at a glance. */
++                  <Chip tone="volt">
++                    <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
++                    {" · "}
++                    <Num>{formatKickoff(new Date(match.kickoff_at), locale)}</Num>
++                  </Chip>
++                )}
++              </span>
++              <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
++                <span
++                  className={cx(
++                    "min-w-0 truncate text-end text-xs font-bold",
++                    away.id === teamId ? "text-volt" : "text-ink",
++                  )}
++                >
++                  {localize(away.shortName)}
++                </span>
++                <TeamBadge team={away} size="sm" />
++              </span>
++            </Link>
++          </li>
++        );
++      })}
+     </ul>
+   );
+ }
+@@ -243,26 +274,44 @@ function StatsTab({ stats }: { stats: SeasonStats }) {
+   const { t } = useI18n();
+   if (!stats) return <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />;
+ 
+-  const rows: Array<{ label: string; value: string }> = [
+-    { label: t("statsPage.teams"), value: `${stats.wins}W ${stats.draws}D ${stats.losses}L` },
++  // Two reads instead of one dump: what the side creates, and what it concedes
++  // or controls. The flat list said everything at once and ranked nothing.
++  const attackRows: Array<{ label: string; value: string }> = [
+     { label: t("stats.goals"), value: `${stats.goals_for}` },
+-    { label: t("stats.conceded"), value: `${stats.goals_against}` },
+-    { label: t("stats.possession"), value: `${Math.round(stats.avg_possession)}%` },
+-    { label: t("stats.passAccuracy"), value: `${Math.round(stats.avg_pass_accuracy)}%` },
+     { label: t("stats.shots"), value: `${stats.total_shots}` },
+     { label: t("stats.onTarget"), value: `${stats.total_shots_on_target}` },
+     { label: t("stats.corners"), value: `${stats.total_corners}` },
++  ];
++  const controlRows: Array<{ label: string; value: string }> = [
++    { label: t("stats.conceded"), value: `${stats.goals_against}` },
++    { label: t("stats.possession"), value: `${Math.round(stats.avg_possession)}%` },
++    { label: t("stats.passAccuracy"), value: `${Math.round(stats.avg_pass_accuracy)}%` },
+     { label: t("stats.fouls"), value: `${stats.total_fouls}` },
+   ];
+ 
+   return (
+-    <Card className="divide-y divide-line p-0">
+-      {rows.map((row) => (
+-        <div key={row.label} className="flex items-center justify-between px-3 py-2.5">
+-          <span className="text-xs text-ink-2">{row.label}</span>
+-          <Num className="text-sm font-bold text-ink">{row.value}</Num>
+-        </div>
+-      ))}
++    <div className="space-y-4">
++      <StatCard title={t("team.statsAttack")} rows={attackRows} />
++      <StatCard title={t("team.statsDefense")} rows={controlRows} />
++    </div>
++  );
++}
++
++/** One grouped stat sheet: a heading, then label/value rows on a hairline. */
++function StatCard({ title, rows }: { title: string; rows: Array<{ label: string; value: string }> }) {
++  return (
++    <Card className="p-4">
++      <SectionHeading title={title} />
++      <dl className="divide-y divide-line">
++        {rows.map((row) => (
++          <div key={row.label} className="flex items-center justify-between gap-3 py-2.5">
++            <dt className="text-xs text-ink-3">{row.label}</dt>
++            <dd>
++              <Num className="text-base font-bold text-ink">{row.value}</Num>
++            </dd>
++          </div>
++        ))}
++      </dl>
+     </Card>
+   );
+ }
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,36 @@
+From 09a139abca3ee8e21f508cd53b29aea1e21a54da Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 20:19:24 +0330
+Subject: [PATCH 142/230] fix(ops): per-league sync rows carried no timestamp
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The health snapshot's SQL aliased MAX(last_synced_at) AS t while the
+mapping read r.lastSyncedAt, so /api/health/sync returned per-league
+rows like {"league":"bel.1"} with the date silently dropped (undefined
+is omitted by JSON). Alias to the field's own name; verified live that
+every league row now carries its ledger date.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/sync/sentinel.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/server/sync/sentinel.ts b/server/sync/sentinel.ts
+index 28b0728..2836d5c 100644
+--- a/server/sync/sentinel.ts
++++ b/server/sync/sentinel.ts
+@@ -98,7 +98,7 @@ export function syncHealthSnapshot(db: DB, now: Date = new Date()): SyncHealthSn
+   );
+   const perLeague = all<LeagueSyncRow>(
+     db,
+-    `SELECT league, MAX(last_synced_at) AS t
++    `SELECT league, MAX(last_synced_at) AS lastSyncedAt
+      FROM matches WHERE last_synced_at IS NOT NULL GROUP BY league ORDER BY league ASC`,
+   );
+ 
+-- 
+2.54.0.windows.1
+

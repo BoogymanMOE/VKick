@@ -1,0 +1,181 @@
+From ca6afb4d0143fc2ae44dbde04843467abbfd4df7 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 15:18:50 +0330
+Subject: [PATCH 164/230] polish(empty-states): add contextual icons (ball,
+ clock, chart, etc.) across the app
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/ui.tsx     | 17 +++++++++++++++--
+ src/i18n/strings.ts       |  4 ++++
+ src/pages/MatchDetail.tsx |  6 +++---
+ src/pages/Matches.tsx     |  1 +
+ src/pages/Profile.tsx     | 17 ++++++++++++++---
+ src/pages/Table.tsx       |  2 +-
+ src/pages/TeamPage.tsx    |  2 +-
+ 7 files changed, 39 insertions(+), 10 deletions(-)
+
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index 3973ed0..a24e84c 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -760,10 +760,23 @@ export function Switch({
+ 
+ /* ------------------------------------------------------------------ loading */
+ 
+-export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
++export function EmptyState({
++  title,
++  hint,
++  action,
++  icon,
++}: {
++  title: string;
++  hint?: string;
++  action?: ReactNode;
++  /** A small 24px pictogram above the title (⚽ the feed, ⏱ the timeline…).
++      Optional: call sites without one render exactly as before. */
++  icon?: ReactNode;
++}) {
+   return (
+     <div className="rise-in pitch-watermark rounded-card border border-dashed border-line px-4 py-10 text-center">
+-      <p className="text-sm font-bold text-ink-2">{title}</p>
++      {icon ? <div className="text-2xl leading-none text-ink-3">{icon}</div> : null}
++      <p className={cx(icon ? "mt-3" : undefined, "text-sm font-bold text-ink-2")}>{title}</p>
+       {hint ? <p className="mt-1 text-xs text-ink-3">{hint}</p> : null}
+       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+     </div>
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 9a28239..eea2156 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -368,6 +368,8 @@ export const strings = {
+     "profile.deleteAccount": "Delete account",
+     "profile.deleteHint": "Removes your account and everything in it — permanently",
+     "profile.deleteConfirmTitle": "Delete account?",
++    "profile.noClubs": "No clubs picked",
++    "profile.noClubsHint": "The clubs you follow show up here — pick your first in onboarding.",
+     "profile.deleteConfirmBody":
+       "This permanently deletes your account, favorites and everything saved in it. It cannot be undone, and the data cannot be recovered.",
+     "profile.deleteConfirm": "Delete forever",
+@@ -995,6 +997,8 @@ export const strings = {
+     "profile.deleteAccount": "حذف حساب",
+     "profile.deleteHint": "حساب و همه محتوای آن برای همیشه پاک می‌شود",
+     "profile.deleteConfirmTitle": "حساب حذف شود؟",
++    "profile.noClubs": "هنوز باشگاهی انتخاب نشده",
++    "profile.noClubsHint": "باشگاه‌هایی که دنبال می‌کنی اینجا می‌آیند — اولین انتخاب را در آشناسازی بزن.",
+     "profile.deleteConfirmBody":
+       "این کار حساب، تیم‌های محبوب و همه چیز ذخیره‌شده در آن را برای همیشه پاک می‌کند. قابل بازگشت نیست و داده‌ها بازیابی نمی‌شوند.",
+     "profile.deleteConfirm": "حذف برای همیشه",
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 4e717b2..a45398a 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -332,7 +332,7 @@ function TimelineTab({
+     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+   }
+   if (adapted.length === 0) {
+-    return <EmptyState title={t("timeline.empty")} hint={t("timeline.emptyHint")} />;
++    return <EmptyState icon="⏱" title={t("timeline.empty")} hint={t("timeline.emptyHint")} />;
+   }
+ 
+   return (
+@@ -376,7 +376,7 @@ function StatsTab({
+     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+   }
+   if (rows.length === 0) {
+-    return <EmptyState title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
++    return <EmptyState icon="📊" title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
+   }
+ 
+   const asNum = (v: unknown): number => (typeof v === "number" ? v : 0);
+@@ -581,7 +581,7 @@ function LineupsTab({
+   if (!data || data.players.length === 0) {
+     // The Lineups tab is about the XI, not the stat sheet — an upcoming match
+     // must not say "stats land here after the first whistle".
+-    return <EmptyState title={t("lineups.noneYet")} hint={t("lineups.noneHint")} />;
++    return <EmptyState icon="📋" title={t("lineups.noneYet")} hint={t("lineups.noneHint")} />;
+   }
+ 
+   const toPlayer = (r: Record<string, unknown>) => ({
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 4ec93f9..7f720b9 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -350,6 +350,7 @@ export default function Matches() {
+         ) : dayMatches.length === 0 ? (
+           <div className="mt-4">
+             <EmptyState
++              icon="⚽"
+               title={t("matches.empty")}
+               hint={t("matches.emptyHint")}
+               action={
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index e429ecf..6b6bf41 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -4,7 +4,7 @@ import { BottomSheet, SheetActions } from "../components/BottomSheet";
+ import { TopBar, LanguageToggle } from "../components/TopBar";
+ import { ChevronRightIcon, CloseIcon, PencilIcon, ShareIcon } from "../components/icons";
+ import { useToast } from "../components/toastContext";
+-import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch, TeamBadge } from "../components/ui";
++import { Avatar, Button, Card, Chip, EmptyState, ListRow, SectionHeading, Switch, TeamBadge } from "../components/ui";
+ import { useAuth } from "../hooks/authContext";
+ import { useFavorites } from "../hooks/useFavorites";
+ import { useNotificationPrefs, useReferral } from "../hooks/useApi";
+@@ -509,9 +509,20 @@ export default function Profile() {
+  * below, not an empty rail.
+  */
+ function FavoriteTeamsStrip() {
+-  const { localize } = useI18n();
++  const { t, localize } = useI18n();
+   const { teams, loading } = useFavorites();
+-  if (loading || teams.length === 0) return null;
++  // First-run honest state: an empty rail with nothing at all read as a
++  // broken component — say that no clubs are picked and where to pick them.
++  if (loading) return null;
++  if (teams.length === 0) {
++    return (
++      <EmptyState
++        icon="⭐"
++        title={t("profile.noClubs")}
++        hint={t("profile.noClubsHint")}
++      />
++    );
++  }
+ 
+   return (
+     <ul className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index 1294c15..e8a22fc 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -609,7 +609,7 @@ function KnockoutView({ slug }: { slug: string }) {
+     return <ErrorState onRetry={() => matchesQuery.refetch()} />;
+   }
+   if (cupMatches.length === 0) {
+-    return <EmptyState title={t("table.emptyTitle")} hint={t("table.emptyHint")} />;
++    return <EmptyState icon="📈" title={t("table.emptyTitle")} hint={t("table.emptyHint")} />;
+   }
+ 
+   const rounds = new Map<string, Match[]>();
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 592706a..a4d8e9c 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -186,7 +186,7 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+ 
+   const squad = squadQuery.data;
+   if (!squad || squad.players.length === 0) {
+-    return <EmptyState title={t("team.squadEmpty")} hint={t("team.squadEmptyHint")} />;
++    return <EmptyState icon="👥" title={t("team.squadEmpty")} hint={t("team.squadEmptyHint")} />;
+   }
+ 
+   // Persian reads every number in the Persian script — jersey, counts and stats
+-- 
+2.54.0.windows.1
+

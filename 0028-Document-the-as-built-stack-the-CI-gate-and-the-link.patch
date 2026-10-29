@@ -1,0 +1,749 @@
+From 61b0d23494d6295aec1d19e5f641c44a43aff759 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 7 Oct 2026 01:35:47 +0330
+Subject: [PATCH 028/230] Document the as-built stack, the CI gate and the link
+ preview
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- .github/workflows/ci.yml runs typecheck, lint, tests and build on every
+  push, on the Node pinned in .node-version (the one Render uses).
+- README picks up that workflow, the /health probe, the scripts/legacy
+  split, the team understat read and the deploy shape; .env.example
+  documents NEAR_KICKOFF_SECONDS, SKIP_CRON and the TEMP auth probe flag.
+- index.html gains a meta description and Open Graph tags for shared links,
+  with public/og-cover.png (640x360) as the preview image.
+- data-model and tech-stack say what is actually true: SQLite via
+  node:sqlite, with server/db/schema.ts as the source of truth.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ .env.example             |  18 +++++++++++++++++-
+ .github/workflows/ci.yml |  39 +++++++++++++++++++++++++++++++++++++++
+ README.md                |  26 ++++++++++++++++++++++----
+ data-model.md            |   2 +-
+ index.html               |  19 +++++++++++++++++++
+ public/og-cover.png      | Bin 0 -> 28642 bytes
+ tech-stack.md            |  27 ++++++++++++++++++---------
+ 7 files changed, 116 insertions(+), 15 deletions(-)
+ create mode 100644 .github/workflows/ci.yml
+ create mode 100644 public/og-cover.png
+
+diff --git a/.env.example b/.env.example
+index 41d5e03..130b04e 100644
+--- a/.env.example
++++ b/.env.example
+@@ -12,13 +12,29 @@ LIVE_SUMMARY_SECONDS=60
+ # call per competition carries every match's score + minute + status — that's
+ # what makes the app feel live. Default 15, floor 10.
+ LIVE_PULSE_SECONDS=15
+-# Comma-separated Telegram user ids that may call admin endpoints (e.g. curating versus pairs); leave empty to disable
++# The near-kickoff lane: how often (seconds) a SCHEDULED match within ~90 min
++# of kickoff is re-checked so the official-lineup gate opens fast. Default 150,
++# floor 60.
++NEAR_KICKOFF_SECONDS=150
++# Dev/CI escape hatch: set to 1 to boot the API WITHOUT the ESPN sync loops,
++# the resolver cron, the bot or the retention sweep (local fixtures stay put).
++# Leave empty in production.
++SKIP_CRON=
++# Comma-separated Telegram user ids that may call admin endpoints (manual sync trigger, single-recipient push); leave empty to disable
+ ADMIN_TELEGRAM_IDS=
+ # Optional: fixed secret for dev testing; when set, /api/auth/login accepts "dev:<any-id>" tokens (DO NOT set in production)
+ DEV_AUTH_SECRET=
++# TEMP auth probe: set to 1 while testing on a real Telegram device and every
++# /api/auth/guest call logs one line (initData key names + booleans, never the
++# data itself). Empty = silent, which is what production wants.
++AUTH_PROBE=
+ 
+ # Telegram bot token from @BotFather
+ TELEGRAM_BOT_TOKEN=
++# Public HTTPS URL of the web app — the tunnel URL from start-telegram.bat while
++# developing, your production host after deploy. The bot's /start button and
++# Mini App menu open this, so it must match what you registered in BotFather.
++MINI_APP_URL=
+ 
+ # Data retention: finished matches older than this many days lose their
+ # detail rows (timeline, commentary, stat sheets, push audit). Match rows,
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..2f1d417
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,39 @@
++# Gates every push and PR on the four checks the repo already runs locally:
++# typecheck (client + server), lint, the zero-dependency tsx test runner, and
++# the production build. Docs drift and lint debt crept in precisely because
++# nothing ran these automatically.
++name: CI
++
++on: [push, pull_request]
++
++jobs:
++  check:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++
++      # .node-version pins the runtime (node:sqlite needs >= 22.5) and is what
++      # Render reads too, so CI runs the same Node the app deploys on.
++      - uses: actions/setup-node@v4
++        with:
++          node-version-file: .node-version
++          cache: npm
++
++      - name: Install dependencies
++        run: npm ci
++
++      - name: Typecheck
++        run: npm run typecheck
++
++      # Warnings are deliberate (the repo sets `no-explicit-any` to warn), so
++      # this gates on lint ERRORS only — same as running it locally.
++      - name: Lint
++        run: npm run lint
++
++      # Self-contained: temp SQLite files and a localhost-only server. No
++      # external network calls and no secrets required.
++      - name: Test
++        run: npm test
++
++      - name: Build
++        run: npm run build
+diff --git a/README.md b/README.md
+index 09f3929..46ff3e3 100644
+--- a/README.md
++++ b/README.md
+@@ -32,7 +32,9 @@ npm run dev:all
+ 
+ Copy `.env.example` to `.env` and set `TELEGRAM_BOT_TOKEN` (from @BotFather). While developing outside Telegram, keep `DEV_AUTH_SECRET` set and append `?devUser=<any-id>` to the web app URL to simulate a user.
+ 
+-Other scripts: `npm run build` (typecheck + bundle), `npm run typecheck`, `npm test`, `npm run preview`.
++Other scripts: `npm run build` (typecheck + bundle), `npm run typecheck`, `npm test`, `npm run lint`, `npm run format`, `npm run preview`.
++
++CI (`.github/workflows/ci.yml`) runs typecheck, lint, the test suite and the build on every push and pull request, on the Node pinned in `.node-version` (the same one Render uses). Lint gates on errors only — `no-explicit-any` is configured as a warning, so a stray `any` is flagged without breaking the build.
+ 
+ ### Telegram Mini App setup
+ 1. Run `start-telegram.bat` (or any HTTPS tunnel to :5173)
+@@ -46,6 +48,8 @@ npm run sync                        # full sweep: scoreboards + live summaries +
+ npm run sync -- sync-match eng.1 401874934   # force one match
+ npm run sync -- sync-match eng.1 401874934 --dry-run  # print what would happen
+ npm run sync -- standings
++npm run sync -- rosters             # refresh club squads (weekly lane, manual)
++npm run sync -- understat           # refresh Understat xG/PPDA (big five, weekly)
+ npm run sync -- dev-token 12345     # print a dev auth token
+ ```
+ 
+@@ -76,17 +80,20 @@ the real one. It attaches predictions to **synced** fixtures rather than inventi
+ | `server/sync/service.ts` | Cron loops: live 1m, scoreboards 10m, standings daily |
+ | `server/sync/upserts.ts` | Normalized data → SQLite, goal-alert detection |
+ | `server/scoring/statScore.ts` | Player stat score per `scoring-rules.md` |
+-| `server/index.ts` | All REST endpoints |
++| `server/index.ts` | App wiring: mounts the route modules, `/health`, static `dist/` + SPA fallback, sync/resolver/bot startup, retention sweep |
+ | `server/sync/teamStats.ts` | Team stats normalization + season leaderboard recompute |
+ | `server/bot/index.ts` | grammY bot + push queue drain |
+ | `server/notifications.ts` | Matchday pushes + the one place notification prefs are enforced |
+ | `src/lib/api.ts` | Frontend API client |
++| `scripts/` | Asset tools (`fetch-logos`, `import-logos`, `logo-normalize`, `make-icons`, `ui-audit`, `wait-for-api`); retired one-off debug scripts live in `scripts/legacy/` |
+ 
+ ## API surface
+ 
+-Public (no auth): `GET /api/matches` (relevance window by default — live now + last 3 days of results + next 14; accepts `league`, `date`, `from`/`to` for an explicit range, and `limit`), `GET /api/matches/:id`, `/lineups`, `/timeline`, `/commentary`, `/players` (per-match stat table), `GET /api/teams` (+ `/:id` season line, `/:id/players`, `/:id/understat`), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`, `GET /api/competitions`
++Ops: `GET /health` (liveness probe — 200 while the process and DB answer, 503 if the DB is broken; this is what `render.yaml`'s health check hits)
++
++Public (no auth): `GET /api/matches` (relevance window by default — live now + last 3 days of results + next 14; accepts `league`, `date`, `from`/`to` for an explicit range, and `limit`), `GET /api/matches/:id`, `/lineups`, `/timeline`, `/commentary`, `/players` (per-match stat table), `GET /api/teams` (+ `/:id` season line, `/:id/players`), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`, `GET /api/competitions`
+ 
+-Auth (Bearer = Telegram initData, or an `mg_` session token from the username path): `POST /api/auth/login`, `GET /api/me`, `GET/POST/DELETE /api/me/favorites` (max 5 clubs plus up to 5 national teams, one flagged `is_favorite` — errors are machine-readable codes), `GET/POST /api/me/leagues` (max 5), `GET/POST /api/me/referral` (+ `/redeem`), `GET/POST /api/matches/:id/ratings` (3-card cap, 1 vote per player per match, 1–10), `GET/POST /api/matches/:id/comments`, `GET/POST /api/matches/:id/predictions` (lock enforcement per mechanic), `GET /api/me/predictions`, `GET /api/me/streak` (favorite-club streak + next threshold bonus)
++Auth (Bearer = Telegram initData, or an `mg_` session token from the username path): `POST /api/auth/login`, `GET /api/me`, `GET /api/teams/:id/understat` (xG/xPts/PPDA for one club), `GET/POST/DELETE /api/me/favorites` (max 5 clubs plus up to 5 national teams, one flagged `is_favorite` — errors are machine-readable codes), `GET/POST /api/me/leagues` (max 5), `GET/POST /api/me/referral` (+ `/redeem`), `GET/POST /api/matches/:id/ratings` (3-card cap, 1 vote per player per match, 1–10), `GET/POST /api/matches/:id/comments`, `GET/POST /api/matches/:id/predictions` (lock enforcement per mechanic), `GET /api/me/predictions`, `GET /api/me/streak` (favorite-club streak + next threshold bonus)
+ 
+ Public leaderboards: `GET /api/leaderboards/global`, `/league/:league`, `/club/:teamId`
+ 
+@@ -185,6 +192,17 @@ one of those helpers is a silent no-op (`src/lib/telegram.ts`).
+ When you deploy, point the bot's menu button at your production static host instead — it's the same
+ build either way, only distribution differs.
+ 
++## Deploy
++
++`render.yaml` is a working Render blueprint for the zero-cost shape this app was built around: one Node service, `npm install && npm run build` to produce `dist/` (frontend) + `dist-server/` (server), then `node dist-server/server/index.js`.
++
++- **One process serves everything.** The API mounts the built `dist/` with an SPA fallback, so there is no separate static host to configure.
++- **Exactly one instance.** File-based SQLite plus in-process cron loops (sync, resolver, retention) mean scaling horizontally would fight itself — scale the box, never the count. The blueprint's comment says the same thing.
++- **Health check** is `GET /health` (503 if the DB stops answering, so the check can actually fail).
++- **Secrets live in the dashboard**, not in `render.yaml`: `TELEGRAM_BOT_TOKEN`, `MINI_APP_URL`, optionally `ADMIN_TELEGRAM_IDS`.
++- **`NODE_ENV=production` refuses to boot while `DEV_AUTH_SECRET` is set** — that key turns `dev:<id>` tokens into any user's identity. Unset it before deploying.
++- After the first deploy, point BotFather's Mini App URL (and `MINI_APP_URL`) at the service's `https://` URL.
++
+ ## Animations
+ 
+ The signature animations from `design-system.md` are implemented:
+diff --git a/data-model.md b/data-model.md
+index 055c6c8..927238a 100644
+--- a/data-model.md
++++ b/data-model.md
+@@ -1,6 +1,6 @@
+ # Data Model
+ 
+-Reference schema for the Postgres database. Field types are illustrative (Prisma-style); adjust as needed during implementation, but keep the relationships and field intent intact. Concept: `concept.md`. Mechanics and leaderboard rules: `prediction-mechanics.md` + `scoring-rules.md`.
++Reference schema. **As built, this runs on SQLite (`node:sqlite`) — the live schema and migrations are `server/db/schema.ts`, and that file wins on any disagreement.** Types below are illustrative (Prisma-style, from the original Postgres plan); keep the relationships and field intent intact so a later move to Postgres stays a translation exercise. Concept: `concept.md`. Mechanics and leaderboard rules: `prediction-mechanics.md` + `scoring-rules.md`.
+ 
+ ## Core football data (populated from ESPN, via the normalization layer)
+ 
+diff --git a/index.html b/index.html
+index 4eda83b..f611154 100644
+--- a/index.html
++++ b/index.html
+@@ -41,6 +41,25 @@
+         pointer-events: none;
+       }
+     </style>
++    <meta
++      name="description"
++      content="Follow your clubs, call the lineups and rate the players who mattered — live matchday, season-long predictions and crowd ratings for every league ESPN covers."
++    />
++    <!-- Link previews when the app URL is shared. The image path is
++         root-relative on purpose: the deployed origin is not known at build
++         time (Render, a tunnel and a custom domain all differ) and scrapers
++         resolve it against this page — swap in an absolute URL if yours
++         insists. 640x360 is Telegram's recommended preview ratio. -->
++    <meta property="og:type" content="website" />
++    <meta property="og:title" content="Vkick — matchday predictions &amp; crowd ratings" />
++    <meta
++      property="og:description"
++      content="Predict lineups, subs, shots and standouts before kick-off, then rate the players who mattered."
++    />
++    <meta property="og:image" content="/og-cover.png" />
++    <meta property="og:image:width" content="640" />
++    <meta property="og:image:height" content="360" />
++    <meta name="twitter:card" content="summary_large_image" />
+     <title>Vkick</title>
+   </head>
+   <body>
+diff --git a/public/og-cover.png b/public/og-cover.png
+new file mode 100644
+index 0000000000000000000000000000000000000000..fec6df9532b9fdab5ded6c41aca24a48911c4584
+GIT binary patch
+literal 28642
+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
+B)!YC8
+
+literal 0
+HcmV?d00001
+
+diff --git a/tech-stack.md b/tech-stack.md
+index a32ba9a..56f242e 100644
+--- a/tech-stack.md
++++ b/tech-stack.md
+@@ -1,5 +1,10 @@
+ # Tech Stack & Architecture
+ 
++> **As built, reconciled 2026-10-06.** The constraints below are still the
++> constraints; the stack choices are now what is actually implemented, not the
++> original shortlist. Where an early choice (Postgres, Prisma) lost to a
++> zero-cost one, the reason is noted — the migration path stays open.
++
+ ## Constraints that shape every decision here
+ - Solo builder using an AI coding agent, near full-time capacity
+ - Must work in Iran: no reliance on Google Play/Apple billing, no assumption of unrestricted API access from Iranian IPs (a VPN may be needed for outbound calls to some services during development)
+@@ -20,24 +25,26 @@ ESPN public API (unofficial)
+ ```
+ 
+ ## Backend
+-- **Language/framework:** Node.js (TypeScript) with a lightweight framework (Express or Fastify) — wide ecosystem, easy to find AI-agent training data for, good fit for both the polling service and the API layer
+-- **Database:** PostgreSQL — relational fits this data well (teams/players/matches/favorites are all relational), and it's free to self-host or use a free tier (e.g. Supabase, Neon) during v1
+-- **ORM:** Prisma — makes schema migrations and type-safe queries straightforward, easy for an AI agent to work with since the schema is declarative
+-- **Job scheduling:** a simple cron-based job runner (node-cron, or a hosted cron trigger) for the ESPN polling service — no need for a heavy queue system at v1 scale
++- **Language/framework:** Node.js (TypeScript) + **Express 5** — one small server for the API, the sync loops and the bot. Fastify was on the shortlist; Express won on familiarity.
++- **Database:** **SQLite via Node's built-in `node:sqlite`** (`DatabaseSync`), file-based at `SQLITE_PATH`. Postgres was the original plan; SQLite removed the need for a hosted DB, a VPN-dependent signup and a free-tier ceiling for v1. Schema + migrations are hand-written in `server/db/schema.ts` (covered by `tests/migrate.test.ts`), and the SQL stays plain enough that a Postgres port is a translation exercise, not a redesign.
++- **ORM:** **None.** Prisma was the original plan; with one hand-written schema file, a query builder/ORM added a dependency and a codegen step without buying anything. Typed helper wrappers (`get`/`all`/`run`) do the narrowing instead.
++- **Job scheduling:** `node-cron` for the daily/weekly passes plus plain `setInterval` lanes for the second-scale ones (live pulse 15s, live summary 60s, near-kickoff 150s — all env-tunable). Overlap guards skip a tick rather than queue one. No queue system at v1 scale.
++- **Runtime constraint:** Node >= 22.5 (`node:sqlite`); pinned by `.node-version`.
+ 
+ ## Frontend (Web App)
+ - **Framework:** React (with Vite) — fits the club picker, timeline and league tables well; large ecosystem
+-- **Styling:** Tailwind CSS — fast to iterate with an AI agent, no design system overhead needed yet
++- **Styling:** Tailwind CSS v4 (via the Vite plugin) with design tokens in `tokens.css` — fast to iterate with an AI agent, no design system overhead needed yet
+ - **State:** React Query (TanStack Query) for server state (matches, favorites, ratings) — avoids building a custom caching layer
+ 
+ ## Telegram Integration
+ - **Telegram Mini App:** the web app is loaded inside Telegram via the Mini Apps platform (Telegram WebApp SDK) for the primary in-Telegram experience
+-- **Telegram Bot:** a separate lightweight bot process (using a library like `node-telegram-bot-api` or `grammY`) handles notifications (goal alerts, lineup-drop/sub-window reminders, rating-window opens, deadline warnings) and simple commands — kept separate from the Mini App's web code so notification logic doesn't get tangled with UI code
++- **Telegram Bot:** **grammY with long-polling** (no webhook server — one less public endpoint and nothing for Telegram to reach into Iran-side). Goal alerts and matchday pushes go through a persistent push queue (`bot_push_queue`) drained in-process, with copy rendered per recipient from `users.language`. Kept separate from the Mini App's web code so notification logic doesn't get tangled with UI code.
+ 
+ ## Hosting (v1, low/no cost)
+-- Backend + polling service: a low-cost VPS (or a free-tier platform like Railway/Render) — avoid serverless for the polling service since it needs to run on a schedule reliably
+-- Database: free tier of a managed Postgres provider (Supabase/Neon) to start; migrate to self-hosted or paid tier once there's real load
+-- Web app: static hosting (Vercel/Netlify free tier, or bundled with the backend)
++- **One Node service** (`render.yaml` blueprint provided): it serves the API **and** the built frontend (`dist/` + SPA fallback), with `GET /health` as the health check. Exactly one instance — file-based SQLite and in-process cron loops do not tolerate a second copy.
++- Backend + polling service: a low-cost VPS or a free-tier platform (Render is what `render.yaml` targets) — avoid serverless for the polling service since it needs to run on a schedule reliably.
++- Database: the SQLite file on a persistent disk (`SQLITE_PATH`). No managed Postgres needed until there's real load; the schema is written so that move stays mechanical.
++- Web app: no separate static host required — it ships inside the same process; any static host also works if you'd rather split them.
+ 
+ ## Data flow: ESPN normalization layer (critical)
+ Do not let raw ESPN response shapes leak into the rest of the app. The polling service's only job is:
+@@ -52,3 +59,5 @@ If ESPN changes their response shape, only this one layer needs to change — no
+ - No microservices — a single backend service is enough at this scale
+ - No paid sports data API — ESPN's free unofficial endpoint covers v1 entirely
+ - No message queue / event bus — cron-based polling is sufficient until proven otherwise
++- No hosted database or ORM — file-based SQLite, hand-written schema/migrations
++- No webhook for the bot — grammY long-polling keeps the surface to one port
+-- 
+2.54.0.windows.1
+

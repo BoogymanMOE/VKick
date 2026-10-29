@@ -1,0 +1,47 @@
+From 8d83d927716383fee2188390377561078c3501de Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 19:48:00 +0330
+Subject: [PATCH 172/230] fix(timeline): add kickoff + other cases to eventMark
+ and typeKey
+
+Give kickoff/other events real render paths: a chip label key and an
+event mark, so they are no longer silently missing from the switch.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/TimelineList.tsx | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index 418b4a6..87efa80 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -13,8 +13,10 @@ const typeKey: Record<TimelineEvent["type"], StringKey> = {
+   card: "timeline.card",
+   substitution: "timeline.sub",
+   var: "timeline.var",
++  kickoff: "timeline.kickoff",
+   halftime: "timeline.halftime",
+   fulltime: "timeline.fulltime",
++  other: "timeline.other",
+ };
+ 
+ /**
+@@ -39,10 +41,14 @@ function eventMark(type: TimelineEvent["type"], description: string): { glyph: R
+       return { glyph: <SwapIcon className="h-4 w-4" />, tone: "text-ink-2" };
+     case "var":
+       return { glyph: "◇", tone: "text-ink-2" };
++    case "kickoff":
++      return { glyph: "•", tone: "text-ink-2" }; // a small dot — kickoff is the start, not a flashy event
+     case "halftime":
+       return { glyph: "‖", tone: "text-ink-2" };
+     case "fulltime":
+       return { glyph: "■", tone: "text-ink-2" };
++    case "other":
++      return { glyph: "·", tone: "text-ink-3" }; // even more muted — these are commentary noise
+   }
+ }
+ 
+-- 
+2.54.0.windows.1
+

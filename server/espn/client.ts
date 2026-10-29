@@ -66,6 +66,11 @@ export async function fetchTeamRoster(league: LeagueSlug, teamId: string): Promi
   return fetchJson(`${BASE}/${league}/teams/${encodeURIComponent(teamId)}/roster`);
 }
 
+/** Injury and sidelined report for one club. */
+export async function fetchTeamInjuries(league: LeagueSlug, teamId: string): Promise<unknown> {
+  return fetchJson(`${BASE}/${league}/teams/${encodeURIComponent(teamId)}/injuries`);
+}
+
 /**
  * League news feed. Returns up to ~6 articles per league, refreshed
  * throughout the day. Each article carries headline, description,

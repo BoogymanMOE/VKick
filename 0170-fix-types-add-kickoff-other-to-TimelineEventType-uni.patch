@@ -1,0 +1,39 @@
+From 9ac7c342c439123e761bbc12c84aa34294744a03 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 19:48:00 +0330
+Subject: [PATCH 170/230] fix(types): add kickoff + other to TimelineEventType
+ union
+
+Extend the client-side TimelineEventType union beyond the old 6-value
+set so the UI type system can represent the full set of event types the
+server stores and returns (kickoff and other included).
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/types.ts | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/types.ts b/src/types.ts
+index b8d0cb6..ae2c08b 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -64,7 +64,15 @@ export interface Match {
+ 
+ export type PredictionKind = "lineup" | "shot" | "sub" | "watch" | "versus";
+ 
+-export type TimelineEventType = "goal" | "card" | "substitution" | "var" | "halftime" | "fulltime";
++export type TimelineEventType =
++  | "goal"
++  | "card"
++  | "substitution"
++  | "var"
++  | "kickoff"
++  | "halftime"
++  | "fulltime"
++  | "other";
+ 
+ export interface TimelineEvent {
+   id: string;
+-- 
+2.54.0.windows.1
+

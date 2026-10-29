@@ -5,6 +5,8 @@
  * Understat read keeps its requireUser gate. Behavior unchanged.
  */
 import express, { type Response } from "express";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { getDb, all, get } from "../db/index.js";
 import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
 
@@ -24,6 +26,25 @@ import { syncMatchSummary } from "../sync/service.js";
 import type { LeagueSlug } from "../espn/types.js";
 
 const db = getDb();
+
+/** Resolve a face URL for a player.
+ * Priority: 1) bundled webp under public/headshots/<id>.webp
+ * 2) the remote ESPN headshot_url the sync stored
+ * 3) null so the UI falls back to initials.
+ */
+function localHeadshotUrl(headshotUrl: string | null, playerId: string | number): string | null {
+  const id = String(playerId);
+  try {
+    const headshotPath = path.join(process.cwd(), "public", "headshots", `${id}.webp`);
+    if (existsSync(headshotPath)) {
+      return `/headshots/${id}.webp`;
+    }
+  } catch {
+    // access denied or not found
+  }
+  if (headshotUrl) return headshotUrl;
+  return null;
+}
 
 export const matchesRouter = express.Router();
 
@@ -310,10 +331,15 @@ matchesRouter.get("/api/matches/:id/lineups", async (req, res) => {
     rows = lineupRows(matchId);
   }
 
+  const players = rows.map((r) => ({
+    ...r,
+    avatarUrl: localHeadshotUrl(r.headshot_url, r.player_id),
+  }));
+
   res.json({
     home: { formation: match.home_formation },
     away: { formation: match.away_formation },
-    players: rows,
+    players,
   });
 });
 
@@ -506,16 +532,14 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
   // The info card's one-line summary needs the league-table position and points;
   // team_season_stats carries the record but no rank, so the row comes from
   // standings (latest season the club has a row in).
-  const standing = get<{ rank: number | null; points: number | null }>(
+  const standing = get<{ rank: number | null; played: number | null; points: number | null }>(
     db,
-    `SELECT rank, points FROM standings
-     WHERE team_id = ? AND season = (SELECT MAX(season) FROM standings WHERE team_id = ?)
+    `SELECT s.rank, s.played, s.points FROM standings s
+     WHERE s.team_id = ? AND s.season = (SELECT MAX(s2.season) FROM standings s2 WHERE s2.team_id = ?)
      LIMIT 1`,
     [teamId, teamId],
   );
-  // Results (latest 7) then upcoming fixtures (soonest 7). One DESC query
-  // filled the list with the whole rest-of-season backlog instead of the
-  // games nearest the club's next kickoff.
+  // Results (newest first) then upcoming fixtures (soonest 7).
   const played = all(
     db,
     `SELECT m.*, th.short_name AS home_short, ta.short_name AS away_short
@@ -534,7 +558,7 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
   );
   // Same flat shape the client already consumes; newest results first,
   // then upcoming in chronological order.
-  const fixtures = [...played.slice().reverse(), ...upcoming];
+  const fixtures = [...played, ...upcoming];
   res.json({ team, seasonStats: seasonStats ?? null, standing: standing ?? null, fixtures });
 });
 
@@ -581,13 +605,24 @@ matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
       espnPosition: typeof row.espn_position === "string" ? row.espn_position : null,
       started: Number(row.started) === 1,
       minutesPlayed: typeof row.minutes_played === "number" ? row.minutes_played : 0,
+      avatarUrl: localHeadshotUrl(row.headshot_url, row.player_id),
+      availability: row.availability
+        ? { status: row.availability.status as "injured" | "suspended" | "doubtful", reason: row.availability.reason, expected_return: row.availability.expected_return }
+        : null,
     }));
-  const toPlayer = ({ started: _started, minutesPlayed: _minutesPlayed, ...player }: (typeof players)[number]) => player;
+  // Split into starters, subs, and bench (all non-starters are on the bench)
+  const starters = players.filter((player) => player.started);
+  const subs = players.filter((player) => !player.started && player.minutesPlayed > 0);
+  const bench = players.filter((player) => !player.started && player.minutesPlayed === 0);
 
   res.json({
     match: { id: match.id, kickoffAt: match.kickoff_at, formation },
-    starters: players.filter((player) => player.started).map(toPlayer),
-    subs: players.filter((player) => !player.started && player.minutesPlayed > 0).map(toPlayer),
+    starters,
+    subs,
+    bench,
+    minutesPlayed: players.map((p) => p.minutesPlayed),
+    availability: starters.map((p) => p.availability).filter(Boolean),
+    avatarUrl: localHeadshotUrl(match.home_team_id, match.home_team_id), // placeholder for squad-level use
   });
 });
 
@@ -616,6 +651,42 @@ matchesRouter.get("/api/teams/:id/players", (req, res) => {
   );
   const coach = get<{ name: string }>(db, "SELECT name FROM team_coaches WHERE team_id = ?", [teamId]);
   res.json({ season, players: rows, coach: coach?.name ?? null });
+});
+
+/** Availability for one team (injured/suspended/doubtful), cached 30 min; empty result also cached. */
+matchesRouter.get("/api/teams/:id/availability", async (req, res) => {
+  const teamId = String(req.params.id);
+  if (isBlockedTeamId(teamId)) return bad(res, "not found", 404);
+  const team = get<{ league: string }>(db, "SELECT league FROM teams WHERE id = ?", [teamId]);
+  if (!team) return bad(res, "not found", 404);
+  if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+
+  // Check cache first (simple in-memory store shared across requests in one process)
+  const cacheKey = `avail:${teamId}`;
+  const cached = globalThis.availabilityCache?.[cacheKey];
+  if (cached && Date.now() - cached.ts < 30 * 60_000) {
+    return res.json({ players: cached.players, stale: cached.stale });
+  }
+
+  // Try to read from DB; if no rows exist, treat as empty (cached too).
+  const rows = all<{ status: string; reason: string | null; expected_return: string | null }>(
+    db,
+    `SELECT status, reason, expected_return FROM team_availability WHERE team_id = ?`,
+    [teamId],
+  );
+  const players = rows.map((r) => ({
+    player_id: r.status, // reuse column names from DB for minimal payload
+    status: r.status as "injured" | "suspended" | "doubtful",
+    reason: r.reason,
+    expected_return: r.expected_return,
+  }));
+  const hasData = rows.length > 0;
+
+  // Cache the result (even if empty) for 30 minutes
+  if (!globalThis.availabilityCache) globalThis.availabilityCache = {};
+  globalThis.availabilityCache[cacheKey] = { players, stale: !hasData, ts: Date.now() };
+
+  res.json({ players, stale: !hasData });
 });
 
 /** Understat xG/xA data for a team (season-aggregated). */

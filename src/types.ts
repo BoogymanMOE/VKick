@@ -5,7 +5,7 @@
 
 /** "halftime" is a real server status (ESPN HT detection) — not a flavour of live. */
 export type MatchStatus = "scheduled" | "live" | "halftime" | "finished";
-export type Position = "GK" | "DEF" | "MID" | "FWD";
+export type Position = "GK" | "DEF" | "MID" | "FWD" | "OTHER";
 /** The big five slugs — the picker defaults; any covered league can be followed. */
 export type LeagueId = "PL" | "LL" | "SA" | "BL" | "L1";
 
@@ -126,11 +126,21 @@ export interface TeamStats {
   passAccuracy: number;
 }
 
+export interface PlayerAvailability {
+  player_id: string;
+  player_name: string;
+  status: "injured" | "suspended" | "doubtful";
+  reason: string | null;
+  expected_return: string | null;
+}
+
 export interface LineupPlayer {
   id: string;
   name: string;
   position: Position;
   number: number;
+  minutesPlayed?: number;
+  availability?: PlayerAvailability | null;
   /**
    * ESPN's granular role ("CD-L", "AM-R", "LW") where the feed carries it.
    * Drives which side of its line a player stands on; absent for squads the
@@ -145,6 +155,8 @@ export interface LineupPlayer {
   /** ESPN headshot URL; missing for some players, so every render falls back
    *  to initials (`PlayerAvatar`). */
   headshot?: string | null;
+  /** URL of the player's local headshot (fallback to initials). */
+  avatarUrl?: string | null;
   /** Set once the sub predictor resolves. */
   subbedOff?: string;
 }

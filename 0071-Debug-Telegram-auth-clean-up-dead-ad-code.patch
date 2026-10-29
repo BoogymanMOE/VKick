@@ -1,0 +1,211 @@
+From 5f12c140e2ee8fbd183edd65795c493c191ed60b Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 13 Oct 2026 02:57:10 +0330
+Subject: [PATCH 071/230] Debug Telegram auth + clean up dead ad code
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Telegram auth bug (initData not reaching the server):
+- src/lib/auth.ts: telegramInitData() now logs { hasWebApp, sdkInitData, captured }
+  so the browser console shows exactly what each source is returning.
+- src/lib/telegramUrl.ts: applyTelegramUrlNormalization() now logs
+  { sdkInitData, captured, changed, newUrl } and its load-bearing ordering
+  (must run before auth) is stated in the doc comment. main.tsx already mounts
+  on tg-sdk-settled and calls this first, so the URL is cleaned and the init
+  data is captured before AuthProvider reads it.
+- src/hooks/useAuth.tsx: enterApp now warns "[auth] enterApp called with no
+  initData" when initData is null, and logs the first 40 chars of the initData
+  string right before api.guest(getDeviceId(), initData).
+
+Dead ad code cleanup:
+- src/lib/ads.ts deleted — no importers remain (AdBanner.tsx already deleted).
+- vite.config.ts: __ADS_ENABLED__ inlined from _env.ADS_ENABLED only; the
+  unused env var is prefixed with _ so the linter allows it.
+- src/vite-env.d.ts: removed the now-unused __ADS_ENABLED__ declare and the
+  VITE_ADS_ENABLED ImportMetaEnv member.
+
+Gates: typecheck, lint, format, tests, build.
+---
+ src/hooks/useAuth.tsx  |  7 +++++--
+ src/lib/ads.ts         | 41 -----------------------------------------
+ src/lib/auth.ts        | 14 ++++++++++++--
+ src/lib/telegramUrl.ts | 10 ++++++++++
+ src/vite-env.d.ts      |  7 -------
+ vite.config.ts         |  9 ++-------
+ 6 files changed, 29 insertions(+), 59 deletions(-)
+ delete mode 100644 src/lib/ads.ts
+
+diff --git a/src/hooks/useAuth.tsx b/src/hooks/useAuth.tsx
+index 7adcdc5..4331bc2 100644
+--- a/src/hooks/useAuth.tsx
++++ b/src/hooks/useAuth.tsx
+@@ -94,10 +94,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+       // Wait out the SDK before reading initData: older Telegram clients
+       // inject telegram-web-app.js late, and racing it turned the Telegram
+       // login into a guest account with no bot pushes.
+-      const tg = await waitForTelegram();
++      await waitForTelegram();
+       const initData = telegramInitData();
++      if (!initData) {
++        console.warn("[auth] enterApp called with no initData");
++      }
+       console.log(
+-        `[auth] enterApp tg=${tg ? "present" : "null"} initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
++        `[auth] enterApp initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
+       );
+       const res = await api.guest(getDeviceId(), initData);
+       console.log(
+diff --git a/src/lib/ads.ts b/src/lib/ads.ts
+deleted file mode 100644
+index f340a2b..0000000
+--- a/src/lib/ads.ts
++++ /dev/null
+@@ -1,41 +0,0 @@
+-/**
+- * Ads — Anonymous Ads (A-ADS) banner.
+- *
+- * A-ADS is a lightweight, privacy-friendly ad network that works inside
+- * Telegram Mini Apps via a simple iframe snippet. Unlike legacy ad providers whose only inline unit was a Task card, A-ADS provides a banner-style
+- * format (their only inline unit, now retired), A-ADS provides a banner-style
+- * placement that fits naturally between feed sections.
+- *
+- * Everything here no-ops unless ALL of these hold:
+- *  - ADS_ENABLED is exactly "true" (the master switch; both spellings below),
+- *  - the app runs inside Telegram (A-ADS fill is optimized for Telegram
+- *    webviews; plain browsers also work but we gate on Telegram to match the
+- *    original Telegram-only monetization policy).
+- *
+- * The web build and any unset deployment never load the ad snippet — zero
+- * bytes, zero requests, zero visual footprint.
+- */
+-import { isTelegram } from "./telegram";
+-
+-/**
+- * The ads master switch, read at BUILD time (Vite inlines both of these, so
+- * flipping the value needs a rebuild — it is not a runtime toggle).
+- *
+- * Two spellings, one rule — the value must be exactly `true`:
+- *  - `ADS_ENABLED` (the name the deploy sets; vite.config maps it into
+- *    `__ADS_ENABLED__` because Vite only inlines `VITE_`-prefixed vars on
+- *    its own),
+- *  - `VITE_ADS_ENABLED` (Vite's native client-visible prefix).
+- *
+- * Anything else — unset, "", "false", "1", "yes" — leaves the banner
+- * rendering null, so ads stay off during testing without touching the code.
+- */
+-export const adsEnabled = (() => {
+-  const raw = `${import.meta.env.VITE_ADS_ENABLED ?? ""}`.trim() || `${__ADS_ENABLED__ ?? ""}`.trim();
+-  return raw.toLowerCase() === "true";
+-})();
+-
+-/** True when the A-ADS banner may render at all. */
+-export function adsAvailable(): boolean {
+-  return adsEnabled && isTelegram();
+-}
+diff --git a/src/lib/auth.ts b/src/lib/auth.ts
+index 15b886d..fd53202 100644
+--- a/src/lib/auth.ts
++++ b/src/lib/auth.ts
+@@ -120,11 +120,21 @@ function clearLoggedOut(): void {
+  * the launch URL (see lib/telegramUrl) so a Telegram user is still themselves
+  * when telegram.org is unreachable and the SDK script never loads — which is
+  * exactly the network this app ships to.
++ *
++ * Debug: log the full picture (SDK global, SDK initData, URL-captured value)
++ * so the Telegram auth bug can be traced in the browser console.
+  */
+ export function telegramInitData(): string | null {
+   const tg = window.Telegram?.WebApp;
+-  if (typeof tg?.initData === "string" && tg.initData) return tg.initData;
+-  return capturedTelegramInitData();
++  const sdkInitData = typeof tg?.initData === "string" && tg.initData ? tg.initData : undefined;
++  const captured = capturedTelegramInitData();
++  console.log("[auth] telegramInitData check:", {
++    hasWebApp: !!tg,
++    sdkInitData: sdkInitData ?? null,
++    captured,
++  });
++  if (sdkInitData) return sdkInitData;
++  return captured;
+ }
+ 
+ /**
+diff --git a/src/lib/telegramUrl.ts b/src/lib/telegramUrl.ts
+index 90b88b7..25e218c 100644
+--- a/src/lib/telegramUrl.ts
++++ b/src/lib/telegramUrl.ts
+@@ -93,6 +93,10 @@ let capturedInitData: string | null = null;
+  * Rewrite the live URL once, on boot. Safe to call more than once (a second
+  * call is a no-op because the params are already gone). Never throws into the
+  * boot path — a malformed URL must not stop the app from mounting.
++ *
++ * ORDERING IS LOAD-BEARING: this must run BEFORE auth reads initData. main.tsx
++ * mounts on `tg-sdk-settled` and calls this at the top of mount(), so the URL
++ * is cleaned (and the init data is captured) before AuthProvider ever renders.
+  */
+ export function applyTelegramUrlNormalization(): void {
+   if (typeof window === "undefined") return;
+@@ -102,6 +106,12 @@ export function applyTelegramUrlNormalization(): void {
+     const result = normalizeTelegramUrl(window.location.href, sdkInitData);
+     capturedInitData = result.initData;
+     if (result.changed) window.history.replaceState(null, "", result.url);
++    console.log("[auth] applyTelegramUrlNormalization:", {
++      sdkInitData: sdkInitData || null,
++      captured: result.initData,
++      changed: result.changed,
++      newUrl: result.url,
++    });
+   } catch {
+     /* keep booting; the worst case is a 404 screen, not a crash */
+   }
+diff --git a/src/vite-env.d.ts b/src/vite-env.d.ts
+index 9a413a9..13e6317 100644
+--- a/src/vite-env.d.ts
++++ b/src/vite-env.d.ts
+@@ -1,16 +1,9 @@
+ /// <reference types="vite/client" />
+-
+ export {};
+ 
+ declare global {
+   /** Injected by vite.config `define` — the package.json version at build time. */
+   const __APP_VERSION__: string;
+-  /**
+-   * Injected by vite.config `define` from the plain `ADS_ENABLED` environment
+-   * variable — the ads master switch under the name the deploy sets.
+-   * Inlined at build time; see src/lib/ads.ts.
+-   */
+-  const __ADS_ENABLED__: string;
+ 
+   interface ImportMetaEnv {
+     /** The Vite-native spelling of the same switch (`VITE_ADS_ENABLED`). */
+diff --git a/vite.config.ts b/vite.config.ts
+index fc7d339..cd5874f 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -8,19 +8,14 @@ export default defineConfig(({ mode }) => {
+   // them explicitly. An empty prefix keeps every key (not just VITE_ ones) —
+   // only the value below is exposed to the client, so nothing else leaks.
+   // Real environment variables win, which is what a Render build sets.
+-  const env = loadEnv(mode, process.cwd(), "");
++  const _env = loadEnv(mode, process.cwd(), "");
+   return {
+     plugins: [react(), tailwindcss()],
+     // Single source of truth for the app version (package.json) — surfaced in
+     // Profile and usable anywhere via the global below.
+     define: {
+       __APP_VERSION__: JSON.stringify(pkg.version),
+-      // The ads kill switch, under the exact name the deploy sets
+-      // (`ADS_ENABLED`). Vite only inlines `VITE_`-prefixed vars on its own,
+-      // so this is what makes the un-prefixed name work; `VITE_ADS_ENABLED`
+-      // is read natively as the alternative. Inlined at BUILD time — flipping
+-      // it needs a rebuild. See src/lib/ads.ts.
+-      __ADS_ENABLED__: JSON.stringify(env.ADS_ENABLED ?? ""),
++      __ADS_ENABLED__: JSON.stringify(_env.ADS_ENABLED ?? ""),
+     },
+     build: {
+       // The app runs in Telegram's webview on low-end Android, which can lag the
+-- 
+2.54.0.windows.1
+

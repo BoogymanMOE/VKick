@@ -1,0 +1,345 @@
+From b53474b3fe59632fc6288daca8a9669995cb4454 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 10 Oct 2026 00:32:16 +0330
+Subject: [PATCH 045/230] Push nightly backups off-site to Cloudflare R2 with
+ rclone
+
+---
+ README.md                   |   7 +--
+ server/backupSchedule.ts    |  23 +++++--
+ server/offsiteBackup.ts     | 106 ++++++++++++++++++++++++++++++++
+ tests/offsiteBackup.test.ts | 117 ++++++++++++++++++++++++++++++++++++
+ tests/run.ts                |   2 +
+ 5 files changed, 246 insertions(+), 9 deletions(-)
+ create mode 100644 server/offsiteBackup.ts
+ create mode 100644 tests/offsiteBackup.test.ts
+
+diff --git a/README.md b/README.md
+index de355b1..381c0a2 100644
+--- a/README.md
++++ b/README.md
+@@ -210,11 +210,8 @@ The database is a single file on the persistent disk, so the backup story has th
+ 
+ 1. **Render's automatic disk snapshots** — once every 24h, kept for at least seven days. Free with the disk. Restore a whole disk from the service's Disks page (restores the entire disk, not one file). This is the outer safety net for the case where the app itself is down.
+ 2. **A nightly app-level snapshot** — `server/backupSchedule.ts` runs one `VACUUM INTO` snapshot (the same code path as `npm run backup`) at `BACKUP_HOUR` (UTC, default `3`) into `BACKUP_DIR` (default `/var/data/backups` on Render), keeping the newest `BACKUP_KEEP` (default 7). It lives **inside the server process** on purpose: a Render cron job is a separate container and **cannot mount this service's disk** (Render: "You can't add a disk to a cron job service", "you can't access a service's disk from any other service"), so it could never see `/var/data/matchday.db`. These files give a fast, granular, point-in-time restore.
+-3. **Off-site copies** — *not implemented; options only.* A backup on the same disk dies with the disk, so a real disaster-recovery copy belongs somewhere else:
+-   - After each nightly run, upload `BACKUP_DIR` to any S3-compatible bucket (`rclone`, `aws s3 cp`) — cheapest, one small file per night.
+-   - `restic`/`borg` to object storage for encrypted, deduplicated, retained history.
+-   - A managed Postgres (Render Postgres, Neon, Supabase) if you ever outgrow a file-based SQLite — it brings its own point-in-time recovery.
+-   Whichever you pick, keep the write-only credential in the dashboard, never in `render.yaml`, and store copies **outside** the Render account/region.
++3. **Off-site copies** — wired up with `rclone`. After each nightly snapshot, `server/backupSchedule.ts` runs `rclone copy "$BACKUP_DIR" "$BACKUP_REMOTE"` (default `r2:vkick-backups/`) to push the whole backup directory to Cloudflare R2. Set `RCLONE_CONFIG_R2_TYPE`, `RCLONE_CONFIG_R2_PROVIDER`, `RCLONE_CONFIG_R2_ACCESS_KEY_ID`, `RCLONE_CONFIG_R2_SECRET_ACCESS_KEY`, `RCLONE_CONFIG_R2_ENDPOINT` and `BACKUP_REMOTE` in the dashboard — rclone reads its remote from those variables, so credentials never live in the repo. The upload is best-effort: if `rclone` is not installed, the config is incomplete, or the bucket is unreachable, the scheduler logs a warning and the local snapshot still stands. (`restic`/`borg` remain options if you want encrypted, deduplicated history.)
++   Keep the credential scoped to this bucket, never in `render.yaml`, and store copies **outside** the Render account/region.
+ 
+ **Restore (stop the server first):**
+ 
+diff --git a/server/backupSchedule.ts b/server/backupSchedule.ts
+index 909122a..0452bce 100644
+--- a/server/backupSchedule.ts
++++ b/server/backupSchedule.ts
+@@ -9,15 +9,18 @@
+  * It reuses exactly the server/backup.ts functions the CLI does, and produces the
+  * same `matchday-<stamp>.db` snapshots, so a restore is identical either way.
+  *
+- * This is local durability, not off-site: Render also snapshots the disk itself
+- * once every 24h (kept >= 7 days), which covers the case where this process is
+- * down. Only an off-site copy survives losing the disk (see README "Backups").
++ * Render also snapshots the disk itself once every 24h (kept >= 7 days), which
++ * covers the case where this process is down. After each local snapshot this
++ * loop also copies BACKUP_DIR off-site to Cloudflare R2 via rclone (see
++ * server/offsiteBackup.ts), so a lost disk does not lose the backups too.
+  *
+  * Env: BACKUP_DIR (default ./backups), BACKUP_KEEP (default 7), BACKUP_HOUR
+- * (UTC hour 0-23, default 3), SQLITE_PATH (default ./data/matchday.db).
++ * (UTC hour 0-23, default 3), SQLITE_PATH (default ./data/matchday.db), plus
++ * the RCLONE_CONFIG_R2_* / BACKUP_REMOTE pair offsiteBackup.ts reads.
+  */
+ import path from "node:path";
+ import { backupFileName, backupTo, listBackups, pruneBackups } from "./backup.js";
++import { readRcloneConfig, uploadBackup } from "./offsiteBackup.js";
+ 
+ export interface BackupRunResult {
+   file: string;
+@@ -75,6 +78,7 @@ export function startBackupLoop(): () => void {
+   }
+ 
+   let lastRunDay = "";
++  const offsite = readRcloneConfig();
+   const tick = (): void => {
+     const now = new Date();
+     if (!backupDue(now, hour, lastRunDay)) return;
+@@ -84,6 +88,17 @@ export function startBackupLoop(): () => void {
+       console.log(
+         `[backup] nightly: ${dbPath} → ${r.file} (${r.bytes} bytes); kept ${r.kept}, pruned ${r.pruned.length}`,
+       );
++      // Off-site is best-effort and must never crash the loop: uploadBackup
++      // resolves on every failure and the local snapshot is already safe.
++      void uploadBackup(dir, offsite).then((res) => {
++        if (res.status === "uploaded") {
++          console.log(`[backup] offsite: uploaded ${dir} → ${offsite.remote}`);
++        } else if (res.status === "skipped") {
++          console.warn(`[backup] offsite skipped: ${res.detail}`);
++        } else {
++          console.error(`[backup] offsite failed: ${res.detail}`);
++        }
++      });
+     } catch (err) {
+       // A failed snapshot must never take the API down; Render's own disk
+       // snapshots are the safety net for the day this one misses.
+diff --git a/server/offsiteBackup.ts b/server/offsiteBackup.ts
+new file mode 100644
+index 0000000..9bd4f62
+--- /dev/null
++++ b/server/offsiteBackup.ts
+@@ -0,0 +1,106 @@
++/**
++ * Off-site copy of the nightly backups — push `BACKUP_DIR` to Cloudflare R2
++ * (any S3-compatible store works) with rclone.
++ *
++ * WHY rclone: the local snapshots live on the same Render disk as the database,
++ * so they die with the disk. rclone is a single static binary, speaks the S3
++ * API R2 exposes, and needs no SDK in this repo. It reads its remote from the
++ * same `RCLONE_CONFIG_*` environment variables every rclone install already
++ * honours, so credentials stay in the dashboard and never land in the tree.
++ *
++ * FAIL-SAFE BY DESIGN: a missing binary (`rclone` not installed), a bad bucket
++ * or an offline night must never take the API down, so every failure resolves
++ * to a result and the scheduler just logs it. The local snapshot is already on
++ * disk by the time this runs, so an upload failure never loses data.
++ */
++import { spawn, type ChildProcess } from "node:child_process";
++
++/** Destination when BACKUP_REMOTE is unset — the bucket this app expects. */
++export const DEFAULT_REMOTE = "r2:vkick-backups/";
++
++export interface RcloneConfig {
++  type: string;
++  provider: string;
++  accessKeyId: string;
++  secretAccessKey: string;
++  endpoint: string;
++  remote: string;
++}
++
++export interface OffsiteResult {
++  status: "uploaded" | "skipped" | "failed";
++  detail?: string;
++}
++
++/** Read the remote config from the environment, trimming empty values. */
++export function readRcloneConfig(env: NodeJS.ProcessEnv = process.env): RcloneConfig {
++  return {
++    type: (env.RCLONE_CONFIG_R2_TYPE ?? "").trim(),
++    provider: (env.RCLONE_CONFIG_R2_PROVIDER ?? "").trim(),
++    accessKeyId: (env.RCLONE_CONFIG_R2_ACCESS_KEY_ID ?? "").trim(),
++    secretAccessKey: (env.RCLONE_CONFIG_R2_SECRET_ACCESS_KEY ?? "").trim(),
++    endpoint: (env.RCLONE_CONFIG_R2_ENDPOINT ?? "").trim(),
++    remote: (env.BACKUP_REMOTE ?? "").trim() || DEFAULT_REMOTE,
++  };
++}
++
++/** All five R2 fields must be present before we hand anything to rclone. */
++export function offsiteConfigured(cfg: RcloneConfig): boolean {
++  return Boolean(cfg.type && cfg.provider && cfg.accessKeyId && cfg.secretAccessKey && cfg.endpoint);
++}
++
++/**
++ * Upload every file in `dir` to the configured remote. Resolves — never
++ * rejects — so a caller can fire-and-forget without a try/catch.
++ */
++export function uploadBackup(
++  dir: string,
++  cfg: RcloneConfig,
++  spawnFn: typeof spawn = spawn,
++): Promise<OffsiteResult> {
++  return new Promise((resolve) => {
++    if (!offsiteConfigured(cfg)) {
++      resolve({ status: "skipped", detail: "R2 rclone config incomplete" });
++      return;
++    }
++
++    let child: ChildProcess;
++    try {
++      child = spawnFn("rclone", ["copy", dir, cfg.remote], {
++        env: {
++          ...process.env,
++          RCLONE_CONFIG_R2_TYPE: cfg.type,
++          RCLONE_CONFIG_R2_PROVIDER: cfg.provider,
++          RCLONE_CONFIG_R2_ACCESS_KEY_ID: cfg.accessKeyId,
++          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: cfg.secretAccessKey,
++          RCLONE_CONFIG_R2_ENDPOINT: cfg.endpoint,
++        },
++        stdio: ["ignore", "ignore", "pipe"],
++        windowsHide: true,
++      });
++    } catch (err) {
++      resolve({ status: "failed", detail: err instanceof Error ? err.message : String(err) });
++      return;
++    }
++
++    let stderr = "";
++    child.stderr?.on("data", (chunk: Buffer | string) => {
++      if (stderr.length < 4000) stderr += chunk.toString();
++    });
++    child.on("error", (err: NodeJS.ErrnoException) => {
++      if (err.code === "ENOENT") {
++        resolve({ status: "skipped", detail: "rclone not installed" });
++      } else {
++        resolve({ status: "failed", detail: err.message });
++      }
++    });
++    child.on("close", (code) => {
++      if (code === 0) {
++        resolve({ status: "uploaded" });
++      } else {
++        const tail = stderr.trim().slice(0, 300);
++        resolve({ status: "failed", detail: `rclone exited ${code}${tail ? `: ${tail}` : ""}` });
++      }
++    });
++  });
++}
+diff --git a/tests/offsiteBackup.test.ts b/tests/offsiteBackup.test.ts
+new file mode 100644
+index 0000000..882acbc
+--- /dev/null
++++ b/tests/offsiteBackup.test.ts
+@@ -0,0 +1,117 @@
++/**
++ * Off-site backup: config reading and the rclone invocation contract.
++ *
++ * The upload must never throw, must skip cleanly when rclone is absent, and —
++ * because rclone's remote lives in RCLONE_CONFIG_* environment variables — must
++ * hand credentials to the child through the environment, never as argv (argv is
++ * visible in a process list). This pins all of that with a fake spawn.
++ */
++import { strict as assert } from "node:assert";
++import { EventEmitter } from "node:events";
++import {
++  DEFAULT_REMOTE,
++  offsiteConfigured,
++  readRcloneConfig,
++  uploadBackup,
++  type RcloneConfig,
++} from "../server/offsiteBackup.js";
++
++const FULL: RcloneConfig = {
++  type: "s3",
++  provider: "Cloudflare",
++  accessKeyId: "AKIA-test",
++  secretAccessKey: "super-secret",
++  endpoint: "https://acct.r2.cloudflarestorage.com",
++  remote: DEFAULT_REMOTE,
++};
++
++type SpawnFn = Parameters<typeof uploadBackup>[2];
++
++function fakeSpawn(behavior: "enoent" | "ok" | "fail"): {
++  fn: SpawnFn;
++  calls: Array<{ cmd: string; args: string[]; env: NodeJS.ProcessEnv }>;
++} {
++  const calls: Array<{ cmd: string; args: string[]; env: NodeJS.ProcessEnv }> = [];
++  const fn = ((cmd: string, args: string[], opts: { env: NodeJS.ProcessEnv }) => {
++    calls.push({ cmd, args, env: opts.env });
++    const child = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
++    child.stderr = new EventEmitter();
++    setImmediate(() => {
++      if (behavior === "enoent") {
++        const err = new Error("spawn rclone ENOENT") as NodeJS.ErrnoException;
++        err.code = "ENOENT";
++        child.emit("error", err);
++      } else if (behavior === "ok") {
++        child.emit("close", 0);
++      } else {
++        child.stderr.emit("data", Buffer.from("fatal: bucket not found"));
++        child.emit("close", 1);
++      }
++    });
++    return child;
++  }) as unknown as SpawnFn;
++  return { fn, calls };
++}
++
++export async function runOffsiteBackupTests(): Promise<void> {
++  /* ------------------------------------------------ reading the config */
++  const empty = readRcloneConfig({});
++  assert.equal(empty.remote, DEFAULT_REMOTE, "remote defaults to the R2 bucket");
++  assert.equal(empty.type, "", "missing keys read as empty, not undefined");
++
++  const cfg = readRcloneConfig({
++    RCLONE_CONFIG_R2_TYPE: "s3",
++    RCLONE_CONFIG_R2_PROVIDER: "Cloudflare",
++    RCLONE_CONFIG_R2_ACCESS_KEY_ID: "AKIA-test",
++    RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: "super-secret",
++    RCLONE_CONFIG_R2_ENDPOINT: "https://acct.r2.cloudflarestorage.com",
++    BACKUP_REMOTE: "  r2:custom-bucket/  ",
++  });
++  assert.equal(cfg.remote, "r2:custom-bucket/", "BACKUP_REMOTE overrides the default, trimmed");
++  assert.equal(cfg.endpoint, "https://acct.r2.cloudflarestorage.com");
++
++  assert.equal(offsiteConfigured(FULL), true, "a complete config is usable");
++  assert.equal(offsiteConfigured({ ...FULL, secretAccessKey: "" }), false, "a missing secret is not usable");
++
++  /* ------------------------------------------------ incomplete config never spawns */
++  const noConfig = fakeSpawn("ok");
++  const skipped = await uploadBackup("/tmp/backups", { ...FULL, accessKeyId: "" }, noConfig.fn);
++  assert.equal(skipped.status, "skipped", "an incomplete config skips");
++  assert.equal(noConfig.calls.length, 0, "rclone is not spawned without config");
++
++  /* ------------------------------------------------ rclone missing */
++  const missing = fakeSpawn("enoent");
++  const enoent = await uploadBackup("/tmp/backups", FULL, missing.fn);
++  assert.equal(enoent.status, "skipped", "a missing binary is a skip, not a crash");
++  assert.match(enoent.detail ?? "", /not installed/);
++
++  /* ------------------------------------------------ success + argv/env contract */
++  const ok = fakeSpawn("ok");
++  const uploaded = await uploadBackup("/var/data/backups", FULL, ok.fn);
++  assert.equal(uploaded.status, "uploaded");
++  assert.equal(ok.calls.length, 1);
++  assert.equal(ok.calls[0]!.cmd, "rclone");
++  assert.deepEqual(
++    ok.calls[0]!.args,
++    ["copy", "/var/data/backups", DEFAULT_REMOTE],
++    "usage is `rclone copy <dir> <remote>`",
++  );
++  assert.ok(
++    !ok.calls[0]!.args.some((a) => a.includes("super-secret")),
++    "the secret never appears in argv (visible in a process list)",
++  );
++  assert.equal(
++    ok.calls[0]!.env.RCLONE_CONFIG_R2_SECRET_ACCESS_KEY,
++    "super-secret",
++    "the secret travels via env",
++  );
++  assert.equal(ok.calls[0]!.env.RCLONE_CONFIG_R2_ENDPOINT, FULL.endpoint);
++
++  /* ------------------------------------------------ rclone error */
++  const bad = fakeSpawn("fail");
++  const failed = await uploadBackup("/var/data/backups", FULL, bad.fn);
++  assert.equal(failed.status, "failed", "a non-zero exit is a failure result, not a rejection");
++  assert.match(failed.detail ?? "", /exited 1/);
++
++  console.log("  offsiteBackup: config gate, graceful ENOENT, env-only secrets, copy argv OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index db5ffbe..2037c36 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -33,6 +33,7 @@ import { runAnchorRaceTests } from "./anchorRace.test.js";
+ import { runLeaderboardTests } from "./leaderboard.test.js";
+ import { runBackupTests } from "./backup.test.js";
+ import { runBackupScheduleTests } from "./backupSchedule.test.js";
++import { runOffsiteBackupTests } from "./offsiteBackup.test.js";
+ import { runAccountDeletionTests } from "./accountDeletion.test.js";
+ import { runLegalTests } from "./legal.test.js";
+ import { runA11yKeysTests } from "./a11yKeys.test.js";
+@@ -73,6 +74,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["leaderboard", runLeaderboardTests],
+   ["backup", runBackupTests],
+   ["backupSchedule", runBackupScheduleTests],
++  ["offsiteBackup", runOffsiteBackupTests],
+   ["accountDeletion", runAccountDeletionTests],
+   ["legal", runLegalTests],
+   ["a11yKeys", runA11yKeysTests],
+-- 
+2.54.0.windows.1
+

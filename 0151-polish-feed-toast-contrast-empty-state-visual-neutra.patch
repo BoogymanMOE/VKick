@@ -1,0 +1,182 @@
+From 6672f4d992263d61dfffae22e937bc7f39ea437d Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 00:57:36 +0330
+Subject: [PATCH 151/230] polish(feed): toast contrast, empty-state visual,
+ neutral HT color, RTL card flip, last-card padding
+
+---
+ src/components/AppShell.tsx  |  5 ++++-
+ src/components/MatchCard.tsx | 25 ++++++++++++++++++-------
+ src/components/Toast.tsx     | 12 +++++++++---
+ src/pages/Matches.tsx        | 18 +++++++++++-------
+ 4 files changed, 42 insertions(+), 18 deletions(-)
+
+diff --git a/src/components/AppShell.tsx b/src/components/AppShell.tsx
+index eddaccd..7fc4473 100644
+--- a/src/components/AppShell.tsx
++++ b/src/components/AppShell.tsx
+@@ -57,7 +57,10 @@ export function AppShell() {
+         tabIndex={-1}
+         key={pathname}
+         className="page-in mx-auto w-full max-w-[560px] flex-1 px-[var(--space-page-x,16px)] pt-4 outline-none"
+-        style={{ paddingBottom: "calc(56px + max(env(safe-area-inset-bottom), 8px))" }}
++        // The sticky tab bar is 4px (its own pt-1) + 56px (min-h-14) + the
++        // safe-area inset — reserving only 56px left the last card tucked under
++        // it. The extra 4px is the difference.
++        style={{ paddingBottom: "calc(60px + max(env(safe-area-inset-bottom), 8px))" }}
+       >
+         <Suspense
+           fallback={
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index ae3be6d..266569c 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -29,15 +29,17 @@ export const MatchCard = memo(function MatchCard({
+   const competition = useCompetitionLabel(match.league);
+ 
+   const isHalftime = match.status === "halftime";
+-  const isLive = match.status === "live" || isHalftime;
++  // Half-time is a neutral pause, not a running match: only `live` gets the red
++  // dot and live tint. (The adapter folds halftime into "live" for the feed, so
++  // this is the defensive branch for data that still carries the real status.)
++  const isLive = match.status === "live";
+   const isFinished = match.status === "finished";
+-  const hasScore = isLive || isFinished;
++  const hasScore = isLive || isHalftime || isFinished;
+   const homeScore = match.homeScore ?? 0;
+   const awayScore = match.awayScore ?? 0;
+   const kickoff = formatKickoff(new Date(match.kickoffAt), locale);
+   // Half-time has no minute on the clock; name the break instead of showing an
+-  // empty slot. The adapter currently folds halftime into "live", so this is
+-  // the defensive branch for data that still carries the real status.
++  // empty slot.
+   const minuteLabel = isHalftime ? match.minute || t("timeline.halftime") : match.minute;
+   const home = localize(match.home.shortName);
+   const away = localize(match.away.shortName);
+@@ -46,9 +48,11 @@ export const MatchCard = memo(function MatchCard({
+   // final score when finished, kickoff time when upcoming.
+   const status = isLive
+     ? `${t("status.live")} ${minuteLabel ?? ""}`.trim()
+-    : isFinished
+-      ? t("status.finished")
+-      : kickoff;
++    : isHalftime
++      ? t("timeline.halftime")
++      : isFinished
++        ? t("status.finished")
++        : kickoff;
+   const label = hasScore
+     ? `${home} ${homeScore}, ${away} ${awayScore}, ${status}`
+     : `${home} ${t("common.versus")} ${away}, ${kickoff}`;
+@@ -73,6 +77,10 @@ export const MatchCard = memo(function MatchCard({
+         to={`/match/${match.id}`}
+         onPointerDown={() => prefetchMatch(match.id)}
+         aria-label={label}
++        // The 3-column grid flips with `dir`, so home sits on the right and away
++        // on the left in Persian; explicit so the card reads correctly even if
++        // the shell ever stops setting dir on the root.
++        dir={lang === "fa" ? "rtl" : "ltr"}
+         className="block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2"
+         style={{
+           borderColor: isLive ? "color-mix(in srgb, var(--live) 60%, transparent)" : "var(--line)",
+@@ -103,6 +111,9 @@ export const MatchCard = memo(function MatchCard({
+                 <LiveDot />
+                 <Num>{minuteLabel}</Num>
+               </span>
++            ) : isHalftime ? (
++              // Neutral (muted), not the live red: a break is not a goal.
++              <span className="text-xs font-bold text-ink-3">{minuteLabel}</span>
+             ) : isFinished ? (
+               <span className="text-xs text-ink-3">{t("status.finished")}</span>
+             ) : null}
+diff --git a/src/components/Toast.tsx b/src/components/Toast.tsx
+index 5c04857..af4be1e 100644
+--- a/src/components/Toast.tsx
++++ b/src/components/Toast.tsx
+@@ -1,7 +1,7 @@
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import type { ReactNode } from "react";
+ import { cx } from "../lib/cx";
+-import { AlertIcon, BallIcon, CloseIcon, RefreshIcon, StarFilledIcon } from "./icons";
++import { AlertIcon, BallIcon, CheckIcon, CloseIcon, RefreshIcon, StarFilledIcon } from "./icons";
+ import { ToastContext, type ToastItem, type ToastTone } from "./toastContext";
+ 
+ /**
+@@ -15,6 +15,7 @@ const GLYPHS: Record<string, ReactNode> = {
+   "↻": <RefreshIcon className="h-4 w-4" />,
+   "⚠": <AlertIcon className="h-4 w-4" />,
+   "⚽": <BallIcon className="h-4 w-4" />,
++  "✓": <CheckIcon className="h-4 w-4" />,
+ };
+ 
+ /*
+@@ -27,14 +28,16 @@ const toneClass: Record<ToastTone, string> = {
+   volt: "border-volt border-s-4 text-volt",
+   gold: "border-gold border-s-4 text-gold",
+   danger: "border-danger border-s-4 text-danger",
+-  muted: "border-line border-s-4 text-ink-2",
++  // "Last sync" / "Updated" reads as a successful sync, so it borrows the
++  // success tint: a volt border + wash rather than a grey disabled-looking one.
++  muted: "border-volt border-s-4 text-volt",
+ };
+ 
+ const toneTint: Record<ToastTone, string | undefined> = {
+   volt: "color-mix(in srgb, var(--volt) 14%, var(--bg-elevated))",
+   gold: "color-mix(in srgb, var(--gold) 14%, var(--bg-elevated))",
+   danger: "color-mix(in srgb, var(--danger) 14%, var(--bg-elevated))",
+-  muted: undefined,
++  muted: "color-mix(in srgb, var(--volt) 12%, transparent)",
+ };
+ 
+ /** How long the copy stays readable before it starts to leave. */
+@@ -87,6 +90,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
+     <ToastContext.Provider value={value}>
+       {children}
+       <div
++        // `auto` (not inherited rtl/ltr): an English "Updated 9:41 PM" inside a
++        // Persian app must read LTR, while a Persian message reads RTL.
++        dir="auto"
+         className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-3 pt-[max(env(safe-area-inset-top),10px)]"
+         role="status"
+         aria-live="polite"
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 46bcc8f..4ec93f9 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -187,7 +187,8 @@ export default function Matches() {
+       push({
+         text: t("matches.lastSync", { time: formatClock(now, locale) }),
+         tone: "muted",
+-        icon: <RefreshIcon className="h-4 w-4" />,
++        // A successful sync, not a spinner: the checkmark says "done".
++        icon: "✓",
+       });
+     });
+   }
+@@ -316,14 +317,17 @@ export default function Matches() {
+         {/* No favorites yet: above the groups, because it is the answer to an
+             empty feed rather than a footnote under one. */}
+         {favCount === 0 ? (
+-          <Card className="pitch-watermark mt-4 flex items-center justify-between gap-3 p-4">
+-            <div className="min-w-0">
+-              <p className="text-sm font-bold text-ink">{t("myTeams.empty")}</p>
+-              <p className="mt-0.5 text-xs text-ink-3">{t("myTeams.hint")}</p>
+-            </div>
++          <Card className="pitch-watermark mt-4 p-5 text-center">
++            {/* An icon at the head of the card: the empty state is a moment to
++                act, not a blank slab, and the ball names the app it belongs to. */}
++            <BallIcon className="mx-auto h-8 w-8 text-volt" />
++            <p className="mt-2 text-sm font-bold text-ink">{t("myTeams.empty")}</p>
++            <p className="mt-1 text-xs text-ink-3">{t("myTeams.hint")}</p>
++            {/* The one action this card owns: everything else on the screen is
++                a different job, so there is no second button to split the intent. */}
+             <Link
+               to="/onboarding"
+-              className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-sm font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
++              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full bg-volt px-5 text-sm font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
+             >
+               {t("matches.pickTeams")}
+             </Link>
+-- 
+2.54.0.windows.1
+

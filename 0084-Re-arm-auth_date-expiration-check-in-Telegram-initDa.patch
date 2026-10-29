@@ -1,0 +1,102 @@
+From 09e089a2fae0fbc5ca2489d08d4d7c4ad4694e3c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 13:39:54 +0330
+Subject: [PATCH 084/230] Re-arm auth_date expiration check in Telegram
+ initData verification
+
+---
+ server/telegram/verify.ts | 16 +---------------
+ tests/verify.test.ts      | 20 +++++++-------------
+ 2 files changed, 8 insertions(+), 28 deletions(-)
+
+diff --git a/server/telegram/verify.ts b/server/telegram/verify.ts
+index 939dd16..adf5463 100644
+--- a/server/telegram/verify.ts
++++ b/server/telegram/verify.ts
+@@ -12,10 +12,6 @@ export interface TelegramUser {
+  * were signed by the bot's token and unchanged since — it says nothing about
+  * *when* — so the clock is ours to add. Without it, a captured initData string
+  * is a bearer credential that never expires.
+- *
+- * TEMP(auth-debug): currently NOT enforced — see the freshness block in
+- * checkInitData. Kept so the bypass still logs a reference and re-arming the
+- * window stays a one-line revert.
+  */
+ const MAX_AGE_SECONDS = 86_400;
+ 
+@@ -85,22 +81,12 @@ function checkInitData(initData: string, botToken: string, excludeSignature: boo
+   // Freshness: auth_date is part of the signed data, so once the hash matches
+   // it is trusted. It is also REQUIRED — a payload without one can't be aged,
+   // and "can't be aged" is exactly what we don't accept.
+-  //
+-  // TEMP(auth-debug): the AGE WINDOW IS DISABLED while we chase the
+-  // "Continue as <Name> lands as Guest" login. An out-of-window auth_date no
+-  // longer rejects — it is logged instead, so we still learn whether the clock
+-  // was ever the reason. Cost while this is in place: with no window, a captured
+-  // initData string is replayable forever. Re-arm the rejection below before
+-  // this is left unattended.
+   const authDate = params.get("auth_date");
+   if (!authDate) return { ok: false, reason: "missing auth_date" };
+   const issuedAt = parseInt(authDate, 10);
+   const age = Date.now() / 1000 - issuedAt;
+   if (Number.isNaN(age) || age > MAX_AGE_SECONDS) {
+-    // TEMP(auth-debug): logged, not rejected. Restore the return to re-arm.
+-    console.warn(
+-      `[telegram:verify] auth_date window bypassed (age=${Number.isNaN(age) ? "NaN" : Math.round(age)}s, max=${MAX_AGE_SECONDS}s)`,
+-    );
++    return { ok: false, reason: "initData expired" };
+   }
+ 
+   const userRaw = params.get("user");
+diff --git a/tests/verify.test.ts b/tests/verify.test.ts
+index 38d52f8..eece9f7 100644
+--- a/tests/verify.test.ts
++++ b/tests/verify.test.ts
+@@ -4,8 +4,8 @@
+  * (same algorithm Telegram documents); nothing here touches the network.
+  *
+  * Pins: valid payload passes, tampering fails, wrong token fails, auth_date is
+- * required (its age window is TEMP-bypassed for the Guest-login debug — see
+- * testAuthDateRules), non-hex digests fail closed (timing-safe path),
++ * required and its age window rejects stale payloads (see testAuthDateRules),
++ * non-hex digests fail closed (timing-safe path),
+  * and BOTH readings of the Bot API 8.0 `signature` ambiguity verify — a
+  * payload whose hash covers `signature` (Telegram's live behaviour, and the
+  * shape that used to be rejected here with `hash mismatch`, downgrading the
+@@ -72,21 +72,15 @@ function testTampering() {
+ }
+ 
+ function testAuthDateRules() {
+-  // TEMP(auth-debug): the freshness window is bypassed in verify.ts while the
+-  // Guest-login failure is diagnosed, so an old auth_date now VERIFIES instead
+-  // of rejecting. These lines flip back to `false` (and the "initData expired"
+-  // reason assertion returns) when the window is re-armed — the two files move
+-  // together, which is the tripwire against a bypass outliving the debug.
+   const expired = verifyInitData(freshInitData(BOT_TOKEN, 25 * 3600), BOT_TOKEN);
+-  assert.equal(expired.ok, true, "[TEMP] 25h-old payload accepted while the window is bypassed");
+-  assert.equal(expired.ok ? expired.user.id : 0, 42, "[TEMP] old payload still resolves the user");
++  assert.equal(expired.ok, false, "25h-old payload rejected");
++  assert.equal(expired.ok ? "" : expired.reason, "initData expired", "expired reason");
+ 
+   const boundary = verifyInitData(freshInitData(BOT_TOKEN, 23 * 3600), BOT_TOKEN);
+   assert.equal(boundary.ok, true, "23h-old payload still fresh");
+ 
+-  // auth_date is still REQUIRED: absence can't be aged, and "can't be aged"
+-  // stays a rejection even with the window bypassed (the bypass covers age,
+-  // not absence).
++  // auth_date is REQUIRED: absence can't be aged, and "can't be aged" is a
++  // rejection.
+   const noAuthDate = sign({ query_id: "AAHtest", user: '{"id":7}' });
+   const r = verifyInitData(noAuthDate, BOT_TOKEN);
+   assert.equal(r.ok, false, "missing auth_date rejected");
+@@ -212,6 +206,6 @@ export async function runVerifyTests(): Promise<void> {
+   testBarePlusReadings();
+   testDevToken();
+   console.log(
+-    "  verify: valid/tamper/wrong-token, auth_date required (age window TEMP-bypassed), bad digests closed, both signature readings, bare `+` readings, dev tokens OK",
++    "  verify: valid/tamper/wrong-token, auth_date required + age window enforced, bad digests closed, both signature readings, bare `+` readings, dev tokens OK",
+   );
+ }
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,45 @@
+From c2b33aee1fb4b738c96f1806436747975dcb8251 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 18:27:16 +0330
+Subject: [PATCH 134/230] fix(matches): humanize the deep-link league scope
+ line
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The single-league deep link showed the raw ESPN slug ("Showing
+xxx.test_cup only") for anything outside the big-five map. Route it
+through competitionName() so mapped slugs keep their names and unknown
+ones fall back to humanizeSlug().
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/pages/Matches.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 9cad38a..120f2b1 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -13,7 +13,7 @@ import { useMatches, useFollowedLeagues } from "../hooks/useApi";
+ import { useFavorites } from "../hooks/useFavorites";
+ import { useI18n } from "../i18n/context";
+ import { formatClock } from "../lib/format";
+-import { LEAGUE_BY_SLUG, competitionName } from "../lib/leagues";
++import { competitionName } from "../lib/leagues";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+ import {
+   BallIcon,
+@@ -286,7 +286,7 @@ export default function Matches() {
+           <div className="mt-4 flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3">
+             <p className="min-w-0 truncate text-xs text-ink-2">
+               {t("matches.leagueScope", {
+-                league: LEAGUE_BY_SLUG[league] ? t(`league.${LEAGUE_BY_SLUG[league]}`) : league,
++                league: competitionName(league, lang),
+               })}
+             </p>
+             <button
+-- 
+2.54.0.windows.1
+

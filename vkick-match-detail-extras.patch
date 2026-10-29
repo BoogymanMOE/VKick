@@ -1,0 +1,1281 @@
+From beb41081796dcd981baf56ff12586bda48710cf4 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 17:51:59 +0330
+Subject: [PATCH 1/5] feat(sync): extract head-to-head, form, and per-match
+ news from ESPN summary
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+ESPN's summary payload carries three blocks we were throwing away:
+`seasonseries[0]` (last 5 meetings between the two teams),
+`lastFiveGames[0..1]` (both teams' last 5 results), and a `news`
+block (articles tagged to BOTH teams in this match).
+
+Three new tables store them, refreshed on every summary sync:
+match_head_to_head, match_form, match_news. Three new normalizers
+in normalize.ts shape the JSON. applySummary upserts all three inside
+its existing transaction.
+
+No new ESPN calls — these were always in the payload, just unused.
+The next commit wires them to MatchDetail tabs.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/db/schema.ts      |  42 +++++++
+ server/espn/normalize.ts | 234 ++++++++++++++++++++++++++++++++++++++-
+ server/sync/upserts.ts   |  64 +++++++++++
+ 3 files changed, 339 insertions(+), 1 deletion(-)
+
+diff --git a/server/db/schema.ts b/server/db/schema.ts
+index 874aec7..dec543a 100644
+--- a/server/db/schema.ts
++++ b/server/db/schema.ts
+@@ -112,6 +112,48 @@ export function migrate(db: DatabaseSync): void {
+     );
+     CREATE INDEX IF NOT EXISTS idx_timeline_match ON timeline_events(match_id, minute_seconds);
+ 
++    -- Head-to-head: last 5 meetings between the two teams, as ESPN's summary
++    -- seasonseries[0] reports them. Refreshed on every summary sync, so the
++    -- MatchDetail H2H tab reads from the DB instead of refetching.
++    CREATE TABLE IF NOT EXISTS match_head_to_head (
++      match_id     TEXT PRIMARY KEY REFERENCES matches(id) ON DELETE CASCADE,
++      summary      TEXT,                          -- "PSG leads series 4-1"
++      series_label TEXT,                          -- "Head-to-Head"
++      events_json  TEXT NOT NULL,                 -- JSON array of H2HEvent
++      updated_at   TEXT NOT NULL
++    );
++    CREATE INDEX IF NOT EXISTS idx_h2h_match ON match_head_to_head(match_id);
++
++    -- Last 5 games form for both teams in a match. ESPN's lastFiveGames[0] is
++    -- the home side, [1] is away. Stored as a compact W/D/L string plus recent
++    -- game summaries so the FormStrip + a list can render from the DB.
++    CREATE TABLE IF NOT EXISTS match_form (
++      match_id     TEXT PRIMARY KEY REFERENCES matches(id) ON DELETE CASCADE,
++      home_form    TEXT,        -- 5-char "WWDLW" string (oldest→newest)
++      away_form    TEXT,
++      home_games_json TEXT,     -- JSON array of last 5 game summaries
++      away_games_json TEXT,
++      updated_at   TEXT NOT NULL
++    );
++    CREATE INDEX IF NOT EXISTS idx_form_match ON match_form(match_id);
++
++    -- News tagged to BOTH teams in this match (ESPN's summary news block).
++    -- Articles share the league-news cache shape; the TeamPage news card
++    -- renders them unchanged.
++    CREATE TABLE IF NOT EXISTS match_news (
++      match_id    TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
++      article_id  TEXT NOT NULL,
++      headline    TEXT NOT NULL,
++      description TEXT,
++      published   TEXT,
++      byline      TEXT,
++      image_url   TEXT,
++      web_url     TEXT,
++      team_ids_json TEXT,       -- JSON array of team ids
++      PRIMARY KEY (match_id, article_id)
++    );
++    CREATE INDEX IF NOT EXISTS idx_news_match ON match_news(match_id);
++
+     CREATE TABLE IF NOT EXISTS standings (
+       league        TEXT NOT NULL,
+       season        TEXT NOT NULL,
+diff --git a/server/espn/normalize.ts b/server/espn/normalize.ts
+index 6e5de8f..581cce6 100644
+--- a/server/espn/normalize.ts
++++ b/server/espn/normalize.ts
+@@ -191,13 +191,76 @@ interface EspnSummaryHeader extends EspnNotes {
+   competitions?: EspnCompetition[];
+ }
+ 
+-/** The `/summary` endpoint: header, boxscore, rosters, keyEvents, commentary. */
++/** One previous meeting from `seasonseries[0].events[]`. */
++interface EspnSeriesEvent {
++  id?: string | number;
++  date?: unknown;
++  /** ESPN's coarse state ("post"), the sibling of statusType. */
++  status?: unknown;
++  statusType?: { detail?: unknown; state?: unknown };
++  competitors?: Array<{
++    homeAway?: string;
++    winner?: boolean;
++    score?: unknown;
++    team?: { id?: string | number };
++  }>;
++}
++
++/** ESPN's head-to-head block: a headline line plus the last N meetings. */
++interface EspnSeries {
++  summary?: unknown;
++  seriesLabel?: unknown;
++  events?: EspnSeriesEvent[];
++}
++
++/** One game of a side's `lastFiveGames` list. */
++interface EspnFormEvent {
++  id?: string | number;
++  /** ESPN uses `gameDate`; tolerate a bare `date` from older payloads. */
++  gameDate?: unknown;
++  date?: unknown;
++  gameResult?: unknown;
++  /** ESPN nests the opponent as `opponent`, other payloads as `opponent.team`. */
++  opponent?: { id?: string | number; team?: { id?: string | number } };
++  homeTeamId?: string | number;
++  awayTeamId?: string | number;
++  homeTeamScore?: unknown;
++  awayTeamScore?: unknown;
++}
++
++/** One side of `lastFiveGames`: the team plus its five most recent results. */
++interface EspnFormBlock {
++  displayOrder?: number;
++  team?: { id?: string | number };
++  events?: EspnFormEvent[];
++}
++
++/** An article in the summary `news` block (same shape as the league feed). */
++interface EspnNewsArticle {
++  id?: string | number;
++  headline?: unknown;
++  description?: unknown;
++  published?: unknown;
++  byline?: unknown;
++  images?: unknown;
++  links?: { web?: { href?: unknown } };
++  categories?: unknown;
++}
++
++/**
++ * The `/summary` endpoint: header, boxscore, rosters, keyEvents, commentary,
++ * plus the three blocks we extract for MatchDetail — seasonseries (H2H),
++ * lastFiveGames (form) and news (articles tagged to this match's clubs).
++ */
+ interface EspnSummary {
+   header?: EspnSummaryHeader;
+   boxscore?: { teams?: { team?: EspnTeamRef }[] };
+   rosters?: EspnRosterSide[];
+   keyEvents?: EspnKeyEvent[];
+   commentary?: EspnCommentaryLine[];
++  seasonseries?: EspnSeries[];
++  lastFiveGames?: EspnFormBlock[];
++  news?: { articles?: EspnNewsArticle[] };
+ }
+ 
+ interface EspnCoachRow {
+@@ -747,6 +810,175 @@ export function normalizeCommentary(raw: unknown): NormCommentaryLine[] {
+   return out;
+ }
+ 
++/* ------------------------------------- head-to-head, form, per-match news */
++
++/** One previous meeting between two teams, as ESPN's seasonseries reports it. */
++export interface H2HEvent {
++  id: string;
++  date: string;
++  homeTeamId: string;
++  awayTeamId: string;
++  homeScore: number | null;
++  awayScore: number | null;
++  winnerTeamId: string | null;
++  status: string;
++}
++
++export interface MatchHeadToHead {
++  summary: string | null;
++  seriesLabel: string | null;
++  events: H2HEvent[];
++}
++
++/**
++ * `seasonseries[0]` — the last five meetings between this fixture's two clubs,
++ * with ESPN's own headline line ("LIV leads series 3-2"). The events keep
++ * ESPN's newest-first order; `winnerTeamId` is read off the competitor ESPN
++ * flags, never derived from the scoreline.
++ */
++export function normalizeHeadToHead(raw: unknown): MatchHeadToHead {
++  const json = raw as EspnSummary;
++  const series = json.seasonseries?.[0];
++  const events: H2HEvent[] = [];
++  for (const ev of series?.events ?? []) {
++    const comps = ev.competitors ?? [];
++    const id = ev.id == null ? "" : String(ev.id);
++    if (!id) continue;
++    const home = comps.find((c) => c.homeAway === "home");
++    const away = comps.find((c) => c.homeAway === "away");
++    const winner = comps.find((c) => c.winner === true);
++    events.push({
++      id,
++      date: typeof ev.date === "string" ? ev.date : "",
++      homeTeamId: String(home?.team?.id ?? ""),
++      awayTeamId: String(away?.team?.id ?? ""),
++      homeScore: parseScore(home?.score),
++      awayScore: parseScore(away?.score),
++      winnerTeamId: winner?.team?.id != null ? String(winner.team.id) : null,
++      status: String(ev.status ?? ev.statusType?.detail ?? ev.statusType?.state ?? ""),
++    });
++  }
++  return {
++    summary: typeof series?.summary === "string" && series.summary ? series.summary : null,
++    seriesLabel: typeof series?.seriesLabel === "string" && series.seriesLabel ? series.seriesLabel : null,
++    events,
++  };
++}
++
++/** One game in a team's last-5 form, from the team's own perspective. */
++export interface FormGame {
++  id: string;
++  date: string;
++  result: "W" | "D" | "L";
++  teamId: string;
++  opponentId: string;
++  teamScore: number | null;
++  opponentScore: number | null;
++}
++
++export interface FormSide {
++  /** Compact W/D/L string, oldest→newest ("WWDLL"), capped at five. */
++  form: string;
++  games: FormGame[];
++}
++
++/**
++ * `lastFiveGames[0..1]` — both clubs' five most recent results. ESPN lists the
++ * home side first and each side's games oldest→newest, which is the order a
++ * form strip reads in. `gameResult` is already that club's own result, so it is
++ * trusted over the scoreline; the score is oriented home/away for the club.
++ */
++export function normalizeLastFiveGames(raw: unknown): {
++  home: FormSide | null;
++  away: FormSide | null;
++} {
++  const json = raw as EspnSummary;
++  const arr = json.lastFiveGames ?? [];
++  const parse = (block: EspnFormBlock | undefined): FormSide | null => {
++    if (!block) return null;
++    const teamId = String(block.team?.id ?? "");
++    if (!teamId) return null;
++    let formStr = "";
++    const games: FormGame[] = [];
++    for (const ev of block.events ?? []) {
++      const id = ev.id == null ? "" : String(ev.id);
++      if (!id) continue;
++      const result: FormGame["result"] =
++        ev.gameResult === "W" || ev.gameResult === "L" ? ev.gameResult : "D";
++      // The club's own score, whichever end of the fixture it played.
++      const atHome = String(ev.homeTeamId ?? "") === teamId;
++      formStr += result;
++      games.push({
++        id,
++        date:
++          typeof ev.gameDate === "string"
++            ? ev.gameDate
++            : typeof ev.date === "string"
++              ? ev.date
++              : "",
++        result,
++        teamId,
++        opponentId: String(ev.opponent?.id ?? ev.opponent?.team?.id ?? ""),
++        teamScore: parseScore(atHome ? ev.homeTeamScore : ev.awayTeamScore),
++        opponentScore: parseScore(atHome ? ev.awayTeamScore : ev.homeTeamScore),
++      });
++    }
++    if (games.length === 0) return null;
++    return { form: formStr.toUpperCase().slice(0, 5), games };
++  };
++  return {
++    home: parse(arr[0]),
++    away: parse(arr[1]),
++  };
++}
++
++export interface MatchNewsArticle {
++  id: string;
++  headline: string;
++  description: string;
++  published: string;
++  byline: string | null;
++  imageUrl: string | null;
++  webUrl: string | null;
++  teamIds: string[];
++}
++
++/**
++ * The summary `news` block. Same shape the league-news route serves (the
++ * TeamPage card renders both), so the mapping mirrors `toNewsArticle` in
++ * routes/football.ts — header crop preferred, team categories collected.
++ */
++export function normalizeSummaryNews(raw: unknown): MatchNewsArticle[] {
++  const root = raw as EspnSummary;
++  const articles = root.news?.articles;
++  if (!Array.isArray(articles)) return [];
++  return articles
++    .map((a) => {
++      const images = Array.isArray(a.images) ? a.images : [];
++      const header =
++        images.find((i) => (i as { type?: unknown } | null)?.type === "header") ?? images[0];
++      const imgUrl = (header as { url?: unknown } | undefined)?.url;
++      const cats = Array.isArray(a.categories) ? a.categories : [];
++      const teamIds = cats.flatMap((c) => {
++        const cat = c as { type?: unknown; teamId?: unknown; team?: { id?: unknown } } | null;
++        if (cat?.type !== "team") return [];
++        const id = cat.team?.id ?? cat.teamId;
++        return id != null ? [String(id)] : [];
++      });
++      return {
++        id: a.id == null ? "" : String(a.id),
++        headline: typeof a.headline === "string" ? a.headline : "",
++        description: typeof a.description === "string" ? a.description : "",
++        published: typeof a.published === "string" ? a.published : "",
++        byline: typeof a.byline === "string" && a.byline ? a.byline : null,
++        imageUrl: typeof imgUrl === "string" && imgUrl ? imgUrl : null,
++        webUrl: typeof a.links?.web?.href === "string" ? a.links.web.href : null,
++        teamIds,
++      };
++    })
++    .filter((a) => a.id);
++}
++
+ /* ------------------------------------------------------------ rosters */
+ 
+ /** Coach entry from the roster endpoint (`coach[]`, first row wins). */
+diff --git a/server/sync/upserts.ts b/server/sync/upserts.ts
+index e034db5..aa7540c 100644
+--- a/server/sync/upserts.ts
++++ b/server/sync/upserts.ts
+@@ -10,6 +10,9 @@ import {
+   normalizeCommentary,
+   normalizeRosterPlayers,
+   normalizeCoach,
++  normalizeHeadToHead,
++  normalizeLastFiveGames,
++  normalizeSummaryNews,
+ } from "../espn/normalize.js";
+ import { statScore } from "../scoring/statScore.js";
+ import {
+@@ -268,6 +271,67 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
+         ["match_id", "sequence"],
+       );
+     }
++
++    // Head-to-head (last 5 meetings between these two teams).
++    const h2h = normalizeHeadToHead(json);
++    if (h2h.events.length > 0) {
++      upsert(
++        db,
++        "match_head_to_head",
++        {
++          match_id: match.id,
++          summary: h2h.summary,
++          series_label: h2h.seriesLabel,
++          events_json: JSON.stringify(h2h.events),
++          updated_at: new Date().toISOString(),
++        },
++        ["match_id"],
++      );
++    }
++
++    // Last 5 games form for both teams.
++    const form = normalizeLastFiveGames(json);
++    if (form.home || form.away) {
++      upsert(
++        db,
++        "match_form",
++        {
++          match_id: match.id,
++          home_form: form.home?.form ?? null,
++          away_form: form.away?.form ?? null,
++          home_games_json: form.home ? JSON.stringify(form.home.games) : null,
++          away_games_json: form.away ? JSON.stringify(form.away.games) : null,
++          updated_at: new Date().toISOString(),
++        },
++        ["match_id"],
++      );
++    }
++
++    // News tagged to BOTH teams in this match.
++    const matchNews = normalizeSummaryNews(json);
++    if (matchNews.length > 0) {
++      // Replace strategy: articles churn between syncs, so the stored set is
++      // rebuilt rather than merged (a stale headline must not linger).
++      run(db, "DELETE FROM match_news WHERE match_id = ?", [match.id]);
++      for (const a of matchNews) {
++        upsert(
++          db,
++          "match_news",
++          {
++            match_id: match.id,
++            article_id: a.id,
++            headline: a.headline,
++            description: a.description,
++            published: a.published,
++            byline: a.byline,
++            image_url: a.imageUrl,
++            web_url: a.webUrl,
++            team_ids_json: JSON.stringify(a.teamIds),
++          },
++          ["match_id", "article_id"],
++        );
++      }
++    }
+   });
+ 
+   // Team-level stats (own transaction — never nest inside the one above).
+-- 
+2.54.0.windows.1
+
+
+From eaa2250fa34ab3d34ec99939cb499a048b17672f Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 17:54:06 +0330
+Subject: [PATCH 2/5] feat(api): /h2h, /form, /news routes for MatchDetail
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Three new read routes, all backfilling on demand using the same
+10-min cooldown helper the lineups/timeline backfill introduced.
+A finished match with no rows triggers one syncMatchSummary call,
+then re-queries. An upcoming match also works — ESPN's summary
+already returns H2H, form, and news for fixtures not yet played.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/routes/football.ts | 116 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 116 insertions(+)
+
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index c2adf59..8af0d3b 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -336,6 +336,122 @@ matchesRouter.get("/api/matches/:id/timeline", async (req, res) => {
+   res.json({ events: events.map((e) => ({ ...e, participants: safeArr(e.participants) })) });
+ });
+ 
++/* ------------------------------------------------------------ head-to-head */
++
++interface H2HEventView {
++  id: string;
++  date: string;
++  homeTeamId: string;
++  awayTeamId: string;
++  homeScore: number | null;
++  awayScore: number | null;
++  winnerTeamId: string | null;
++  status: string;
++}
++
++/**
++ * Last 5 meetings between the two teams (summary `seasonseries[0]`), stored by
++ * the summary sync. The same missed-summary repair as the lineups read: no row
++ * yet buys one summary fetch (the shared 10-minute cooldown), then re-reads.
++ * ESPN serves this block for upcoming fixtures too, so a match not yet played
++ * answers just as well as a finished one.
++ */
++matchesRouter.get("/api/matches/:id/h2h", async (req, res) => {
++  const matchId = String(req.params.id);
++  if (!assertMatchAllowed(res, matchId)) return;
++  const select =
++    "SELECT summary, series_label, events_json FROM match_head_to_head WHERE match_id = ?";
++  let row = get<{ summary: string | null; series_label: string | null; events_json: string }>(
++    db,
++    select,
++    [matchId],
++  );
++  if (!row) {
++    const match = matchReadState(matchId);
++    if (match) await backfillSummary(match.league, matchId);
++    row = get(db, select, [matchId]);
++  }
++  if (!row) return res.json({ summary: null, seriesLabel: null, events: [] });
++  res.json({
++    summary: row.summary,
++    seriesLabel: row.series_label,
++    events: safeArr(row.events_json) as unknown as H2HEventView[],
++  });
++});
++
++/* ------------------------------------------------------------ form */
++
++/**
++ * Both teams' last 5 results (`lastFiveGames[0..1]`). ESPN's home side is
++ * block 0; the form string reads oldest→newest and the games carry the club's
++ * own scoreline. Same on-demand backfill as the reads above.
++ */
++matchesRouter.get("/api/matches/:id/form", async (req, res) => {
++  const matchId = String(req.params.id);
++  if (!assertMatchAllowed(res, matchId)) return;
++  const select =
++    "SELECT home_form, away_form, home_games_json, away_games_json FROM match_form WHERE match_id = ?";
++  let row = get<{
++    home_form: string | null;
++    away_form: string | null;
++    home_games_json: string | null;
++    away_games_json: string | null;
++  }>(db, select, [matchId]);
++  if (!row) {
++    const match = matchReadState(matchId);
++    if (match) await backfillSummary(match.league, matchId);
++    row = get(db, select, [matchId]);
++  }
++  if (!row) return res.json({ home: null, away: null });
++  res.json({
++    home: row.home_form ? { form: row.home_form, games: safeArr(row.home_games_json) } : null,
++    away: row.away_form ? { form: row.away_form, games: safeArr(row.away_games_json) } : null,
++  });
++});
++
++/* ------------------------------------------------------------ per-match news */
++
++interface MatchNewsRow {
++  article_id: string;
++  headline: string;
++  description: string | null;
++  published: string | null;
++  byline: string | null;
++  image_url: string | null;
++  web_url: string | null;
++  team_ids_json: string;
++}
++
++/**
++ * Articles from the summary `news` block — the same NewsArticle shape the
++ * league-news route serves, so the TeamPage card renders these unchanged.
++ * A match with no stored articles gets the same one-shot backfill.
++ */
++matchesRouter.get("/api/matches/:id/news", async (req, res) => {
++  const matchId = String(req.params.id);
++  if (!assertMatchAllowed(res, matchId)) return;
++  const select = `SELECT article_id, headline, description, published, byline, image_url, web_url, team_ids_json
++     FROM match_news WHERE match_id = ? ORDER BY published DESC`;
++  let rows = all<MatchNewsRow>(db, select, [matchId]);
++  if (rows.length === 0) {
++    const match = matchReadState(matchId);
++    if (match) await backfillSummary(match.league, matchId);
++    rows = all<MatchNewsRow>(db, select, [matchId]);
++  }
++  res.json({
++    articles: rows.map((r) => ({
++      id: r.article_id,
++      headline: r.headline,
++      description: r.description ?? "",
++      published: r.published ?? "",
++      byline: r.byline,
++      imageUrl: r.image_url,
++      webUrl: r.web_url,
++      teamIds: safeArr(r.team_ids_json),
++    })),
++  });
++});
++
+ /* ------------------------------------------------------------ teams */
+ 
+ /*
+-- 
+2.54.0.windows.1
+
+
+From 926a8e90422df166a024d21ea737dd4602558ba0 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 17:55:24 +0330
+Subject: [PATCH 3/5] feat(client): types, api getters, and hooks for H2H /
+ form / match news
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Three new read-only data paths for MatchDetail. H2H and form are
+MatchDetail-only; per-match news reuses the NewsArticle shape the
+TeamPage news tab already renders, so the next commit's UI can reuse
+the same card component.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/hooks/useApi.ts | 35 +++++++++++++++++++++++++++++++++++
+ src/lib/api.ts      | 11 ++++++++++-
+ src/types.ts        | 38 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 83 insertions(+), 1 deletion(-)
+
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 9e8ae1d..6646691 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -665,6 +665,41 @@ export function useLeagueNews(league: string, teamId: string) {
+   });
+ }
+ 
++/* ------------------------------------------------- match detail extras */
++
++/**
++ * Head-to-head for a match: the two clubs' last five meetings. Barely moves
++ * while a match is being played, so five minutes of cache is plenty.
++ */
++export function useMatchH2H(matchId: string) {
++  return useQuery({
++    queryKey: ["h2h", matchId],
++    queryFn: () => api.getH2H(matchId),
++    enabled: Boolean(matchId),
++    staleTime: 5 * 60_000,
++  });
++}
++
++/** Both clubs' last-five form; changes only when one of them plays. */
++export function useMatchForm(matchId: string) {
++  return useQuery({
++    queryKey: ["form", matchId],
++    queryFn: () => api.getForm(matchId),
++    enabled: Boolean(matchId),
++    staleTime: 60_000,
++  });
++}
++
++/** Articles tagged to this match's clubs; news turns over a few times a day. */
++export function useMatchNews(matchId: string) {
++  return useQuery({
++    queryKey: ["match-news", matchId],
++    queryFn: () => api.getMatchNews(matchId),
++    enabled: Boolean(matchId),
++    staleTime: 5 * 60_000,
++  });
++}
++
+ /* ------------------------------------------------------------------ squads */
+ 
+ export interface SquadRow {
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 828e5f6..0db9de0 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -10,7 +10,7 @@
+  */
+ 
+ import { currentAuthToken, getDeviceId } from "./auth";
+-import type { NewsArticle } from "../types";
++import type { MatchForm, MatchH2H, NewsArticle } from "../types";
+ 
+ const BASE = "/api";
+ 
+@@ -702,6 +702,15 @@ export const api = {
+ 
+   getTimeline: (id: string) => request<{ events: ApiTimelineEvent[] }>(`/matches/${id}/timeline`),
+ 
++  /** Last 5 meetings between this match's two clubs (ESPN seasonseries). */
++  getH2H: (id: string) => request<MatchH2H>(`/matches/${id}/h2h`),
++
++  /** Both clubs' last-5 results, oldest→newest. */
++  getForm: (id: string) => request<MatchForm>(`/matches/${id}/form`),
++
++  /** Articles from this match's ESPN summary news block. */
++  getMatchNews: (id: string) => request<{ articles: NewsArticle[] }>(`/matches/${id}/news`),
++
+   getSquad: (teamId: string) =>
+     request<{
+       season: string;
+diff --git a/src/types.ts b/src/types.ts
+index 1d3902f..51cf3c5 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -240,3 +240,41 @@ export interface NewsArticle {
+   webUrl: string | null;
+   teamIds: string[];
+ }
++
++/* ---------------------------------------------------- match detail extras */
++
++/** One previous meeting between two teams, as ESPN's seasonseries reports it. */
++export interface H2HEvent {
++  id: string;
++  date: string;
++  homeTeamId: string;
++  awayTeamId: string;
++  homeScore: number | null;
++  awayScore: number | null;
++  winnerTeamId: string | null;
++  status: string;
++}
++
++/** H2H summary for a match — the headline line + last 5 meetings. */
++export interface MatchH2H {
++  summary: string | null;
++  seriesLabel: string | null;
++  events: H2HEvent[];
++}
++
++/** One game in a team's last-5 form. */
++export interface FormGame {
++  id: string;
++  date: string;
++  result: "W" | "D" | "L";
++  teamId: string;
++  opponentId: string;
++  teamScore: number | null;
++  opponentScore: number | null;
++}
++
++/** Both teams' last-5 form for a match. */
++export interface MatchForm {
++  home: { form: string; games: FormGame[] } | null;
++  away: { form: string; games: FormGame[] } | null;
++}
+-- 
+2.54.0.windows.1
+
+
+From 1f5195c82883498442f6ef50a6375093600d20e3 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 18:09:14 +0330
+Subject: [PATCH 4/5] feat(match): H2H, Form, and News tabs on MatchDetail
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Three new tabs on the match detail page, all reading data ESPN's
+summary endpoint already returns but we were discarding.
+
+H2H: last 5 meetings between the two teams, with the series
+summary line ("PSG leads series 4-1") and a list of past fixtures
+with team names, scores, and dates. Form: both teams' last 5
+results, reusing the FormStrip component from the Table page (now
+exported) plus a compact list of recent games. News: articles
+tagged to BOTH teams in this match, reusing the TeamPage news
+card layout — same NewsArticle shape, same arrow flip in RTL.
+
+All three backfill on demand: opening a tab for a match with no
+stored data triggers one syncMatchSummary call, then the data is
+cached in the DB for the next reader. EN + FA, with Persian dates
+in Jalali via Intl.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/strings.ts       |  20 +++
+ src/pages/MatchDetail.tsx | 308 +++++++++++++++++++++++++++++++++++++-
+ src/pages/Table.tsx       |  19 ++-
+ 3 files changed, 333 insertions(+), 14 deletions(-)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 4219d07..110dead 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -230,6 +230,16 @@ export const strings = {
+     "match.tabTimeline": "Timeline",
+     "match.tabStats": "Stats",
+     "match.tabLineups": "Lineups",
++    "match.tabH2H": "Head-to-Head",
++    "match.tabForm": "Form",
++    "match.tabNews": "News",
++    "match.h2h.empty": "No previous meetings found",
++    "match.h2h.seriesLeads": "{name} leads series {score}",
++    "match.h2h.even": "Series tied {score}",
++    "match.form.empty": "No form data yet",
++    "match.form.lastFive": "Last 5",
++    "match.form.vs": "vs",
++    "match.news.empty": "No news for this match",
+     "match.tabRatings": "Ratings",
+     "stats.possession": "Possession",
+     "stats.shots": "Shots",
+@@ -903,6 +913,16 @@ export const strings = {
+     "match.tabTimeline": "رویدادها",
+     "match.tabStats": "آمار",
+     "match.tabLineups": "ترکیب‌ها",
++    "match.tabH2H": "رو در رو",
++    "match.tabForm": "فرم",
++    "match.tabNews": "اخبار",
++    "match.h2h.empty": "سابقه‌ای از بازی رو در رو یافت نشد",
++    "match.h2h.seriesLeads": "{name} با نتیجه {score} پیش است",
++    "match.h2h.even": "بازی‌های رو در رو {score} مساوی است",
++    "match.form.empty": "اطلاعات فرم موجود نیست",
++    "match.form.lastFive": "۵ بازی اخیر",
++    "match.form.vs": "در برابر",
++    "match.news.empty": "خبری برای این بازی نیست",
+     "match.tabRatings": "امتیازها",
+     "stats.possession": "مالکیت توپ",
+     "stats.shots": "شوت",
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 8d4482f..6678eeb 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -26,17 +26,24 @@ import {
+ import { cx } from "../lib/cx";
+ import { api, type ApiTimelineEvent } from "../lib/api";
+ import { TEAM_FALLBACK } from "../lib/colors";
+-import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
++import {
++  leagueIdOf,
++  useCompetitionLabel,
++  useMatchH2H,
++  useMatchForm,
++  useMatchNews,
++} from "../hooks/useApi";
+ import { useI18n } from "../i18n/context";
+ import { RATINGS_ENABLED } from "../lib/features";
+ import { flipIntoPlace, getFlipFirst } from "../lib/flip";
+ import { formatClock, formatKickoffDate, kickoffParts, toFaDigits } from "../lib/format";
+ import { useNow } from "../hooks/useNow";
+ import { useLiveUpdates } from "../hooks/useLiveUpdates";
+-import type { Team, TimelineEventType } from "../types";
++import type { FormGame, Team, TimelineEventType } from "../types";
++import { FormStrip } from "./Table";
+ 
+-type Tab = "timeline" | "stats" | "lineups";
+-const TABS: Tab[] = ["timeline", "stats", "lineups"];
++type Tab = "timeline" | "stats" | "lineups" | "h2h" | "form" | "news";
++const TABS: Tab[] = ["timeline", "stats", "lineups", "h2h", "form", "news"];
+ 
+ export default function MatchDetail() {
+   const { id = "" } = useParams();
+@@ -332,6 +339,9 @@ export default function MatchDetail() {
+           { value: "timeline", label: t("match.tabTimeline") },
+           { value: "stats", label: t("match.tabStats") },
+           { value: "lineups", label: t("match.tabLineups") },
++          { value: "h2h", label: t("match.tabH2H") },
++          { value: "form", label: t("match.tabForm") },
++          { value: "news", label: t("match.tabNews") },
+         ]}
+       />
+ 
+@@ -355,6 +365,9 @@ export default function MatchDetail() {
+         ) : null}
+         {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
+         {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
++        {tab === "h2h" ? <H2HTab matchId={id} home={home} away={away} /> : null}
++        {tab === "form" ? <FormTab matchId={id} home={home} away={away} /> : null}
++        {tab === "news" ? <MatchNewsTab matchId={id} /> : null}
+       </section>
+ 
+ 
+@@ -398,7 +411,7 @@ function UnderlineTabs<T extends string>({
+   onChange: (value: T) => void;
+ }) {
+   return (
+-    <div role="tablist" className="mt-md flex border-b border-line">
++    <div role="tablist" className="mt-md flex overflow-x-auto border-b border-line">
+       {options.map((option) => {
+         const active = option.value === value;
+         return (
+@@ -411,7 +424,7 @@ function UnderlineTabs<T extends string>({
+             aria-controls={`${id}-panel`}
+             onClick={() => onChange(option.value)}
+             className={cx(
+-              "relative min-h-11 flex-1 px-2 text-sm font-bold transition-colors duration-[var(--t-fast)]",
++              "relative min-h-11 flex-1 whitespace-nowrap px-2 text-sm font-bold transition-colors duration-[var(--t-fast)]",
+               active ? "text-ink" : "text-ink-3 hover:text-ink-2",
+             )}
+           >
+@@ -863,3 +876,286 @@ function adaptTimelineEvent(e: ApiTimelineEvent) {
+     commentCount: e.comment_count,
+   };
+ }
++
++/* ------------------------------------------------------------ head-to-head */
++
++/**
++ * The two clubs' last five meetings. ESPN's `seasonseries[0]` ships its own
++ * headline line ("LIV leads series 3-2"); when the payload omits it, the line
++ * is folded from the meetings themselves and localized, which is also what
++ * keeps this tab readable in Persian.
++ */
++function H2HTab({
++  matchId,
++  home,
++  away,
++}: {
++  matchId: string;
++  home: { id: string; shortName: string; color: string };
++  away: { id: string; shortName: string; color: string };
++}) {
++  const { t, lang, localize } = useI18n();
++  const fa = lang === "fa";
++  const query = useMatchH2H(matchId);
++  if (query.isLoading) return <LineupsSkeleton />;
++  if (query.isError) {
++    return (
++      <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />
++    );
++  }
++  const data = query.data;
++  const events = data?.events ?? [];
++  if (events.length === 0) {
++    return <EmptyState title={t("match.h2h.empty")} />;
++  }
++  const nameOf = (teamId: string) => {
++    if (teamId === home.id) return localize(home.shortName);
++    if (teamId === away.id) return localize(away.shortName);
++    return teamId;
++  };
++  const fmtScore = (v: number | null) => (v === null ? "–" : fa ? toFaDigits(v) : String(v));
++  const seriesLine =
++    data?.summary ??
++    (() => {
++      const homeWins = events.filter((e) => e.winnerTeamId === home.id).length;
++      const awayWins = events.filter((e) => e.winnerTeamId === away.id).length;
++      const score = `${fmtScore(homeWins)}-${fmtScore(awayWins)}`;
++      return homeWins === awayWins
++        ? t("match.h2h.even", { score })
++        : t("match.h2h.seriesLeads", {
++            name: nameOf(homeWins > awayWins ? home.id : away.id),
++            score,
++          });
++    })();
++  const dayFmt = new Intl.DateTimeFormat(fa ? "fa-IR" : undefined, {
++    year: "numeric",
++    month: "short",
++    day: "numeric",
++  });
++  return (
++    <Card className="overflow-hidden p-0">
++      {seriesLine ? (
++        <p className="border-b border-line px-3 py-2 text-sm font-bold text-ink">{seriesLine}</p>
++      ) : null}
++      <ul className="divide-y divide-line">
++        {events.map((e) => {
++          const hasScore = e.homeScore !== null || e.awayScore !== null;
++          return (
++            <li
++              key={e.id}
++              className="flex items-center justify-between gap-2 px-3 py-2 text-xs"
++            >
++              <span className="flex-none text-ink-3">
++                {e.date ? dayFmt.format(new Date(e.date)) : ""}
++              </span>
++              <span className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
++                <span
++                  className={cx(
++                    "truncate",
++                    e.winnerTeamId === e.homeTeamId ? "font-bold text-ink" : "text-ink-2",
++                  )}
++                >
++                  {nameOf(e.homeTeamId)}
++                </span>
++                {hasScore ? (
++                  <span dir="ltr" className="flex-none font-bold text-ink">
++                    {fmtScore(e.homeScore)}–{fmtScore(e.awayScore)}
++                  </span>
++                ) : (
++                  <span className="flex-none text-ink-3">{t("match.form.vs")}</span>
++                )}
++                <span
++                  className={cx(
++                    "truncate",
++                    e.winnerTeamId === e.awayTeamId ? "font-bold text-ink" : "text-ink-2",
++                  )}
++                >
++                  {nameOf(e.awayTeamId)}
++                </span>
++              </span>
++            </li>
++          );
++        })}
++      </ul>
++    </Card>
++  );
++}
++
++/* -------------------------------------------------------------- form tab */
++
++/** Both clubs' last-five results, one card per side. */
++function FormTab({
++  matchId,
++  home,
++  away,
++}: {
++  matchId: string;
++  home: { id: string; shortName: string; color: string };
++  away: { id: string; shortName: string; color: string };
++}) {
++  const { t, localize } = useI18n();
++  const query = useMatchForm(matchId);
++  if (query.isLoading) return <LineupsSkeleton />;
++  if (query.isError) {
++    return (
++      <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />
++    );
++  }
++  const data = query.data;
++  if (!data || (!data.home && !data.away)) {
++    return <EmptyState title={t("match.form.empty")} />;
++  }
++  return (
++    <div className="space-y-3">
++      <p className="label label-lg text-ink-2">{t("match.form.lastFive")}</p>
++      {data.home ? (
++        <FormSide
++          label={localize(home.shortName)}
++          color={home.color}
++          form={data.home.form}
++          games={data.home.games}
++        />
++      ) : null}
++      {data.away ? (
++        <FormSide
++          label={localize(away.shortName)}
++          color={away.color}
++          form={data.away.form}
++          games={data.away.games}
++        />
++      ) : null}
++    </div>
++  );
++}
++
++/**
++ * One club's last-5: the shared FormStrip (dots) over the compact list of
++ * recent results. `result` is already from this club's perspective and the
++ * score is oriented to it too, so a row reads "W 2–1" whichever end of the
++ * fixture the club played.
++ */
++function FormSide({
++  label,
++  color,
++  form,
++  games,
++}: {
++  label: string;
++  color: string;
++  form: string;
++  games: FormGame[];
++}) {
++  const { t, lang } = useI18n();
++  const fa = lang === "fa";
++  return (
++    <Card className="p-3">
++      <div className="mb-2 flex items-center justify-between gap-2">
++        <div className="flex min-w-0 items-center gap-2">
++          <span
++            className="h-2 w-2 flex-none rounded-full"
++            style={{ backgroundColor: color }}
++            aria-hidden="true"
++          />
++          <span className="truncate text-sm font-bold text-ink">{label}</span>
++        </div>
++        <FormStrip form={form} />
++      </div>
++      <ul className="divide-y divide-line">
++        {games.map((g) => {
++          const score = `${g.teamScore ?? "–"}–${g.opponentScore ?? "–"}`;
++          return (
++            <li key={g.id} className="flex items-center justify-between py-1.5 text-xs">
++              <span className="text-ink-2">
++                {g.result === "W"
++                  ? t("table.formW")
++                  : g.result === "L"
++                    ? t("table.formL")
++                    : t("table.formD")}
++              </span>
++              <span dir="ltr" className="font-bold text-ink">
++                {fa ? toFaDigits(score) : score}
++              </span>
++            </li>
++          );
++        })}
++      </ul>
++    </Card>
++  );
++}
++
++/* ------------------------------------------------------------ match news */
++
++/**
++ * Articles from this match's summary news block, rendered with the TeamPage
++ * news card's layout — same NewsArticle shape, same arrow flip in RTL.
++ */
++function MatchNewsTab({ matchId }: { matchId: string }) {
++  const { t, lang, dir } = useI18n();
++  const query = useMatchNews(matchId);
++  if (query.isLoading) return <LineupsSkeleton />;
++  if (query.isError) {
++    return (
++      <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />
++    );
++  }
++  const articles = query.data?.articles ?? [];
++  if (articles.length === 0) {
++    return <EmptyState title={t("match.news.empty")} />;
++  }
++  const locale = lang === "fa" ? "fa-IR" : undefined;
++  const dateFmt = new Intl.DateTimeFormat(locale, {
++    month: "short",
++    day: "numeric",
++    hour: "2-digit",
++    minute: "2-digit",
++  });
++  return (
++    <ul className="space-y-2">
++      {articles.map((article) => {
++        const body = (
++          <>
++            {article.imageUrl ? (
++              <img
++                src={article.imageUrl}
++                alt=""
++                loading="lazy"
++                className="mb-2 h-32 w-full rounded-lg object-cover"
++              />
++            ) : null}
++            <h3 className="text-sm font-bold leading-snug text-ink">{article.headline}</h3>
++            {article.description ? (
++              <p className="mt-1 line-clamp-2 text-xs text-ink-2">{article.description}</p>
++            ) : null}
++            <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
++              <span>{article.published ? dateFmt.format(new Date(article.published)) : ""}</span>
++              {article.byline ? <span>{t("team.news.byline", { name: article.byline })}</span> : null}
++            </p>
++            {article.webUrl ? (
++              <p className="mt-1 text-[11px] font-bold text-volt">
++                {t("team.news.readMore")} {dir === "rtl" ? "←" : "→"}
++              </p>
++            ) : null}
++          </>
++        );
++        const className =
++          "block rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)]";
++        return (
++          <li key={article.id}>
++            {article.webUrl ? (
++              <a
++                href={article.webUrl}
++                target="_blank"
++                rel="noopener noreferrer"
++                className={cx(className, "hover:bg-elevated")}
++              >
++                {body}
++              </a>
++            ) : (
++              <div className={className}>{body}</div>
++            )}
++          </li>
++        );
++      })}
++    </ul>
++  );
++}
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index 31581a9..425b553 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -424,15 +424,18 @@ function StandingItem({
+ }
+ 
+ /**
+- * The last five results, oldest first — the server folds them from the stored
+- * finished matches (server/standings/form.ts), so the strip always matches the
+- * fixtures the club page shows; a club with fewer than five finished matches
+- * simply carries fewer dots. Dots rather than letters: green win, grey draw,
+- * red loss. One image for screen readers, so the label reads as a sentence
+- * instead of five stray letters; `dir="ltr"` keeps the order oldest→newest in
+- * Farsi too.
++ * The last five results, oldest first. On the Table page the server folds them
++ * from the stored finished matches (server/standings/form.ts), so the strip
++ * always matches the fixtures the club page shows; MatchDetail's Form tab feeds
++ * it the per-match ESPN form instead. Either way a club with fewer than five
++ * finished matches simply carries fewer dots. Dots rather than letters: green
++ * win, grey draw, red loss. One image for screen readers, so the label reads as
++ * a sentence instead of five stray letters; `dir="ltr"` keeps the order
++ * oldest→newest in Farsi too.
++ *
++ * Exported because MatchDetail renders the very same strip.
+  */
+-function FormStrip({ form }: { form: string }) {
++export function FormStrip({ form }: { form: string }) {
+   const { t } = useI18n();
+   const results = [...form];
+   const label = results
+-- 
+2.54.0.windows.1
+
+
+From 774797de4ab46936ee98e97962a02892111612bf Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 18:12:20 +0330
+Subject: [PATCH 5/5] polish(lint): no-empty-object-type on TabBar, two
+ exhaustive-deps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+TabBar: forwardRef<HTMLElement, {}> tripped no-empty-object-type.
+Dropping the empty props generic (forwardRef<HTMLElement>) is the
+fix that compiles here — Record<string, never> rejects the ref
+AppShell passes through to the bar, because the index signature
+makes `ref` incompatible.
+
+useApi: `favoritesQuery.data?.teams ?? []` minted a fresh array
+every render, so the `ids` memo and isFavorite changed identity on
+each pass. Memoize `teams` on the query data instead.
+
+MatchDetail: `nf` (Intl.NumberFormat) was rebuilt every render
+inside the countdown memo's dependency closure. Memoize it per
+locale and depend on it.
+
+The match-card polish this commit was to carry (full-width league
+meta, white kickoff time on upcoming cards) is already the state of
+the shipped card: the feed's MatchRow in LeagueGroup.tsx renders
+the kickoff clock in text-ink, and the league label lives in the
+group header with no count-chip width reservation to fight.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/TabBar.tsx | 2 +-
+ src/hooks/useApi.ts       | 5 ++++-
+ src/pages/MatchDetail.tsx | 6 ++++--
+ 3 files changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index d4d9615..ad30e39 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -15,7 +15,7 @@ const tabs: Array<{ to: string; key: StringKey; Icon: typeof BallIcon }> = [
+   { to: "/profile", key: "nav.profile", Icon: UserIcon },
+ ];
+ 
+-export const TabBar = forwardRef<HTMLElement, {}>((_, ref) => {
++export const TabBar = forwardRef<HTMLElement>((_, ref) => {
+   const { t } = useI18n();
+   const { pathname } = useLocation();
+   // A team sub-page belongs to no top-level tab: highlighting one would claim a
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 6646691..0a9ab9b 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -200,7 +200,10 @@ export function useFavorites() {
+     select: favoritesView,
+   });
+ 
+-  const teams = favoritesQuery.data?.teams ?? [];
++  // Memoized on the query data, not on the array it produces: `?? []` mints a
++  // fresh array every render, which made `ids` (and everything keyed off it)
++  // a new value on each pass — exactly what exhaustive-deps flagged.
++  const teams = useMemo(() => favoritesQuery.data?.teams ?? [], [favoritesQuery.data]);
+   const anchorId = favoritesQuery.data?.anchorId ?? null;
+ 
+   const ids = useMemo(() => teams.map((t) => t.id), [teams]);
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 6678eeb..f05e00c 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -156,7 +156,9 @@ export default function MatchDetail() {
+ 
+   // Days, then hours+minutes in words — never a bare "335h 45m", whose Latin
+   // h/m scramble the bidi run of a Persian sentence.
+-  const nf = new Intl.NumberFormat(locale);
++  // Stable per locale: a fresh Intl.NumberFormat each render made the memo
++  // below recompute every time (the missing-dependency warning).
++  const nf = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+   const countdownLabel = useMemo(() => {
+     if (!match || match.status !== "scheduled") return null;
+     const ms = new Date(match.kickoff_at).getTime() - now;
+@@ -173,7 +175,7 @@ export default function MatchDetail() {
+           ? t("match.hoursMinutes", { h: nf.format(hours), m: nf.format(minutes) })
+           : t("match.minutes", { m: nf.format(minutes) }),
+     });
+-  }, [match, now, t, locale]);
++  }, [match, now, t, nf]);
+ 
+ 
+ 
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,64 @@
+From 0b0f9c7b2e481ea7edd3d6e2c6a55ac838caadba Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 12:54:57 +0330
+Subject: [PATCH 127/230] Fix date strip: Persian day abbreviations from single
+ letters to readable 3-letter forms
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Persian dates.day.* values changed from single letters (د س چ پ ج ش ی)
+  to readable 3-letter forms (دو سه چه پن جمع شن یک) so each chip is
+  understandable in FA mode, matching the 3-letter rhythm of the English
+  Mon/Tue/Wed/Thu/Fri/Sat/Sun labels.
+- DateStrip chip gap reduced gap-1.5 → gap-1 so all five chips fit on one
+  row at 390px without horizontal scroll when showing the longer Persian text.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/DateStrip.tsx |  2 +-
+ src/i18n/strings.ts          | 14 +++++++-------
+ 2 files changed, 8 insertions(+), 8 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index 50dce4b..f0bae4a 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -58,7 +58,7 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
+     // explicit pressed state, and role=tab would promise arrow-key semantics
+     // this row does not implement.
+     <div
+-      className="mt-4 flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)]"
++      className="mt-4 flex items-center gap-1 overflow-x-auto px-[var(--space-page-x,16px)]"
+       role="group"
+       aria-label={t("dateStrip.label")}
+     >
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index ecf2ace..bbd540a 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -602,13 +602,13 @@ export const strings = {
+     "matches.otherMatches": "سایر مسابقات",
+     "table.view.tables": "جدول‌ها",
+     "table.view.browse": "مرور",
+-    "dates.day.mon": "د",
+-    "dates.day.tue": "س",
+-    "dates.day.wed": "چ",
+-    "dates.day.thu": "پ",
+-    "dates.day.fri": "ج",
+-    "dates.day.sat": "ش",
+-    "dates.day.sun": "ی",
++    "dates.day.mon": "دو",
++    "dates.day.tue": "سه",
++    "dates.day.wed": "چه",
++    "dates.day.thu": "پن",
++    "dates.day.fri": "جمع",
++    "dates.day.sat": "شن",
++    "dates.day.sun": "یک",
+     "dates.today": "امروز",
+     "dates.yesterday": "دیروز",
+     "dates.tomorrow": "فردا",
+-- 
+2.54.0.windows.1
+

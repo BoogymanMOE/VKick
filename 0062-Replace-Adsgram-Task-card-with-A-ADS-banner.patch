@@ -1,0 +1,494 @@
+From 9a91a846a20dea1c0ae94b1e32825f7381c493b8 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 11 Oct 2026 13:58:09 +0330
+Subject: [PATCH 062/230] Replace Adsgram Task card with A-ADS banner
+
+Remove the Adsgram SDK and TaskAdCard component entirely, and replace
+them with an Anonymous Ads (A-ADS) iframe banner behind the new
+ADS_ENABLED switch (renamed from ADGRAM_ENABLED in vite.config,
+.env.example, and vite-env.d.ts). AdBanner injects the A-ADS snippet
+via innerHTML into a ref, collapses when empty, and uses z-index: 1 so
+it never covers the bottom nav. Placed below the Upcoming feed on
+Matches and at the foot of MatchDetail.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ .env.example                  |  26 +++----
+ src/components/AdBanner.tsx   |  60 ++++++++++++++++
+ src/components/TaskAdCard.tsx | 130 ----------------------------------
+ src/lib/ads.ts                |  75 ++++++--------------
+ src/pages/MatchDetail.tsx     |  11 ++-
+ src/pages/Matches.tsx         |  15 ++--
+ src/vite-env.d.ts             |  19 ++---
+ vite.config.ts                |   6 +-
+ 8 files changed, 114 insertions(+), 228 deletions(-)
+ create mode 100644 src/components/AdBanner.tsx
+ delete mode 100644 src/components/TaskAdCard.tsx
+
+diff --git a/.env.example b/.env.example
+index 7ca0b45..10df0f8 100644
+--- a/.env.example
++++ b/.env.example
+@@ -43,19 +43,19 @@ RETENTION_DAYS=120
+ # Size cap for logs/api.log in KB (rotates once to api.log.1). 0 = uncapped.
+ RETENTION_LOG_KB=512
+ 
+-# Ads (Telegram Mini App only): the inline Adsgram Task card on Matchday and
+-# Match detail. Register at https://partner.adsgram.ai, create one Block of
+-# type Task, put its id here (format: task-12345). Task is Adsgram's only
+-# inline unit — they ship no banner format. BOTH this and ADGRAM_ENABLED=true
+-# below are required; unset/empty = ads disabled and the SDK never loads. Set
+-# both in the Telegram deployment only: the card's Telegram check is the SDK
+-# script itself, which also loads in a plain browser, so an enabled web
+-# deployment would render the card there too.
+-VITE_ADSGRAM_TASK_BLOCK_ID=
++# Ads (Telegram Mini App only): the Anonymous Ads (A-ADS) banner on Matchday
++# and Match detail. Sign up at https://a-ads.com, create an ad unit, and paste
++# its unit id here (the number in the iframe data-aa attribute). A-ADS serves
++# a banner iframe, so no block id format is required — just leave empty to keep
++# ads disabled. Both this (via the snippet in src/components/AdBanner.tsx) and
++# ADS_ENABLED=true below are required for any ad to show. Set both in the
++# Telegram deployment only: the banner is gated on isTelegram() so it never
++# renders in a plain browser build.
++# VITE_ADS_UNIT_ID=
+ 
+ # Ads master switch. Must be exactly "true" for any ad to render; anything else
+-# (unset, "false", "1", "yes") renders none — the Task card returns null before
+-# it ever touches the SDK. Both names work: this one is read through
+-# vite.config's define, VITE_ADGRAM_ENABLED is Vite's own client-visible prefix.
++# (unset, "false", "1", "yes") renders none — the banner returns null before
++# it ever touches the A-ADS snippet. Both names work: this one is read through
++# vite.config's define, VITE_ADS_ENABLED is Vite's own client-visible prefix.
+ # Baked in at BUILD time — flipping it needs a rebuild. See src/lib/ads.ts.
+-ADGRAM_ENABLED=false
++ADS_ENABLED=false
+diff --git a/src/components/AdBanner.tsx b/src/components/AdBanner.tsx
+new file mode 100644
+index 0000000..5526707
+--- /dev/null
++++ b/src/components/AdBanner.tsx
+@@ -0,0 +1,60 @@
++/**
++ * Anonymous Ads (A-ADS) banner.
++ *
++ * Renders the A-ADS iframe snippet when ADS_ENABLED is "true". Because the
++ * snippet contains an <iframe> with custom attributes, it is injected via
++ * innerHTML into a ref so React doesn't complain about the unknown element.
++ *
++ * The ad container collapses away when nothing fills it, so we never ship an
++ * empty box to the user.
++ */
++import { useEffect, useRef, useState } from "react";
++import { adsAvailable } from "../lib/ads";
++
++/**
++ * A-ADS snippet (unit 2458182). z-index lowered from the provider default of
++ * 99998 to 1 so the ad never covers the app's bottom navigation or modals.
++ */
++const AADS_SNIPPET = `<!-- BEGIN AADS AD UNIT 2458182 -->
++<div id="frame" style="width: 100%;margin: auto;position: relative; z-index: 1;">
++  <iframe data-aa='2458182' src='//acceptable.a-ads.com/2458182/?size=Adaptive'
++    style='border:0; padding:0; width:70%; height:auto; overflow:hidden;display: block;margin: auto'></iframe>
++</div>
++<!-- END AADS AD UNIT 2458182 -->`;
++
++export function AdBanner() {
++  const ref = useRef<HTMLDivElement | null>(null);
++  const [filled, setFilled] = useState(false);
++
++  useEffect(() => {
++    if (!adsAvailable() || !ref.current) return;
++    ref.current.innerHTML = AADS_SNIPPET;
++    const frame = ref.current.querySelector<HTMLIFrameElement>("#frame iframe");
++    if (frame) {
++      const check = () => {
++        try {
++          // If the iframe is cross-origin we cannot read its content, but a
++          // successful load event plus a non-zero offsetHeight is a decent
++          // fill signal for same-origin or when the provider allows it.
++          if (frame.offsetHeight > 0) setFilled(true);
++        } catch {
++          // Cross-origin — assume filled if the load event fired.
++          setFilled(true);
++        }
++      };
++      frame.addEventListener("load", check);
++      // Also check immediately in case it already loaded.
++      check();
++      return () => frame.removeEventListener("load", check);
++    }
++  }, []);
++
++  if (!adsAvailable() || !filled) return null;
++
++  return (
++    <div className="mx-auto max-w-[468px] mt-6">
++      <p className="mb-2 text-center text-[10px] font-bold uppercase tracking-widest text-ink-3">Sponsored</p>
++      <div ref={ref} className="rounded-card border border-line bg-surface p-2 text-center" />
++    </div>
++  );
++}
+diff --git a/src/components/TaskAdCard.tsx b/src/components/TaskAdCard.tsx
+deleted file mode 100644
+index b6f6381..0000000
+--- a/src/components/TaskAdCard.tsx
++++ /dev/null
+@@ -1,130 +0,0 @@
+-/**
+- * The inline sponsored card — Adsgram's Task format in our own chrome.
+- *
+- * Renders <adsgram-task> (registered by the SDK in src/lib/ads.ts) only when
+- * the placement can actually serve: inside Telegram with a block id. Adsgram
+- * fires custom events on the element, and the card collapses itself on
+- * "nothing to show" or a load error — an empty sponsored slot is worse than
+- * none. On a completed task the user gets the success haptic; the component's
+- * own claim/done slots handle the visual state.
+- *
+- * Failure policy, because an ad is never allowed to nag: the moment the
+- * placement reports a problem — its own error events, or an error escaping the
+- * SDK script/unhandled rejections — the card unmounts (returns null) AND
+- * remembers for the rest of the session, so a remount (tab switch, route
+- * change, poll) cannot retry the same rejected block and re-fire the same
+- * failure on top of the user's screen.
+- */
+-import { useCallback, useEffect, useRef, useState } from "react";
+-import { loadAdsgramScript, taskAdsAvailable, taskBlockId } from "../lib/ads";
+-import { notifyHaptic } from "../lib/telegram";
+-import { useI18n } from "../i18n/context";
+-
+-/**
+- * Session-lifetime "this placement is broken" flag. Module scope on purpose:
+- * navigation remounts the component, and retrying a block Adsgram has already
+- * rejected is how one bad fill turns into a stream of error popups. A reload
+- * clears it, so a fixed block id comes back on its own.
+- */
+-let placementFailed = false;
+-
+-/**
+- * The SDK's own failure wording (it throws things like "Block is not active"
+- * out of its script rather than only emitting an element event). Kept loose —
+- * the exact string is not part of any contract we control.
+- */
+-const ADSGRAM_ERROR_RE = /adsgram|block is not active|block is inactive|block not found/i;
+-
+-export function TaskAdCard() {
+-  const { t } = useI18n();
+-  const [ready, setReady] = useState(false);
+-  const [hidden, setHidden] = useState(placementFailed);
+-  const ref = useRef<HTMLElement | null>(null);
+-
+-  /** Give up for the rest of the session: nothing may render this slot again. */
+-  const giveUp = useCallback(() => {
+-    placementFailed = true;
+-    setReady(false);
+-    setHidden(true);
+-  }, []);
+-
+-  useEffect(() => {
+-    if (placementFailed || !taskAdsAvailable()) return;
+-    let cancelled = false;
+-    loadAdsgramScript()
+-      .then(() => {
+-        if (!cancelled) setReady(true);
+-      })
+-      .catch(() => {
+-        // No SDK, no card. This mount stays silent but a later one may retry
+-        // (loadAdsgramScript resets its promise), so the flag is not set here.
+-        if (!cancelled) setHidden(true);
+-      });
+-    return () => {
+-      cancelled = true;
+-    };
+-  }, []);
+-
+-  // Custom events live on the element itself (docs.adsgram.ai/publisher/task-integration-example).
+-  // `onError` is a hard failure (the retained-flag path); the other two mean
+-  // "nothing to show right now", which only collapses this mount so a later one
+-  // can still fill.
+-  useEffect(() => {
+-    const el = ref.current;
+-    if (!el) return;
+-    const hide = () => setHidden(true);
+-    const reward = () => notifyHaptic("success");
+-    el.addEventListener("reward", reward);
+-    el.addEventListener("onError", giveUp);
+-    el.addEventListener("onBannerNotFound", hide);
+-    el.addEventListener("onTooLongSession", hide);
+-    return () => {
+-      el.removeEventListener("reward", reward);
+-      el.removeEventListener("onError", giveUp);
+-      el.removeEventListener("onBannerNotFound", hide);
+-      el.removeEventListener("onTooLongSession", hide);
+-    };
+-  }, [ready, giveUp]);
+-
+-  // The SDK also throws out of its own script — an uncaught error, or a rejected
+-  // promise — and that never reaches the element listeners above. Catch those at
+-  // the window and collapse the slot; otherwise the card stays mounted with a
+-  // toast the user cannot dismiss.
+-  useEffect(() => {
+-    if (!taskAdsAvailable()) return;
+-    const fromAdsgram = (event: ErrorEvent) =>
+-      ADSGRAM_ERROR_RE.test(`${event.message ?? ""} ${event.filename ?? ""}`);
+-    const onError = (event: ErrorEvent) => {
+-      if (fromAdsgram(event)) giveUp();
+-    };
+-    const onRejection = (event: PromiseRejectionEvent) => {
+-      const reason = event.reason as { message?: string } | string | undefined;
+-      const message = typeof reason === "string" ? reason : (reason?.message ?? "");
+-      if (ADSGRAM_ERROR_RE.test(message)) giveUp();
+-    };
+-    window.addEventListener("error", onError);
+-    window.addEventListener("unhandledrejection", onRejection);
+-    return () => {
+-      window.removeEventListener("error", onError);
+-      window.removeEventListener("unhandledrejection", onRejection);
+-    };
+-  }, [giveUp]);
+-
+-  if (!taskAdsAvailable() || hidden) return null;
+-
+-  return (
+-    <div className="mt-6">
+-      <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-widest text-ink-3">
+-        {t("ads.sponsored")}
+-      </p>
+-      {ready ? (
+-        <adsgram-task
+-          ref={ref}
+-          data-block-id={taskBlockId}
+-          data-debug={import.meta.env.DEV ? "true" : undefined}
+-          className="block w-full"
+-        />
+-      ) : null}
+-    </div>
+-  );
+-}
+diff --git a/src/lib/ads.ts b/src/lib/ads.ts
+index ac17c0e..40fe573 100644
+--- a/src/lib/ads.ts
++++ b/src/lib/ads.ts
+@@ -1,76 +1,41 @@
+ /**
+- * Ads — the Adsgram Task card, Telegram Mini App only.
++ * Ads — Anonymous Ads (A-ADS) banner.
+  *
+- * The Mini App monetization reality: Google AdSense needs native WebView
+- * registration (impossible inside a Telegram webview) and a payout country
+- * Google supports, so the Telegram surface runs Adsgram (docs.adsgram.ai)
+- * instead. Their Task format is the only INLINE unit — a native "complete a
+- * task, earn a reward" card rendered by the <adsgram-task> web component; their
+- * rewarded/interstitial formats are fullscreen and deliberately unused (the
+- * product chose passive placements only), and they ship no banner format at all.
++ * A-ADS is a lightweight, privacy-friendly ad network that works inside
++ * Telegram Mini Apps via a simple iframe snippet. Unlike Adsgram's Task
++ * format (their only inline unit, now retired), A-ADS provides a banner-style
++ * placement that fits naturally between feed sections.
+  *
+- * Everything here no-ops unless ALL THREE hold:
+- *  - ADGRAM_ENABLED is exactly "true" (the master switch; both spellings below),
+- *  - VITE_ADSGRAM_TASK_BLOCK_ID is set (a `task-…` id from partner.adsgram.ai),
+- *  - the app runs inside Telegram (only there does the SDK fill).
+- * The web build and any unset deployment never load the SDK — zero bytes, zero
+- * requests, zero visual footprint.
++ * Everything here no-ops unless ALL of these hold:
++ *  - ADS_ENABLED is exactly "true" (the master switch; both spellings below),
++ *  - the app runs inside Telegram (A-ADS fill is optimized for Telegram
++ *    webviews; plain browsers also work but we gate on Telegram to match the
++ *    original Adsgram policy of Telegram-only monetization).
+  *
+- * Adsgram allows exactly ONE Task block per project, so every placement shares
+- * one block id and each screen renders at most one card.
++ * The web build and any unset deployment never load the ad snippet — zero
++ * bytes, zero requests, zero visual footprint.
+  */
+ import { isTelegram } from "./telegram";
+ 
+-/** The SDK that registers the <adsgram-task> custom element. */
+-export const TASK_SCRIPT_SRC = "https://sad.adsgram.ai/js/sad.min.js";
+-
+ /**
+  * The ads master switch, read at BUILD time (Vite inlines both of these, so
+  * flipping the value needs a rebuild — it is not a runtime toggle).
+  *
+  * Two spellings, one rule — the value must be exactly `true`:
+- *  - `ADGRAM_ENABLED` (the name the deploy sets; vite.config maps it into
+- *    `__ADGRAM_ENABLED__` because Vite only inlines `VITE_`-prefixed vars on
++ *  - `ADS_ENABLED` (the name the deploy sets; vite.config maps it into
++ *    `__ADS_ENABLED__` because Vite only inlines `VITE_`-prefixed vars on
+  *    its own),
+- *  - `VITE_ADGRAM_ENABLED` (Vite's native client-visible prefix).
++ *  - `VITE_ADS_ENABLED` (Vite's native client-visible prefix).
+  *
+- * Anything else — unset, `""`, `"false"`, `"1"`, `"yes"` — leaves the Task card
++ * Anything else — unset, "", "false", "1", "yes" — leaves the banner
+  * rendering null, so ads stay off during testing without touching the code.
+  */
+ export const adsEnabled = (() => {
+-  const raw = `${import.meta.env.VITE_ADGRAM_ENABLED ?? ""}`.trim() || `${__ADGRAM_ENABLED__ ?? ""}`.trim();
++  const raw = `${import.meta.env.VITE_ADS_ENABLED ?? ""}`.trim() || `${__ADS_ENABLED__ ?? ""}`.trim();
+   return raw.toLowerCase() === "true";
+ })();
+ 
+-/** `task-…` block id from partner.adsgram.ai; empty = ads fully disabled. */
+-export const taskBlockId = (import.meta.env.VITE_ADSGRAM_TASK_BLOCK_ID ?? "").trim();
+-
+-/** True when the inline task card may render at all. */
+-export function taskAdsAvailable(): boolean {
+-  return adsEnabled && Boolean(taskBlockId) && isTelegram();
+-}
+-
+-let scriptPromise: Promise<void> | null = null;
+-
+-/**
+- * Load the Adsgram SDK once per page load — it registers the <adsgram-task>
+- * custom element the card component then renders. A failed load resets the
+- * promise so a later mount can retry (transient network, webview quirks).
+- */
+-export function loadAdsgramScript(): Promise<void> {
+-  if (scriptPromise) return scriptPromise;
+-  scriptPromise = new Promise((resolve, reject) => {
+-    if (typeof window === "undefined") return reject(new Error("no window"));
+-    if (window.customElements?.get("adsgram-task")) return resolve();
+-    const script = document.createElement("script");
+-    script.src = TASK_SCRIPT_SRC;
+-    script.async = true;
+-    script.onload = () => resolve();
+-    script.onerror = () => {
+-      scriptPromise = null; // allow a retry on the next mount
+-      reject(new Error("adsgram SDK failed to load"));
+-    };
+-    document.head.appendChild(script);
+-  });
+-  return scriptPromise;
++/** True when the A-ADS banner may render at all. */
++export function adsAvailable(): boolean {
++  return adsEnabled && isTelegram();
+ }
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index dc9012f..947d611 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -37,7 +37,7 @@ import { cx } from "../lib/cx";
+ import { api, serverErrorKey, type ApiPlayerRating, type ApiTimelineEvent } from "../lib/api";
+ import { TEAM_FALLBACK } from "../lib/colors";
+ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+-import { TaskAdCard } from "../components/TaskAdCard";
++import { AdBanner } from "../components/AdBanner";
+ import { useAuth } from "../hooks/authContext";
+ import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+@@ -300,11 +300,10 @@ export default function MatchDetail() {
+         </>
+       ) : null}
+ 
+-      {/* Inline sponsored card (Adsgram Task), last block on the page so it
+-          never sits between the user and the match. Telegram-only, hidden when
+-          nothing fills, and off unless ADGRAM_ENABLED is "true" and a Task
+-          block id is configured; see src/lib/ads.ts for the whole story. */}
+-      <TaskAdCard />
++      {/* Inline sponsored banner (Anonymous Ads / A-ADS), last block on the
++          page so it never sits between the user and the match. Renders nothing
++          unless ADS_ENABLED is "true"; see src/lib/ads.ts for the whole story. */}
++      <AdBanner />
+ 
+       {/* The Shot Predictor lives in the Predict tab now (concept v2). */}
+     </>
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 3e24394..b467efe 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -33,7 +33,7 @@ import {
+   RefreshIcon,
+   StarFilledIcon,
+ } from "../components/icons";
+-import { TaskAdCard } from "../components/TaskAdCard";
++import { AdBanner } from "../components/AdBanner";
+ import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
+ import { usePullToRefresh } from "../hooks/usePullToRefresh";
+ import { PullIndicator } from "../components/PullToRefresh";
+@@ -213,13 +213,12 @@ export default function Matches() {
+     </CollapsibleSection>
+   );
+ 
+-  /* Inline sponsored card (Adsgram Task), below the Upcoming feed and above
+-     Previous results: after today's games have had their say, so it can never
+-     push the fixtures out of view. Renders nothing unless ADGRAM_ENABLED is
+-     "true" and a Task block id is configured — Telegram only, and hidden when
+-     nothing fills; see src/lib/ads.ts. One placement per screen, so the same
+-     node is reused by the two feed states that show it. */
+-  const adSlot = <TaskAdCard />;
++  /* Inline sponsored banner (Anonymous Ads / A-ADS), below the Upcoming feed
++     and above Previous results: after today's games have had their say, so it
++     can never push the fixtures out of view. Renders nothing unless
++     ADS_ENABLED is "true"; see src/lib/ads.ts. One placement per screen, so
++     the same node is reused by the two feed states that show it. */
++  const adSlot = <AdBanner />;
+ 
+   return (
+     <>
+diff --git a/src/vite-env.d.ts b/src/vite-env.d.ts
+index 4096093..9a413a9 100644
+--- a/src/vite-env.d.ts
++++ b/src/vite-env.d.ts
+@@ -1,22 +1,20 @@
+ /// <reference types="vite/client" />
+-import type * as React from "react";
+ 
+-/** Adsgram's inline Task ad unit (docs.adsgram.ai), registered by their SDK. */
++export {};
++
+ declare global {
+   /** Injected by vite.config `define` — the package.json version at build time. */
+   const __APP_VERSION__: string;
+   /**
+-   * Injected by vite.config `define` from the plain `ADGRAM_ENABLED` environment
++   * Injected by vite.config `define` from the plain `ADS_ENABLED` environment
+    * variable — the ads master switch under the name the deploy sets.
+    * Inlined at build time; see src/lib/ads.ts.
+    */
+-  const __ADGRAM_ENABLED__: string;
++  const __ADS_ENABLED__: string;
+ 
+   interface ImportMetaEnv {
+-    /** The Vite-native spelling of the same switch (`VITE_ADGRAM_ENABLED`). */
+-    readonly VITE_ADGRAM_ENABLED?: string;
+-    /** Adsgram Task block id (see src/lib/ads.ts). */
+-    readonly VITE_ADSGRAM_TASK_BLOCK_ID?: string;
++    /** The Vite-native spelling of the same switch (`VITE_ADS_ENABLED`). */
++    readonly VITE_ADS_ENABLED?: string;
+   }
+ 
+   interface Window {
+@@ -28,9 +26,4 @@ declare global {
+      */
+     __tgSdkSettled?: boolean;
+   }
+-  namespace JSX {
+-    interface IntrinsicElements {
+-      "adsgram-task": React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement>;
+-    }
+-  }
+ }
+diff --git a/vite.config.ts b/vite.config.ts
+index 4897449..fc7d339 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -16,11 +16,11 @@ export default defineConfig(({ mode }) => {
+     define: {
+       __APP_VERSION__: JSON.stringify(pkg.version),
+       // The ads kill switch, under the exact name the deploy sets
+-      // (`ADGRAM_ENABLED`). Vite only inlines `VITE_`-prefixed vars on its own,
+-      // so this is what makes the un-prefixed name work; `VITE_ADGRAM_ENABLED`
++      // (`ADS_ENABLED`). Vite only inlines `VITE_`-prefixed vars on its own,
++      // so this is what makes the un-prefixed name work; `VITE_ADS_ENABLED`
+       // is read natively as the alternative. Inlined at BUILD time — flipping
+       // it needs a rebuild. See src/lib/ads.ts.
+-      __ADGRAM_ENABLED__: JSON.stringify(env.ADGRAM_ENABLED ?? ""),
++      __ADS_ENABLED__: JSON.stringify(env.ADS_ENABLED ?? ""),
+     },
+     build: {
+       // The app runs in Telegram's webview on low-end Android, which can lag the
+-- 
+2.54.0.windows.1
+

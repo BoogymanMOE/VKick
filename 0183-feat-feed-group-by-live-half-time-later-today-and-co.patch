@@ -1,0 +1,466 @@
+From 971707bf6bbbbc8e4e460577892278225e49c9ff Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 20 Oct 2026 23:30:59 +0330
+Subject: [PATCH 183/230] feat(feed): group by live, half-time, later today,
+ and collapsed finished
+
+---
+ src/i18n/strings.ts             |  10 +++
+ src/lib/useLocalState.ts        |  25 +++++++-
+ src/pages/Matches.tsx           | 109 +++++++++++++++++++++++++++++---
+ tests/run.ts                    |   8 +++
+ tests/useLocalState.harness.tsx |  81 ++++++++++++++++++++++++
+ tests/useLocalState.test.ts     | 104 ++++++++++++++++++++++++++++++
+ 6 files changed, 324 insertions(+), 13 deletions(-)
+ create mode 100644 tests/useLocalState.harness.tsx
+ create mode 100644 tests/useLocalState.test.ts
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 3782c3c..45ad44f 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -70,6 +70,11 @@ export const strings = {
+     "matches.pickBanner": "Pick your clubs to see their matches first",
+     "matches.pickBannerCta": "Choose",
+     "matches.pickBannerDismiss": "Dismiss",
++    "matches.groupLive": "Live now",
++    "matches.groupHalftime": "Half-time",
++    "matches.groupLater": "Later today",
++    "matches.groupUpcoming": "Upcoming",
++    "matches.groupFinished": "Finished",
+     "leagues.title": "Favorite leagues",
+     "leagues.subtitle": "Follow a league or cup — its matches lead the feed and its alerts reach you.",
+     "leagues.notifyHint":
+@@ -705,6 +710,11 @@ export const strings = {
+     "matches.pickBanner": "باشگاه‌هایت را انتخاب کن تا بازی‌هایشان اول بیاید",
+     "matches.pickBannerCta": "انتخاب",
+     "matches.pickBannerDismiss": "بستن",
++    "matches.groupLive": "زنده",
++    "matches.groupHalftime": "نیمه‌وقت",
++    "matches.groupLater": "بعداً امروز",
++    "matches.groupUpcoming": "بازی‌های پیش‌رو",
++    "matches.groupFinished": "تمام‌شده",
+     "leagues.title": "لیگ‌های موردعلاقه",
+     "leagues.subtitle": "یک لیگ یا جام را دنبال کن — بازی‌هایش اول فید می‌آید و هشدارهایش به تو می‌رسد.",
+     "leagues.notifyHint": "گل، ترکیب و یادآور شروع بازی برای هر بازی در مسابقاتی که دنبال می‌کنی.",
+diff --git a/src/lib/useLocalState.ts b/src/lib/useLocalState.ts
+index 7e9f464..2c49860 100644
+--- a/src/lib/useLocalState.ts
++++ b/src/lib/useLocalState.ts
+@@ -1,12 +1,22 @@
+-import { useCallback, useEffect, useRef, useState } from "react";
++import { useCallback, useEffect, useRef, useState, type SetStateAction } from "react";
+ 
+ /**
+  * State that survives a reload. Stands in for the API until the backend exists —
+  * ratings, pins, comments and predictions all persist locally so the UI behaves
+  * like a real app on a dev machine.
++ *
++ * Only real choices are persisted: the value is read once at mount (stored
++ * beats `initial`) and the write effect is armed by the setters. That skip
++ * matters because the mount effect used to run immediately and would persist a
++ * COMPUTED DEFAULT the user never chose (a `defaultOpen` derived from data) —
++ * the next mount then pinned that default as if it were a saved choice, even
++ * after the underlying data changed. The armed flag also survives React
++ * StrictMode's dev double-invoke of mount effects: neither run persists
++ * anything until an actual setter fires.
+  */
+ export function useLocalState<T>(key: string, initial: T) {
+   const initialRef = useRef(initial);
++  const dirtyRef = useRef(false);
+ 
+   const [value, setValue] = useState<T>(() => {
+     try {
+@@ -17,7 +27,13 @@ export function useLocalState<T>(key: string, initial: T) {
+     }
+   });
+ 
++  const write = useCallback((action: SetStateAction<T>) => {
++    dirtyRef.current = true;
++    setValue(action);
++  }, []);
++
+   useEffect(() => {
++    if (!dirtyRef.current) return;
+     try {
+       localStorage.setItem(key, JSON.stringify(value));
+     } catch {
+@@ -25,7 +41,10 @@ export function useLocalState<T>(key: string, initial: T) {
+     }
+   }, [key, value]);
+ 
+-  const reset = useCallback(() => setValue(initialRef.current), []);
++  const reset = useCallback(() => {
++    dirtyRef.current = true;
++    setValue(initialRef.current);
++  }, []);
+ 
+-  return [value, setValue, reset] as const;
++  return [value, write, reset] as const;
+ }
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 9c89a14..72cf657 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -5,7 +5,7 @@ import { ConfettiBurst } from "../components/Confetti";
+ import { MatchCard } from "../components/MatchCard";
+ import { TopBar } from "../components/TopBar";
+ import { useToast } from "../components/toastContext";
+-import { EmptyState, ErrorState } from "../components/ui";
++import { Chip, CollapsibleSection, EmptyState, ErrorState, Num } from "../components/ui";
+ import { useLocalState } from "../lib/useLocalState";
+ import {
+   BallIcon,
+@@ -45,6 +45,25 @@ const LEAGUE_CHIP_OFF = "border-line text-ink-3";
+ 
+ const pad = (n: number) => String(n).padStart(2, "0");
+ 
++function GroupHeader({ id, label, count, tone }: { id: string; label: string; count: number; tone: "live" | "gold" | "muted" }) {
++  return (
++    <div className="mb-2 mt-5 flex items-center gap-2 first:mt-0">
++      <h2
++        id={id}
++        className={cx(
++          "text-[13px] font-extrabold",
++          tone === "live" ? "text-[color:var(--live)]" : tone === "gold" ? "text-gold" : "text-ink-2",
++        )}
++      >
++        {label}
++      </h2>
++      <Chip tone={tone}>
++        <Num>{count}</Num>
++      </Chip>
++    </div>
++  );
++}
++
+ /**
+  * Local calendar-day key. NEVER use toISOString() for this: it is UTC, so east
+  * of UTC (this app's users are UTC+3:30/+4) local midnight is still the previous
+@@ -129,6 +148,32 @@ export default function Matches() {
+     [dayMatches, myTeamsMatches],
+   );
+ 
++  // The rest of the day, grouped by state: a busy matchday is otherwise one
++  // column of twelve half-time borders. Live first, then the break, then what
++  // is still ahead, then the record. Parts of the day before group boundaries
++  // never repeat: `Match` folds a real `halftime` server status into `live`, so
++  // the break flag carves the half-time group out of the live column.
++  const groups = useMemo(() => {
++    const g = { live: [] as Match[], halftime: [] as Match[], scheduled: [] as Match[], finished: [] as Match[] };
++    for (const m of otherMatches) {
++      if (m.status === "finished") g.finished.push(m);
++      else if (m.isHalftime) g.halftime.push(m);
++      else if (m.status === "live") g.live.push(m);
++      else g.scheduled.push(m);
++    }
++    return g;
++  }, [otherMatches]);
++  const isToday = selectedKey === dayKey(startOfDay(new Date(now)));
++  // Finished collapsed by default whenever anything sits above it (my teams
++  // included); expanded by default when it is the day's only content. A saved
++  // per-user choice always beats this computed default — useLocalState reads
++  // the stored value before it ever looks at `defaultOpen`.
++  const onlyFinishedHasContent =
++    myTeamsMatches.length === 0 &&
++    groups.live.length === 0 &&
++    groups.halftime.length === 0 &&
++    groups.scheduled.length === 0;
++
+   // First later day that has matches, for the empty state's shortcut.
+   const nextMatchDay = useMemo(() => {
+     const later = matches
+@@ -417,21 +462,65 @@ export default function Matches() {
+               <InlineAd />
+             )}
+ 
+-            {/* Everything else on the day. */}
+-            {otherMatches.length > 0 && (
+-              <section className={favCount === 0 ? "mt-2" : "mt-4"}>
+-                {favCount > 0 && (
+-                  <h2 className="mb-2 text-[13px] font-bold text-ink-2">
+-                    {t("matches.otherMatches")}
+-                  </h2>
+-                )}
++            {/* Everything else on the day, grouped by state. */}
++            {groups.live.length > 0 && (
++              <section aria-labelledby="feed-group-live">
++                <GroupHeader id="feed-group-live" label={t("matches.groupLive")} count={groups.live.length} tone="live" />
++                <ul className="space-y-2">
++                  {groups.live.map((match, index) => (
++                    <MatchCard key={match.id} match={match} index={index} />
++                  ))}
++                </ul>
++              </section>
++            )}
++
++            {groups.halftime.length > 0 && (
++              <section aria-labelledby="feed-group-halftime">
++                <GroupHeader
++                  id="feed-group-halftime"
++                  label={t("matches.groupHalftime")}
++                  count={groups.halftime.length}
++                  tone="gold"
++                />
+                 <ul className="space-y-2">
+-                  {otherMatches.map((match, index) => (
++                  {groups.halftime.map((match, index) => (
+                     <MatchCard key={match.id} match={match} index={index} />
+                   ))}
+                 </ul>
+               </section>
+             )}
++
++            {groups.scheduled.length > 0 && (
++              <section aria-labelledby="feed-group-scheduled">
++                <GroupHeader
++                  id="feed-group-scheduled"
++                  label={t(isToday ? "matches.groupLater" : "matches.groupUpcoming")}
++                  count={groups.scheduled.length}
++                  tone="muted"
++                />
++                <ul className="space-y-2">
++                  {groups.scheduled.map((match, index) => (
++                    <MatchCard key={match.id} match={match} index={index} />
++                  ))}
++                </ul>
++              </section>
++            )}
++
++            {groups.finished.length > 0 && (
++              <CollapsibleSection
++                id="feed-finished"
++                level={2}
++                title={t("matches.groupFinished")}
++                count={groups.finished.length}
++                defaultOpen={onlyFinishedHasContent}
++              >
++                <ul className="space-y-2">
++                  {groups.finished.map((match, index) => (
++                    <MatchCard key={match.id} match={match} index={index} />
++                  ))}
++                </ul>
++              </CollapsibleSection>
++            )}
+           </div>
+         ) : null}
+ 
+diff --git a/tests/run.ts b/tests/run.ts
+index 507324d..468f10a 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -103,6 +103,14 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["sentinel", runSentinelTests],
+   ["faStrings", runFaStringsTests],
+   ["matchReconcile", runMatchReconcileTests],
++  // Browser group: needs playwright (skips itself cleanly without it).
++  [
++    "useLocalState",
++    async () => {
++      const mod = (await import("./useLocalState.test.js")) as { runUseLocalStateTests(): Promise<void> };
++      await mod.runUseLocalStateTests();
++    },
++  ],
+   // Owns getDb() too (router under test, module-scope handle): stays last.
+   ["teamStats", runTeamStatsTests],
+ ];
+diff --git a/tests/useLocalState.harness.tsx b/tests/useLocalState.harness.tsx
+new file mode 100644
+index 0000000..56fee7e
+--- /dev/null
++++ b/tests/useLocalState.harness.tsx
+@@ -0,0 +1,81 @@
++/**
++ * Browser-side harness for tests/useLocalState.test.ts: mounts the real
++ * `useLocalState` hook through a real React root (StrictMode off here — the
++ * app's own wrapper adds it; the dirty-flag write rule must hold either way)
++ * and runs the three contract cases:
++ *
++ *   1. defaultUntouched — a key never written stays ABSENT after mount
++ *   2. togglePersist    — a setter change is persisted
++ *   3. storedWins       — an existing stored value beats the default AND the
++ *                         mount effect never rewrites it
++ */
++import { useEffect } from "react";
++import { createElement } from "react";
++import { createRoot } from "react-dom/client";
++import { useLocalState } from "../src/lib/useLocalState";
++
++function Probe({
++  keyId,
++  initial,
++  onValue,
++  runAfterMount,
++  runDelay,
++}: {
++  keyId: string;
++  initial: boolean;
++  onValue: (value: boolean) => void;
++  runAfterMount: boolean;
++  runDelay: number;
++}) {
++  const [value, setValue] = useLocalState<boolean>(keyId, initial);
++  useEffect(() => {
++    onValue(value);
++  }, [value, onValue]);
++  useEffect(() => {
++    if (!runAfterMount) return;
++    const id = setTimeout(() => setValue(true), runDelay);
++    return () => clearTimeout(id);
++    // runAfterMount fires once per mount by design ("targets a key once").
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++  return createElement(
++    "div",
++    { "data-testid": `probe-${keyId}`, "data-value": String(value) },
++    String(value),
++  );
++}
++
++function mount(keyId: string, initial: boolean, onValue: (value: boolean) => void, runAfterMount = false, runDelay = 30) {
++  const host = document.createElement("div");
++  document.body.appendChild(host);
++  createRoot(host).render(createElement(Probe, { keyId, initial, onValue, runAfterMount, runDelay }));
++  return host;
++}
++
++const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
++
++export async function defaultUntouched(key: string) {
++  localStorage.removeItem(key);
++  const values: boolean[] = [];
++  mount(key, false, (value) => values.push(value));
++  await tick(120);
++  return { stored: localStorage.getItem(key), values };
++}
++
++export async function togglePersist(key: string) {
++  localStorage.removeItem(key);
++  const values: boolean[] = [];
++  mount(key, false, (value) => values.push(value), true, 30);
++  await tick(250);
++  return { stored: localStorage.getItem(key), values };
++}
++
++export async function storedWins(key: string, initial: boolean) {
++  localStorage.removeItem(key);
++  localStorage.setItem(key, JSON.stringify(true));
++  const values: boolean[] = [];
++  mount(key, initial, (value) => values.push(value));
++  await tick(150);
++  const stored = localStorage.getItem(key);
++  return { stored, values };
++}
+diff --git a/tests/useLocalState.test.ts b/tests/useLocalState.test.ts
+new file mode 100644
+index 0000000..b9ceb7c
+--- /dev/null
++++ b/tests/useLocalState.test.ts
+@@ -0,0 +1,104 @@
++/**
++ * useLocalState contract (registered in tests/run.ts as its own group):
++ *
++ *   1. a key the user never touched stays ABSENT from storage after mount —
++ *      the mounted hook must not persist its computed default (this locks the
++ *      fat-finger bug from the mount-cause effect that used to write `initial`
++ *      on first run and would later pin a derived `defaultOpen` as if a user
++ *      had chosen it);
++ *   2. a real setter change IS persisted;
++ *   3. a stored value wins over the passed default, and is not rewritten.
++ *
++ * The hook is exercised through a real React root in a real browser (Vite dev
++ * server started in-process; Playwright page), like tests/matchCardCenter
++ * before it. Needs the browser; every other npm test group stays pure Node.
++ */
++import assert from "node:assert/strict";
++import { fileURLToPath } from "node:url";
++import type { ChromiumBrowser } from "playwright";
++
++interface Case1 {
++  stored: string | null;
++  values: boolean[];
++}
++interface Case2 {
++  stored: string | null;
++  values: boolean[];
++}
++interface Case3 {
++  stored: string | null;
++  values: boolean[];
++}
++
++const HARNESS_URL = "/@fs/" + fileURLToPath(new URL("./useLocalState.harness.tsx", import.meta.url)).replace(/\\/g, "/");
++
++export async function runUseLocalStateTests() {
++  let chromium: (typeof import("playwright"))["chromium"] | null = null;
++  try {
++    ({ chromium } = await import("playwright"));
++  } catch {
++    console.log("~ useLocalState SKIPPED: playwright not installed");
++    return;
++  }
++
++  const { createServer } = await import("vite");
++  const vite = await createServer({
++    configFile: "vite.config.ts",
++    root: fileURLToPath(new URL("..", import.meta.url)),
++    logLevel: "error",
++    server: { port: 0, strictPort: false },
++  });
++  await vite.listen();
++  const base = vite.resolvedUrls?.local?.[0] ?? vite.resolvedUrls?.network?.[0];
++  assert.ok(base, "vite dev server did not produce a base url");
++  const appUrl = base + "?devUser=9005070000#/profile";
++
++  const launchOptions: Record<string, unknown> = { headless: true, args: ["--no-sandbox"] };
++  let browser: ChromiumBrowser;
++  if (process.env.SMOKE_CHANNEL) {
++    browser = await chromium.launch({ ...launchOptions, channel: process.env.SMOKE_CHANNEL });
++  } else {
++    try {
++      browser = await chromium.launch(launchOptions);
++    } catch {
++      // Bundled browser not downloaded: fall back to the system Chrome channel.
++      browser = await chromium.launch({ ...launchOptions, channel: "chrome" });
++    }
++  }
++  try {
++    const page = await browser.newPage();
++    await page.goto(appUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
++    await page.waitForSelector("body", { timeout: 15_000 });
++    // The dev server eagerly loads app modules on first hit; wait for the vite
++    // client + module graph to be warm so the later /@fs import is live.
++    await page.waitForTimeout(2500);
++
++    const [untouched, toggled, stored] = (await page.evaluate(async (harnessUrl) => {
++      const h = (await import(harnessUrl)) as {
++        defaultUntouched(k: string): Promise<Case1>;
++        togglePersist(k: string): Promise<Case2>;
++        storedWins(k: string, initial: boolean): Promise<Case3>;
++      };
++      const stamp = Date.now();
++      const untouched = await h.defaultUntouched(`t7ls.untouched.${stamp}`);
++      const toggled = await h.togglePersist(`t7ls.toggle.${stamp}`);
++      const stored = await h.storedWins(`t7ls.stored.${stamp}`, false);
++      return [untouched, toggled, stored] as const;
++    }, HARNESS_URL)) as readonly [Case1, Case2, Case3];
++
++    assert.equal(untouched.stored, null, `case1 untouched key must stay absent, saw ${untouched.stored}`);
++    assert.equal(untouched.values.at(-1), false, "case1 value defaults to initial");
++    console.log("  ✓ useLocalState: untouched key stays absent after mount");
++
++    assert.equal(toggled.stored, "true", `case2 toggled key must persist, saw ${toggled.stored}`);
++    assert.equal(toggled.values.at(-1), true, "case2 final value is the toggled one");
++    console.log("  ✓ useLocalState: setter change persists");
++
++    assert.equal(stored.stored, "true", `case3 stored value must win, saw ${stored.stored}`);
++    assert.equal(stored.values.at(-1), true, "case3 hook reads the stored value, not the default");
++    console.log("  ✓ useLocalState: stored value wins over the default and is never rewritten");
++  } finally {
++    await browser.close();
++    await vite.close();
++  }
++}
+-- 
+2.54.0.windows.1
+

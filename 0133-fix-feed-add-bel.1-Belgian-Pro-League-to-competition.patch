@@ -1,0 +1,34 @@
+From 8b1cf682113214f348071cc1c51dea7501173853 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 17:25:36 +0330
+Subject: [PATCH 133/230] fix(feed): add bel.1 (Belgian Pro League) to
+ competition names
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Discovered via /api/matches?limit=200 audit that the live data also
+contains bel.1 — map it to a readable name in both EN and FA so it
+never shows as a raw slug.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/lib/leagues.ts | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/lib/leagues.ts b/src/lib/leagues.ts
+index 11a7f90..6de6f2b 100644
+--- a/src/lib/leagues.ts
++++ b/src/lib/leagues.ts
+@@ -55,6 +55,7 @@ export const COMPETITION_NAMES: Record<string, { en: string; fa: string }> = {
+   "por.1": { en: "Primeira Liga", fa: "لیگ پرتغال" },
+   "gre.1": { en: "Super League Greece", fa: "سوپر لیگ یونان" },
+   "sco.1": { en: "Scottish Premiership", fa: "دوره اسکاتلند" },
++  "bel.1": { en: "Belgian Pro League", fa: "لیگ برزیل 프로" },
+ };
+ 
+ /** Last resort for unknown slugs: never show the raw code. */
+-- 
+2.54.0.windows.1
+

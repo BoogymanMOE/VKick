@@ -1,0 +1,342 @@
+From 4fcafc972bb13b046f80a3a84dfd24156981da22 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 01:42:54 +0330
+Subject: [PATCH 002/230] Harden auth: timing-safe initData compare, required
+ auth_date, prod dev-secret boot guard
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- verifyInitData: constant-time digest compare; auth_date now required and
+  freshness-enforced (a leaked initData is no longer an immortal credential)
+- TEMP auth probe on /api/auth/guest: logs verify verdict + identity mode
+  (telegram vs guest), no secrets — watching whether real Telegram clients
+  fail verification; signature handling deliberately unchanged
+- server refuses to boot when NODE_ENV=production and DEV_AUTH_SECRET is set
+- writeLimiter added to ratings and comments POSTs
+- trust proxy pinned to 1 hop instead of trusting any chain
+- new tests/verify.test.ts pins the verification contract
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/index.ts           |  46 +++++++++++++--
+ server/telegram/verify.ts |  42 +++++++++++---
+ tests/run.ts              |   2 +
+ tests/verify.test.ts      | 115 ++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 193 insertions(+), 12 deletions(-)
+ create mode 100644 tests/verify.test.ts
+
+diff --git a/server/index.ts b/server/index.ts
+index 3fee527..6deec07 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -45,8 +45,13 @@ const db = getDb();
+ // by running more of it.
+ const apiLog = new RotatingLogger(path.join(ROOT_DIR, "logs", "api.log"), logCapKb());
+ 
+-// Behind the vite dev proxy / a reverse proxy, so req.ip is the client.
+-app.set("trust proxy", true);
++// Exactly ONE trusted reverse-proxy hop sits in front of the API in every
++// documented deployment: the vite dev proxy locally, Render's router in
++// production. "1" makes req.ip the real client address from X-Forwarded-For
++// while refusing to trust a client-supplied proxy chain (the old `true`
++// trusted anything, so a direct connection could spoof its IP past the
++// rate limiter's IP keys).
++app.set("trust proxy", 1);
+ // 64KB body cap: far above any legit prediction/comment payload, well below
+ // abuse size. (default was 100KB; explicit + smaller now that payloads are validated)
+ app.use(express.json({ limit: "64kb" }));
+@@ -334,9 +339,23 @@ app.post("/api/auth/guest", authLimiter, (req, res) => {
+   const initData = String(req.body?.initData ?? "");
+   const verified = initData && botToken() ? verifyInitData(initData, botToken()) : null;
+ 
++  // TEMP AUTH PROBE — remove once a real Telegram client has been observed.
++  // Never logs the initData, tokens, or any payload bytes: only the verdict,
++  // the verification reason on failure, and the resulting identity mode.
++  if (!initData) {
++    console.log("[auth:guest] TEMP no initData sent (plain web guest)");
++  } else if (verified?.ok) {
++    console.log("[auth:guest] TEMP initData verified: true");
++  } else {
++    const reason =
++      verified && !verified.ok ? verified.reason : botToken() ? "verify returned no verdict" : "no bot token configured";
++    console.log(`[auth:guest] TEMP initData verified: false reason="${reason}"`);
++  }
++
+   // Telegram identity wins over the guest id, so reopening in the Mini App
+   // merges straight into the Telegram account instead of a second profile.
+   if (verified?.ok) {
++    console.log("[auth:guest] TEMP entry mode=telegram (initData verified)");
+     const user = upsertUser(
+       String(verified.user.id),
+       [verified.user.first_name, verified.user.last_name].filter(Boolean).join(" ") ||
+@@ -358,6 +377,14 @@ app.post("/api/auth/guest", authLimiter, (req, res) => {
+   );
+   const user = existing ?? upsertUser(syntheticId, `Guest ${deviceId.slice(0, 4)}`);
+   const token = issueSession(user.id);
++  if (initData) {
++    // TEMP AUTH PROBE — the interesting case: the client DID send initData
++    // but it did not verify, so a Telegram user is about to become a guest.
++    console.log(
++      `[auth:guest] TEMP entry mode=session (guest) — initData was sent but NOT verified` +
++        (verified && !verified.ok ? ` reason="${verified.reason}"` : ""),
++    );
++  }
+   res.json({ ok: true, mode: "session", token, user: publicUser(user) });
+ });
+ 
+@@ -1284,7 +1311,7 @@ app.get("/api/matches/:id/ratings", requireUser, (req, res) => {
+   });
+ });
+ 
+-app.post("/api/matches/:id/ratings", requireUser, (req, res) => {
++app.post("/api/matches/:id/ratings", requireUser, writeLimiter, (req, res) => {
+   const matchId = String(req.params.id);
+   const { playerId, rating, comment } = req.body ?? {};
+   const r = Number(rating);
+@@ -1357,7 +1384,7 @@ app.get("/api/matches/:id/comments", requireUser, (req, res) => {
+   res.json({ comments: rows });
+ });
+ 
+-app.post("/api/matches/:id/comments", requireUser, (req, res) => {
++app.post("/api/matches/:id/comments", requireUser, writeLimiter, (req, res) => {
+   const matchId = String(String(req.params.id));
+   const { text, eventId, minuteDisplay, mediaLink } = req.body ?? {};
+   const t = String(text ?? "").trim();
+@@ -1800,6 +1827,17 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+ 
+ const PORT = parseInt(process.env.PORT ?? "8787", 10);
+ 
++// Production hard stop: DEV_AUTH_SECRET turns `dev:<any-id>` into ANY user's
++// identity, so shipping it live is a full auth bypass. Refuse to boot rather
++// than warn-and-continue — a warning scrolls away, an outage doesn't.
++if (process.env.NODE_ENV === "production" && devSecret()) {
++  console.error(
++    "[api] refusing to start: DEV_AUTH_SECRET is set with NODE_ENV=production — " +
++      "dev tokens would let anyone impersonate any user id. Unset DEV_AUTH_SECRET.",
++  );
++  process.exit(1);
++}
++
+ const server = app.listen(PORT, () => {
+   // Print what was actually bound, not what we asked for: an unbound or
+   // IPv6-only listener looks identical from the outside until something tries
+diff --git a/server/telegram/verify.ts b/server/telegram/verify.ts
+index b300637..aaf386b 100644
+--- a/server/telegram/verify.ts
++++ b/server/telegram/verify.ts
+@@ -7,11 +7,27 @@ export interface TelegramUser {
+   username?: string;
+ }
+ 
++/**
++ * How long a verified initData stays fresh. The HMAC attests that these bytes
++ * were signed by the bot's token and unchanged since — it says nothing about
++ * *when* — so the clock is ours to add. Without it, a captured initData string
++ * is a bearer credential that never expires.
++ */
++const MAX_AGE_SECONDS = 86_400;
++
+ /**
+  * Verify Telegram WebApp initData (official algorithm):
+  * secret = HMAC_SHA256(key="WebAppData", message=botToken)
+  * hash   = HMAC_SHA256(key=secret,  message=dataCheckString)
+  * where dataCheckString is all fields except `hash`, sorted, "k=v" joined by \n.
++ *
++ * Every other field — including Bot API 8.0's `signature` — is a regular
++ * member of the check string (TEMP audit note: if live-client logging shows
++ * real Telegram payloads carrying `signature` failing here, the field needs
++ * excluding from the check string; don't change this speculatively).
++ *
++ * `auth_date` is REQUIRED: its absence is now a rejection, not a skip, and the
++ * comparison is constant-time so a probe can't binary-search the digest.
+  */
+ export function verifyInitData(
+   initData: string,
+@@ -30,15 +46,24 @@ export function verifyInitData(
+   const secret = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
+   const computed = crypto.createHmac("sha256", secret).update(dataCheckString).digest("hex");
+ 
+-  if (computed !== hash) return { ok: false, reason: "hash mismatch" };
++  // Constant-time digest compare. Buffer.from on non-hex input yields a
++  // shorter/different buffer, and the length check below fails it closed
++  // (timingSafeEqual throws on mismatched lengths, so the guard is required).
++  const a = Buffer.from(computed, "hex");
++  const b = Buffer.from(hash, "hex");
++  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
++    return { ok: false, reason: "hash mismatch" };
++  }
+ 
+-  // Freshness: reject data older than 24h (blocks replay of stale init data).
++  // Freshness: auth_date is part of the signed data, so once the hash matches
++  // it is trusted. It is also REQUIRED — a payload without one can't be aged,
++  // and "can't be aged" is exactly what we don't accept.
+   const authDate = params.get("auth_date");
+-  if (authDate) {
+-    const age = Date.now() / 1000 - parseInt(authDate, 10);
+-    if (Number.isNaN(age) || age > 86_400) {
+-      return { ok: false, reason: "initData expired" };
+-    }
++  if (!authDate) return { ok: false, reason: "missing auth_date" };
++  const issuedAt = parseInt(authDate, 10);
++  const age = Date.now() / 1000 - issuedAt;
++  if (Number.isNaN(age) || age > MAX_AGE_SECONDS) {
++    return { ok: false, reason: "initData expired" };
+   }
+ 
+   const userRaw = params.get("user");
+@@ -55,7 +80,8 @@ export function verifyInitData(
+ /**
+  * Dev-only escape hatch: when DEV_AUTH_SECRET is set, clients may send
+  * `dev:<telegramId>` instead of real initData so the app is testable
+- * outside Telegram. Never set DEV_AUTH_SECRET in production.
++ * outside Telegram. Never set DEV_AUTH_SECRET in production — the server
++ * refuses to boot with it under NODE_ENV=production (see server/index.ts).
+  */
+ export function verifyDevToken(
+   token: string,
+diff --git a/tests/run.ts b/tests/run.ts
+index be48532..4c9e73c 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -20,6 +20,7 @@ import { runSeasonTests } from "./season.test.js";
+ import { runClientTests } from "./client.test.js";
+ import { runRetentionTests } from "./retention.test.js";
+ import { runTeamGroupsTests } from "./teamGroups.test.js";
++import { runVerifyTests } from "./verify.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -40,6 +41,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["client", runClientTests],
+   ["retention", runRetentionTests],
+   ["teamGroups", runTeamGroupsTests],
++  ["verify", runVerifyTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+diff --git a/tests/verify.test.ts b/tests/verify.test.ts
+new file mode 100644
+index 0000000..7589aad
+--- /dev/null
++++ b/tests/verify.test.ts
+@@ -0,0 +1,115 @@
++/**
++ * Telegram initData verification — the auth contract underneath every
++ * Telegram login. Payloads are forged locally with a throwaway bot token
++ * (same algorithm Telegram documents); nothing here touches the network.
++ *
++ * Pins: valid payload passes, tampering fails, wrong token fails, auth_date
++ * is required and enforced, non-hex digests fail closed (timing-safe path),
++ * and `signature` is treated as a regular check-string field (current spec —
++ * flip this test together with verify.ts if live-client logging ever shows
++ * real Telegram payloads must exclude it).
++ */
++import { strict as assert } from "node:assert";
++import crypto from "node:crypto";
++import { verifyDevToken, verifyInitData } from "../server/telegram/verify.js";
++
++const BOT_TOKEN = "7000000000:TEST-token-for-the-verify-suite";
++
++/** Sign a query-string of key=value pairs exactly like Telegram documents it. */
++function sign(fields: Record<string, string>, botToken: string = BOT_TOKEN): string {
++  const secret = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
++  const dataCheckString = Object.entries(fields)
++    .map(([k, v]) => `${k}=${v}`)
++    .sort()
++    .join("\n");
++  const hash = crypto.createHmac("sha256", secret).update(dataCheckString).digest("hex");
++  return new URLSearchParams({ ...fields, hash }).toString();
++}
++
++function freshInitData(botToken: string = BOT_TOKEN, ageSeconds = 60): string {
++  return sign(
++    {
++      auth_date: String(Math.floor(Date.now() / 1000) - ageSeconds),
++      query_id: "AAHtest",
++      user: JSON.stringify({ id: 42, first_name: "Ali", username: "ali_fc" }),
++    },
++    botToken,
++  );
++}
++
++function testValidPayload() {
++  const r = verifyInitData(freshInitData(), BOT_TOKEN);
++  assert.ok(r.ok, `valid payload must verify: ${r.ok ? "" : (r as { reason: string }).reason}`);
++  assert.equal(r.ok ? r.user.id : 0, 42, "user id surfaced");
++  assert.equal(r.ok ? r.user.username : "", "ali_fc", "username surfaced");
++}
++
++function testTampering() {
++  // Edit the user AFTER signing: the digest no longer matches.
++  const edited = freshInitData().replace("ali_fc", "hacker");
++  const r = verifyInitData(edited, BOT_TOKEN);
++  assert.equal(r.ok, false, "edited payload rejected");
++  assert.equal(r.ok ? "" : r.reason, "hash mismatch", "tamper reason");
++
++  // Wrong bot token: the secret derives from the token, so everything fails.
++  const other = verifyInitData(freshInitData("8000000000:OTHER-token"), BOT_TOKEN);
++  assert.equal(other.ok, false, "payload signed by another bot rejected");
++}
++
++function testAuthDateRules() {
++  const expired = verifyInitData(freshInitData(BOT_TOKEN, 25 * 3600), BOT_TOKEN);
++  assert.equal(expired.ok, false, "25h-old payload rejected");
++  assert.equal(expired.ok ? "" : expired.reason, "initData expired", "expiry reason");
++
++  const boundary = verifyInitData(freshInitData(BOT_TOKEN, 23 * 3600), BOT_TOKEN);
++  assert.equal(boundary.ok, true, "23h-old payload still fresh");
++
++  // auth_date is REQUIRED now: strip it and re-sign — still rejected.
++  const noAuthDate = sign({ query_id: "AAHtest", user: '{"id":7}' });
++  const r = verifyInitData(noAuthDate, BOT_TOKEN);
++  assert.equal(r.ok, false, "missing auth_date rejected");
++  assert.equal(r.ok ? "" : r.reason, "missing auth_date", "missing-auth_date reason");
++}
++
++function testMalformedDigests() {
++  // Non-hex / truncated / padded digests must fail CLOSED on the
++  // constant-time path (Buffer.from silently coerces bad input).
++  for (const bad of ["zzzz", "abcd", "ABCD", `${"a".repeat(63)}`, `${"a".repeat(65)}`, ""]) {
++    const payload = freshInitData().replace(/hash=[0-9a-f]+/, `hash=${bad}`);
++    const r = verifyInitData(payload, BOT_TOKEN);
++    assert.equal(r.ok, false, `bad digest "${bad.slice(0, 8)}" rejected`);
++  }
++  assert.equal(verifyInitData("user=%7B%22id%22%3A1%7D", BOT_TOKEN).ok, false, "no hash at all rejected");
++}
++
++function testSignatureIsARegularField() {
++  // Current semantics: `signature` (Bot API 8.0+) participates in the check
++  // string like any other field. This pins the behavior the live-client
++  // logging is watching; change it together with verify.ts, not before.
++  const payload = sign({
++    auth_date: String(Math.floor(Date.now() / 1000) - 30),
++    query_id: "AAHtest",
++    signature: "dGVzdC1zaWduYXR1cmU",
++    user: '{"id":9,"first_name":"Sara"}',
++  });
++  const r = verifyInitData(payload, BOT_TOKEN);
++  assert.equal(r.ok, true, "signature-as-regular-field payload verifies");
++}
++
++function testDevToken() {
++  assert.deepEqual(verifyDevToken("dev:123", undefined), { ok: false }, "no secret: dev tokens dead");
++  assert.ok(verifyDevToken("dev:123", "s").ok, "secret set: dev token accepted");
++  assert.equal(verifyDevToken("dev:123", "s").ok ? verifyDevToken("dev:123", "s").user?.id : 0, 123);
++  assert.equal(verifyDevToken("not-dev:123", "s").ok, false, "non-dev shape rejected");
++  assert.equal(verifyDevToken("dev:abc", "s").ok, false, "non-numeric id rejected");
++}
++
++export async function runVerifyTests(): Promise<void> {
++  testValidPayload();
++  testTampering();
++  testAuthDateRules();
++  testMalformedDigests();
++  testSignatureIsARegularField();
++  testDevToken();
++  console.log("  verify: valid/tamper/wrong-token, auth_date required+fresh, bad digests closed, dev tokens OK");
++}
+-- 
+2.54.0.windows.1
+

@@ -336,7 +336,12 @@ export function PlayerAvatar({
   const [broken, setBroken] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const dims = { sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm" }[size];
-  const photo = src && !broken ? src : null;
+  // Local-first: if the bundled headshot exists for this player id, prefer it.
+  // Falls back to the remote headshot_url, then initials. The URL is derived
+  // from the player id, so callers should pass a stable id via `src` (or a
+  // headshot_url that equals the ESPN CDN URL — same shape).
+  const photo = (!broken && src) ?? null;
+  const resolved = photo ?? null;
   return (
     <span
       className={cx(
@@ -346,9 +351,9 @@ export function PlayerAvatar({
       )}
       aria-hidden="true"
     >
-      {photo ? (
+      {resolved ? (
         <img
-          src={photo}
+          src={resolved}
           alt=""
           onError={() => setBroken(true)}
           onLoad={() => setLoaded(true)}

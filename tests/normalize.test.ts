@@ -17,6 +17,8 @@ import {
   normalizeScoreboard,
   normalizeTimeline,
   normalizeRosters,
+  normalizeRosterPlayers,
+  normalizeTeamAvailability,
   normalizeStandings,
   deriveMinutes,
 } from "../server/espn/normalize.js";
@@ -55,7 +57,11 @@ function testPositions() {
   assert.equal(normalizePosition("ST-L"), "FWD");
   assert.equal(normalizePosition("W-R"), "MID");
   // Goal-subtype free-kick etc. fall through the exact map...
-  assert.equal(normalizePosition(undefined), "MID", "missing position defaults to MID");
+  assert.equal(normalizePosition(undefined), "OTHER", "missing position uses the fallback group");
+  assert.equal(normalizePosition("Central Defender"), "DEF");
+  assert.equal(normalizePosition("Left Wing-back"), "DEF");
+  assert.equal(normalizePosition("Attacker"), "FWD");
+  assert.equal(normalizePosition("Mystery Role"), "OTHER");
   // "SUB" is a role marker (wasn't in the XI), never a position — callers use
   // isPositional to skip it and read the athlete's own position instead.
   assert.ok(!isPositional("SUB"), "SUB is not a position");
@@ -64,6 +70,39 @@ function testPositions() {
   assert.equal(normalizePositionName("Defender"), "DEF", "roster name form");
   assert.equal(normalizePositionName("Midfielder"), "MID", "roster name form");
   assert.equal(normalizePositionName("Forward"), "FWD", "roster name form");
+}
+
+function testFullRosterAndAvailability(): void {
+  const raw = {
+    team: { id: "112" },
+    athletes: [
+      { id: "gk", fullName: "Keeper", position: { abbreviation: "G" } },
+      { id: "cb", fullName: "Centre Back", position: { name: "Centre-Back" } },
+      { id: "wb", fullName: "Wing Back", position: { abbreviation: "WB" } },
+      { id: "cm", fullName: "Midfielder", position: { name: "Midfielder" } },
+      { id: "st", fullName: "Attacker", position: { name: "Attacker" } },
+      { id: "unk", fullName: "Unknown", position: { abbreviation: "MYSTERY" } },
+      { id: "unk", fullName: "Duplicate row", position: { abbreviation: "MYSTERY" } },
+    ],
+  };
+  const players = normalizeRosterPlayers(raw);
+  assert.equal(players.length, 6, "all distinct roster records retained");
+  assert.deepEqual(players.map((player) => player.position), ["GK", "DEF", "DEF", "MID", "FWD", "OTHER"]);
+  assert.equal(new Set(players.map((player) => player.id)).size, players.length, "each player appears once");
+
+  assert.deepEqual(
+    normalizeTeamAvailability({ injuries: [
+      { athlete: { id: "p1", displayName: "Player One" }, status: { name: "Out" }, details: { type: "Hamstring", returnDate: "2026-11-10" } },
+      { athlete: { id: "p2", fullName: "Player Two" }, status: "Suspended", reason: "Red card" },
+      { athlete: { id: "p3", fullName: "Player Three" }, status: "Doubtful" },
+    ] }),
+    [
+      { player_id: "p1", player_name: "Player One", status: "injured", reason: "Hamstring", expected_return: "2026-11-10" },
+      { player_id: "p2", player_name: "Player Two", status: "suspended", reason: "Red card", expected_return: null },
+      { player_id: "p3", player_name: "Player Three", status: "doubtful", reason: null, expected_return: null },
+    ],
+  );
+  assert.deepEqual(normalizeTeamAvailability({}), [], "empty report normalizes to an empty cacheable result");
 }
 
 function testClock() {
@@ -234,6 +273,7 @@ function testRoundExtraction() {
 export function runNormalizeTests(): void {
   testStatus();
   testPositions();
+  testFullRosterAndAvailability();
   testClock();
   testEventTypes();
   testScoreboard();

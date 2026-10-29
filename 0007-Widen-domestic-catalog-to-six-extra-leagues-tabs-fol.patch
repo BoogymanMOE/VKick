@@ -1,0 +1,394 @@
+From 665c887c2046a73ffe86b2dbc054313216eee861 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 03:15:18 +0330
+Subject: [PATCH 007/230] Widen domestic catalog to six extra leagues; tabs
+ follow the follow list
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Server: DOMESTIC_EXTRAS (ned/por/tur/sco/gre/bel .1) join the standings sync,
+catalog and isCup classification. Client: buildLeagueTabs/useLeagueTabs feeds
+Table, PlayerStats and Leaderboards so a followed league outside the big five
+gains its table, stat board and leaderboard tab without further changes;
+labels for extras come from the catalog name, not league.* i18n keys.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/espn/types.ts       | 34 +++++++++++++++++++++++++++++---
+ server/sync/service.ts     |  9 ++++++---
+ src/hooks/useApi.ts        | 24 ++++++++++++++++++++---
+ src/lib/leagues.ts         | 11 +++++++++++
+ src/lib/pickerGroups.ts    | 40 ++++++++++++++++++++++++++++++++++++++
+ src/pages/Leaderboards.tsx | 11 ++++++++---
+ src/pages/PlayerStats.tsx  | 20 +++++++------------
+ src/pages/Table.tsx        | 17 ++++++++++------
+ 8 files changed, 135 insertions(+), 31 deletions(-)
+
+diff --git a/server/espn/types.ts b/server/espn/types.ts
+index 5faa2a0..71982ac 100644
+--- a/server/espn/types.ts
++++ b/server/espn/types.ts
+@@ -5,6 +5,13 @@ export type LeagueSlug =
+   | "ita.1"
+   | "ger.1"
+   | "fra.1"
++  // Domestic leagues beyond the big five (see DOMESTIC_EXTRAS)
++  | "ned.1"
++  | "por.1"
++  | "tur.1"
++  | "sco.1"
++  | "gre.1"
++  | "bel.1"
+   // UEFA club competitions
+   | "uefa.champions"
+   | "uefa.europa"
+@@ -33,6 +40,20 @@ export type LeagueSlug =
+ /** The big five domestic leagues — the ones the favorites rule is built on. */
+ export const LEAGUES: LeagueSlug[] = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
+ 
++/**
++ * Domestic leagues beyond the big five that the catalog carries — real league
++ * tables, full fixture sync, predictable matches. Every slug here was verified
++ * against ESPN's standings endpoint (they also appear in the crest collection's
++ * league folder map). Widening this list is the whole mechanism behind
++ * "tables for a followed league outside the big five": the standings sync,
++ * the isCup classification, the picker tabs and the stat boards all read the
++ * catalog, so an entry here lights up everywhere at once.
++ */
++export const DOMESTIC_EXTRAS: LeagueSlug[] = ["ned.1", "por.1", "tur.1", "sco.1", "gre.1", "bel.1"];
++
++/** Every competition that owns a league table. */
++export const ALL_DOMESTIC: LeagueSlug[] = [...LEAGUES, ...DOMESTIC_EXTRAS];
++
+ /**
+  * Club cup competitions synced alongside the leagues (all confirmed on ESPN).
+  * These are the big five's own cups plus the UEFA club competitions.
+@@ -73,8 +94,8 @@ export const INTERNATIONALS: LeagueSlug[] = [
+   "concacaf.gold",
+ ];
+ 
+-/** Big five + cups + internationals — everything the sync polls. */
+-export const LEAGUES_ALL: LeagueSlug[] = [...LEAGUES, ...CUPS, ...INTERNATIONALS];
++/** All domestic leagues + cups + internationals — everything the sync polls. */
++export const LEAGUES_ALL: LeagueSlug[] = [...ALL_DOMESTIC, ...CUPS, ...INTERNATIONALS];
+ 
+ /**
+  * Competitions polled on the narrow sweep window instead of the wide one.
+@@ -106,7 +127,7 @@ export function pollWindow(league: string): { back: number; forward: number } {
+  * uefa.champions as its own league.
+  */
+ export function isCup(league: string): boolean {
+-  return !LEAGUES.includes(league as LeagueSlug);
++  return !ALL_DOMESTIC.includes(league as LeagueSlug);
+ }
+ 
+ /** Seeded competition labels — the display names users browse by. */
+@@ -120,6 +141,13 @@ export const COMPETITIONS: Array<{
+   { slug: "ita.1", name: "Serie A", kind: "league" },
+   { slug: "ger.1", name: "Bundesliga", kind: "league" },
+   { slug: "fra.1", name: "Ligue 1", kind: "league" },
++  // Domestic leagues beyond the big five — full tables, same pipeline.
++  { slug: "ned.1", name: "Eredivisie", kind: "league" },
++  { slug: "por.1", name: "Liga Portugal", kind: "league" },
++  { slug: "tur.1", name: "Türkiye Süper Lig", kind: "league" },
++  { slug: "sco.1", name: "Scottish Premiership", kind: "league" },
++  { slug: "gre.1", name: "Super League Greece", kind: "league" },
++  { slug: "bel.1", name: "Belgian Pro League", kind: "league" },
+   { slug: "uefa.champions", name: "UEFA Champions League", kind: "cup" },
+   { slug: "uefa.europa", name: "UEFA Europa League", kind: "cup" },
+   { slug: "uefa.europa.conf", name: "UEFA Conference League", kind: "cup" },
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index 195a9d8..c820d9e 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -1,6 +1,6 @@
+ import cron from "node-cron";
+ import { fetchScoreboard, fetchSummary, fetchTeamRoster } from "../espn/client.js";
+-import { LEAGUES_ALL, LEAGUES, pollWindow, type LeagueSlug } from "../espn/types.js";
++import { LEAGUES_ALL, ALL_DOMESTIC, pollWindow, type LeagueSlug } from "../espn/types.js";
+ import { getDb, all, get } from "../db/index.js";
+ import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
+ import { onMatchFinished } from "../predictions/resolver.js";
+@@ -179,9 +179,12 @@ export async function syncRosters(): Promise<void> {
+   );
+ }
+ 
+-/** Season standings for the big five domestic leagues (cups have no table). */
++/**
++ * Season standings for every domestic league in the catalog (big five + the
++ * wider domestic set) — cups and internationals correctly have no table.
++ */
+ export async function syncStandings(): Promise<void> {
+-  for (const league of LEAGUES) {
++  for (const league of ALL_DOMESTIC) {
+     try {
+       const json = await fetchSummary(league, await firstEventId(league));
+       applyStandings(db, json, league, currentSeason());
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 7c82704..94ddb1a 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -2,17 +2,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+ import { useCallback, useMemo } from "react";
+ import { api, serverErrorKey, type ApiMatch, type ApiTeam } from "../lib/api";
+ import { TEAM_FALLBACK } from "../lib/colors";
+-import { INTERNATIONAL_GROUP } from "../lib/pickerGroups";
++import { INTERNATIONAL_GROUP, buildLeagueTabs, type LeagueTab } from "../lib/pickerGroups";
+ import { useToast } from "../components/Toast";
+ import { useI18n } from "../i18n/I18nProvider";
+ import type { StringKey } from "../i18n/strings";
+ import { haptic } from "../lib/telegram";
+ import type { LeagueId, Match, Team } from "../types";
+-import { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE } from "../lib/leagues";
++import { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE, slugForLeague } from "../lib/leagues";
+ 
+ // Public surface preserved: the maps now live in a pure module so non-React
+ // code (and the node test runner) can use them without this file's imports.
+-export { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE };
++export { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE, slugForLeague };
+ 
+ /**
+  * Single source for every screen that tabs over the synced domestic leagues
+@@ -367,6 +367,24 @@ function currentTeamFromCache(teamId: string): Team | undefined {
+   return t ? teamFromApi(t) : undefined;
+ }
+ 
++/* ------------------------------------------------------------ league tabs */
++
++/**
++ * Tabs for the league-scoped screens (Table, PlayerStats, Leaderboards):
++ * the big five always, plus every FOLLOWED non-cup league beyond them. The
++ * tab list grows with the follow list — following Eredivisie adds its table,
++ * stat boards and leaderboard tab with no other change (server catalog
++ * decides what's a table-league; see buildLeagueTabs in lib/pickerGroups).
++ */
++export function useLeagueTabs(): LeagueTab[] {
++  const { t, localize } = useI18n();
++  const followed = useFollowedLeagues();
++  return useMemo(
++    () => buildLeagueTabs(followed.leagues, t, localize),
++    [followed.leagues, t, localize],
++  );
++}
++
+ /* ------------------------------------------------------------ notification prefs */
+ 
+ export interface NotificationPrefs {
+diff --git a/src/lib/leagues.ts b/src/lib/leagues.ts
+index dc54ad7..15d2582 100644
+--- a/src/lib/leagues.ts
++++ b/src/lib/leagues.ts
+@@ -24,3 +24,14 @@ export const SLUG_BY_LEAGUE: Record<LeagueId, string> = {
+   BL: "ger.1",
+   L1: "fra.1",
+ };
++
++/**
++ * Whatever league-scoped identifier a value is — big-five alias ("PL") or an
++ * ESPN slug ("ned.1") — return the slug to query the server with. Aliases
++ * translate; slugs (and anything else) pass through unchanged. The league
++ * tabs mix both values by design, so every screen that consumes them needs
++ * exactly this coercion.
++ */
++export function slugForLeague(idOrSlug: string): string {
++  return SLUG_BY_LEAGUE[idOrSlug as LeagueId] ?? idOrSlug;
++}
+diff --git a/src/lib/pickerGroups.ts b/src/lib/pickerGroups.ts
+index 8675617..7e03a14 100644
+--- a/src/lib/pickerGroups.ts
++++ b/src/lib/pickerGroups.ts
+@@ -79,3 +79,43 @@ export function buildPickerGroups(
+ export function teamsInGroup(teams: Team[], group: string): Team[] {
+   return teams.filter((team) => team.groupKey === group);
+ }
++
++/** A tab on the league-scoped screens (Table, PlayerStats, Leaderboards). */
++export interface LeagueTab {
++  /** Alias ("PL") for the big five, slug ("ned.1") beyond them. */
++  value: string;
++  label: string;
++}
++
++/** A followed-league row as /api/me/leagues serves it. */
++export interface FollowedLeagueRow {
++  league: string;
++  name: string | null;
++  kind: "league" | "cup" | "tournament" | null;
++}
++
++/**
++ * Tabs for the league-scoped screens: the big five always (translated
++ * aliases), then every FOLLOWED non-cup league beyond them in catalog order.
++ * Cups and internationals never get a tab — they have no table to show. A
++ * user who follows Eredivisie sees it here and in the picker automatically;
++ * a user who follows nobody beyond the big five sees exactly the old five.
++ */
++export function buildLeagueTabs(
++  followed: FollowedLeagueRow[],
++  t: (key: StringKey) => string,
++  localize: (name: string) => string,
++): LeagueTab[] {
++  const bigFive = PICKER_GROUPS.filter((g) => g.key !== OTHER_GROUP && g.key !== INTERNATIONAL_GROUP);
++  const aliasBySlug = new Map(Object.entries(SLUG_BY_LEAGUE).map(([slug, alias]) => [slug, alias]));
++  const extras = followed.filter(
++    (row) => row.kind === "league" && !aliasBySlug.has(row.league),
++  );
++  const seen = new Set<string>();
++  return [
++    ...bigFive.map((g) => ({ value: g.key, label: t(g.label) })),
++    ...extras
++      .filter((row) => (seen.has(row.league) ? false : (seen.add(row.league), true)))
++      .map((row) => ({ value: row.league, label: localize(row.name ?? row.league) })),
++  ];
++}
+diff --git a/src/pages/Leaderboards.tsx b/src/pages/Leaderboards.tsx
+index 32c7159..8260bd0 100644
+--- a/src/pages/Leaderboards.tsx
++++ b/src/pages/Leaderboards.tsx
+@@ -1,7 +1,7 @@
+ import { useState } from "react";
+ import { TopBar } from "../components/TopBar";
+ import { Avatar, Chip, EmptyState, ErrorState, Num, SectionHeading, Segmented, cx } from "../components/ui";
+-import { LEAGUE_TABS, SLUG_BY_LEAGUE, useLeaderboard, type LeaderboardScope } from "../hooks/useApi";
++import { slugForLeague, useLeaderboard, useLeagueTabs, type LeaderboardScope } from "../hooks/useApi";
+ import { useFavorites } from "../hooks/useFavorites";
+ import { useI18n } from "../i18n/I18nProvider";
+ 
+@@ -194,12 +194,17 @@ function BoardRow({
+ /* ------------------------------------------------------------ league picker */
+ 
+ function LeaguePicker({ value, onChange }: { value: string; onChange: (slug: string) => void }) {
+-  const { t } = useI18n();
++  const tabs = useLeagueTabs();
++  // Board state is a slug end-to-end; tab values are big-five aliases, so
++  // aliases translate back through SLUG_BY_LEAGUE and extras pass through.
+   return (
+     <Segmented
+       value={value}
+       onChange={onChange}
+-      options={LEAGUE_TABS.map((id) => ({ value: SLUG_BY_LEAGUE[id], label: t(`league.${id}`) }))}
++      options={tabs.map((tab) => ({
++        value: slugForLeague(tab.value),
++        label: tab.label,
++      }))}
+     />
+   );
+ }
+diff --git a/src/pages/PlayerStats.tsx b/src/pages/PlayerStats.tsx
+index e534ef6..3487f67 100644
+--- a/src/pages/PlayerStats.tsx
++++ b/src/pages/PlayerStats.tsx
+@@ -4,8 +4,9 @@ import { RowSkeleton } from "../components/Skeletons";
+ import { EmptyState, ErrorState } from "../components/ui";
+ import { Card, Chip, Num, SectionHeading, Segmented, TeamBadge, cx } from "../components/ui";
+ import {
+-  SLUG_BY_LEAGUE,
++  slugForLeague,
+   useLeaguePlayers,
++  useLeagueTabs,
+   useLeagueTeamStats,
+   type LeaderPlayerRow,
+   type LeaderSort,
+@@ -15,15 +16,6 @@ import { useI18n } from "../i18n/I18nProvider";
+ import { Link } from "react-router-dom";
+ import { haptic } from "../lib/telegram";
+ import type { StringKey } from "../i18n/strings";
+-import type { LeagueId } from "../types";
+-
+-/**
+- * Leagues with synced season standings/stats. Hardcoded to the big five for
+- * now (the standings sync covers exactly these), but typed and consumed
+- * through SLUG_BY_LEAGUE so adding a league to the sync is a one-line change
+- * here, not a refactor.
+- */
+-const STAT_LEAGUES: LeagueId[] = ["PL", "LL", "SA", "BL", "L1"];
+ 
+ /** Leaderboard columns: i18n key + the server sort field. */
+ const SORTS: Array<{ key: LeaderSort; labelKey: StringKey }> = [
+@@ -49,11 +41,13 @@ const SORTS: Array<{ key: LeaderSort; labelKey: StringKey }> = [
+  */
+ export default function PlayerStats() {
+   const { t } = useI18n();
+-  const [league, setLeague] = useState<LeagueId>("PL");
++  const tabs = useLeagueTabs();
++  const [league, setLeague] = useState<string>("PL");
+   const [view, setView] = useState<"players" | "teams">("players");
+   const [sort, setSort] = useState<LeaderSort>("goals");
+ 
+-  const slug = SLUG_BY_LEAGUE[league];
++  // Tab values are big-five aliases; anything else is already a slug.
++  const slug = slugForLeague(league);
+ 
+   return (
+     <>
+@@ -74,7 +68,7 @@ export default function PlayerStats() {
+         <Segmented
+           value={league}
+           onChange={setLeague}
+-          options={STAT_LEAGUES.map((id) => ({ value: id, label: t(`league.${id}`) }))}
++          options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
+         />
+       </div>
+ 
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index 0be6463..f154ec6 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -5,12 +5,11 @@ import { RowSkeleton } from "../components/Skeletons";
+ import { EmptyState, ErrorState } from "../components/ui";
+ import { Chip, Num, SectionHeading, Segmented, TeamBadge, cx } from "../components/ui";
+ import { StarFilledIcon } from "../components/icons";
+-import { LEAGUE_TABS, SLUG_BY_LEAGUE, useStandings, type StandingRow } from "../hooks/useApi";
++import { slugForLeague, useLeagueTabs, useStandings, type StandingRow } from "../hooks/useApi";
+ 
+ type TableView = "actual" | "expected";
+ import { useFavorites } from "../hooks/useFavorites";
+ import { useI18n } from "../i18n/I18nProvider";
+-import type { LeagueId } from "../types";
+ 
+ /**
+  * League tables for the synced domestic leagues — straight from the standings.
+@@ -20,12 +19,18 @@ import type { LeagueId } from "../types";
+ export default function Table() {
+   const { t, localize } = useI18n();
+   const { teams: clubs, isFavorite } = useFavorites();
+-  const [league, setLeague] = useState<LeagueId | null>(null);
++  const tabs = useLeagueTabs();
++  const [league, setLeague] = useState<string | null>(null);
+   const [view, setView] = useState<TableView>("actual");
+ 
+   // Default to the league one of your clubs plays in, else the Premier League.
++  // `clubs[].league` is a big-five alias (teamFromApi parks every other side
++  // in "PL"), so the default always lands on a tab that exists.
+   const active = league ?? clubs[0]?.league ?? "PL";
+-  const slug = SLUG_BY_LEAGUE[active];
++  const slug = slugForLeague(active);
++  // Tab labels carry the translation: aliases come pre-translated, followed
++  // extras read their catalog name — `league.<slug>` i18n keys don't exist.
++  const tabLabel = (value: string) => tabs.find((tab) => tab.value === value)?.label ?? value;
+   const standingsQuery = useStandings(slug);
+   const rows = standingsQuery.data ?? [];
+ 
+@@ -45,7 +50,7 @@ export default function Table() {
+         <Segmented
+           value={active}
+           onChange={setLeague}
+-          options={LEAGUE_TABS.map((id) => ({ value: id, label: t(`league.${id}`) }))}
++          options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
+         />
+       </div>
+ 
+@@ -96,7 +101,7 @@ export default function Table() {
+ 
+       <section className="mt-4">
+         <SectionHeading
+-          title={t(`league.${active}`)}
++          title={tabLabel(active)}
+           action={
+             standingsQuery.data?.length ? (
+               <span className="text-[11px] text-ink-3">{standingsQuery.data[0]?.played ?? 0} GW</span>
+-- 
+2.54.0.windows.1
+

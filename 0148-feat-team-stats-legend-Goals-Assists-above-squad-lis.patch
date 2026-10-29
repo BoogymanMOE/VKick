@@ -1,0 +1,62 @@
+From f2941d108be6a26ac3c675272e95384c9b6b4a3f Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 00:32:33 +0330
+Subject: [PATCH 148/230] feat(team): stats legend (Goals / Assists) above
+ squad list for accessibility
+
+---
+ src/i18n/strings.ts    |  4 ++++
+ src/pages/TeamPage.tsx | 15 +++++++++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 137e897..0e364cc 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -229,6 +229,8 @@ export const strings = {
+     "team.tab.fixtures": "Fixtures",
+     "team.tab.season": "Season",
+     "team.tab.xg": "xG",
++    "team.stats.goals": "Goals",
++    "team.stats.assists": "Assists",
+     "team.played": "{played} matches played",
+     "team.appearances": "{count} apps",
+     "team.squadEmpty": "Squad not synced yet",
+@@ -842,6 +844,8 @@ export const strings = {
+     "team.tab.fixtures": "بازی‌ها",
+     "team.tab.season": "آمار فصل",
+     "team.tab.xg": "xG",
++    "team.stats.goals": "گل",
++    "team.stats.assists": "پاس گل",
+     "team.played": "{played} بازی انجام داده",
+     "team.appearances": "{count} بازی",
+     "team.squadEmpty": "ترکیب تیم هنوز همگام‌سازی نشده",
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 4139ccc..6d2063a 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -171,6 +171,21 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+ 
+   return (
+     <div className="space-y-4">
++      {/* The squad rows carry colour-coded numbers with no key; a colour-blind
++          reader cannot tell goals from assists. The legend names both. */}
++      <div
++        className="flex items-center gap-3 text-[11px] font-bold"
++        style={{ padding: "8px 0", borderBottom: "1px solid var(--border-subtle)" }}
++      >
++        <span className="flex items-center gap-1" style={{ color: "var(--volt)" }}>
++          <span aria-hidden="true">⚽</span>
++          {t("team.stats.goals")}
++        </span>
++        <span className="flex items-center gap-1" style={{ color: "var(--gold)" }}>
++          <span aria-hidden="true">🅰️</span>
++          {t("team.stats.assists")}
++        </span>
++      </div>
+       {POS_ORDER.map((pos) => {
+         const group = squad.players.filter((p) => p.position === pos);
+         if (group.length === 0) return null;
+-- 
+2.54.0.windows.1
+

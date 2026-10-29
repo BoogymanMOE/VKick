@@ -1,0 +1,65 @@
+From 6c556a41b0c949e7c436cf2ec7e00be213465b86 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 21:43:54 +0330
+Subject: [PATCH 094/230] Show all cup competitions in Table tabs (not just
+ followed ones)
+
+---
+ src/lib/pickerGroups.ts | 28 ++++++++++++++++++++++++++--
+ 1 file changed, 26 insertions(+), 2 deletions(-)
+
+diff --git a/src/lib/pickerGroups.ts b/src/lib/pickerGroups.ts
+index f0233e4..d4c1a88 100644
+--- a/src/lib/pickerGroups.ts
++++ b/src/lib/pickerGroups.ts
+@@ -27,6 +27,19 @@ import type { StringKey } from "../i18n/strings";
+ import type { Team } from "../types";
+ import { SLUG_BY_LEAGUE, LEAGUE_BY_SLUG } from "./leagues";
+ 
++const CUP_COMPETITIONS: Array<{ slug: string; name: string }> = [
++  { slug: "uefa.champions", name: "UEFA Champions League" },
++  { slug: "uefa.europa", name: "UEFA Europa League" },
++  { slug: "uefa.europa.conf", name: "UEFA Conference League" },
++  { slug: "uefa.super_cup", name: "UEFA Super Cup" },
++  { slug: "eng.fa", name: "English FA Cup" },
++  { slug: "eng.league_cup", name: "English Carabao Cup" },
++  { slug: "esp.copa_del_rey", name: "Spanish Copa del Rey" },
++  { slug: "ita.coppa_italia", name: "Coppa Italia" },
++  { slug: "ger.dfb_pokal", name: "German Cup" },
++  { slug: "fra.coupe_de_france", name: "Coupe de France" },
++];
++
+ /**
+  * The picker tab a cached team row belongs under — the ONE derivation of it.
+  *
+@@ -112,14 +125,25 @@ export function buildLeagueTabs(
+   const bigFive = PICKER_GROUPS.filter((g) => g.key !== OTHER_GROUP && g.key !== INTERNATIONAL_GROUP);
+   const aliasBySlug = new Map(Object.entries(SLUG_BY_LEAGUE).map(([slug, alias]) => [slug, alias]));
+   const extras = followed.filter((row) => row.kind === "league" && !aliasBySlug.has(row.league));
+-  const cups = followed.filter((row) => row.kind === "cup");
+   const seen = new Set<string>();
++
++  const followedCups = followed.filter((row) => row.kind === "cup");
++  const catalogCups = CUP_COMPETITIONS.map((c) => ({
++    league: c.slug,
++    name: c.name,
++    kind: "cup" as const,
++  }));
++  const allCups = [
++    ...followedCups,
++    ...catalogCups.filter((c) => !followedCups.some((f) => f.league === c.league)),
++  ];
++
+   return [
+     ...bigFive.map((g) => ({ value: g.key, label: t(g.label) })),
+     ...extras
+       .filter((row) => (seen.has(row.league) ? false : (seen.add(row.league), true)))
+       .map((row) => ({ value: row.league, label: localize(row.name ?? row.league) })),
+-    ...cups
++    ...allCups
+       .filter((row) => (seen.has(row.league) ? false : (seen.add(row.league), true)))
+       .map((row) => ({ value: row.league, label: localize(row.name ?? row.league) })),
+   ];
+-- 
+2.54.0.windows.1
+

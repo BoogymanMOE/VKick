@@ -1,0 +1,72 @@
+From a27ea2873cffa7f921b36299ecd7ee1cd2c5ac5d Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 15:15:21 +0330
+Subject: [PATCH 162/230] polish(profile): 44px touch targets,
+ destructive-action color, RTL verification
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/ui.tsx | 13 ++++++++++++-
+ src/pages/Profile.tsx |  3 +++
+ 2 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index f8b1adc..3973ed0 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -665,6 +665,7 @@ export function ListRow({
+   onClick,
+   onToggle,
+   icon,
++  danger,
+ }: {
+   label: string;
+   hint?: string;
+@@ -678,6 +679,9 @@ export function ListRow({
+    */
+   onToggle?: () => void;
+   icon?: ReactNode;
++  /** Destructive rows: the label carries the --live coral so the action's
++      stakes are visible before the tap, not only after. */
++  danger?: boolean;
+ }) {
+   const Tag = onClick ? "button" : "div";
+   const active = Boolean(onClick || onToggle);
+@@ -703,7 +707,14 @@ export function ListRow({
+     >
+       {icon ? <span className="flex-none text-ink-2">{icon}</span> : null}
+       <span className="min-w-0 flex-1">
+-        <span className="block truncate text-sm font-bold text-ink">{label}</span>
++        <span
++          className={cx(
++            "block truncate text-sm font-bold",
++            danger ? "text-danger" : "text-ink",
++          )}
++        >
++          {label}
++        </span>
+         {hint ? <span className="block truncate text-xs text-ink-3">{hint}</span> : null}
+       </span>
+       {right}
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 85e50e1..e429ecf 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -301,7 +301,10 @@ export default function Profile() {
+ 
+       <section className="mt-6">
+         <SectionHeading title={t("profile.dangerZone")} />
++        {/* The one destructive row on the page: the label carries the live
++            (coral) colour so the stakes are visible without reading the hint. */}
+         <ListRow
++          danger
+           label={t("profile.deleteAccount")}
+           hint={t("profile.deleteHint")}
+           onClick={() => {
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,166 @@
+From ad985bbe1f04682943da7ea280c3eb3cb7ee5ca0 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 15:19:22 +0330
+Subject: [PATCH 012/230] Stop the dead shot-plotter route and the blank
+ Expected table
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+/match/:id/shot-plotter was still routed but had no page behind it, so a
+stale link or an old push landed on a blank screen. Redirect it to the
+predict tab that replaced it, via a component rather than <Navigate to>,
+because Navigate's target is a literal string and would have baked the
+":id" placeholder into the URL.
+
+The Expected view rendered an empty grid whenever a league had no
+Understat data — which is every league outside the big five, since the
+Understat sync is hard-scoped to those five. Hide the view entirely when
+there is nothing to show, so the Table screen never offers a tab it
+cannot fill.
+
+That made the two empty-state strings a lie ("the next sync fills this
+table"), so they now say what is actually true: no expected data for
+this competition.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/App.tsx         | 20 ++++++++++++++++++--
+ src/i18n/strings.ts | 10 ++++++----
+ src/pages/Table.tsx | 24 ++++++++++++++++++------
+ 3 files changed, 42 insertions(+), 12 deletions(-)
+
+diff --git a/src/App.tsx b/src/App.tsx
+index d30257d..551862e 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -1,5 +1,5 @@
+ import { lazy } from "react";
+-import { Navigate, Route, Routes } from "react-router-dom";
++import { Navigate, Route, Routes, useParams } from "react-router-dom";
+ import { AppShell } from "./components/AppShell";
+ import { AuthProvider, RequireAuth } from "./hooks/useAuth";
+ import { useFavorites } from "./hooks/useFavorites";
+@@ -50,7 +50,11 @@ export default function App() {
+                 route folds in the same way. */}
+             <Route path="/my-teams" element={<Navigate to="/onboarding" replace />} />
+             <Route path="/draft" element={<Navigate to="/onboarding" replace />} />
+-            <Route path="/match/:id/shot-plotter" element={<MatchDetail />} />
++            {/* Legacy deep link: the Shot Plotter used to be its own route, then
++                moved into the Predict tab. It rendered MatchDetail bare, which
++                silently opened the Timeline instead — so point it at the tab
++                that actually holds the Shot Predictor. */}
++            <Route path="/match/:id/shot-plotter" element={<ShotPlotterRedirect />} />
+             <Route path="/ratings" element={<Ratings />} />
+             <Route path="/table" element={<Table />} />
+             <Route path="/leaderboards" element={<Leaderboards />} />
+@@ -67,6 +71,18 @@ export default function App() {
+   );
+ }
+ 
++/**
++ * Legacy `/match/:id/shot-plotter` → `/match/:id?tab=predict`.
++ *
++ * `Navigate` does not interpolate route params (its `to` is a literal string,
++ * so `"/match/:id"` would navigate to a URL containing the characters ":id"),
++ * hence the wrapper that reads the param.
++ */
++function ShotPlotterRedirect() {
++  const { id } = useParams();
++  return <Navigate to={`/match/${id}?tab=predict`} replace />;
++}
++
+ /**
+  * First-run gate: users with no club picks land on onboarding once; everyone
+  * else goes straight to the matchday feed. A localStorage flag marks the
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 6912dec..7b7c56d 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -203,7 +203,7 @@ export const strings = {
+       "The table the chances say this season deserved: each club's xPts, with the gap to its real points. Overs is finishing above the chances.",
+     "table.expectedEmpty": "No expected points for this league yet",
+     "table.expectedEmptyHint":
+-      "Expected points come from Understat, which only covers the big five. The next sync fills this table.",
++      "Expected points come from Understat, which only covers Europe's big five leagues. Cups and other competitions have no xPts feed.",
+ 
+     "profile.title": "Profile",
+     "profile.telegram": "Telegram account",
+@@ -333,7 +333,8 @@ export const strings = {
+     "xg.xa": "xA",
+     "xg.xg90": "xG/90",
+     "xg.emptyTitle": "No expected-goals data",
+-    "xg.emptyHint": "Understat covers the big five, so clubs outside it have no xG feed.",
++    "xg.emptyHint":
++      "Understat covers Europe's big five leagues, so clubs and competitions outside them have no xG feed yet.",
+     "xg.source": "Understat \u00b7 season totals",
+     "xg.sitOpenPlay": "Open play",
+     "xg.sitCorner": "From a corner",
+@@ -877,7 +878,7 @@ export const strings = {
+       "جدولی که موقعیت‌ها می‌گویند فصل شایسته‌اش بوده: امتیاز انتظاری هر باشگاه و فاصله‌اش با امتیاز واقعی.",
+     "table.expectedEmpty": "هنوز امتیاز انتظاری برای این لیگ نیست",
+     "table.expectedEmptyHint":
+-      "امتیاز انتظاری از Understat می‌آید و فقط پنج لیگ برتر را پوشش می‌دهد. سینک بعدی این جدول را پر می‌کند.",
++      "امتیاز انتظاری از Understat می‌آید و فقط پنج لیگ برتر اروپا را پوشش می‌دهد. جام‌ها و مسابقات دیگر داده xPts ندارند.",
+ 
+     "profile.title": "پروفایل",
+     "profile.telegram": "حساب تلگرام",
+@@ -1007,7 +1008,8 @@ export const strings = {
+     "xg.xa": "xA",
+     "xg.xg90": "xG/۹۰",
+     "xg.emptyTitle": "داده گل انتظاری موجود نیست",
+-    "xg.emptyHint": "Understat پنج لیگ برتر را پوشش می‌دهد؛ باشگاه‌های بیرون آن داده xG ندارند.",
++    "xg.emptyHint":
++      "Understat پنج لیگ برتر اروپا را پوشش می‌دهد؛ باشگاه‌ها و مسابقات بیرون آن داده xG ندارند.",
+     "xg.source": "Understat \u00b7 آمار فصل",
+     "xg.sitOpenPlay": "جریان بازی",
+     "xg.sitCorner": "از کرنر",
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index f154ec6..480f18e 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -36,8 +36,16 @@ export default function Table() {
+ 
+   // Expected points ride along on the standings payload (one left join
+   // server-side, no extra request), and only the clubs Understat covers have
+-  // them — so "no data" is a normal state here, never an error.
++  // them — so "no data" is a normal state here, never an error. Understat only
++  // scrapes the big five, so for any other league the Expected tab would open
++  // onto an empty board; in that case the tab is hidden rather than shown
++  // disabled, because a control that can never do anything is worse than an
++  // absent one.
+   const hasExpected = rows.some((row) => row.xpts != null);
++  // Guard the view itself too: if it somehow renders without data (a league
++  // that gains coverage mid-session), fall back to the real table instead of
++  // a grid of dashes.
++  const showExpected = view === "expected" && hasExpected;
+   // Ranked by xPts, with the uncovered clubs parked below in table order
+   // (Array#sort is stable) rather than dropped or given a fake rank.
+   const expectedRows = [...rows].sort((a, b) => (b.xpts ?? -1) - (a.xpts ?? -1));
+@@ -131,13 +139,17 @@ export default function Table() {
+               value={view}
+               onChange={setView}
+               className="mb-2"
+-              options={[
+-                { value: "actual", label: t("table.viewActual") },
+-                { value: "expected", label: t("table.viewExpected") },
+-              ]}
++              options={
++                hasExpected
++                  ? [
++                      { value: "actual", label: t("table.viewActual") },
++                      { value: "expected", label: t("table.viewExpected") },
++                    ]
++                  : [{ value: "actual", label: t("table.viewActual") }]
++              }
+             />
+ 
+-            {view === "expected" ? (
++            {showExpected ? (
+               hasExpected ? (
+                 <>
+                   {/* Same shell as the real table so switching views doesn't
+-- 
+2.54.0.windows.1
+

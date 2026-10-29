@@ -1,0 +1,314 @@
+From 314404ea7449d840fc0a1d7765b4db0031eb730b Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 16 Oct 2026 20:04:32 +0330
+Subject: [PATCH 103/230] Reserve a dedicated fixed slot for the A-ADS ad at
+ the viewport bottom; modernize the design language with more breathing room
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Add --space-page-x (16px) and --ad-slot-h (100px) to tokens.css
+- Pin A-ADS iframe to a fixed bottom slot with reserved height
+- Offset TabBar by --ad-slot-h so it sits above the ad
+- Add bottom padding to AppShell main for TabBar + ad slot
+- Add bottom padding to Login main for the ad slot (no TabBar)
+- Update MatchDetail CTA bottom calc to include ad slot height
+- Bump horizontal gutters from 12px to 16px across headers, cards, and pages
+- Increase vertical spacing (pb-3→pb-4, mt-3→mt-4, etc.) for breathing room
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ index.html                   | 57 ++++++++++++++++++++++++++++--------
+ src/components/AppShell.tsx  |  8 +++--
+ src/components/MatchCard.tsx |  2 +-
+ src/components/TabBar.tsx    |  9 ++++--
+ src/components/TopBar.tsx    |  4 ++-
+ src/pages/Login.tsx          | 21 +++++++------
+ src/pages/MatchDetail.tsx    |  8 +++--
+ src/pages/Matches.tsx        | 10 +++----
+ tokens.css                   | 11 +++++++
+ 9 files changed, 94 insertions(+), 36 deletions(-)
+
+diff --git a/index.html b/index.html
+index ea438bd..7241239 100644
+--- a/index.html
++++ b/index.html
+@@ -110,25 +110,56 @@
+     <!-- A-ADS (Anonymous Ads) unit, served as RAW HTML on purpose: the A-ADS
+          verifier does not run JavaScript, so an ad drawn by the SPA is invisible
+          to it ("Not found"). It is the initial document's own markup, and no
+-         environment switch gates it — editing this block is the only way to turn it off. -->
++         environment switch gates it — editing this block is the only way to turn it off.
++
++         The slot is `position: fixed` at the very bottom of the viewport with a
++         reserved height (see --ad-slot-h in tokens.css). The TabBar sits ABOVE
++         this slot (its sticky bottom offsets by the same height) and the main
++         content's bottom padding accounts for both, so the ad never overlaps
++         content or the tab bar, and A-ADS sees a fully visible unit. -->
+     <div
+       id="a-ads"
+-      style="margin: 20px auto; max-width: 468px; min-height: 100px; position: relative; z-index: 1"
++      style="
++        position: fixed;
++        bottom: 0;
++        left: 0;
++        right: 0;
++        z-index: 5;
++        height: var(--ad-slot-h, 100px);
++        background: var(--bg-base, #081613);
++        border-top: 1px solid var(--border-subtle, #1e3b34);
++        display: flex;
++        align-items: center;
++        justify-content: center;
++        padding: 8px 8px max(env(safe-area-inset-bottom), 8px);
++      "
+     >
+-      <iframe
+-        data-aa="2458182"
+-        src="//acceptable.a-ads.com/2458182/?size=Adaptive"
++      <div
+         style="
+-          border: 0;
+-          padding: 0;
+-          overflow: hidden;
+-          display: block;
+-          margin: auto;
++          max-width: 468px;
+           width: 100%;
+-          height: auto;
++          height: 100%;
++          display: flex;
++          align-items: center;
++          justify-content: center;
++          overflow: hidden;
+         "
+-        title="Advertisement"
+-      ></iframe>
++      >
++        <iframe
++          data-aa="2458182"
++          src="//acceptable.a-ads.com/2458182/?size=Adaptive"
++          style="
++            border: 0;
++            padding: 0;
++            margin: 0;
++            display: block;
++            width: 100%;
++            height: 100%;
++            overflow: hidden;
++          "
++          title="Advertisement"
++        ></iframe>
++      </div>
+     </div>
+   </body>
+ </html>
+diff --git a/src/components/AppShell.tsx b/src/components/AppShell.tsx
+index 6327285..e2fab4b 100644
+--- a/src/components/AppShell.tsx
++++ b/src/components/AppShell.tsx
+@@ -48,12 +48,16 @@ export function AppShell() {
+       >
+         {t("common.skipToContent")}
+       </a>
+-      {/* key={pathname} remounts the wrapper per route, replaying the animation. */}
++      {/* key={pathname} remounts the wrapper per route, replaying the animation. 
++          The bottom padding reserves space for BOTH the sticky TabBar (~56px) AND
++          the fixed A-ADS ad slot, so the last match card / league row is never hidden
++          behind the tab bar and ad. */}
+       <main
+         id="main-content"
+         tabIndex={-1}
+         key={pathname}
+-        className="page-in mx-auto w-full max-w-[560px] flex-1 px-3 pb-6 outline-none"
++        className="page-in mx-auto w-full max-w-[560px] flex-1 px-[var(--space-page-x,16px)] pt-4 outline-none"
++        style={{ paddingBottom: "calc(56px + var(--ad-slot-h, 100px) + max(env(safe-area-inset-bottom), 8px))" }}
+       >
+         <Suspense
+           fallback={
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index 8cf16fc..a426feb 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -66,7 +66,7 @@ export const MatchCard = memo(function MatchCard({
+           card scrolling under the header never paints over it. */}
+       <div
+         className={cx(
+-          "relative overflow-hidden rounded-card border p-2.5 transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
++          "relative overflow-hidden rounded-card border p-3 transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
+           // A goal in flight owns the card; otherwise a live match wears the
+           // cyan halo (see .live-glow), and everything else stays on the
+           // neutral surface so live is the only card that glows.
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index aec99aa..b450c4c 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -26,8 +26,13 @@ export function TabBar() {
+   return (
+     // 95% opaque, so no backdrop blur — same reasoning as TopBar: the blur was
+     // imperceptible but ran on every scroll frame.
+-    <nav className="pad-safe-bottom sticky bottom-0 z-20 border-t border-line bg-base/95">
+-      <ul className="mx-auto flex w-full max-w-[560px] items-stretch justify-between px-1">
++    // `bottom` is offset by --ad-slot-h so the bar sits ABOVE the fixed A-ADS slot
++    // instead of fighting it for the same strip.
++    <nav
++      className="pad-safe-bottom sticky z-20 border-t border-line bg-base/95"
++      style={{ bottom: "var(--ad-slot-h, 100px)" }}
++    >
++      <ul className="mx-auto flex w-full max-w-[560px] items-stretch justify-between px-2 pt-1">
+         {tabs.map(({ to, key, Icon }) => (
+           <li key={to} className="flex-1">
+             <NavLink
+diff --git a/src/components/TopBar.tsx b/src/components/TopBar.tsx
+index 6d648ae..b85c992 100644
+--- a/src/components/TopBar.tsx
++++ b/src/components/TopBar.tsx
+@@ -23,7 +23,9 @@ export function TopBar({
+     // still forcing a full-width backdrop read on every scroll frame — exactly
+     // the cost the low-end Android target can't afford.
+     <header className="pad-safe-top sticky top-0 z-20 border-b border-line bg-base/95">
+-      <div className="mx-auto flex w-full max-w-[560px] items-center gap-3 px-3 pb-3">
++      {/* px-[var(--space-page-x)] aligns the header's gutters with the page below
++          and pb-4 gives more breathing room from the content underneath. */}
++      <div className="mx-auto flex w-full max-w-[560px] items-center gap-3 px-[var(--space-page-x,16px)] pb-4 pt-2">
+         {back ? (
+           <button
+             type="button"
+diff --git a/src/pages/Login.tsx b/src/pages/Login.tsx
+index d47d154..a005ad3 100644
+--- a/src/pages/Login.tsx
++++ b/src/pages/Login.tsx
+@@ -89,14 +89,20 @@ export default function Login() {
+   return (
+     <div className="floodlight flex min-h-[100svh] flex-col">
+       <header className="pad-safe-top">
+-        <div className="mx-auto flex w-full max-w-[560px] justify-end px-3 py-2">
++        <div className="mx-auto flex w-full max-w-[560px] justify-end px-[var(--space-page-x,16px)] py-3">
+           <LanguageToggle />
+         </div>
+       </header>
+ 
+-      <main className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-4 pb-8">
++      {/* The fixed A-ADS ad slot overlaps this screen too (Login sits outside
++          AppShell, so there is no TabBar to offset it). The bottom padding reserves
++          the ad slot height plus safe-area so the legal line stays reachable. */}
++      <main
++        className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-5"
++        style={{ paddingBottom: "calc(40px + var(--ad-slot-h, 100px) + max(env(safe-area-inset-bottom), 8px))" }}
++      >
+         {/* Hero: the mark over the wordmark, over the floodlit wash. */}
+-        <section className="rise-in px-2 pb-7 text-center">
++        <section className="rise-in px-1 pb-10 text-center">
+           <img
+             src="/vkick-mark.svg"
+             alt=""
+@@ -235,12 +241,9 @@ export default function Login() {
+               </button>
+             </div>
+           )}
+-        </Card>
+-
+-        <p
+-          className="rise-in mt-5 px-2 text-center text-[11px] leading-relaxed text-ink-3"
+-          style={{ "--stagger": "140ms" } as CSSProperties}
+-        >
++        </Card>        <p
++          className="rise-in mt-6 px-1 text-center text-[11px] leading-relaxed text-ink-3"
++          style={{ "--stagger": "140ms" } as CSSProperties}>
+           {t("auth.legal")}
+         </p>
+       </main>
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index b04767f..09dc7e3 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -352,9 +352,11 @@ export default function MatchDetail() {
+           spacer keeps the last row from hiding underneath it. */}
+       {showPickCta ? (
+         <>
+-          <div className="h-16" aria-hidden="true" />
+-          <div className="fixed inset-x-0 bottom-[calc(56px+max(env(safe-area-inset-bottom),8px))] z-20 border-t border-line bg-base/95">
+-            <div className="mx-auto flex w-full max-w-[560px] items-center justify-between gap-3 px-3 py-2">
++          <div className="h-[180px]" aria-hidden="true" />
++          {/* The CTA sits on top of the tab bar which itself sits on top of the ad slot,
++              so `bottom` is the sum of the TabBar's offset and its own height. */}
++          <div className="fixed inset-x-0 bottom-[calc(56px+var(--ad-slot-h,100px)+max(env(safe-area-inset-bottom),8px))] z-20 border-t border-line bg-base/95">
++            <div className="mx-auto flex w-full max-w-[560px] items-center justify-between gap-3 px-[var(--space-page-x,16px)] py-3">
+               <p className="min-w-0 truncate text-[11px] text-ink-3">
+                 {t("predict.picksMade", { count: picksMade, total: 5 })}
+               </p>
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index db20249..c7b5d70 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -256,7 +256,7 @@ export default function Matches() {
+           carries them: two quiet shortcuts, always visible — even when a league
+           deep link scopes the feed and the leagues chip row is hidden — in the
+           same rounded-line affordance as the header's refresh button. */}
+-      <div className="mt-3 flex items-center gap-2">
++      <div className="mt-4 flex items-center gap-2">
+         <Link
+           to="/browse"
+           onClick={() => haptic("light")}
+@@ -290,7 +290,7 @@ export default function Matches() {
+             and the row is here even with nothing followed so leagues are
+             pickable from the feed rather than only during onboarding. */}
+         {!league ? (
+-          <div className="-mx-3 mt-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
++          <div className="-mx-[var(--space-page-x,16px)] mt-4 flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] pb-1">
+             {followed.count > 0 ? (
+               <>
+                 <button
+@@ -341,7 +341,7 @@ export default function Matches() {
+         {/* Single-league deep link: name the scope, let the user leave. Without
+           this the screen looks like a broken feed when the window is quiet. */}
+         {league ? (
+-          <div className="mt-3 flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-3 py-2">
++          <div className="mt-4 flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3">
+             <p className="min-w-0 truncate text-xs text-ink-2">
+               {t("matches.leagueScope", {
+                 league: LEAGUE_BY_SLUG[league] ? t(`league.${LEAGUE_BY_SLUG[league]}`) : league,
+@@ -401,7 +401,7 @@ export default function Matches() {
+         {/* No favorites yet: one clear call to pick them. The picks feed above
+           takes over once a team is saved. */}
+         {favCount === 0 ? (
+-          <Card className="pitch-watermark mt-3 flex items-center justify-between gap-3 p-3">
++          <Card className="pitch-watermark mt-4 flex items-center justify-between gap-3 p-4">
+             <div className="min-w-0">
+               <p className="text-sm font-bold text-ink">{t("myTeams.empty")}</p>
+               <p className="mt-0.5 text-xs text-ink-3">{t("myTeams.hint")}</p>
+@@ -486,7 +486,7 @@ export default function Matches() {
+                   {groupedUpcoming.map((group) => (
+                     <li key={group.day}>
+                       <div className="sticky top-14 z-10 bg-base/95 py-1.5">
+-                        <p className="label text-ink-3 px-1">{group.label}</p>
++                        <p className="label text-ink-3 px-2">{group.label}</p>
+                       </div>
+                       <ul className="space-y-2">
+                         {group.matches.map((match, index) => (
+diff --git a/tokens.css b/tokens.css
+index 9e4428e..7c95246 100644
+--- a/tokens.css
++++ b/tokens.css
+@@ -35,6 +35,17 @@
+   --t-slow: 450ms;
+   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+   --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
++
++  /* Page gutter — shared horizontal space between content and screen edge.
++     16px from each edge on a 360px webview is the modern mobile norm; the
++     previous 12px (px-3) read as cramped. */
++  --space-page-x: 16px;
++
++  /* A-ADS ad slot — reserved at the very bottom of the viewport, above the
++     iOS home indicator. The TabBar sits on top of this slot and the main
++     content's bottom padding accounts for both, so nothing is ever hidden
++     behind the ad and the ad never overlaps content or the tab bar. */
++  --ad-slot-h: 100px;
+ }
+ body {
+   background: var(--bg-base);
+-- 
+2.54.0.windows.1
+

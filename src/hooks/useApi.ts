@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { api, serverErrorKey, type ApiMatch, type ApiTeam } from "../lib/api";
+import { api, serverErrorKey, type ApiMatch, type ApiTeam, type ApiTeamAvailability } from "../lib/api";
 import type { PredictionWindow } from "../lib/predictionWindow";
 import { TEAM_FALLBACK } from "../lib/colors";
 import { buildLeagueTabs, type LeagueTab } from "../lib/pickerGroups";
@@ -559,6 +559,7 @@ export function useLeaguePlayers(league: string, sort: LeaderSort = "goals", lim
         teamShort: p.team_short,
         teamColor: p.team_color,
         headshot: p.headshot_url,
+        avatarUrl: p.avatar_url ?? null,
         jersey: p.jersey_number,
         appearances: p.appearances ?? 0,
         goals: p.goals ?? 0,
@@ -640,6 +641,17 @@ export function useRecentLineup(teamId: string) {
   });
 }
 
+export function useTeamAvailability(teamId: string) {
+  return useQuery({
+    queryKey: ["team-availability", teamId],
+    queryFn: () => api.getTeamAvailability(teamId),
+    enabled: Boolean(teamId),
+    staleTime: 30 * 60_000,
+    select: (data): Map<string, ApiTeamAvailability> =>
+      new Map(data.players.map((player) => [player.player_id, player])),
+  });
+}
+
 export function useTeamDetail(teamId: string) {
   return useQuery({
     queryKey: ["team", teamId],
@@ -718,10 +730,12 @@ export interface SquadRow {
   id: string;
   name: string;
   shortName: string | null;
-  position: "GK" | "DEF" | "MID" | "FWD";
+  position: "GK" | "DEF" | "MID" | "FWD" | "OTHER";
   espnPosition: string | null;
+  availability: ApiTeamAvailability | null;
   jersey: number | null;
   headshot: string | null;
+  avatarUrl?: string | null;
   appearances: number | null;
   goals: number | null;
   assists: number | null;
@@ -740,10 +754,12 @@ export function useSquad(teamId: string) {
         id: p.id,
         name: p.full_name,
         shortName: p.short_name,
-        position: (p.position ?? "MID") as SquadRow["position"],
+        position: (p.position ?? "OTHER") as SquadRow["position"],
         espnPosition: p.espn_position,
+        availability: p.availability ?? null,
         jersey: p.jersey_number,
         headshot: p.headshot_url,
+        avatarUrl: p.avatar_url ?? null,
         appearances: p.appearances,
         goals: p.season_goals,
         assists: p.season_assists,

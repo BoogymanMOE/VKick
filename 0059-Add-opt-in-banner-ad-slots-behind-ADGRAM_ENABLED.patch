@@ -1,0 +1,461 @@
+From d92c1776c13ec0776488d141cb08d1913e991b2c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 11 Oct 2026 01:34:59 +0330
+Subject: [PATCH 059/230] Add opt-in banner ad slots behind ADGRAM_ENABLED
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The Task card only covers in-Telegram placements, so there was no passive
+banner surface on either screen. AdBanner owns the container (React renders no
+script tags) and injects the provider code from an effect, with a marked TODO
+for the snippet; it returns null unless ADGRAM_ENABLED is exactly "true", and
+renders nothing until the SDK is ready so a blocked or hung load can never
+leave a hollow sponsored frame in the feed. vite.config maps the un-prefixed
+name into the bundle because Vite only inlines VITE_-prefixed vars on its own.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ .env.example                |   7 ++
+ CHANGELOG.md                |  12 +++
+ README.md                   |   5 +-
+ src/components/AdBanner.tsx | 146 ++++++++++++++++++++++++++++++++++++
+ src/lib/ads.ts              |  27 ++++++-
+ src/pages/MatchDetail.tsx   |   6 ++
+ src/pages/Matches.tsx       |   7 ++
+ src/vite-env.d.ts           |  13 ++++
+ vite.config.ts              |  83 +++++++++++---------
+ 9 files changed, 269 insertions(+), 37 deletions(-)
+ create mode 100644 src/components/AdBanner.tsx
+
+diff --git a/.env.example b/.env.example
+index 130b04e..2b8639c 100644
+--- a/.env.example
++++ b/.env.example
+@@ -48,3 +48,10 @@ RETENTION_LOG_KB=512
+ # type Task, put its id here (format: task-12345). Unset/empty = ads disabled
+ # and the SDK never loads (the web build never shows ads either).
+ VITE_ADSGRAM_TASK_BLOCK_ID=
++
++# Banner ads (<AdBanner>, Adsgram banner format). "true" renders the banner
++# slots, anything else (unset, "1", "yes") renders nothing at all. Both names
++# work: this one is read through vite.config's define, VITE_ADGRAM_ENABLED is
++# Vite's own client-visible prefix. Baked in at BUILD time — flipping it needs
++# a rebuild. Paste your banner snippet into src/components/AdBanner.tsx first.
++ADGRAM_ENABLED=false
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 2c820af..fd03bcc 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -208,6 +208,18 @@
+ 
+ ### Added
+ 
++- **Banner ad slots (`<AdBanner>`) — off by default, awaiting the provider
++  snippet.** Two placements: the end of the Matchday Upcoming feed (after
++  today's games, so nothing is pushed out of view) and the foot of Match detail
++  (below the tab body, timeline and comments). The slot wears the app's own card
++  chrome, labels itself "Sponsored", and is capped at a 468px banner width for
++  desktop. It renders `null` unless `ADGRAM_ENABLED=true` (or
++  `VITE_ADGRAM_ENABLED`; vite.config maps the un-prefixed name into the bundle,
++  and both are inlined at build time so switching them means a rebuild), and it
++  renders nothing at all until the provider SDK is ready — an empty or blocked
++  slot leaves no hollow frame behind. The provider snippet goes in the `TODO`
++  block in `src/components/AdBanner.tsx`; until it is pasted, the slot stays
++  empty and hides itself.
+ - **Explicit username registration.** The Login screen has a Sign in / Create
+   account switch wired to `POST /api/auth/register` (with guest-upgrade
+   merge). Unknown usernames on sign-in stay `NO_ACCOUNT` — never auto-created,
+diff --git a/README.md b/README.md
+index dda942d..115060f 100644
+--- a/README.md
++++ b/README.md
+@@ -120,6 +120,7 @@ fixtures and live scores from ESPN scoreboards, lineups/timelines/player stats f
+ - Referral/invite mechanic: one reusable invite code per account, redeemable once per account, paying the referrer on the GLOBAL board only (capped per invite count) — `server/scoring/referral.ts`, surfaced in Profile with copy in both languages
+ - League tables for **every** followed domestic league, not just the big five: `buildLeagueTabs` derives the Table tabs from `followed_leagues`, and `syncStandings()` sweeps `ALL_DOMESTIC` (11 leagues). Understat xPts remain big-five only, so the Expected view hides itself where there is no data rather than showing dashes
+ - Inline Adsgram Task card (Telegram-only, opt-in via `VITE_ADSGRAM_TASK_BLOCK_ID`) — see the note below
++- Banner ad slots (`<AdBanner>`, Adsgram banner format) after the Matchday Upcoming feed and at the foot of Match detail — off unless `ADGRAM_ENABLED=true` (or `VITE_ADGRAM_ENABLED`), and awaiting the provider snippet in `src/components/AdBanner.tsx`
+ - Guest/device accounts with full merge-on-upgrade, username-only login, Telegram initData auth, admin sync/notify endpoints
+ 
+ Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by migration) — Versus Mode is the user-chosen pair in the prediction payload.
+@@ -137,7 +138,9 @@ Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by mi
+ 
+ **Knockout brackets ship too.** `src/lib/bracket.ts` builds a connected tree from ESPN's round labels — rounds ordered first-leg → final, ties folded onto their second legs, winners inferred from the scoreline, and each round's entrants linked back to the feeder matches that produced them. The Cups screen renders it whenever a competition carries round data, and falls back to the flat live/upcoming/results sections when it doesn't.
+ 
+-(Ads: the inline **Adsgram Task card is live** on Matchday and Match detail — Telegram-only, and off entirely unless `VITE_ADSGRAM_TASK_BLOCK_ID` is set (`src/lib/ads.ts`). Rewarded/interstitial formats are deliberately unused.)
++(Ads: the inline **Adsgram Task card is live** on Matchday and Match detail — Telegram-only, and off entirely unless `VITE_ADSGRAM_TASK_BLOCK_ID` is set (`src/lib/ads.ts`). Rewarded/interstitial formats are deliberately unused.
++
++**Banner slots** are wired but dormant: `<AdBanner>` (`src/components/AdBanner.tsx`) renders at the end of the Upcoming feed and at the foot of Match detail, and it returns `null` unless `ADGRAM_ENABLED=true` — at which point it loads the Adsgram SDK and expects your banner snippet in the `TODO` block inside the component. Both env names work (`VITE_ADGRAM_ENABLED` is Vite's own prefix; vite.config maps the plain `ADGRAM_ENABLED` in), and both are baked in at build time, so changing the flag means a rebuild.)
+ 
+ ## Screens
+ 
+diff --git a/src/components/AdBanner.tsx b/src/components/AdBanner.tsx
+new file mode 100644
+index 0000000..cb6c56b
+--- /dev/null
++++ b/src/components/AdBanner.tsx
+@@ -0,0 +1,146 @@
++/**
++ * AdBanner — the reusable banner-ad slot.
++ *
++ * WHY A SLOT AND NOT A PASTED TAG: the ad <script> cannot live in JSX (React
++ * renders no script tags), and the same banner must appear in two places, so the
++ * component owns the container and injects the provider's code into it from an
++ * effect, once, after mount.
++ *
++ * TWO THINGS TO DO BEFORE THIS SHOWS ANYTHING:
++ *  1. paste your Adsgram snippet into the `TODO` block below (the file is
++ *     structured for it — see the step-by-step there);
++ *  2. set `ADGRAM_ENABLED=true` in the environment (or `VITE_ADGRAM_ENABLED=true`)
++ *     and rebuild — without it this component returns null and no script or
++ *     request is ever made.
++ *
++ * The slot wears the app's own chrome (`rounded-card`, `border-line`,
++ * `bg-surface`, centred, capped at a 468px banner width so desktop does not
++ * stretch it) and labels itself "Sponsored" for honesty.
++ *
++ * An empty sponsored box is worse than none — the rule the Task card already
++ * follows — so the component renders NOTHING until the provider SDK is ready
++ * (a blocked, offline or hanging load therefore leaves no hollow frame and no
++ * empty wrapper in the feed), and a slot that is still empty a few seconds
++ * after the SDK lands hides itself too.
++ */
++import { useEffect, useRef, useState } from "react";
++import { bannerAdsEnabled, loadAdsgramScript } from "../lib/ads";
++import { useI18n } from "../i18n/context";
++import { cx } from "../lib/cx";
++
++/** How long an empty slot may sit before it hides. Generous: ad fill is slow. */
++const EMPTY_SLOT_MS = 5000;
++
++/** Standard banner width — also keeps the slot honest on a desktop viewport. */
++const SLOT_MAX_WIDTH = 468;
++
++export function AdBanner({ className }: { className?: string }) {
++  const { t } = useI18n();
++  const [sdkReady, setSdkReady] = useState(false);
++  const [hidden, setHidden] = useState(false);
++  /** The div the provider's code renders into (or the script tag is appended to). */
++  const slotRef = useRef<HTMLDivElement | null>(null);
++
++  // 1. Load the provider SDK. `loadAdsgramScript` is the same loader the Task
++  //    card uses: it appends <script src="https://sad.adsgram.ai/js/sad.min.js">
++  //    to <head> once per page load, and retries after a failed load. Nothing
++  //    here runs at all unless the switch above is on.
++  useEffect(() => {
++    if (!bannerAdsEnabled) return;
++    let cancelled = false;
++    loadAdsgramScript()
++      .then(() => {
++        if (!cancelled) setSdkReady(true);
++      })
++      .catch(() => {
++        // No SDK (blocked, offline, provider down): hide the slot rather than
++        // render an empty frame.
++        if (!cancelled) setHidden(true);
++      });
++    return () => {
++      cancelled = true;
++    };
++  }, []);
++
++  // 2. Inject the ad itself. This is the effect to edit. It runs after the
++  //    commit that first renders the slot (the render gate above waits for
++  //    `sdkReady`), so `slotRef.current` is the live element here.
++  useEffect(() => {
++    const slot = slotRef.current;
++    if (!sdkReady || !slot) return;
++
++    // ==================== TODO: PASTE YOUR ADGRAM SCRIPT HERE ====================
++    //
++    // Adsgram gives you a snippet that looks like this (partner.adsgram.ai →
++    // your Banner block):
++    //
++    //   <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
++    //   <script>
++    //     window.Adsgram.init({ blockId: "12345" }).show();
++    //   </script>
++    //
++    // The <script src> half is ALREADY loaded by the effect above, so paste only
++    // the second half here, pointed at this slot:
++    //
++    //     const adsgram = (window as unknown as {
++    //       Adsgram?: { init: (opts: { blockId: string }) => { show: () => unknown } };
++    //     }).Adsgram;
++    //     if (adsgram) adsgram.init({ blockId: "YOUR_BLOCK_ID" }).show();
++    //
++    // If your snippet instead hands you a self-contained block with its own
++    // inline <script>, append it to the slot we render — that is what `slot` is
++    // for. A script node created this way runs on append:
++    //
++    //     const script = document.createElement("script");
++    //     script.text = "/* your snippet body */";
++    //     slot.appendChild(script);
++    //
++    // Or, if the provider renders into an element you name, give it the slot:
++    //
++    //     window.MyAdProvider.render({ container: slot, blockId: "…" });
++    //
++    // Two rules when you paste it:
++    //  - keep it inside this effect, so it runs once per mount and only after
++    //    the SDK is ready (never on every render);
++    //  - delete the `EMPTY_SLOT_MS` timer below if your provider can legitimately
++    //    fill later than 5s, and call `setHidden(true)` yourself when it reports
++    //    "no fill" / "error" (that keeps an empty framed box out of the feed).
++    //
++    // Nothing is pasted yet, so the slot stays empty and hides itself after
++    // EMPTY_SLOT_MS. That is expected until you fill this in.
++    //
++    // ============================================================================
++
++    const emptyTimer = window.setTimeout(() => {
++      if (slot.childElementCount === 0) setHidden(true);
++    }, EMPTY_SLOT_MS);
++
++    return () => {
++      window.clearTimeout(emptyTimer);
++    };
++  }, [sdkReady]);
++
++  // Off, still loading, or already known to have nothing to show: no wrapper,
++  // no label, no empty frame. The whole component is a no-op in every one of
++  // those states — which is also what keeps a hung SDK load invisible.
++  if (!bannerAdsEnabled || !sdkReady || hidden) return null;
++
++  return (
++    <aside
++      aria-label={t("ads.sponsored")}
++      className={cx("mx-auto mt-6 w-full", className)}
++      style={{ maxWidth: SLOT_MAX_WIDTH }}
++    >
++      <p className="mb-1 text-center text-[10px] font-bold uppercase tracking-widest text-ink-3">
++        {t("ads.sponsored")}
++      </p>
++      {/* The provider renders inside this slot. `data-ad-slot` makes it easy to
++          find in devtools (and to target from a CSS/blocked-ad rule). */}
++      <div
++        ref={slotRef}
++        data-ad-slot="adgram-banner"
++        className="grid min-h-[60px] place-items-center overflow-hidden rounded-card border border-line bg-surface"
++      />
++    </aside>
++  );
++}
+diff --git a/src/lib/ads.ts b/src/lib/ads.ts
+index ddd097c..dfff881 100644
+--- a/src/lib/ads.ts
++++ b/src/lib/ads.ts
+@@ -17,12 +17,37 @@
+  *
+  * Adsgram allows exactly ONE Task block per project, so every placement shares
+  * one block id and each screen renders at most one card.
++ *
++ * The BANNER format (`src/components/AdBanner.tsx`) shares the same SDK script
++ * but a different switch: `bannerAdsEnabled` below (ADGRAM_ENABLED /
++ * VITE_ADGRAM_ENABLED). It is deliberately NOT gated on `isTelegram()` — the
++ * banner is a placement the operator turns on explicitly — but note that
++ * outside Telegram's webview Adsgram serves nothing, so an enabled banner on
++ * the plain web renders an empty slot that hides itself.
+  */
+ import { isTelegram } from "./telegram";
+ 
+-/** The SDK that registers the <adsgram-task> custom element. */
++/** The SDK that registers the <adsgram-task> custom element (and serves banners). */
+ export const TASK_SCRIPT_SRC = "https://sad.adsgram.ai/js/sad.min.js";
+ 
++/**
++ * The banner-ads kill switch, read at BUILD time (Vite inlines both of these,
++ * so flipping the value needs a rebuild — it is not a runtime toggle).
++ *
++ * Two spellings, one rule — the value must be exactly `true`:
++ *  - `ADGRAM_ENABLED` (the name the deploy sets; vite.config maps it into
++ *    `__ADGRAM_ENABLED__` because Vite only inlines `VITE_`-prefixed vars on
++ *    its own),
++ *  - `VITE_ADGRAM_ENABLED` (Vite's native client-visible prefix).
++ *
++ * Anything else — unset, `""`, `"1"`, `"yes"` — leaves every <AdBanner>
++ * rendering null, so ads stay off during testing without touching the code.
++ */
++export const bannerAdsEnabled = (() => {
++  const raw = `${import.meta.env.VITE_ADGRAM_ENABLED ?? ""}`.trim() || `${__ADGRAM_ENABLED__ ?? ""}`.trim();
++  return raw.toLowerCase() === "true";
++})();
++
+ /** `task-…` block id from partner.adsgram.ai; empty = ads fully disabled. */
+ export const taskBlockId = (import.meta.env.VITE_ADSGRAM_TASK_BLOCK_ID ?? "").trim();
+ 
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 3db5334..8bb6325 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -38,6 +38,7 @@ import { api, serverErrorKey, type ApiPlayerRating, type ApiTimelineEvent } from
+ import { TEAM_FALLBACK } from "../lib/colors";
+ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+ import { TaskAdCard } from "../components/TaskAdCard";
++import { AdBanner } from "../components/AdBanner";
+ import { useAuth } from "../hooks/authContext";
+ import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+@@ -304,6 +305,11 @@ export default function MatchDetail() {
+           nothing fills; see src/lib/ads.ts for the whole story. */}
+       <TaskAdCard />
+ 
++      {/* Sponsored banner, last thing on the page: below the tab body (timeline
++          and comments included) so it never sits between the user and the
++          match. Off unless ADGRAM_ENABLED is "true". */}
++      <AdBanner />
++
+       {/* The Shot Predictor lives in the Predict tab now (concept v2). */}
+     </>
+   );
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 5da4b78..3ad0a85 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -34,6 +34,7 @@ import {
+   StarFilledIcon,
+ } from "../components/icons";
+ import { TaskAdCard } from "../components/TaskAdCard";
++import { AdBanner } from "../components/AdBanner";
+ import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
+ import { usePullToRefresh } from "../hooks/usePullToRefresh";
+ import { PullIndicator } from "../components/PullToRefresh";
+@@ -403,6 +404,12 @@ export default function Matches() {
+           )}
+         </CollapsibleSection>
+ 
++        {/* Sponsored banner, below the Upcoming feed: after today's games have
++          had their say, so it can never push the fixtures out of view. Renders
++          nothing unless ADGRAM_ENABLED is "true" and a snippet is pasted into
++          src/components/AdBanner.tsx. */}
++        <AdBanner />
++
+         {/* Previous results beneath the feed: folded away by default so the
+           matchday page leads with what's next; open when the score is wanted.
+           Hidden entirely until there is a result — an always-empty disclosure
+diff --git a/src/vite-env.d.ts b/src/vite-env.d.ts
+index cbc91e2..ba4720f 100644
+--- a/src/vite-env.d.ts
++++ b/src/vite-env.d.ts
+@@ -5,6 +5,19 @@ import type * as React from "react";
+ declare global {
+   /** Injected by vite.config `define` — the package.json version at build time. */
+   const __APP_VERSION__: string;
++  /**
++   * Injected by vite.config `define` from the plain `ADGRAM_ENABLED` environment
++   * variable — the banner-ads kill switch under the name the deploy sets.
++   * Inlined at build time; see src/lib/ads.ts.
++   */
++  const __ADGRAM_ENABLED__: string;
++
++  interface ImportMetaEnv {
++    /** The Vite-native spelling of the same switch (`VITE_ADGRAM_ENABLED`). */
++    readonly VITE_ADGRAM_ENABLED?: string;
++    /** Adsgram Task block id (see src/lib/ads.ts). */
++    readonly VITE_ADSGRAM_TASK_BLOCK_ID?: string;
++  }
+ 
+   interface Window {
+     /**
+diff --git a/vite.config.ts b/vite.config.ts
+index 30155ad..75f6eea 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -1,45 +1,58 @@
+-import { defineConfig } from "vite";
++import { defineConfig, loadEnv } from "vite";
+ import react from "@vitejs/plugin-react";
+ import tailwindcss from "@tailwindcss/vite";
+ import pkg from "./package.json";
+ 
+-export default defineConfig({
+-  plugins: [react(), tailwindcss()],
+-  // Single source of truth for the app version (package.json) — surfaced in
+-  // Profile and usable anywhere via the global below.
+-  define: {
+-    __APP_VERSION__: JSON.stringify(pkg.version),
+-  },
+-  build: {
+-    // The app runs in Telegram's webview on low-end Android, which can lag the
+-    // newest Chrome; Vite's "baseline widely available" default is a touch too
+-    // fresh there. es2019 keeps the output inside what these webviews parse.
+-    target: "es2019",
+-    cssTarget: "chrome61",
+-    // Routes are lazy-loaded, so the framework itself is the floor cost. Split
+-    // it into its own chunk (React + router, then the query client) so an app
+-    // code change doesn't invalidate the vendor bytes in the browser cache.
+-    rollupOptions: {
+-      output: {
+-        manualChunks: {
+-          react: ["react", "react-dom", "react-router-dom"],
+-          query: ["@tanstack/react-query"],
++export default defineConfig(({ mode }) => {
++  // `.env` files are not in process.env while this config is evaluated, so load
++  // them explicitly. An empty prefix keeps every key (not just VITE_ ones) —
++  // only the value below is exposed to the client, so nothing else leaks.
++  // Real environment variables win, which is what a Render build sets.
++  const env = loadEnv(mode, process.cwd(), "");
++  return {
++    plugins: [react(), tailwindcss()],
++    // Single source of truth for the app version (package.json) — surfaced in
++    // Profile and usable anywhere via the global below.
++    define: {
++      __APP_VERSION__: JSON.stringify(pkg.version),
++      // The banner-ads kill switch, under the exact name the deploy sets
++      // (`ADGRAM_ENABLED`). Vite only inlines `VITE_`-prefixed vars on its own,
++      // so this is what makes the un-prefixed name work; `VITE_ADGRAM_ENABLED`
++      // is read natively as the alternative. Inlined at BUILD time — flipping
++      // it needs a rebuild. See src/lib/ads.ts.
++      __ADGRAM_ENABLED__: JSON.stringify(env.ADGRAM_ENABLED ?? ""),
++    },
++    build: {
++      // The app runs in Telegram's webview on low-end Android, which can lag the
++      // newest Chrome; Vite's "baseline widely available" default is a touch too
++      // fresh there. es2019 keeps the output inside what these webviews parse.
++      target: "es2019",
++      cssTarget: "chrome61",
++      // Routes are lazy-loaded, so the framework itself is the floor cost. Split
++      // it into its own chunk (React + router, then the query client) so an app
++      // code change doesn't invalidate the vendor bytes in the browser cache.
++      rollupOptions: {
++        output: {
++          manualChunks: {
++            react: ["react", "react-dom", "react-router-dom"],
++            query: ["@tanstack/react-query"],
++          },
+         },
+       },
+     },
+-  },
+-  server: {
+-    // `npm run dev` then open http://localhost:5173 in a browser,
+-    // or expose it through a tunnel to load it inside Telegram.
+-    host: true,
+-    port: 5173,
+-    // Proxy API calls to the backend (`npm run server` / npm run dev:all),
+-    // so the frontend can just fetch("/api/...") with no CORS setup.
+-    proxy: {
+-      "/api": {
+-        target: "http://localhost:8787",
+-        changeOrigin: true,
++    server: {
++      // `npm run dev` then open http://localhost:5173 in a browser,
++      // or expose it through a tunnel to load it inside Telegram.
++      host: true,
++      port: 5173,
++      // Proxy API calls to the backend (`npm run server` / npm run dev:all),
++      // so the frontend can just fetch("/api/...") with no CORS setup.
++      proxy: {
++        "/api": {
++          target: "http://localhost:8787",
++          changeOrigin: true,
++        },
+       },
+     },
+-  },
++  };
+ });
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,367 @@
+From 53818ef024a05ed9e0f1e05ff02747263d604eb6 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 13 Oct 2026 15:03:00 +0330
+Subject: [PATCH 078/230] Stop reading a literal `+` in Telegram initData as a
+ space
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+URLSearchParams applies form-encoding rules, so the `+` Telegram puts in a
+signed field (base64 signature, start_param, a name) came back as a space.
+That changes the bytes the server HMACs, so a genuine login was rejected and
+the user silently landed on a guest account. Extract the launch params with a
+manual `&`/`=` split + decodeURIComponent instead, and let the verifier read a
+payload containing `+` under both readings (literal plus first, legacy
+form-encoded second) so nothing that verified before stops verifying.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/telegram/verify.ts |  37 +++++++++++--
+ src/lib/telegramUrl.ts    |  44 +++++++++++++--
+ tests/telegramUrl.test.ts | 109 +++++++++++++++++++++++++++++++++++++-
+ tests/verify.test.ts      |  54 ++++++++++++++++++-
+ 4 files changed, 235 insertions(+), 9 deletions(-)
+
+diff --git a/server/telegram/verify.ts b/server/telegram/verify.ts
+index 582aed5..68c3aa7 100644
+--- a/server/telegram/verify.ts
++++ b/server/telegram/verify.ts
+@@ -35,10 +35,10 @@ const MAX_AGE_SECONDS = 86_400;
+  * `auth_date` is REQUIRED: its absence is a rejection, not a skip, and the
+  * comparison is constant-time so a probe can't binary-search the digest.
+  */
+-export function verifyInitData(
+-  initData: string,
+-  botToken: string,
+-): { ok: true; user: TelegramUser } | { ok: false; reason: string } {
++type InitDataVerdict = { ok: true; user: TelegramUser } | { ok: false; reason: string };
++
++/** The HMAC check itself, over one byte-level reading of the payload. */
++function checkInitData(initData: string, botToken: string): InitDataVerdict {
+   const params = new URLSearchParams(initData);
+   const hash = params.get("hash");
+   if (!hash) return { ok: false, reason: "missing hash" };
+@@ -84,6 +84,35 @@ export function verifyInitData(
+   }
+ }
+ 
++/**
++ * Verify Telegram WebApp initData, tolerating the one genuine ambiguity in a
++ * query string: `+`.
++ *
++ * Form-encoding says `+` means a space, and `URLSearchParams` applies that rule.
++ * Telegram does not: it encodes each field with `encodeURIComponent`, so a space
++ * travels as `%20` and a real plus as `%2B` — which makes a BARE `+` in
++ * initData a literal `+` (the base64 `signature`, a `start_param`, a name).
++ * A launch URL re-encoded on the way into the webview can hand us exactly that
++ * shape; reading its `+` as a space changes the bytes the HMAC covers and
++ * rejects a genuine login, which is how a signed-in user ends up on a guest
++ * account. (The client side of the same bug lives in src/lib/telegramUrl.ts.)
++ *
++ * So a payload containing `+` is checked under both readings — literal plus
++ * first, then the legacy form-encoded one. Both still require an HMAC that only
++ * the bot token could produce, so this cannot admit a payload Telegram did not
++ * sign; it only stops us disagreeing with Telegram over what `+` means.
++ */
++export function verifyInitData(initData: string, botToken: string): InitDataVerdict {
++  // No `+`, no ambiguity — one reading, exactly as before.
++  if (!initData.includes("+")) return checkInitData(initData, botToken);
++
++  const literalPlus = checkInitData(initData.replace(/\+/g, "%2B"), botToken);
++  if (literalPlus.ok) return literalPlus;
++  // Legacy reading last so its verdict (and its reason string) is what a
++  // payload that fails BOTH readings reports, as it did before.
++  return checkInitData(initData, botToken);
++}
++
+ /**
+  * Dev-only escape hatch: when DEV_AUTH_SECRET is set, clients may send
+  * `dev:<telegramId>` instead of real initData so the app is testable
+diff --git a/src/lib/telegramUrl.ts b/src/lib/telegramUrl.ts
+index b091d54..2e75833 100644
+--- a/src/lib/telegramUrl.ts
++++ b/src/lib/telegramUrl.ts
+@@ -65,6 +65,44 @@ export interface NormalizedTelegramUrl {
+   changed: boolean;
+ }
+ 
++/**
++ * Percent-decode one URL component the way Telegram encodes it.
++ *
++ * Deliberately NOT `URLSearchParams`: that applies the
++ * `application/x-www-form-urlencoded` rule that a `+` means a space, and the
++ * init data we pull out of the launch URL is a query string that was ALREADY
++ * percent-encoded once (Telegram encodes each field, then encodes the whole
++ * string again for the fragment). A literal `+` inside a signed field — the
++ * base64 `signature`, or a `user`/`start_param` value that really contains one
++ * — therefore came back as a space, changing the bytes the server HMACs over.
++ * The signature check then fails and the user is silently downgraded to a
++ * guest. `decodeURIComponent` leaves `+` alone, matching Telegram's own parsing.
++ */
++function decodeComponent(raw: string): string {
++  try {
++    return decodeURIComponent(raw);
++  } catch {
++    // A malformed escape (stray `%`). Hand back the raw text instead of
++    // throwing into the boot path; the server rejects it cleanly if bogus.
++    return raw;
++  }
++}
++
++/**
++ * Read a single key out of an `a=b&c=d` string without `URLSearchParams`'
++ * `+` → space rule (see `decodeComponent`). Returns null when the key is absent,
++ * so callers keep their "no value found" fallback.
++ */
++function readParam(raw: string, key: string): string | null {
++  for (const pair of raw.split("&")) {
++    if (!pair) continue;
++    const eq = pair.indexOf("=");
++    if (decodeComponent(eq === -1 ? pair : pair.slice(0, eq)) !== key) continue;
++    return eq === -1 ? "" : decodeComponent(pair.slice(eq + 1));
++  }
++  return null;
++}
++
+ /**
+  * Pure URL rewrite. `sdkInitData` (from `window.Telegram.WebApp.initData`) wins
+  * when non-empty because the SDK is the authoritative parser; otherwise the
+@@ -88,7 +126,7 @@ export function normalizeTelegramUrl(href: string, sdkInitData = ""): Normalized
+   //    `tgWebAppStartParam` still cannot masquerade as a route.
+   const hash = url.hash.replace(/^#/, "");
+   if (hash.includes(TG_PARAM_PREFIX)) {
+-    recovered = new URLSearchParams(hash).get(INIT_DATA_KEY) ?? recovered;
++    recovered = readParam(hash, INIT_DATA_KEY) ?? recovered;
+     url.hash = "";
+     changed = true;
+   }
+@@ -97,7 +135,7 @@ export function normalizeTelegramUrl(href: string, sdkInitData = ""): Normalized
+   //    only the Telegram keys so unrelated params (e.g. ?devUser=) survive.
+   const searchKeys = [...url.searchParams.keys()];
+   if (searchKeys.some((key) => key.startsWith(TG_PARAM_PREFIX))) {
+-    recovered = recovered ?? url.searchParams.get(INIT_DATA_KEY);
++    recovered = recovered ?? readParam(url.search.replace(/^\?/, ""), INIT_DATA_KEY);
+     for (const key of searchKeys) {
+       if (key.startsWith(TG_PARAM_PREFIX)) url.searchParams.delete(key);
+     }
+@@ -107,7 +145,7 @@ export function normalizeTelegramUrl(href: string, sdkInitData = ""): Normalized
+   // 3) Path — the mangled form `/<params>` with no `?`. Parse the leading
+   //    segment as a query string and reset the path to the app root.
+   if (url.pathname.includes(TG_PARAM_PREFIX)) {
+-    recovered = recovered ?? new URLSearchParams(url.pathname.replace(/^\/+/, "")).get(INIT_DATA_KEY);
++    recovered = recovered ?? readParam(url.pathname.replace(/^\/+/, ""), INIT_DATA_KEY);
+     url.pathname = "/";
+     changed = true;
+   }
+diff --git a/tests/telegramUrl.test.ts b/tests/telegramUrl.test.ts
+index c2c4cce..561604d 100644
+--- a/tests/telegramUrl.test.ts
++++ b/tests/telegramUrl.test.ts
+@@ -8,7 +8,9 @@
+  * an unrelated query param and never touching a real hash route.
+  */
+ import { strict as assert } from "node:assert";
++import crypto from "node:crypto";
+ import { normalizeTelegramUrl } from "../src/lib/telegramUrl.js";
++import { verifyInitData } from "../server/telegram/verify.js";
+ 
+ /** Telegram init data is a query string that itself is percent-encoded. */
+ const INIT = "user=%7B%22id%22%3A1%7D&auth_date=1700000000&hash=abc";
+@@ -62,6 +64,104 @@ function testSdkValueWins(): void {
+   assert.equal(out.url, "https://app.example/", "the URL is still normalised");
+ }
+ 
++/**
++ * `+` preservation.
++ *
++ * Telegram's signed `signature` is base64 and legitimately contains `+`, and a
++ * client that escapes only the structural characters leaves that `+` bare in
++ * the fragment. `URLSearchParams` applies form-encoding rules, so it read the
++ * bare `+` as a SPACE — one flipped byte, but the server HMACs over it, so the
++ * signature check failed and the user was silently downgraded to a guest
++ * account. `decodeURIComponent` never rewrites `+`, which is what Telegram's own
++ * parsing does.
++ */
++const PLUS_INIT =
++  "query_id=AAHdF6IQAAAAAN0XohDhrOrc&user=%7B%22id%22%3A1%7D&auth_date=1700000000&signature=Ab%2BC%2Fd%3D";
++/** The same payload as it arrives when the signature's `+` was left unescaped. */
++const PLUS_INIT_BARE =
++  "query_id=AAHdF6IQAAAAAN0XohDhrOrc&user=%7B%22id%22%3A1%7D&auth_date=1700000000&signature=Ab+C%2Fd%3D";
++
++/**
++ * Encode a payload for the fragment the way the mangling shows up on a device:
++ * the inner `%2B` reaches the fragment as a bare `+` instead of `%2B`/`%252B`.
++ */
++function fragmentWithBarePlus(payload: string): string {
++  return encodeURIComponent(payload).replace(/%252B/g, "+");
++}
++
++function testPlusSurvivesHashForm(): void {
++  const href = `https://app.example/#tgWebAppData=${fragmentWithBarePlus(PLUS_INIT)}&tgWebAppVersion=7.0`;
++  const out = normalizeTelegramUrl(href);
++  assert.equal(out.changed, true, "the hash form is still rewritten");
++  assert.ok(!out.url.includes("+"), "the Telegram fragment is stripped from the URL");
++  assert.equal(out.initData, PLUS_INIT_BARE, "a bare `+` is preserved, not turned into a space");
++}
++
++function testPlusSurvivesQueryForm(): void {
++  const href = `https://app.example/?tgWebAppData=${fragmentWithBarePlus(PLUS_INIT)}&tgWebAppVersion=7.0&devUser=2`;
++  const out = normalizeTelegramUrl(href);
++  assert.equal(out.initData, PLUS_INIT_BARE, "the query form preserves `+`");
++  assert.ok(out.url.includes("devUser=2"), "unrelated params still survive");
++}
++
++function testPlusSurvivesPathForm(): void {
++  const href = `https://app.example/tgWebAppData=${fragmentWithBarePlus(PLUS_INIT)}&tgWebAppVersion=7.0`;
++  const out = normalizeTelegramUrl(href);
++  assert.equal(out.initData, PLUS_INIT_BARE, "the path form preserves `+`");
++  assert.equal(new URL(out.url).pathname, "/", "the mangled path still resets to the root");
++}
++
++/**
++ * The fix must not start decoding twice: Telegram's canonical fragment is
++ * percent-encoded, so `%252B` still has to come back as `%2B` (the init data the
++ * server expects), not as a bare `+`.
++ */
++function testCanonicalPlusDecodesExactlyOnce(): void {
++  const href = `https://app.example/#tgWebAppData=${encodeURIComponent(PLUS_INIT)}&tgWebAppVersion=7.0`;
++  const out = normalizeTelegramUrl(href);
++  assert.equal(out.initData, PLUS_INIT, "a fully-encoded `%252B` decodes to `%2B`");
++}
++
++const BOT_TOKEN = "7000000000:TEST-token-for-the-telegramUrl-suite";
++
++/** Sign a field set the way Telegram documents it (`signature` excluded). */
++function signInitData(fields: Record<string, string>): string {
++  const secret = crypto.createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
++  const dataCheckString = Object.entries(fields)
++    .filter(([key]) => key !== "signature")
++    .map(([key, value]) => `${key}=${value}`)
++    .sort()
++    .join("\n");
++  const hash = crypto.createHmac("sha256", secret).update(dataCheckString).digest("hex");
++  return new URLSearchParams({ ...fields, hash }).toString();
++}
++
++/**
++ * The end the user actually experiences: whatever the URL recovery hands back
++ * has to pass the server's HMAC check. A payload whose base64 signature carries
++ * `+` is signed locally with a throwaway token, then pushed through the exact
++ * launch shapes the Mini App sees. Before the fix the bare-`+` shape failed
++ * here and the user landed on the guest account.
++ */
++function testRecoveredPayloadVerifies(): void {
++  const signed = signInitData({
++    query_id: "AAHdF6IQAAAAAN0XohDhrOrc",
++    user: JSON.stringify({ id: 279058397, first_name: "Ali" }),
++    auth_date: String(Math.floor(Date.now() / 1000)),
++    signature: "Ab+C/d=",
++  });
++  const forms = {
++    canonical: `https://app.example/#tgWebAppData=${encodeURIComponent(signed)}&tgWebAppVersion=7.0`,
++    "bare +": `https://app.example/#tgWebAppData=${fragmentWithBarePlus(signed)}&tgWebAppVersion=7.0`,
++  };
++  for (const [name, href] of Object.entries(forms)) {
++    const out = normalizeTelegramUrl(href);
++    const res = verifyInitData(out.initData ?? "", BOT_TOKEN);
++    assert.ok(res.ok, `${name}: recovered init data must verify (${res.ok ? "" : res.reason})`);
++    assert.equal(res.ok ? res.user.id : 0, 279058397, `${name}: the Telegram user is surfaced`);
++  }
++}
++
+ interface FakeBrowserState {
+   href: string;
+ }
+@@ -156,6 +256,13 @@ export async function runTelegramUrlTests(): Promise<void> {
+   testStartParamOnly();
+   testLeavesRealRoutesAlone();
+   testSdkValueWins();
++  testPlusSurvivesHashForm();
++  testPlusSurvivesQueryForm();
++  testPlusSurvivesPathForm();
++  testCanonicalPlusDecodesExactlyOnce();
++  testRecoveredPayloadVerifies();
+   await testReloadRecovery();
+-  console.log("  telegramUrl: hash/query/path extraction, real-route passthrough + reload recovery OK");
++  console.log(
++    "  telegramUrl: hash/query/path extraction, `+` preserved, server HMAC accepted, real-route passthrough + reload recovery OK",
++  );
+ }
+diff --git a/tests/verify.test.ts b/tests/verify.test.ts
+index a9027af..d60e5ad 100644
+--- a/tests/verify.test.ts
++++ b/tests/verify.test.ts
+@@ -125,6 +125,57 @@ function testSignatureExcludedFromCheckString() {
+   assert.equal(verifyInitData(legacy, BOT_TOKEN).ok, true, "pre-8.0 payload still verifies");
+ }
+ 
++/**
++ * A bare `+` in the payload.
++ *
++ * Telegram encodes each field with `encodeURIComponent`, so a space travels as
++ * `%20` and a real plus as `%2B` — a BARE `+` in initData therefore means a
++ * literal `+`. `URLSearchParams` alone reads it as a space, which changes the
++ * bytes the HMAC covers; a launch URL re-encoded on its way into the webview
++ * hands over exactly that shape, and the login was rejected as a guest. (The
++ * client half of this is pinned in telegramUrl.test.ts.)
++ */
++function testBarePlusReadings() {
++  const authDate = String(Math.floor(Date.now() / 1000) - 30);
++
++  // `sign` serialises with URLSearchParams, i.e. `+` arrives as `%2B`...
++  const canonical = sign({
++    auth_date: authDate,
++    query_id: "AAHtest",
++    user: '{"id":11,"first_name":"A+B"}',
++    start_param: "a+b",
++  });
++  assert.equal(verifyInitData(canonical, BOT_TOKEN).ok, true, "canonical `%2B` payload verifies");
++
++  // ...so the mangled shape is that same payload with `%2B` worn down to a bare
++  // `+`. It must verify: `+` is a plus, not a space.
++  const bare = canonical.replace(/%2B/g, "+");
++  assert.ok(bare.includes("+"), "the payload really carries a bare `+`");
++  assert.equal(
++    verifyInitData(bare, BOT_TOKEN).ok,
++    true,
++    "a bare `+` in signed fields is a literal plus, not a space",
++  );
++
++  // A bare `+` can also have been a form-encoded space (that is what
++  // URLSearchParams produces). Nothing that verified before may stop verifying.
++  const formEncoded = sign({
++    auth_date: authDate,
++    query_id: "AAHtest",
++    user: '{"id":12,"first_name":"Ali Reza"}',
++  });
++  assert.ok(formEncoded.includes("+"), "the signer form-encodes the space");
++  const spaced = verifyInitData(formEncoded, BOT_TOKEN);
++  assert.equal(spaced.ok, true, "a form-encoded space still verifies");
++  assert.equal(spaced.ok ? spaced.user.first_name : "", "Ali Reza", "the spaced name is decoded as a space");
++
++  // Tampering with a `+`-carrying payload is still rejected by both readings.
++  const tampered = bare.replace("AAHtest", "AAHevil");
++  const bad = verifyInitData(tampered, BOT_TOKEN);
++  assert.equal(bad.ok, false, "tampered `+` payload rejected");
++  assert.equal(bad.ok ? "" : bad.reason, "hash mismatch", "tamper reason preserved");
++}
++
+ function testDevToken() {
+   assert.deepEqual(verifyDevToken("dev:123", undefined), { ok: false }, "no secret: dev tokens dead");
+   assert.ok(verifyDevToken("dev:123", "s").ok, "secret set: dev token accepted");
+@@ -139,8 +190,9 @@ export async function runVerifyTests(): Promise<void> {
+   testAuthDateRules();
+   testMalformedDigests();
+   testSignatureExcludedFromCheckString();
++  testBarePlusReadings();
+   testDevToken();
+   console.log(
+-    "  verify: valid/tamper/wrong-token, auth_date required+fresh, bad digests closed, signature excluded, dev tokens OK",
++    "  verify: valid/tamper/wrong-token, auth_date required+fresh, bad digests closed, signature excluded, bare `+` readings, dev tokens OK",
+   );
+ }
+-- 
+2.54.0.windows.1
+

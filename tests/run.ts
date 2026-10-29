@@ -3,6 +3,7 @@
  * assertion that breaks (`node:assert` throws) and exits non-zero so CI /
  * `npm run build`-adjacent tooling can gate on it.
  */
+import { runLineupsTests } from "./lineups.test.js";
 import { runShotGridTests } from "./shotGrid.test.js";
 import { runValidateTests } from "./validate.test.js";
 import { runFormationTests } from "./formations.test.js";
@@ -103,6 +104,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["kickoffParts", runKickoffPartsTests],
   ["sentinel", runSentinelTests],
 
+  ["lineups", runLineupsTests],
   ["faStrings", runFaStringsTests],
   ["matchReconcile", runMatchReconcileTests],
   // Browser group: needs playwright (skips itself cleanly without it).

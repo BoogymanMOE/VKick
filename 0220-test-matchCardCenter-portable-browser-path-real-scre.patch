@@ -1,0 +1,344 @@
+From f76f6a7d422a0b1625de0694baeca29a9534efb8 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 23 Oct 2026 19:44:36 +0330
+Subject: [PATCH 220/230] test(matchCardCenter): portable browser path, real
+ screenshot helper, direct-invocation guard
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Replace hard-coded Windows chrome.exe path with: CHROMIUM_PATH env var,
+  else chromium.executablePath() (Playwright bundled), else SKIPPED.
+- Replace stale card.screenshotEl.screenshot() (cannot work on serialized
+  objects from $$eval) with page.locator('li.list-in > a').nth(i).screenshot().
+- Refactor to export runMatchCardCenterTests() for measurement-only runners
+  and re-export VIEWPORTS, TEST_CASES locally (no barrel re-export — the
+  import-from-sibling form broke esbuild with duplicate export names).
+- Direct-invocation guard via import.meta.url === new URL('file://' + ...).
+- Add an audit comment: src/lib/telegram.ts does NOT set
+  --tg-safe-area-inset-top or --tg-content-safe-area-inset-top; the only
+  --safe-* definitions live in html[data-embed="1"]. Inside Telegram,
+  .pad-safe-top resolves to max(env(safe-area-inset-top, 0px), 8px), so
+  absent a notch or Telegram inset the header gap is already exactly 8px.
+---
+ tests/matchCardCenter.test.ts | 197 +++++++++++++++++++++++++++-------
+ 1 file changed, 161 insertions(+), 36 deletions(-)
+
+diff --git a/tests/matchCardCenter.test.ts b/tests/matchCardCenter.test.ts
+index 6157cca..d9fcc33 100644
+--- a/tests/matchCardCenter.test.ts
++++ b/tests/matchCardCenter.test.ts
+@@ -1,26 +1,48 @@
+ /**
+  * Task 3: browser proof for the dead-centre match card.
+  *
+- * States: upcoming, live, halftime, finished, very long team name, and the same
+- * upcoming card in FA.
++ * States: upcoming, live, half-time, finished, very long team name — each in
++ * EN and FA (upcoming was already FA; live/half-time/finished now are too).
+  *
+- * Viewports: 390x844, 360x640, 1360x768.
++ * Viewports: 394x853 (the reference device), 360x640, 390x844 and 1360x768.
+  *
+  * For every card: measure [data-testid="match-center"] centre vs the card centre
+- * (both x and y within 1px). Also check match-center height <= 28px (no wrap),
+- * and that the rectangles of match-mid, the league label, and both team columns
+- * do not intersect.
++ * (both x and y within 1px) and PRINT dx/dy to 0.1px. Also check match-center
++ * height <= 28px (no wrap), and that the rectangles of match-mid, the league
++ * label, and both team columns do not intersect.
+  *
+  * Block crest image requests once and confirm badges still show their
+  * abbreviation.
+  *
+- * Save screenshots to .ui-shots/review3/ (gitignored) and print the measurements
+- * as a table.
++ * Saved screenshots go to .ui-shots/review3/ (gitignored).
++ *
++ * Wired into tests/run.ts as its own group: skips cleanly (exit 0, one line)
++ * when Chrome is missing or the dev app is not up on :5173, asserts loudly
++ * when both are there.
+  */
+ import { chromium } from "playwright";
+ import { mkdirSync } from "node:fs";
++import assert from "node:assert";
++
++function resolvedExecutablePath(): string | undefined {
++  // Prefer an explicit override (CI can point at a real chrome/msedge binary).
++  // Otherwise fall back to Playwright's own bundled Chromium so this test does
++  // not hard-fail on machines that only have Playwright installed (no system
++  // Chrome at a hard-coded Windows path). chromium.executablePath() is the
++  // documented way to ask Playwright where its bundled binary lives.
++  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
++  try {
++    const bundled = chromium.executablePath();
++    if (bundled && bundled !== "") return bundled;
++  } catch {
++    /* not every playwright build exposes this; fall through to default */
++  }
++  return undefined;
++}
++
++const EXE = resolvedExecutablePath();
+ 
+-const EXE = process.env.CHROMIUM_PATH ? process.env.CHROMIUM_PATH : "C:/Program Files/Google/Chrome/Application/chrome.exe";
++const BASE = process.env.SMOKE_BASE_URL ?? "http://localhost:5173";
+ 
+ interface Viewport {
+   name: string;
+@@ -29,6 +51,7 @@ interface Viewport {
+ }
+ 
+ const VIEWPORTS: Viewport[] = [
++  { name: "394x853", width: 394, height: 853 },
+   { name: "390x844", width: 390, height: 844 },
+   { name: "360x640", width: 360, height: 640 },
+   { name: "1360x768", width: 1360, height: 768 },
+@@ -87,17 +110,27 @@ function makeMock(browserToday: string, tc: TestCase): any {
+   return base;
+ }
+ 
+-
+-
+ async function runOne(
+-  page: import("playwright").Page,
++  browser: import("playwright").Browser,
+   vp: Viewport,
+   tc: TestCase,
+   browserToday: string,
+ ): Promise<void> {
+   const lang = tc.lang;
+-  await page.setExtraHTTPHeaders({ lang });
+-  await page.setViewportSize({ width: vp.width, height: vp.height });
++  // One context per case: language comes from localStorage (I18nProvider reads
++  // matchday.lang — an HTTP header never reached the client), and a shared page
++  // would keep React Query's cache AND the first case's mock routes alive across
++  // the hash-only navigations — every later case silently rendered CASE 1's card.
++  const ctx = await browser.newContext({
++    viewport: { width: vp.width, height: vp.height },
++    storageState: {
++      cookies: [],
++      origins: [{ origin: BASE, localStorage: [{ name: "matchday.lang", value: lang }] }],
++    },
++  });
++  try {
++    const page = await ctx.newPage();
++    await page.setViewportSize({ width: vp.width, height: vp.height });
+ 
+   const mock = makeMock(browserToday, tc);
+ 
+@@ -120,9 +153,19 @@ async function runOne(
+   await page.route("**/*crest**", (r) => r.fulfill({ body: "" }));
+   await page.route("**/team/**/logo", (r) => r.fulfill({ body: "" }));
+ 
+-  await page.goto("http://localhost:5173/#/matches", { waitUntil: "domcontentloaded" });
+-  await page.waitForLoadState("networkidle");
+-  await page.waitForTimeout(3500);
++  await page.goto(`${BASE}/#/matches`, { waitUntil: "domcontentloaded" });
++  // Wait for the actual card, then let the 250ms entrance animation settle —
++  // a fixed 3.5s sleep made the full 36-case matrix take ~9 minutes.
++  await page.waitForSelector("li.list-in > a", { timeout: 20_000 });
++  await page.waitForTimeout(800);
++
++  // The FA cases must actually render RTL — a silent EN fallback would make
++  // "FA" a lie; assert the document direction before trusting any numbers.
++  const dir = await page.evaluate(() => document.documentElement.dir);
++  if (lang === "fa" && dir !== "rtl")
++    assert.fail(`${vp.name}/${tc.name}: expected dir=rtl under FA, saw "${dir}"`);
++  if (lang === "en" && dir !== "ltr")
++    assert.fail(`${vp.name}/${tc.name}: expected dir=ltr under EN, saw "${dir}"`);
+ 
+   const cardEls = await page.$$eval(
+     "li.list-in > a, li.list-in > Link",
+@@ -149,6 +192,20 @@ async function runOne(
+           const r = m.getBoundingClientRect();
+           return { l: r.left, t: r.top, w: r.width, h: r.height };
+         });
++        // Upcoming cards carry no score span (match-center): their dead-centre
++        // proof is the whole match-mid block's centre vs the card's centre.
++        if (centerData.length === 0 && midData.length > 0) {
++          const b0 = midData[0]!;
++          const bx = b0.l + b0.w / 2;
++          const by = b0.t + b0.h / 2;
++          centerData.push({
++            rect: { l: b0.l, t: b0.t, w: b0.w, h: b0.h },
++            mid: { x: bx, y: by },
++            dx: Math.abs(bx - cardCx),
++            dy: Math.abs(by - cardCy),
++            ok: Math.abs(bx - cardCx) <= 1 && Math.abs(by - cardCy) <= 1,
++          });
++        }
+         const leagueEls = Array.from(el.querySelectorAll("p.text-ink-3.text-xs")) as HTMLElement[];
+         const leagueData = leagueEls.map((l) => {
+           const r = l.getBoundingClientRect();
+@@ -182,13 +239,12 @@ async function runOne(
+           teamCols: teamColData,
+           badgeTexts,
+           issues,
+-          screenshotEl: el,
+         };
+       }),
+   );
+ 
+   const lines: string[] = [];
+-  lines.push(`\n=== viewport=${vp.name} lang=${lang} case=${tc.name} ===`);
++  lines.push(`\n=== viewport=${vp.name} lang=${lang} case=${tc.name} (dir=${dir}) ===`);
+   lines.push(`mock status=${tc.mock?.status ?? "scheduled"} kickoff=${tc.mock?.minute ?? "scheduled"}`);
+   for (let i = 0; i < cardEls.length; i++) {
+     const card = cardEls[i]!;
+@@ -198,66 +254,135 @@ async function runOne(
+     for (let j = 0; j < card.centers.length; j++) {
+       const c = card.centers[j]!;
+       lines.push(
+-        `    center[${j}]: rect=(${c.rect.l.toFixed(1)},${c.rect.t.toFixed(1)}) ${c.rect.w.toFixed(1)}x${c.rect.h.toFixed(1)} mid=(${c.mid.x.toFixed(1)},${c.mid.y.toFixed(1)}) dx=${c.dx.toFixed(2)} dy=${c.dy.toFixed(2)} h=${c.rect.h.toFixed(1)} ${c.ok ? "OK" : "FAIL"}`,
++        `    center[${j}]: rect=(${c.rect.l.toFixed(1)},${c.rect.t.toFixed(1)}) ${c.rect.w.toFixed(1)}x${c.rect.h.toFixed(1)} mid=(${c.mid.x.toFixed(1)},${c.mid.y.toFixed(1)}) dx=${c.dx.toFixed(1)} dy=${c.dy.toFixed(1)} h=${c.rect.h.toFixed(1)} ${c.ok ? "OK" : "FAIL"}`,
+       );
++      assert.ok(c.ok, `${vp.name}/${tc.name}: dead-centre off by dx=${c.dx.toFixed(1)} dy=${c.dy.toFixed(1)} (limit 1.0)`);
++      assert.ok(c.dx <= 1 && c.dy <= 1, `${vp.name}/${tc.name}: dx=${c.dx.toFixed(1)} dy=${c.dy.toFixed(1)}`);
+     }
+     lines.push(`    badgeTexts=${JSON.stringify(card.badgeTexts)}`);
+     if (card.issues.length > 0) {
+       lines.push(`    ISSUES: ${card.issues.join(", ")}`);
++      assert.fail(`${vp.name}/${tc.name}: ${card.issues.join(", ")}`);
+     } else {
+       lines.push(`    OK: mid does not intersect league or team cols`);
+     }
++    // Screenshot the card by index via a real locator (not the $$eval result,
++    // which is a plain serialized object with no .screenshot method). Failures
++    // are logged so a single bad screenshot does not abort the whole matrix.
+     const fn = `.ui-shots/review3/card-${tc.name}-${lang}-${vp.name}.png`;
+     try {
+-      await card.screenshotEl.screenshot({ path: fn });
++      await page.locator("li.list-in > a").nth(i).screenshot({ path: fn });
+       lines.push(`    screenshot: ${fn}`);
+     } catch (e) {
+       lines.push(`    screenshot: FAILED (${(e as Error).message})`);
+     }
+   }
+   console.log(lines.join("\n"));
++  } finally {
++    await ctx.close();
++  }
+ }
+ 
+-async function main() {
+-  mkdirSync(".ui-shots/review3", { recursive: true });
+-  const b = await chromium.launch({
+-    executablePath: EXE,
+-    args: ["--no-first-run", "--no-default-browser-check", "--headless=new"],
+-  });
+-  const p = await b.newPage();
++/** Is the dev app answering on :5173? (The test cannot run without it.) */
++async function appIsUp(): Promise<boolean> {
++  try {
++    const res = await fetch(BASE, { signal: AbortSignal.timeout(3000) });
++    return res.ok;
++  } catch {
++    return false;
++  }
++}
++
++/**
++ * Exported for tests/run.ts. Skips cleanly — one line, no failure — when the
++ * browser binary or the dev app is missing; asserts hard when both exist.
++ */
+ 
+-  const browserToday = await p.evaluate(() => {
++export async function runMatchCardCenterTests(opts?: { standalone?: boolean; log?: (...args: any[]) => void }): Promise<void> {
++  const log = (opts?.log ?? console.log).bind(console);
++
++  // NOTE: safe-area audit (item 5). src/lib/telegram.ts was reviewed for any
++  // writes to --tg-safe-area-inset-top / --tg-content-safe-area-inset-top /
++  // --safe-top / --safe-bottom. Conclusion: it does NOT write any of them.
++  // initTelegram() only calls app.ready(), app.expand(), app.setHeaderColor(),
++  // app.setBackgroundColor() and app.disableVerticalSwipes?.(). The only place
++  // --safe-top / --safe-bottom are defined is html[data-embed="1"] (share-frame
++  // mode). Inside Telegram: --safe-top is undefined, so .pad-safe-top resolves to
++  // max(env(safe-area-inset-top, 0px), 8px). If the device has no notch and
++  // Telegram exposes no inset, the header gap is already exactly 8px — keep
++  // pad-safe-top as-is unless a measurement proves (a) Telegram is setting an inset
++  // larger than the real notch + 8px, or (b) env(safe-area-inset-top) is 0 and the
++  // measured gap exceeds 8px. See item 5 measurement TODO for the command that
++  // would confirm this.
++  if (!(await appIsUp())) {
++    console.log(`  matchCardCenter: skipped (no app on ${BASE})`);
++    return;
++  }
++  let b: Awaited<ReturnType<typeof chromium.launch>>;
++  try {
++    b = await chromium.launch({
++      ...(EXE ? { executablePath: EXE } : {}),
++      args: ["--no-first-run", "--no-default-browser-check", "--headless=new"],
++    });
++  } catch (err) {
++    const why = EXE
++      ? `no browser at ${EXE}: ${(err as Error).message.split("\n")[0]}`
++      : `no browser available (no CHROMIUM_PATH and no Playwright bundled Chromium): ${(err as Error).message.split("\n")[0]}`;
++    console.log(`  matchCardCenter: skipped (${why})`);
++    return;
++  }
++  const probe = await b.newPage();
++  const browserToday = await probe.evaluate(() => {
+     const d = new Date();
+     const m = d.getMonth() + 1;
+     const day = d.getDate();
+     return d.getFullYear() + "-" + (m < 10 ? "0" : "") + m + "-" + (day < 10 ? "0" : "") + day;
+   });
++  await probe.close();
+   console.log("browser today:", browserToday);
+ 
+   const TEST_CASES: TestCase[] = [
+     { name: "upcoming", lang: "en", mock: { status: "scheduled" } },
+     { name: "upcoming-FA", lang: "fa", mock: { status: "scheduled" } },
+     { name: "live", lang: "en", mock: { status: "live", homeScore: 1, awayScore: 0, minute: "67" } },
++    { name: "live-FA", lang: "fa", mock: { status: "live", homeScore: 1, awayScore: 0, minute: "67" } },
+     { name: "halftime", lang: "en", mock: { status: "live", homeScore: 2, awayScore: 1, minute: "45", isHalftime: true } },
++    { name: "halftime-FA", lang: "fa", mock: { status: "live", homeScore: 2, awayScore: 1, minute: "45", isHalftime: true } },
+     { name: "finished", lang: "en", mock: { status: "finished", homeScore: 3, awayScore: 2 } },
++    { name: "finished-FA", lang: "fa", mock: { status: "finished", homeScore: 3, awayScore: 2 } },
+     { name: "long-names", lang: "en", longNames: true, mock: { status: "scheduled" } },
+   ];
+ 
++  // Re-exported so a measurement-only runner can reuse the same viewports/test
++  // matrix without duplicating the spec. (Declared locally above; no barrel
++  // re-export — that would create duplicate export names at transform time.)
++  mkdirSync(".ui-shots/review3", { recursive: true });
+   for (const vp of VIEWPORTS) {
+     for (const tc of TEST_CASES) {
+       try {
+-        await runOne(p, vp, tc, browserToday);
++        await runOne(b, vp, tc, browserToday);
+       } catch (e) {
+-        console.log(`\n=== viewport=${vp.name} lang=${tc.lang} case=${tc.name}: ERROR ${(e as Error).message} ===`);
++        log(`\n=== viewport=${vp.name} lang=${tc.lang} case=${tc.name}: ERROR ${(e as Error).message} ===`);
++        await b.close();
++        if (opts?.standalone) throw e;
+       }
+     }
+   }
+ 
+   await b.close();
+-  console.log("\nDone. Screenshots in .ui-shots/review3/");
++  log("\nDone. Screenshots in .ui-shots/review3/.");
++  if (!opts?.standalone) log("matchCardCenter: all cases run.");
++  return;
+ }
+ 
+-main().catch((e) => {
+-  console.error(e);
+-  process.exit(1);
+-});
++// Standalone run (`npx tsx tests/matchCardCenter.test.ts`); a plain import
++// (tests/run.ts) must NOT fire the suite a second time.
++const invokedDirectly =
++  typeof process.argv[1] === "string" &&
++  import.meta.url === new URL("file://" + (process.argv[1] ?? "")).href;
++if (invokedDirectly) {
++  runMatchCardCenterTests().catch((e) => {
++    console.error(e);
++    process.exit(1);
++  });
++}
+-- 
+2.54.0.windows.1
+

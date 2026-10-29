@@ -1,0 +1,90 @@
+From 7b4260319d73f7cd0bc6274d8d73fd1425a83fea Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 15:11:22 +0330
+Subject: [PATCH 158/230] =?UTF-8?q?polish(match):=20tighter=20score=20hero?=
+ =?UTF-8?q?=20=E2=80=94=20bigger=20score,=20smaller=20badges,=20no=20redun?=
+ =?UTF-8?q?dant=20team=20names?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/pages/MatchDetail.tsx | 28 +++++++++++++++-------------
+ 1 file changed, 15 insertions(+), 13 deletions(-)
+
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index d613f5a..881c68d 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -38,7 +38,7 @@ const TABS: Tab[] = ["timeline", "stats", "lineups"];
+ 
+ export default function MatchDetail() {
+   const { id = "" } = useParams();
+-  const { t, lang, localize } = useI18n();
++  const { t, lang } = useI18n();
+   const locale = lang === "fa" ? "fa-IR" : undefined;
+   useLiveUpdates();
+ 
+@@ -198,7 +198,7 @@ export default function MatchDetail() {
+       {/* Score header */}
+       <div
+         className={cx(
+-          "score-hero relative mt-3 overflow-hidden rounded-card border p-4",
++          "score-hero relative mt-3 overflow-hidden rounded-card border p-3",
+           flashScore ? "goal-flash border-volt/60 bg-elevated" : "border-line",
+         )}
+       >
+@@ -206,9 +206,12 @@ export default function MatchDetail() {
+           {leagueLabel} · {formatKickoff(new Date(match.kickoff_at), locale)}
+         </p>
+         <div className="flex items-center justify-between gap-3">
+-          <div className="flex flex-col items-center gap-2">
+-            <TeamBadge team={home} size="lg" />
+-            <span className="text-xs font-bold text-ink-2">{localize(home.shortName)}</span>
++          {/* Badge only: the user tapped this match's card, so the crest is
++              all the teams need — the scoreboard below already says who plays.
++              The md badge keeps the crest as supporting context so the score
++              itself is the hero. */}
++          <div className="flex flex-col items-center">
++            <TeamBadge team={home} size="md" />
+           </div>
+ 
+           <div className="flex flex-col items-center gap-1.5">
+@@ -222,15 +225,15 @@ export default function MatchDetail() {
+             ) : (
+               <span className="flex items-baseline gap-1">
+                 {match.home_score === null ? (
+-                  <Num className="text-[40px] leading-none text-ink">–</Num>
++                  <Num className="text-[48px] leading-none text-ink">–</Num>
+                 ) : (
+-                  <CountUp value={match.home_score} className="text-[40px] leading-none text-ink" />
++                  <CountUp value={match.home_score} className="text-[48px] leading-none text-ink" />
+                 )}
+-                <Num className="text-[40px] leading-none text-ink">:</Num>
++                <Num className="text-[48px] leading-none text-ink">:</Num>
+                 {match.away_score === null ? (
+-                  <Num className="text-[40px] leading-none text-ink">–</Num>
++                  <Num className="text-[48px] leading-none text-ink">–</Num>
+                 ) : (
+-                  <CountUp value={match.away_score} className="text-[40px] leading-none text-ink" />
++                  <CountUp value={match.away_score} className="text-[48px] leading-none text-ink" />
+                 )}
+               </span>
+             )}
+@@ -260,9 +263,8 @@ export default function MatchDetail() {
+             )}
+           </div>
+ 
+-          <div className="flex flex-col items-center gap-2">
+-            <TeamBadge team={away} size="lg" />
+-            <span className="text-xs font-bold text-ink-2">{localize(away.shortName)}</span>
++          <div className="flex flex-col items-center">
++            <TeamBadge team={away} size="md" />
+           </div>
+         </div>
+       </div>
+-- 
+2.54.0.windows.1
+

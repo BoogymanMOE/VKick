@@ -1,0 +1,510 @@
+From 492eb0b21615c982cdb91fe6c53eda053b2d9aea Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 03:03:15 +0330
+Subject: [PATCH 083/230] Add Telegram bot command menu and deep-link handlers
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The bot's only entry point was /start, so users had to find Matches,
+Profile and Leaderboards inside the app. Registering the three commands
+(with an FA-scoped list, since the app is EN/FA) puts them in Telegram's
+own menu, and each handler answers with a web_app button that opens the
+HashRouter deep link directly on that page.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/bot/index.ts   | 108 +++++++++++++++++++--
+ server/messages.ts    |  68 +++++++++++++
+ tests/botMenu.test.ts | 215 ++++++++++++++++++++++++++++++++++++++++++
+ tests/run.ts          |   2 +
+ 4 files changed, 385 insertions(+), 8 deletions(-)
+ create mode 100644 tests/botMenu.test.ts
+
+diff --git a/server/bot/index.ts b/server/bot/index.ts
+index 1ba7634..5681f77 100644
+--- a/server/bot/index.ts
++++ b/server/bot/index.ts
+@@ -4,7 +4,17 @@ import { fileURLToPath } from "node:url";
+ import { Bot, InlineKeyboard, InputFile } from "grammy";
+ import { getDb, all, run, get } from "../db/index.js";
+ import { asPushKind, isOptedOut } from "../notifications.js";
+-import { asPushLang, botNoAccountText, botNoTeamsText, botStartText, botTeamsHeader } from "../messages.js";
++import {
++  asPushLang,
++  botCommandMenu,
++  botNoAccountText,
++  botNoTeamsText,
++  botPageCopy,
++  botStartText,
++  botTeamsHeader,
++  type BotPage,
++  type PushLang,
++} from "../messages.js";
+ import type { GoalAlert } from "../sync/upserts.js";
+ 
+ let bot: Bot | null = null;
+@@ -20,10 +30,24 @@ const TELEGRAM_ICON = path.join(
+   "telegram-icon.png",
+ );
+ 
+-export function startBot(token: string): Bot | null {
+-  if (!token) return null;
+-  bot = new Bot(token);
++/*
++ * The Mini App screens behind the command menu, in menu order. The names are
++ * deliberately the same ones the app uses for its routes (/matches,
++ * /profile, /leaderboards) and for the commands themselves, so the command
++ * list, the deep links and the router cannot disagree about where a button
++ * lands.
++ */
++const BOT_PAGES: BotPage[] = ["matches", "profile", "leaderboards"];
+ 
++/**
++ * Every command handler, registered on a bot that is not polling yet.
++ *
++ * Kept separate from startBot so a test can register the handlers on a bot of
++ * its own and dispatch a real update through grammy for real — command
++ * parsing, middleware, the lot. The menu is only worth having if the button it
++ * sends actually carries the deep link, and only grammy can settle that.
++ */
++export function registerHandlers(bot: Bot): void {
+   bot.command("start", async (ctx) => {
+     const from = ctx.from;
+     let lang: "en" | "fa" = "en";
+@@ -65,6 +89,18 @@ export function startBot(token: string): Bot | null {
+     }
+   });
+ 
++  // Command-menu entries. Each one answers with a single button that opens the
++  // Mini App straight on that screen: tapping /matches in Telegram's menu and
++  // landing on the feed instead would make the menu worse than useless.
++  for (const page of BOT_PAGES) {
++    bot.command(page, async (ctx) => {
++      const copy = botPageCopy(userLang(ctx.from?.id), page);
++      await ctx.reply(copy.text, {
++        reply_markup: new InlineKeyboard().webApp(copy.button, deepLink(page)),
++      });
++    });
++  }
++
+   bot.command("myteams", async (ctx) => {
+     if (!ctx.from) return;
+     const db = getDb();
+@@ -96,14 +132,26 @@ export function startBot(token: string): Bot | null {
+   bot.catch((err) => {
+     console.error("[bot] error:", err.error ?? err);
+   });
++}
++
++export function startBot(token: string): Bot | null {
++  if (!token) return null;
++  const instance = new Bot(token);
++  bot = instance;
++  registerHandlers(instance);
+ 
+   // Long-polling: fine for v1 (no public URL needed, works behind NAT).
+   // If api.telegram.org is unreachable (VPN needed on some networks), log it
+   // clearly and keep the rest of the server running — polling retries on its
+   // own once connectivity returns.
+-  void bot
++  void instance
+     .start({
+-      onStart: (me) => console.log(`[bot] @${me.username} polling started`),
++      onStart: (me) => {
++        console.log(`[bot] @${me.username} polling started`);
++        // Reachability is already proven at this point, so a failure here means
++        // the call itself was rejected — not that the network is down.
++        void registerCommands(instance);
++      },
+     })
+     .catch((err) => {
+       console.error(
+@@ -115,20 +163,64 @@ export function startBot(token: string): Bot | null {
+ 
+   // Graceful shutdown
+   const stop = () => {
+-    void bot?.stop();
++    void instance.stop();
+     if (drainTimer) clearInterval(drainTimer);
+   };
+   process.once("SIGINT", stop);
+   process.once("SIGTERM", stop);
+ 
+   startPushDrain();
+-  return bot;
++  return instance;
+ }
+ 
+ function webAppUrl(): string {
+   return process.env.MINI_APP_URL ?? "https://example.com";
+ }
+ 
++/**
++ * Mini App deep link for one screen.
++ *
++ * The SPA is a HashRouter, so the route travels after the `#` and Telegram
++ * opens the app directly on that page. A trailing slash on MINI_APP_URL (which
++ * people do paste) is trimmed — otherwise the link is `...//#/matches`, and
++ * what Telegram does with a doubled slash is not something to find out in
++ * production.
++ */
++export function deepLink(page: BotPage): string {
++  return `${webAppUrl().replace(/\/+$/, "")}/#/${page}`;
++}
++
++/**
++ * The language a user picked in the app, from `users.language`. Defaults to
++ * English for anyone the bot has never met, matching the pushes and /start.
++ * Without this every menu reply would be English regardless of the app's UI.
++ */
++function userLang(telegramId: number | undefined): PushLang {
++  if (telegramId === undefined) return "en";
++  const row = get<{ language: string | null }>(getDb(), "SELECT language FROM users WHERE telegram_id = ?", [
++    String(telegramId),
++  ]);
++  return asPushLang(row?.language);
++}
++
++/**
++ * Register Telegram's command menu (the "/" button), one list per language.
++ * Idempotent, so each boot simply re-asserts it; the call is free and the menu
++ * is the only discoverable entry point besides /start.
++ *
++ * Called from the polling start callback on purpose: registering before the
++ * bot is reachable only earns a connection error on a machine that has to
++ * bring a VPN up first, and the menu is not worth that noise.
++ */
++export async function registerCommands(bot: Bot): Promise<void> {
++  try {
++    await bot.api.setMyCommands(botCommandMenu("en"));
++    await bot.api.setMyCommands(botCommandMenu("fa"), { language_code: "fa" });
++  } catch (err) {
++    console.error(`[bot] could not register the command menu: ${String(err).slice(0, 120)}`);
++  }
++}
++
+ /**
+  * Push drain: the sync layer queues alerts in SQLite; the bot sends them.
+  * Keeping send-retries out of the sync loop keeps polling timing stable.
+diff --git a/server/messages.ts b/server/messages.ts
+index 9f82ba3..d06a0e5 100644
+--- a/server/messages.ts
++++ b/server/messages.ts
+@@ -119,3 +119,71 @@ export function botNoTeamsText(lang: PushLang): string {
+     ? "هنوز باشگاهی انتخاب نکرده‌ای. برنامه را باز کن و تا پنج باشگاه انتخاب کن!"
+     : "You haven't picked any clubs yet. Open the app and choose up to five!";
+ }
++
++/* ---------------------------------------------------- bot command menu */
++
++/*
++ * The commands Telegram lists behind the "/" button, plus the reply each one
++ * sends. Both live here together so the menu label and the reply can never
++ * drift apart, and so Persian users get Persian in the MENU too: grammy's
++ * setMyCommands takes a language_code, and server/bot/index.ts registers one
++ * list per language — the same per-recipient rule the pushes follow.
++ *
++ * The command names are also the route names of the Mini App
++ * (/#/matches, /#/profile, /#/leaderboards), which is what makes the deep link
++ * one string concatenation instead of a lookup table.
++ */
++
++/** A screen the bot can deep-link into. */
++export type BotPage = "matches" | "profile" | "leaderboards";
++
++export interface BotCommandSpec {
++  command: string;
++  description: string;
++}
++
++/**
++ * The command list registered with Telegram. Descriptions are kept short —
++ * Telegram truncates the menu, and it is a menu, not a pitch.
++ */
++export function botCommandMenu(lang: PushLang): BotCommandSpec[] {
++  if (lang === "fa") {
++    return [
++      { command: "matches", description: "بازی‌های امروز" },
++      { command: "profile", description: "پروفایل شما" },
++      { command: "leaderboards", description: "جدول امتیازها" },
++    ];
++  }
++  return [
++    { command: "matches", description: "View today's fixtures" },
++    { command: "profile", description: "View your profile" },
++    { command: "leaderboards", description: "View the leaderboards" },
++  ];
++}
++
++export interface BotPageCopy {
++  /** The line above the button. */
++  text: string;
++  /** Label of the inline button that opens this page in the Mini App. */
++  button: string;
++}
++
++const BOT_PAGE_COPY: Record<BotPage, Record<PushLang, BotPageCopy>> = {
++  matches: {
++    en: { text: "Tap below to open today's fixtures:", button: "⚽ Open Matches" },
++    fa: { text: "برای دیدن بازی‌های امروز دکمه زیر را بزن:", button: "⚽ باز کردن بازی‌ها" },
++  },
++  profile: {
++    en: { text: "Tap below to open your Profile:", button: "👤 Open Profile" },
++    fa: { text: "برای دیدن پروفایلت دکمه زیر را بزن:", button: "👤 باز کردن پروفایل" },
++  },
++  leaderboards: {
++    en: { text: "Tap below to open the Leaderboards:", button: "🏆 Open Leaderboards" },
++    fa: { text: "برای دیدن جدول امتیازها دکمه زیر را بزن:", button: "🏆 باز کردن جدول امتیازها" },
++  },
++};
++
++/** The reply for one command: a line of copy plus its web_app button label. */
++export function botPageCopy(lang: PushLang, page: BotPage): BotPageCopy {
++  return BOT_PAGE_COPY[page][lang];
++}
+diff --git a/tests/botMenu.test.ts b/tests/botMenu.test.ts
+new file mode 100644
+index 0000000..50eb5ee
+--- /dev/null
++++ b/tests/botMenu.test.ts
+@@ -0,0 +1,215 @@
++/**
++ * The bot's command menu (/matches, /profile, /leaderboards) and the Mini App
++ * deep links behind them.
++ *
++ * Why this suite exists: the app is a HashRouter, so the page lives AFTER the
++ * `#`. `/matches` and `/#/matches` both parse fine as URLs and only one of them
++ * lands on the Matches screen — the other opens the app and then the router
++ * throws the user at the fallback route. Nothing type-checks that, and it is
++ * invisible until someone taps the button in Telegram.
++ *
++ * Two things are checked: the command menu that gets registered with Telegram,
++ * and the reply each command sends — dispatched through grammy itself, so
++ * command parsing, the handlers and the `web_app` button payload are all the
++ * real ones. The only thing stubbed is the HTTP layer, via an API transformer.
++ */
++import { strict as assert } from "node:assert";
++import { Bot } from "grammy";
++import { deepLink, registerCommands, registerHandlers } from "../server/bot/index.js";
++import { botCommandMenu, botPageCopy, type BotPage } from "../server/messages.js";
++
++const PAGES: BotPage[] = ["matches", "profile", "leaderboards"];
++const LANGS = ["en", "fa"] as const;
++
++/** A syntactically valid token — this bot never talks to Telegram. */
++const TEST_TOKEN = "123456:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
++
++/** What getMe would have returned, so grammy needs no round trip for it. */
++const TEST_BOT_INFO = {
++  id: 123456,
++  is_bot: true,
++  first_name: "Vkick Test",
++  username: "vkick_test_bot",
++  can_join_groups: true,
++  can_read_all_group_messages: false,
++  supports_inline_queries: false,
++  can_connect_to_business: false,
++  has_main_web_app: true,
++  has_topics_enabled: false,
++  allows_users_to_create_topics: false,
++  can_manage_bots: false,
++  supports_join_request_queries: false,
++} as const;
++
++interface ApiCall {
++  method: string;
++  payload: Record<string, unknown>;
++}
++
++/**
++ * A bot with the real handlers registered and every API call captured: the
++ * transformer is grammy's own interception point (it also runs on the fresh
++ * Api instance grammy builds per update), so a dispatch exercises the actual
++ * middleware stack and stops one step short of the network.
++ */
++function testBot(): { bot: Bot; calls: ApiCall[] } {
++  const bot = new Bot(TEST_TOKEN, { botInfo: TEST_BOT_INFO });
++  const calls: ApiCall[] = [];
++  bot.api.config.use(async (_prev, method, payload) => {
++    calls.push({ method, payload: payload as Record<string, unknown> });
++    // The per-method result is never inspected — grammy's transformer type is
++    // generic over the method, so `never` stands in for the concrete result.
++    return { ok: true, result: undefined as never };
++  });
++  registerHandlers(bot);
++  return { bot, calls };
++}
++
++/** Send one command from a private chat, as Telegram would. */
++async function dispatch(bot: Bot, command: string): Promise<void> {
++  const chatId = 400_000_000;
++  await bot.handleUpdate({
++    update_id: 1,
++    message: {
++      message_id: 1,
++      date: Math.floor(Date.now() / 1000),
++      chat: { id: chatId, type: "private", first_name: "Tester" },
++      from: { id: chatId, is_bot: false, first_name: "Tester" },
++      text: command,
++      entities: [{ type: "bot_command", offset: 0, length: command.length }],
++    },
++  });
++}
++
++/** The reply_markup the bot sent in response to one command. */
++async function replyMarkupFor(command: string): Promise<unknown> {
++  const { bot, calls } = testBot();
++  await dispatch(bot, command);
++  const send = calls.find((c) => c.method === "sendMessage");
++  assert.ok(send, `${command}: the bot replied`);
++  const markup = send.payload.reply_markup as {
++    inline_keyboard?: Array<Array<{ text?: string; web_app?: { url?: string } }>>;
++  };
++  return markup;
++}
++
++/** Run `fn` with MINI_APP_URL set, restoring whatever was there before. */
++async function withMiniAppUrl(url: string | undefined, fn: () => void | Promise<void>) {
++  const saved = process.env.MINI_APP_URL;
++  if (url === undefined) delete process.env.MINI_APP_URL;
++  else process.env.MINI_APP_URL = url;
++  try {
++    await fn();
++  } finally {
++    if (saved === undefined) delete process.env.MINI_APP_URL;
++    else process.env.MINI_APP_URL = saved;
++  }
++}
++
++export async function runBotMenuTests(): Promise<void> {
++  // The menu Telegram shows: exactly the three commands, described for a user
++  // reading the "/" list.
++  assert.deepEqual(
++    botCommandMenu("en"),
++    [
++      { command: "matches", description: "View today's fixtures" },
++      { command: "profile", description: "View your profile" },
++      { command: "leaderboards", description: "View the leaderboards" },
++    ],
++    "the English command menu is the three deep-link commands",
++  );
++
++  // Menu order is handler order (BOT_PAGES), so a command in the menu always
++  // has a handler and every handler is reachable.
++  assert.deepEqual(
++    botCommandMenu("en").map((c) => c.command),
++    PAGES,
++    "menu commands and handler pages agree",
++  );
++
++  // Persian: same commands, translated descriptions, nothing empty.
++  const fa = botCommandMenu("fa");
++  assert.deepEqual(
++    fa.map((c) => c.command),
++    PAGES,
++    "the Persian menu lists the same commands",
++  );
++  for (let i = 0; i < fa.length; i += 1) {
++    assert.ok(fa[i].description.trim().length > 0, `fa: ${fa[i].command} has a description`);
++    assert.notEqual(
++      fa[i].description,
++      botCommandMenu("en")[i].description,
++      `${fa[i].command} description is translated, not copied`,
++    );
++  }
++
++  // Every page has reply copy + a button label, in both languages.
++  for (const page of PAGES) {
++    for (const lang of LANGS) {
++      const copy = botPageCopy(lang, page);
++      assert.ok(copy.text.trim().length > 0, `${lang}: ${page} reply text is empty`);
++      assert.ok(copy.button.trim().length > 0, `${lang}: ${page} button label is empty`);
++    }
++  }
++
++  // The registration itself: one setMyCommands for the default language and one
++  // for Persian. A missing call means the menu never appears in Telegram.
++  {
++    const { bot, calls } = testBot();
++    await registerCommands(bot);
++    const sets = calls.filter((c) => c.method === "setMyCommands");
++    assert.equal(sets.length, 2, "setMyCommands runs once per language");
++    assert.deepEqual(sets[0].payload.commands, botCommandMenu("en"), "the default menu is English");
++    assert.equal(sets[0].payload.language_code, undefined, "the default menu is unscoped");
++    assert.deepEqual(sets[1].payload.commands, botCommandMenu("fa"), "the second menu is Persian");
++    assert.equal(sets[1].payload.language_code, "fa", "the second menu is scoped to fa");
++  }
++
++  // The deep link: hash route, one slash, and a trailing slash on the env var
++  // must not double up.
++  await withMiniAppUrl("https://vkick.onrender.com", () => {
++    assert.equal(deepLink("matches"), "https://vkick.onrender.com/#/matches");
++    assert.equal(deepLink("profile"), "https://vkick.onrender.com/#/profile");
++    assert.equal(deepLink("leaderboards"), "https://vkick.onrender.com/#/leaderboards");
++  });
++  await withMiniAppUrl("https://vkick.onrender.com/", () => {
++    assert.equal(deepLink("matches"), "https://vkick.onrender.com/#/matches", "trailing slash trimmed");
++  });
++  await withMiniAppUrl(undefined, () => {
++    // Same fallback /start's button uses, so an unset MINI_APP_URL can never
++    // produce a relative URL that Telegram rejects.
++    assert.equal(deepLink("profile"), "https://example.com/#/profile");
++  });
++
++  for (const page of PAGES) {
++    const url = deepLink(page);
++    assert.match(url, /^https:\/\//, `${page}: link is absolute https`);
++    assert.ok(url.endsWith(`/#/${page}`), `${page}: link is a hash route to /${page}`);
++  }
++
++  // End to end, through grammy: each command answers with ONE button of type
++  // web_app pointing at that page's deep link. This payload IS the feature, so
++  // it is asserted as the user would experience it.
++  await withMiniAppUrl("https://vkick.onrender.com", async () => {
++    for (const page of PAGES) {
++      const markup = (await replyMarkupFor(`/${page}`)) as {
++        inline_keyboard?: Array<Array<{ text?: string; web_app?: { url?: string } }>>;
++      };
++      const rows = markup.inline_keyboard ?? [];
++      assert.equal(rows.length, 1, `/${page}: exactly one row`);
++      assert.equal(rows[0].length, 1, `/${page}: exactly one button`);
++      const button = rows[0][0];
++      assert.ok(
++        typeof button.text === "string" && button.text.trim().length > 0,
++        `/${page}: button has a label`,
++      );
++      assert.equal(
++        button.web_app?.url,
++        `https://vkick.onrender.com/#/${page}`,
++        `/${page}: the button is a web_app opening that page`,
++      );
++    }
++  });
++
++  console.log("  botMenu: /matches /profile /leaderboards menu + hash deep links OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 0271f7f..9426b3b 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -43,6 +43,7 @@ import { runA11yKeysTests } from "./a11yKeys.test.js";
+ import { runModerationTests } from "./moderation.test.js";
+ import { runErrorsTests } from "./errors.test.js";
+ import { runAdsgramTests } from "./adsgram.test.js";
++import { runBotMenuTests } from "./botMenu.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -88,6 +89,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["moderation", runModerationTests],
+   ["errors", runErrorsTests],
+   ["adsgram", runAdsgramTests],
++  ["botMenu", runBotMenuTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

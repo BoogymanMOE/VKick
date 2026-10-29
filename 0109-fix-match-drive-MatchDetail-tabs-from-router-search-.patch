@@ -1,0 +1,57 @@
+From 1ebb53fbbf1734daf19ae0712c413274088fec2f Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 17 Oct 2026 22:34:23 +0330
+Subject: [PATCH 109/230] fix(match): drive MatchDetail tabs from router search
+ params
+
+---
+ src/pages/MatchDetail.tsx | 27 +++++++++++++++++++--------
+ 1 file changed, 19 insertions(+), 8 deletions(-)
+
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index e55d771..35e5911 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -1,5 +1,5 @@
+ import { useEffect, useMemo, useRef, useState } from "react";
+-import { useParams } from "react-router-dom";
++import { useParams, useSearchParams } from "react-router-dom";
+ import { useQuery } from "@tanstack/react-query";
+ import { ConfettiBurst } from "../components/Confetti";
+ import { LineupsSkeleton,
+@@ -72,14 +72,25 @@ export default function MatchDetail() {
+   // (cups/tournaments), so a cup match never shows a raw "uefa.champions".
+   const leagueLabel = useCompetitionLabel(match?.league ?? "");
+ 
+-  // Tabs live in the URL so a panel is shareable and deep-linkable.
+-  const requested = new URLSearchParams(window.location.search).get("tab") as Tab | null;
++  // Tabs live in the router's search params so a panel is shareable and
++  // deep-linkable. `useSearchParams` (not window.history.replaceState) is what
++  // makes the tab actually re-render: replaceState fired without touching React
++  // state, so the panel only changed once something else re-rendered — and on
++  // a HashRouter the hand-built `pathname?tab=…` URL dropped the `#/match/…`
++  // part, so a reload landed on the home route. `replace` keeps tab switches
++  // out of browser history.
++  const [searchParams, setSearchParams] = useSearchParams();
++  const requested = searchParams.get("tab") as Tab | null;
+   const tab: Tab = requested && TABS.includes(requested) ? requested : "timeline";
+-  const setTab = (next: Tab) => {
+-    const nextParams = new URLSearchParams(window.location.search);
+-    nextParams.set("tab", next);
+-    window.history.replaceState(null, "", `${window.location.pathname}?${nextParams.toString()}`);
+-  };
++  const setTab = (next: Tab) =>
++    setSearchParams(
++      (prev) => {
++        const params = new URLSearchParams(prev);
++        params.set("tab", next);
++        return params;
++      },
++      { replace: true },
++    );
+ 
+   // Goal flash when polling reveals a new score.
+   const [burst, setBurst] = useState(0);
+-- 
+2.54.0.windows.1
+

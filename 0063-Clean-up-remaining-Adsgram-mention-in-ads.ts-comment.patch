@@ -1,0 +1,35 @@
+From bc125408afd731d52fe41d726bc56d35c2155bda Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 11 Oct 2026 14:04:33 +0330
+Subject: [PATCH 063/230] Clean up remaining Adsgram mention in ads.ts comment
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/lib/ads.ts | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/lib/ads.ts b/src/lib/ads.ts
+index 40fe573..f340a2b 100644
+--- a/src/lib/ads.ts
++++ b/src/lib/ads.ts
+@@ -2,7 +2,7 @@
+  * Ads — Anonymous Ads (A-ADS) banner.
+  *
+  * A-ADS is a lightweight, privacy-friendly ad network that works inside
+- * Telegram Mini Apps via a simple iframe snippet. Unlike Adsgram's Task
++ * Telegram Mini Apps via a simple iframe snippet. Unlike legacy ad providers whose only inline unit was a Task card, A-ADS provides a banner-style
+  * format (their only inline unit, now retired), A-ADS provides a banner-style
+  * placement that fits naturally between feed sections.
+  *
+@@ -10,7 +10,7 @@
+  *  - ADS_ENABLED is exactly "true" (the master switch; both spellings below),
+  *  - the app runs inside Telegram (A-ADS fill is optimized for Telegram
+  *    webviews; plain browsers also work but we gate on Telegram to match the
+- *    original Adsgram policy of Telegram-only monetization).
++ *    original Telegram-only monetization policy).
+  *
+  * The web build and any unset deployment never load the ad snippet — zero
+  * bytes, zero requests, zero visual footprint.
+-- 
+2.54.0.windows.1
+

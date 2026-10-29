@@ -1,0 +1,621 @@
+From ac3c4377576ef907fc44294e03067699f9290b52 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 12:34:39 +0330
+Subject: [PATCH 1/2] fix(api): backfill finished-match lineups and timeline on
+ demand
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The sync's "recent finishers" rule only re-summarizes a finished
+match if 1h < hoursSinceSync < 26h, so a match that finished while
+the server was down (or more than 26h ago) sat with zero
+match_player_stats and zero timeline_events forever. The lineups
+and timeline tabs both read "not out yet" for matches that were
+already played.
+
+Fix: in the /api/matches/:id/lineups and /api/matches/:id/timeline
+route handlers, when the DB has zero rows for a finished match,
+call syncMatchSummary(league, matchId) once and re-query. The
+summary writes to match_player_stats and timeline_events, so the
+first user to open the match pays one ESPN fetch and every
+subsequent user gets the cached result.
+
+Failure mode is graceful: if the ESPN fetch throws, the route
+falls through to the empty state rather than 500'ing.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/routes/football.ts | 117 +++++++++++++++++++++++++++++++-------
+ 1 file changed, 95 insertions(+), 22 deletions(-)
+
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index 48cd4a1..37f4d95 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -19,6 +19,8 @@ import { bad, requireUser } from "./shared.js";
+ // Sync freshness for the ops surface: the client shows "data as of <time>"
+ // rather than silently serving yesterday's football.
+ import { syncHealthSnapshot } from "../sync/sentinel.js";
++import { syncMatchSummary } from "../sync/service.js";
++import type { LeagueSlug } from "../espn/types.js";
+ 
+ const db = getDb();
+ 
+@@ -215,22 +217,28 @@ matchesRouter.get("/api/matches/:id/team-stats", (req, res) => {
+   });
+ });
+ 
+-matchesRouter.get("/api/matches/:id/lineups", (req, res) => {
+-  const matchId = String(req.params.id);
+-  if (!assertMatchAllowed(res, matchId)) return;
+-  const match = get<{
+-    home_team_id: string;
+-    away_team_id: string;
+-    home_formation: string | null;
+-    away_formation: string | null;
+-    status: string;
+-  }>(
++/* ------------------------------------------------------------ lineups */
++
++interface MatchReadState {
++  home_team_id: string;
++  away_team_id: string;
++  home_formation: string | null;
++  away_formation: string | null;
++  status: string;
++  league: string;
++}
++
++function matchReadState(matchId: string): MatchReadState | undefined {
++  return get<MatchReadState>(
+     db,
+-    "SELECT home_team_id, away_team_id, home_formation, away_formation, status FROM matches WHERE id = ?",
++    `SELECT home_team_id, away_team_id, home_formation, away_formation, status, league
++     FROM matches WHERE id = ?`,
+     [matchId],
+   );
+-  if (!match) return bad(res, "not found", 404);
+-  const rows = all(
++}
++
++function lineupRows(matchId: string): Record<string, unknown>[] {
++  return all(
+     db,
+     `SELECT s.*, p.full_name, p.short_name, p.position, p.jersey_number, p.headshot_url,
+             p.espn_position
+@@ -239,6 +247,68 @@ matchesRouter.get("/api/matches/:id/lineups", (req, res) => {
+      ORDER BY s.started DESC, s.minutes_played DESC, p.jersey_number ASC`,
+     [matchId],
+   );
++}
++
++function timelineRows(matchId: string): Record<string, unknown>[] {
++  return all(
++    db,
++    `SELECT e.*,
++       (SELECT COUNT(*) FROM timeline_comments c WHERE c.event_id = e.id) AS comment_count
++     FROM timeline_events e WHERE e.match_id = ?
++     ORDER BY e.minute_seconds ASC`,
++    [matchId],
++  );
++}
++
++/**
++ * A finished match can sit in the database with no player stats at all: the
++ * sync's "recent finishers" rule only re-summarizes while 1h < hoursSinceSync
++ * < 26h, so a match that ended while the box was down — or more than 26h ago —
++ * never gets its summary applied, and the lineups/timeline tabs read "not out
++ * yet" for football that has already been played.
++ *
++ * Both reads below repair that on demand: zero rows for a finished match buys
++ * one summary fetch, and because the summary writes match_player_stats and
++ * timeline_events itself, the next reader of that match gets the cached result.
++ *
++ * The cooldown keeps a public route from becoming a fetch amplifier: a fixture
++ * ESPN has no summary for keeps coming back empty, and without it every single
++ * request for that match would hit ESPN again. One attempt per match per 10
++ * minutes, in-memory on purpose — this server is one process, the same rule the
++ * sync's own reconcile backoff follows.
++ */
++const BACKFILL_RETRY_MS = 10 * 60_000;
++const backfillAttempts = new Map<string, number>();
++
++async function backfillSummary(league: string, matchId: string): Promise<void> {
++  const retriedAt = backfillAttempts.get(matchId) ?? 0;
++  if (retriedAt > Date.now()) return;
++  backfillAttempts.set(matchId, Date.now() + BACKFILL_RETRY_MS);
++  try {
++    await syncMatchSummary(league as LeagueSlug, matchId);
++  } catch (err) {
++    // A dead ESPN fetch must never 500 a read: the caller falls through to the
++    // empty state it would have shown before, exactly as if we had not tried.
++    console.error(`[lineups] backfill ${matchId} FAILED:`, String(err));
++  }
++}
++
++matchesRouter.get("/api/matches/:id/lineups", async (req, res) => {
++  const matchId = String(req.params.id);
++  if (!assertMatchAllowed(res, matchId)) return;
++  let match = matchReadState(matchId);
++  if (!match) return bad(res, "not found", 404);
++  let rows = lineupRows(matchId);
++
++  // Backfill: a finished match with no player stats means we missed the
++  // post-final sync. Fetch the summary now, then re-read (the status may have
++  // moved, and the summary is what writes the rows).
++  if (rows.length === 0 && match.status === "finished") {
++    await backfillSummary(match.league, matchId);
++    match = matchReadState(matchId) ?? match;
++    rows = lineupRows(matchId);
++  }
++
+   res.json({
+     home: { formation: match.home_formation },
+     away: { formation: match.away_formation },
+@@ -248,17 +318,20 @@ matchesRouter.get("/api/matches/:id/lineups", (req, res) => {
+ 
+ /* ------------------------------------------------------------ timeline */
+ 
+-matchesRouter.get("/api/matches/:id/timeline", (req, res) => {
++matchesRouter.get("/api/matches/:id/timeline", async (req, res) => {
+   const matchId = String(req.params.id);
+   if (!assertMatchAllowed(res, matchId)) return;
+-  const events = all(
+-    db,
+-    `SELECT e.*,
+-       (SELECT COUNT(*) FROM timeline_comments c WHERE c.event_id = e.id) AS comment_count
+-     FROM timeline_events e WHERE e.match_id = ?
+-     ORDER BY e.minute_seconds ASC`,
+-    [matchId],
+-  );
++  let events = timelineRows(matchId);
++
++  // Same missed-summary repair as the lineups read above.
++  if (events.length === 0) {
++    const match = matchReadState(matchId);
++    if (match?.status === "finished") {
++      await backfillSummary(match.league, matchId);
++      events = timelineRows(matchId);
++    }
++  }
++
+   res.json({ events: events.map((e) => ({ ...e, participants: safeArr(e.participants) })) });
+ });
+ 
+-- 
+2.54.0.windows.1
+
+
+From a6ce4483dd9085efe35024189194b90767fab05e Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 12:47:09 +0330
+Subject: [PATCH 2/2] feat(lineups): goal, assist, card badges and subs row on
+ the pitch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The Lineups tab showed the starting XI and the bench, but a
+finished match had no per-player signal for what they actually
+did — a scorer looked the same as a non-scorer, a sub who came
+on and scored wasn't on the pitch at all.
+
+Fix: LineupsTab now also reads the timeline events and passes a
+per-player event map (goals, assists, subIn/subOut minute, card
+type) down to LineupsPanel. Starters who scored show a ball per
+goal, assisters an "A", carded players the same yellow/red
+rectangle the timeline draws. A new "Subs used" row below the
+pitch lists players who came off the bench with their minute, the
+same badges, and an ↑ arrow.
+
+Upcoming matches with no events render exactly as before — the
+new map is empty, no badges, no subs row.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/panels/LineupsPanel.tsx | 153 +++++++++++++++++++++++--
+ src/i18n/strings.ts                    |  10 ++
+ src/lib/lineupEvents.ts                |  54 +++++++++
+ src/pages/MatchDetail.tsx              |  21 +++-
+ src/types.ts                           |  17 +++
+ 5 files changed, 247 insertions(+), 8 deletions(-)
+ create mode 100644 src/lib/lineupEvents.ts
+
+diff --git a/src/components/panels/LineupsPanel.tsx b/src/components/panels/LineupsPanel.tsx
+index 64528fa..a659f09 100644
+--- a/src/components/panels/LineupsPanel.tsx
++++ b/src/components/panels/LineupsPanel.tsx
+@@ -1,7 +1,9 @@
+ import { useState } from "react";
+ import { useI18n } from "../../i18n/context";
+-import type { LineupPlayer, MatchLineup, Team } from "../../types";
++import type { LineupPlayer, LineupPlayerEvents, MatchLineup, Team } from "../../types";
+ import { Card, Chip, Num, PlayerAvatar, Segmented, TeamBadge } from "../ui";
++import { BallIcon } from "../icons";
++import { cx } from "../../lib/cx";
+ import { placePublishedXI, type SlotCandidate } from "../../lib/formations";
+ 
+ /** `LineupPlayer` → the shape the placement helpers reason about. */
+@@ -34,7 +36,13 @@ const asCandidate = (player: LineupPlayer): SlotCandidate => ({
+  * where they are: every one is horizontally centred, so a mirrored row of
+  * players still lines up with the penalty areas and the halfway line.
+  */
+-function LineupPitch({ lineup }: { lineup: MatchLineup }) {
++function LineupPitch({
++  lineup,
++  playerEvents,
++}: {
++  lineup: MatchLineup;
++  playerEvents?: Record<string, LineupPlayerEvents>;
++}) {
+   const { t, localize } = useI18n();
+   // Carries the player itself plus the fields the placement helpers read, so a
+   // placed slot can still render a face and a name.
+@@ -57,6 +65,7 @@ function LineupPitch({ lineup }: { lineup: MatchLineup }) {
+                   key={player ? player.id : `empty-${rowIndex}-${index}`}
+                   player={player}
+                   name={player ? localize(player.name) : ""}
++                  events={player ? playerEvents?.[player.id] : undefined}
+                 />
+               ))}
+             </div>
+@@ -82,8 +91,99 @@ function LineupPitch({ lineup }: { lineup: MatchLineup }) {
+   );
+ }
+ 
+-/** One player on the pitch: face (or initials), shirt number, name. */
+-function PitchSlot({ player, name }: { player: LineupPlayer | null; name: string }) {
++type CardKind = NonNullable<LineupPlayerEvents["card"]>;
++
++/** The booking itself, drawn the way the timeline draws it: a filled rectangle,
++ *  yellow or red, or the overlapping pair ESPN describes as a second yellow. */
++function CardMark({ kind }: { kind: CardKind }) {
++  if (kind === "second-yellow") {
++    return (
++      <span aria-hidden="true" className="relative inline-block h-3 w-3">
++        <span className="absolute inset-y-0 end-0 w-[7px] rounded-[1px] bg-danger shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />
++        <span className="absolute inset-y-0 start-0 w-[7px] rounded-[1px] bg-gold shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />
++      </span>
++    );
++  }
++  return (
++    <span
++      aria-hidden="true"
++      className={cx(
++        "inline-block h-3 w-2 rounded-[1px] shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]",
++        kind === "red" ? "bg-danger" : "bg-gold",
++      )}
++    />
++  );
++}
++
++/**
++ * What this player actually did, as small marks under his name: a ball per goal
++ * (the timeline's own --volt ball), an outlined "A" for an assist, and the
++ * booking's rectangle. Drawn marks, never emoji — the rule the timeline set.
++ *
++ * A brace is two balls rather than a count: at 12px a digit is unreadable, and
++ * one goal is the common case anyway. The whole cluster carries one label, so a
++ * screen reader hears "2 goals · Yellow card" once instead of per glyph.
++ */
++function PlayerMarks({ events }: { events?: LineupPlayerEvents }) {
++  const { t } = useI18n();
++  if (!events) return null;
++  const card =
++    events.card === "red" || events.card === "second-yellow"
++      ? t("timeline.red")
++      : events.card === "yellow"
++        ? t("timeline.yellow")
++        : "";
++  const label = [
++    events.goals > 0
++      ? events.goals === 1
++        ? t("lineups.goalsOne", { count: events.goals })
++        : t("lineups.goals", { count: events.goals })
++      : "",
++    events.assists > 0
++      ? events.assists === 1
++        ? t("lineups.assistsOne", { count: events.assists })
++        : t("lineups.assists", { count: events.assists })
++      : "",
++    card,
++  ]
++    .filter(Boolean)
++    .join(" · ");
++  if (!label) return null;
++
++  return (
++    <span
++      className="mt-0.5 flex flex-wrap items-center justify-center gap-0.5"
++      role="img"
++      aria-label={label}
++      title={label}
++    >
++      {Array.from({ length: events.goals }, (_, i) => (
++        <BallIcon key={`goal-${i}`} className="h-3 w-3 flex-none text-volt" />
++      ))}
++      {events.assists > 0 ? (
++        <span
++          aria-hidden="true"
++          className="grid h-3 min-w-3 place-items-center rounded-[2px] px-0.5 text-[9px] leading-none font-black text-ink-2 ring-1 ring-line"
++        >
++          A
++        </span>
++      ) : null}
++      {events.card ? <CardMark kind={events.card} /> : null}
++    </span>
++  );
++}
++
++/** One player on the pitch: face (or initials), shirt number, name, and — once
++ *  the match has been played — what he did in it. */
++function PitchSlot({
++  player,
++  name,
++  events,
++}: {
++  player: LineupPlayer | null;
++  name: string;
++  events?: LineupPlayerEvents;
++}) {
+   if (!player) {
+     return (
+       <span className="flex min-w-0 flex-1 justify-center">
+@@ -100,6 +200,7 @@ function PitchSlot({ player, name }: { player: LineupPlayer | null; name: string
+         </Num>
+       </span>
+       <span className="mt-1 block w-full truncate text-center text-xs font-bold text-ink-2">{name}</span>
++      <PlayerMarks events={events} />
+     </span>
+   );
+ }
+@@ -113,16 +214,29 @@ export function LineupsPanel({
+   home,
+   away,
+   lineups,
++  playerEvents,
+ }: {
+   home: Team;
+   away: Team;
+   lineups: { home: MatchLineup; away: MatchLineup };
++  /**
++   * Per-player goals/assists/bookings and sub minutes, keyed by player id.
++   * Absent (or empty) for a match that has not been played yet — the pitch then
++   * renders exactly as it did before the marks existed.
++   */
++  playerEvents?: Record<string, LineupPlayerEvents>;
+ }) {
+   const { t, localize } = useI18n();
+   const [side, setSide] = useState<"home" | "away">("home");
+ 
+   const team = side === "home" ? home : away;
+   const lineup = side === "home" ? lineups.home : lineups.away;
++  // A bench player with a sub-on minute is a substitution that was actually
++  // made: he moves to "Subs used" with his minute, and the bench strip keeps
++  // the players who never came on. Without events (an upcoming fixture) every
++  // bench player stays on the bench, exactly as before.
++  const cameOn = lineup.subs.filter((player) => playerEvents?.[player.id]?.subInMinute);
++  const bench = lineup.subs.filter((player) => !playerEvents?.[player.id]?.subInMinute);
+ 
+   return (
+     <div className="space-y-3">
+@@ -143,7 +257,7 @@ export function LineupsPanel({
+           <Chip tone="pitch">{lineup.formation}</Chip>
+         </div>
+ 
+-        <LineupPitch lineup={lineup} />
++        <LineupPitch lineup={lineup} playerEvents={playerEvents} />
+ 
+         {/* The coach is not in every feed, and the lineups route has no coach
+             endpoint at all — a bare "Coach:" label is worse than no line. */}
+@@ -154,15 +268,40 @@ export function LineupsPanel({
+         ) : null}
+       </Card>
+ 
++      {/* The bench, as far as it was used: who came on, and at what minute.
++            Only rendered when the timeline gave us a sub event, so a fixture
++            with no events still shows just the XI and the bench. */}
++      {cameOn.length > 0 ? (
++        <Card className="p-3">
++          <p className="mb-1 label text-ink-2">{t("lineups.subsUsed")}</p>
++          <ul className="divide-y divide-line">
++            {cameOn.map((player) => (
++              <li key={player.id} className="flex items-center gap-2 py-1.5">
++                <Num className="grid h-6 w-6 flex-none place-items-center rounded-full bg-elevated text-xs font-black text-ink-2">
++                  {player.number > 0 ? player.number : "–"}
++                </Num>
++                <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
++                  {localize(player.name)}
++                </span>
++                <PlayerMarks events={playerEvents?.[player.id]} />
++                <span className="flex-none text-xs font-bold text-pitch">
++                  ↑ {playerEvents?.[player.id]?.subInMinute}′
++                </span>
++              </li>
++            ))}
++          </ul>
++        </Card>
++      ) : null}
++
+       {/* The bench, as a horizontal strip of small chips: shirt number over
+             the name's initial. A row per sub made the bench longer than the
+             pitch; a scroll keeps it to one line. Chips are LTR-safe: numbers
+             are figures and an initial is direction-neutral. */}
+-      {lineup.subs.length > 0 ? (
++      {bench.length > 0 ? (
+         <Card className="p-3">
+           <p className="mb-2 label text-ink-2">{t("lineups.bench")}</p>
+           <ul className="-mx-2 flex gap-2 overflow-x-auto px-2 pb-1">
+-            {lineup.subs.map((player) => (
++            {bench.map((player) => (
+               <li key={player.id} className="flex-none">
+                 <div
+                   className="flex w-[52px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center"
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 90f1e68..4351193 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -243,6 +243,11 @@ export const strings = {
+     "stats.live": "Live",
+     "lineups.coach": "Coach",
+     "lineups.bench": "Bench",
++    "lineups.subsUsed": "Subs used",
++    "lineups.goals": "{count} goals",
++    "lineups.goalsOne": "{count} goal",
++    "lineups.assists": "{count} assists",
++    "lineups.assistsOne": "{count} assist",
+     "lineups.noneYet": "No lineups yet",
+     "lineups.noneHint": "Lineups usually appear about an hour before kickoff.",
+     "lineups.emptyHint": "Lineups drop roughly an hour before kickoff.",
+@@ -906,6 +911,11 @@ export const strings = {
+     "stats.live": "زنده",
+     "lineups.coach": "سرمربی",
+     "lineups.bench": "نیمکت",
++    "lineups.subsUsed": "تعویض‌های انجام‌شده",
++    "lineups.goals": "{count} گل",
++    "lineups.goalsOne": "{count} گل",
++    "lineups.assists": "{count} پاس گل",
++    "lineups.assistsOne": "{count} پاس گل",
+     "lineups.noneYet": "هنوز ترکیبی اعلام نشده",
+     "lineups.noneHint": "ترکیب‌ها معمولاً حدود یک ساعت قبل از شروع بازی اعلام می‌شوند.",
+     "lineups.emptyHint": "ترکیب‌ها حدود یک ساعت قبل از شروع بازی اعلام می‌شوند.",
+diff --git a/src/lib/lineupEvents.ts b/src/lib/lineupEvents.ts
+new file mode 100644
+index 0000000..d9d88b1
+--- /dev/null
++++ b/src/lib/lineupEvents.ts
+@@ -0,0 +1,54 @@
++import type { ApiTimelineEvent } from "./api";
++import type { LineupPlayerEvents } from "../types";
++
++/**
++ * Server → view adapter for the lineup pitch: what each player actually did in
++ * this match, keyed by player id (the pitch renders by id, and every timeline
++ * event carries its participants' ids).
++ *
++ * Sits in lib rather than in `pages/MatchDetail` for the same reason
++ * `adaptComments` does — a module that exports a page component should not also
++ * export a plain helper (Fast Refresh cannot hot-patch those).
++ *
++ * An own goal is served as a plain `goal` naming the player who put it into his
++ * own net. It must not earn him a scoring badge — the stat sheet does not credit
++ * it to him either — so it is skipped, exactly as the timeline's own score line
++ * treats it.
++ */
++export function buildPlayerEvents(events: ApiTimelineEvent[]): Record<string, LineupPlayerEvents> {
++  const map: Record<string, LineupPlayerEvents> = {};
++  const entry = (id: string): LineupPlayerEvents => (map[id] ??= { goals: 0, assists: 0 });
++  // A red outranks a second yellow outranks a plain yellow: if the feed files
++  // two rows for one player, the pitch shows the booking that matters.
++  const rank = { yellow: 1, "second-yellow": 2, red: 3 } as const;
++
++  for (const e of events) {
++    const [first, second] = e.participants;
++    if (!first) continue;
++    if (e.type === "goal") {
++      if (/own goal/i.test(e.description)) continue;
++      entry(first.id).goals += 1;
++      // ESPN names the assist as the second participant when there is one — a
++      // solo goal or a penalty carries the scorer alone.
++      if (second) entry(second.id).assists += 1;
++    } else if (e.type === "substitution" && second) {
++      // participants: [on, off].
++      entry(first.id).subInMinute = e.minute_display;
++      entry(second.id).subOutMinute = e.minute_display;
++    } else if (e.type === "card") {
++      // ESPN folds every sending-off into one `card` type; only the description
++      // says which card it was (same reading the timeline uses).
++      const kind = /second yellow/i.test(e.description)
++        ? "second-yellow"
++        : /\bred card\b/i.test(e.description)
++          ? "red"
++          : /yellow/i.test(e.description)
++            ? "yellow"
++            : null;
++      if (!kind) continue;
++      const row = entry(first.id);
++      if (!row.card || rank[kind] > rank[row.card]) row.card = kind;
++    }
++  }
++  return map;
++}
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 6a74bb1..8d4482f 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -9,6 +9,7 @@ import { LineupsSkeleton,
+ } from "../components/Skeletons";
+ import { TimelineList } from "../components/TimelineList";
+ import { adaptComments } from "../lib/adaptComments";
++import { buildPlayerEvents } from "../lib/lineupEvents";
+ import { TopBar } from "../components/TopBar";
+ import { LineupsPanel } from "../components/panels/LineupsPanel";
+ 
+@@ -763,6 +764,17 @@ function LineupsTab({
+     queryKey: ["lineups", matchId],
+     queryFn: () => api.getLineups(matchId),
+   });
++  // The pitch shows what each player did, which lives on the timeline, not in
++  // the lineups payload. Shared query key with the Timeline tab, so whichever
++  // tab opens second reads the cache instead of refetching the same events.
++  const eventsQuery = useQuery({
++    queryKey: ["timeline", matchId],
++    queryFn: () => api.getTimeline(matchId),
++  });
++  const playerEvents = useMemo(
++    () => buildPlayerEvents(eventsQuery.data?.events ?? []),
++    [eventsQuery.data],
++  );
+   const data = query.data;
+   if (query.isLoading) return <LineupsSkeleton />;
+   if (query.isError) {
+@@ -826,7 +838,14 @@ function LineupsTab({
+     subs: awayAll.filter((p) => !p.starter && p.minutes > 0),
+   };
+ 
+-  return <LineupsPanel home={homeTeam} away={awayTeam} lineups={{ home: homeLineup, away: awayLineup }} />;
++  return (
++    <LineupsPanel
++      home={homeTeam}
++      away={awayTeam}
++      lineups={{ home: homeLineup, away: awayLineup }}
++      playerEvents={playerEvents}
++    />
++  );
+ }/* ------------------------------------------------------------ adapters */
+ 
+ function adaptTimelineEvent(e: ApiTimelineEvent) {
+diff --git a/src/types.ts b/src/types.ts
+index ae2c08b..ae11663 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -149,6 +149,23 @@ export interface LineupPlayer {
+   subbedOff?: string;
+ }
+ 
++/**
++ * What one player actually did in this match, read off the timeline and keyed by
++ * player id for the lineup pitch. Empty for a fixture that has not been played
++ * yet, which is what keeps an upcoming match's lineups looking exactly as they
++ * did before the badges existed.
++ */
++export interface LineupPlayerEvents {
++  goals: number;
++  assists: number;
++  /** Minute this player came off the bench (the sub event's display, "67"). */
++  subInMinute?: string;
++  /** Minute this player was replaced. */
++  subOutMinute?: string;
++  /** ESPN folds every sending-off into one type; the description picks the card. */
++  card?: "yellow" | "red" | "second-yellow";
++}
++
+ export interface MatchLineup {
+   formation: string;
+   coach: string;
+-- 
+2.54.0.windows.1
+

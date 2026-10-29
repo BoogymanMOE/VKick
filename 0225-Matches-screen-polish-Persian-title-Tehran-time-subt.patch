@@ -1,0 +1,416 @@
+From 518e08c7030c9e8f3ff5a39b5791004a5f575f22 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 25 Oct 2026 18:56:38 +0330
+Subject: [PATCH 225/230] Matches screen polish: Persian title, Tehran-time
+ subtitle, filter chips, score column rows
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- TopBar title is "مسابقات" (was "مچ‌دی"); subtitle appends the single
+  "ساعت‌ها به وقت تهران" mention and the per-row Tehran caption is gone.
+- Rows: status lives in the time column (kickoff clock / live minute in
+  coral / نیمه‌وقت / پایان muted), the chevron is removed, and scores are
+  a bold two-line column at the row end aligned per team.
+- Filter chips under the day strip: همه / زنده (live count, hidden at 0) /
+  تیم‌های من (hidden with no picks); a stale chip selection falls back to
+  همه instead of an empty feed.
+- Inline ad: dark rounded slot, max-height 60px with overflow clipped,
+  small localized "تبلیغ" label; creative can no longer render as a bare
+  white block floating over the feed.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/InlineAd.tsx    |  29 +++++----
+ src/components/LeagueGroup.tsx |  73 +++++++++++++++--------
+ src/i18n/strings.ts            |  16 +++--
+ src/pages/Matches.tsx          | 106 ++++++++++++++++++++++++++++++---
+ 4 files changed, 173 insertions(+), 51 deletions(-)
+
+diff --git a/src/components/InlineAd.tsx b/src/components/InlineAd.tsx
+index cfdf750..aee008c 100644
+--- a/src/components/InlineAd.tsx
++++ b/src/components/InlineAd.tsx
+@@ -1,28 +1,30 @@
+ import type { CSSProperties } from "react";
++import { useI18n } from "../i18n/context";
+ import { IS_EMBED } from "../lib/embed";
+ 
+ /**
+- * The feed's inline ad: a 56px hosted iframe (A-ADS, adaptive size) sitting
+- * inside a card that matches the rest of the feed's chrome. Token colours and
+- * the shared card radius only — a monetization surface must read as part of
+- * the product, and it must not read as "empty" (a dashed border here would
+- * collide with the app's dashed-border-means-nothing-here language).
++ * The feed's inline ad: a hosted iframe (A-ADS, adaptive size) inside a dark
++ * rounded slot — deliberately capped at 60px with the overflow clipped, so a
++ * tall third-party creative can never blow open the feed's rhythm, and the
++ * slot's own surface stays on-token even while the iframe itself paints.
++ * The small "تبلیغ" label keeps the monetization surface branded, not bare.
+  */
+ export function InlineAd() {
++  const { t } = useI18n();
+   // Share mode (?embed=1 inside /frame.html): clean screenshots, no ad iframe.
+   if (IS_EMBED) return null;
+   return (
+     <div
+-      className="my-3 flex items-center gap-2 rounded-card border border-line bg-elevated p-2"
+-      style={{ minHeight: "56px", overflow: "hidden" }}
++      className="my-3 flex items-center gap-2 overflow-hidden rounded-card bg-elevated p-1.5"
++      style={{ maxHeight: "60px" }}
+     >
+       {/* Labelling: the strap matches the app's other micro-labels, not an
+           arbitrary pill, so the slot reads as branded furniture. */}
+       <span
+-        aria-label="Advertisement"
+-        className="grid h-7 min-w-[34px] flex-none place-items-center rounded-md border border-line bg-surface px-1.5 text-xs font-bold uppercase tracking-wide text-ink-3"
++        aria-label={t("ads.label")}
++        className="grid h-6 min-w-[30px] flex-none place-items-center rounded-md border border-line bg-surface px-1 text-[10px] font-bold tracking-wide text-ink-3"
+       >
+-        Ad
++        {t("ads.label")}
+       </span>
+       <iframe
+         data-aa="2458182"
+@@ -33,11 +35,14 @@ export function InlineAd() {
+           margin: "0",
+           display: "block",
+           width: "100%",
+-          height: "56px",
++          height: "48px",
++          minHeight: "0",
+           overflow: "hidden",
+           flex: 1,
++          borderRadius: "8px",
++          colorScheme: "dark",
+         } as CSSProperties}
+-        title="Advertisement"
++        title={t("ads.label")}
+       />
+     </div>
+   );
+diff --git a/src/components/LeagueGroup.tsx b/src/components/LeagueGroup.tsx
+index 81188a0..2c9a103 100644
+--- a/src/components/LeagueGroup.tsx
++++ b/src/components/LeagueGroup.tsx
+@@ -4,8 +4,8 @@ import type { Match, Team } from "../types";
+ import { useI18n } from "../i18n/context";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { useCompetitionLabel } from "../hooks/useApi";
+-import { LiveDot, Num, TeamBadge } from "./ui";
+-import { ChevronRightIcon, StarFilledIcon } from "./icons";
++import { Num, TeamBadge } from "./ui";
++import { StarFilledIcon } from "./icons";
+ import { cx } from "../lib/cx";
+ 
+ /**
+@@ -57,7 +57,7 @@ function TeamLine({
+     // star; the name truncates before anything else yields width.
+     <div className="flex min-w-0 items-center gap-[9px]">
+       <span className="flex-none">
+-        <        TeamBadge team={team} size="xs" />
++        <TeamBadge team={team} size="xs" />
+       </span>
+       <span className="min-w-0 truncate text-sm font-medium">{localize(team.shortName)}</span>
+       <StarFilledIcon
+@@ -92,13 +92,17 @@ export const MatchRow = memo(function MatchRow({
+   const home = localize(match.home.shortName);
+   const away = localize(match.away.shortName);
+   const clock = clockFormatter(lang === "fa" ? "fa-IR" : "en").format(new Date(match.kickoffAt));
++  // Live minute, Persian digits under fa: "۴۴′". The feed's `minute` is the
++  // server's normalised clock ("44'"); only the numeric part is localized.
++  const minuteNum = /\d+/.exec(match.minute ?? "")?.[0] ?? null;
++  const minuteLabel = minuteNum ? digitFormatter(lang === "fa" ? "fa-IR" : "en").format(Number(minuteNum)) : null;
+ 
+   // The accessible name carries the state: score + minute when in play, final
+   // score when finished, kickoff time when upcoming.
+   const status = isLive
+-    ? `${t("status.live")} ${match.minute ?? ""}`.trim()
++    ? `${t("status.live")} ${minuteLabel ?? ""}`.trim()
+     : isHalftime
+-      ? t("timeline.halftime")
++      ? t("matches.groupHalftime")
+       : isFinished
+         ? t("status.finished")
+         : clock;
+@@ -125,27 +129,30 @@ export const MatchRow = memo(function MatchRow({
+         dir={lang === "fa" ? "rtl" : "ltr"}
+         className="flex min-w-0 items-center gap-3 px-3.5 py-[9px] transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated focus-visible:outline-2 focus-visible:outline-volt focus-visible:-outline-offset-2"
+       >
+-        {/* Time column: 44px floor, centred. Normally the 24h clock fills the
+-            floor exactly; if user text scaling pushes the clock or its caption
+-            wider, the column grows instead of clipping or overlapping the team
+-            column — height-always, never sideways. */}
+-        <div dir="ltr" className="flex min-w-11 flex-none flex-col items-center gap-0.5 text-center">
+-          <span className="whitespace-nowrap text-[15px] font-bold leading-4 text-ink">
+-            <Num>{clock}</Num>
+-          </span>
++        {/* TIME + STATUS column. Upcoming: kickoff clock. Live: the minute in
++            the live coral, in place of the kickoff time. Halftime: the break
++            label. Finished: "پایان" in muted ink. 44px floor, centred. */}
++        <div dir="ltr" className="flex min-w-11 flex-none flex-col items-center justify-center gap-0.5 text-center">
+           {isLive ? (
+-            <span className="flex items-center gap-1 text-[9px] font-bold leading-3 text-live">
+-              <LiveDot />
+-              <Num>{match.homeScore ?? 0}–{match.awayScore ?? 0}</Num>
+-            </span>
++            minuteLabel ? (
++              <span className="whitespace-nowrap text-[15px] font-bold leading-5 text-live">
++                <Num>{minuteLabel}′</Num>
++              </span>
++            ) : (
++              <span className="flex items-center gap-1 text-[15px] font-bold leading-5 text-live">
++                <span className="live-dot" aria-hidden="true" />
++              </span>
++            )
+           ) : isHalftime ? (
+-            <span className="text-[9px] font-bold leading-3 text-gold">{t("timeline.halftime")}</span>
+-          ) : isFinished ? (
+-            <span dir="ltr" className="text-[9px] leading-3 text-ink-3">
+-              <Num>{match.homeScore ?? 0}–{match.awayScore ?? 0}</Num>
++            <span className="flex-nowrap text-[10px] font-bold leading-4 text-gold">
++              {t("matches.groupHalftime")}
+             </span>
++          ) : isFinished ? (
++            <span className="text-[11px] font-bold leading-5 text-ink-3">{t("status.finished")}</span>
+           ) : (
+-            <span className="text-[9px] leading-3 text-ink-3">{t("matches.tehranTime")}</span>
++            <span className="whitespace-nowrap text-[15px] font-bold leading-5 text-ink">
++              <Num>{clock}</Num>
++            </span>
+           )}
+         </div>
+ 
+@@ -157,10 +164,24 @@ export const MatchRow = memo(function MatchRow({
+           <TeamLine team={match.away} followed={awayFollowed} />
+         </div>
+ 
+-        {/* Far end: small muted chevron, pointing at the edge it opens from. */}
+-        <span className={cx("flex-none text-ink-3", lang === "fa" ? "rotate-180" : "")} aria-hidden="true">
+-          <ChevronRightIcon className="h-3.5 w-3.5" />
+-        </span>
++        {/* SCORE column: bold, one number per team line, aligned with that
++            team (the cells share the team line's 22px height and the same
++            7px row gap). Blank for upcoming matches — an upcoming row only
++            carries the kickoff clock. */}
++        {hasScore ? (
++          <div className="flex flex-none flex-col justify-end gap-[7px]">
++            <span className="flex h-[22px] items-center">
++              <Num className="text-[15px] font-extrabold text-ink">
++                {match.homeScore ?? 0}
++              </Num>
++            </span>
++            <span className="flex h-[22px] items-center">
++              <Num className="text-[15px] font-extrabold text-ink">
++                {match.awayScore ?? 0}
++              </Num>
++            </span>
++          </div>
++        ) : null}
+       </Link>
+     </li>
+   );
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index aa66a5b..fe0d19b 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -82,8 +82,11 @@ export const strings = {
+   // League-group header, far end: "22 matches" / "2 matches".
+   "matches.matchCount": "{count} matches",
+   "matches.matchCountOne": "{count} match",
+-  // Tiny caption under the kickoff clock on feed rows.
+-  "matches.tehranTime": "Tehran time",
++    // Tiny caption under the kickoff clock on feed rows.
++  "matches.headerTz": "times in Tehran time",
++  "matches.filter.all": "All",
++  "matches.filter.live": "Live {count}",
++  "matches.filter.mine": "My clubs",
+   "matches.emptyDay": "No matches on {day}",
+   "matches.emptyNext": "The next match day is {day}",
+   "matches.goToDay": "Go to {day}",
+@@ -113,6 +116,7 @@ export const strings = {
+     "myTeams.removed": "{team} removed",
+     "myTeams.vsOpp": "v {opp}",
+     "ads.sponsored": "Sponsored",
++    "ads.label": "Ad",
+     "onboarding.favoriteSaved":
+       "{team} saved as your favorite team — its league's matches now lead your Matchday feed.",
+     "onboarding.editPicksHint": "Your saved favorite team and leagues",
+@@ -708,7 +712,7 @@ export const strings = {
+     "league.UEL": "لیگ اروپا",
+     "nav.table": "جدول",
+     "nav.profile": "پروفایل",
+-    "matches.title": "مچ‌دی",
++    "matches.title": "مسابقات",
+     "matches.subtitle": "باشگاه‌ها و لیگ‌های شما",
+     "matches.live": "در حال بازی",
+     "matches.upcoming": "پیش رو",
+@@ -746,7 +750,10 @@ export const strings = {
+     "matches.matchCount": "{count} بازی",
+     "matches.matchCountOne": "{count} بازی",
+     // کپشن کوچک زیر ساعت شروع بازی در ردیف‌های فید.
+-    "matches.tehranTime": "به وقت تهران",
++    "matches.headerTz": "ساعت‌ها به وقت تهران",
++    "matches.filter.all": "همه",
++    "matches.filter.live": "زنده {count}",
++    "matches.filter.mine": "تیم‌های من",
+     "matches.emptyDay": "در {day} بازی‌ای نیست",
+     "matches.emptyNext": "روز بعدیِ بازی‌ها {day} است",
+     "matches.goToDay": "برو به {day}",
+@@ -776,6 +783,7 @@ export const strings = {
+     "myTeams.removed": "{team} حذف شد",
+     "myTeams.vsOpp": "مقابل {opp}",
+     "ads.sponsored": "اسپانسری",
++    "ads.label": "تبلیغ",
+     "onboarding.favoriteSaved":
+       "{team} به‌عنوان تیم موردعلاقه‌ات ذخیره شد — بازی‌های لیگش حالا اول مچ‌دی دیده می‌شود.",
+     "onboarding.editPicksHint": "تیم و لیگ‌های موردعلاقه ذخیره‌شده",
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 67ce80e..5a942f0 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -178,6 +178,31 @@ export default function Matches() {
+     [matches, selectedKey],
+   );
+ 
++  // Day-state filter chips: all / live / followed clubs. The live chip hides
++  // when the day has no live football and the mine chip hides with no picks;
++  // a stale selection (e.g. "live" after the day rolled to a quiet one) falls
++  // back to "all" instead of holding an empty screen.
++  const [dayFilter, setDayFilter] = useState<"all" | "live" | "mine">("all");
++  const liveCount = useMemo(
++    () => dayMatches.filter((m) => m.status === "live" || m.isHalftime === true).length,
++    [dayMatches],
++  );
++  const effectiveFilter =
++    dayFilter === "live" && liveCount === 0
++      ? ("all" as const)
++      : dayFilter === "mine" && favCount === 0
++        ? ("all" as const)
++        : dayFilter;
++  const filteredMatches = useMemo(() => {
++    if (effectiveFilter === "live") {
++      return dayMatches.filter((m) => m.status === "live" || m.isHalftime === true);
++    }
++    if (effectiveFilter === "mine") {
++      return dayMatches.filter((m) => isFavorite(m.home.id) || isFavorite(m.away.id));
++    }
++    return dayMatches;
++  }, [dayMatches, effectiveFilter, isFavorite]);
++
+   // Strip/calendar markers, one pass over the feed. The strip's dot marks ONLY
+   // the days a followed club plays — a day full of fixtures the user doesn't
+   // follow stays quiet — while the calendar sheet keeps its "has fixtures" dots,
+@@ -199,7 +224,7 @@ export default function Matches() {
+   // rest, earliest kickoff first. Within a group, kickoff order top-to-bottom.
+   const leagueGroups = useMemo<DayLeagueGroup[]>(() => {
+     const byLeague = new Map<string, Match[]>();
+-    for (const match of dayMatches) {
++    for (const match of filteredMatches) {
+       const list = byLeague.get(match.league);
+       if (list) list.push(match);
+       else byLeague.set(match.league, [match]);
+@@ -223,7 +248,7 @@ export default function Matches() {
+         const rankB = followOrder.get(b.league) ?? followOrder.size;
+         return rankA - rankB || a.firstKickoff - b.firstKickoff;
+       });
+-  }, [dayMatches, followed.leagues]);
++  }, [dayMatches, followed.leagues, filteredMatches]);
+ 
+   // First later day that has matches, for the empty state's shortcut.
+   const nextMatchDay = useMemo(() => {
+@@ -348,13 +373,20 @@ export default function Matches() {
+         // the weekday and the number must track the picked day, not the boot
+         // clock. Digits localize (Persian digits under fa), the word is an
+         // i18n key, and the old standalone count chip is gone.
+-        subtitle={t(
+-          dayMatches.length === 1 ? "matches.headerCountOne" : "matches.headerCount",
+-          {
+-            date: headerDayFormatter.format(selectedDay),
+-            count: digitsFormatter.format(dayMatches.length),
+-          },
+-        )}
++        subtitle={
++          /* The selected day, its count, and the ONE mention of Tehran time:
++             every clock on this screen is Tehran time, so it is stated here
++             and the per-row captions were removed. */
++          `${t(
++            dayMatches.length === 1 ? "matches.headerCountOne" : "matches.headerCount",
++            {
++              date: headerDayFormatter.format(selectedDay),
++              count: digitsFormatter.format(dayMatches.length),
++            },
++          )}${
++            dayMatches.length > 0 ? ` · ${t("matches.headerTz")}` : ""
++          }`
++        }
+         right={
+           // One header action: the calendar. Refresh's button went away — the
+           // gesture above owns the resync, and the toast after every sync is
+@@ -414,6 +446,62 @@ export default function Matches() {
+           daysWithMatches={daysWithMatches}
+         />
+ 
++        {/* State filter chips: all / live (with its count) / followed clubs.
++            A chip that can never show anything hides itself — the live chip
++            vanishes on a day without live football, the mine chip without
++            followed clubs, so the row only offers real views of this feed. */}
++        {dayMatches.length > 0 && (liveCount > 0 || favCount > 0) ? (
++          <div className="-mx-[var(--space-page-x,16px)] mt-sm flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
++            <button
++              type="button"
++              onClick={() => {
++                haptic("light");
++                setDayFilter("all");
++              }}
++              aria-pressed={dayFilter === "all"}
++              className={cx(LEAGUE_CHIP, dayFilter === "all" ? LEAGUE_CHIP_ON : LEAGUE_CHIP_OFF)}
++            >
++              {t("matches.filter.all")}
++            </button>
++            {liveCount > 0 ? (
++              <button
++                type="button"
++                onClick={() => {
++                  haptic("light");
++                  setDayFilter(dayFilter === "live" ? "all" : "live");
++                }}
++                aria-pressed={dayFilter === "live"}
++                className={cx(
++                  LEAGUE_CHIP,
++                  dayFilter === "live" ? "border-live text-live" : LEAGUE_CHIP_OFF,
++                )}
++              >
++                {t("matches.filter.live", {
++                  count: digitsFormatter.format(liveCount),
++                })}
++              </button>
++            ) : null}
++            {favCount > 0 ? (
++              <button
++                type="button"
++                onClick={() => {
++                  haptic("light");
++                  setDayFilter(dayFilter === "mine" ? "all" : "mine");
++                }}
++                aria-pressed={dayFilter === "mine"}
++                className={cx(
++                  LEAGUE_CHIP,
++                  dayFilter === "mine"
++                    ? "border-volt bg-volt/15 text-volt"
++                    : LEAGUE_CHIP_OFF,
++                )}
++              >
++                {t("matches.filter.mine")}
++              </button>
++            ) : null}
++          </div>
++        ) : null}
++
+         {/* Favorite leagues — the start page's own way in. One tap re-scopes
+             the whole feed (concept pillar 1); the last chip opens the picker,
+             and the row is here even with nothing followed so leagues are
+-- 
+2.54.0.windows.1
+

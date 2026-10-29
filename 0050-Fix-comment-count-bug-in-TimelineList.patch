@@ -1,0 +1,35 @@
+From 6b27bc8abc5477dc27011c5583ded42491f50129 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 10 Oct 2026 20:11:15 +0330
+Subject: [PATCH 050/230] Fix comment-count bug in TimelineList
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The visibility check on line 163 uses the derived `count` (event.commentCount
+plus pinned.length when commentCount is zero), but the badge on line 166 was
+showing event.commentCount directly. When pinned.length > 0 but
+event.commentCount === 0, the badge previously rendered "💬 0" instead of the
+correct count. Now both use `count`.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/TimelineList.tsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index fc1bd34..fab5b20 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -163,7 +163,7 @@ export function TimelineList({
+                   {count > 0 ? (
+                     <span className="ms-auto inline-flex items-center gap-1 text-[11px] font-bold text-gold">
+                       <span aria-hidden="true">💬</span>
+-                      <Num>{event.commentCount}</Num>
++                      <Num>{count}</Num>
+                     </span>
+                   ) : null}
+                 </div>
+-- 
+2.54.0.windows.1
+

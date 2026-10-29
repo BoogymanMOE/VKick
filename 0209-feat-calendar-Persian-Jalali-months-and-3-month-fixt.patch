@@ -1,0 +1,1020 @@
+From 56faadb646813575d0f770c9077ad47be74a7dc1 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 13:04:49 +0330
+Subject: [PATCH 209/230] =?UTF-8?q?feat(calendar):=20Persian=20Jalali=20mo?=
+ =?UTF-8?q?nths=20and=20=C2=B13-month=20fixture=20horizon?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The calendar sheet ran on Gregorian months in both languages and could
+browse endlessly into months the sync never fetched. Under Persian it now
+runs on the Solar Hijri calendar (ported jalaali algorithms in
+src/lib/jalali.ts, pinned against Intl's ca-persian in tests/jalali.test.ts),
+and navigation clamps to today ± 3 months in the active calendar. The feed
+query widened to that range (server clamp ceiling 300→2000 for explicit
+range queries) so picked far days show real fixtures and the sheet's dots
+cover them, and a daily horizon sweep (~95 days) backfills fixtures beyond
+the routine 21-day lookahead, on boot, daily cron and `npm run sync --
+horizon`.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ scripts/browser-smoke.mjs               |  41 ++++-
+ server/cli.ts                           |  11 +-
+ server/matches/feed.ts                  |  10 +-
+ server/sync/service.ts                  |  68 +++++++++
+ src/components/panels/CalendarSheet.tsx | 195 +++++++++++++++++-------
+ src/lib/jalali.ts                       | 182 ++++++++++++++++++++++
+ src/pages/Matches.tsx                   |  52 ++++++-
+ tests/feed.test.ts                      |   4 +-
+ tests/jalali.test.ts                    | 109 +++++++++++++
+ tests/run.ts                            |   2 +
+ 10 files changed, 603 insertions(+), 71 deletions(-)
+ create mode 100644 src/lib/jalali.ts
+ create mode 100644 tests/jalali.test.ts
+
+diff --git a/scripts/browser-smoke.mjs b/scripts/browser-smoke.mjs
+index a80b818..c3585d4 100644
+--- a/scripts/browser-smoke.mjs
++++ b/scripts/browser-smoke.mjs
+@@ -703,12 +703,29 @@ function printFeedTopTable() {
+     console.log(`    ${name.padEnd(width)}  ${String(got).padStart(7)}   want ${want}`);
+ }
+ 
+-/** A localised day number, so a chip/cell can be found in either language. */
++/** A localised day number, so a chip can be found in either language. */
+ const dayNumber = (lang, offset) =>
+   new Intl.NumberFormat(lang === "fa" ? "fa-IR" : undefined, { useGrouping: false }).format(
+     new Date(new Date().setDate(new Date().getDate() + offset)).getDate(),
+   );
+ 
++/**
++ * The number a CALENDAR-SHEET cell carries for a date: the strip chips stay on
++ * Gregorian day numbers in both languages, but the sheet runs on the ACTIVE
++ * calendar — Jalali day under Persian, Gregorian day under English — so the
++ * far-day pick must ask Intl for that day of that system.
++ */
++const calendarDayNumber = (lang, date) => {
++  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
++  const day = Number(
++    new Intl.DateTimeFormat(lang === "fa" ? "en-US-u-ca-persian" : "en-US", {
++      day: "numeric",
++      timeZone: "UTC",
++    }).format(d),
++  );
++  return new Intl.NumberFormat(lang === "fa" ? "fa-IR" : undefined, { useGrouping: false }).format(day);
++};
++
+ /** Server-side favourite for a throwaway dev identity (the feed's banner gate). */
+ async function seedFavorite(user, teamId) {
+   const res = await fetch(`${API}/api/me/favorites`, {
+@@ -968,9 +985,12 @@ async function checkFeedTop(browser, lang, width, height) {
+   const monthAhead = await page.evaluate(([iso, l]) => {
+     const date = new Date(iso);
+     const header = document.querySelector('[role="dialog"] span.text-md')?.textContent ?? "";
++    // The sheet runs on the ACTIVE calendar: Solar Hijri under Persian,
++    // Gregorian under English. The header must name the far day's month in
++    // that system, not the host one.
+     const month = new Intl.DateTimeFormat(l === "fa" ? "fa-IR" : undefined, {
+       month: "long",
+-      calendar: "gregory",
++      calendar: l === "fa" ? "persian" : "gregory",
+     }).format(date);
+     return { month, header, same: header.includes(month) };
+   }, [far.toISOString(), lang]);
+@@ -979,17 +999,21 @@ async function checkFeedTop(browser, lang, width, height) {
+     await page.click(`[role="dialog"] button[aria-label="${nextLabel}"]`);
+     await page.waitForTimeout(400);
+   }
+-  const farDay = dayNumber(lang, 20);
++  const farDay = calendarDayNumber(lang, far);
+   const picked = await page.evaluate(([num]) => {
+     const cells = [...document.querySelector('[role="dialog"]').querySelectorAll("button")].filter(
+       (b) => (b.textContent ?? "").trim() === num,
+     );
+-    if (!cells.length) return false;
+-    cells[0].click();
+-    return true;
++    if (!cells.length) return { ok: false, dotFree: false };
++    // Prefer a dot-free cell: the feed assertion below counts on an EMPTY
++    // matchday, and with the ± 3-month range now fetched the day-20 read can
++    // carry real fixtures.
++    const dotFree = cells.find((c) => !c.querySelector("span.bg-volt")) ?? null;
++    (dotFree ?? cells[0]).click();
++    return { ok: true, dotFree: Boolean(dotFree) };
+   }, [farDay]);
+   await page.waitForTimeout(900);
+-  if (!picked) fail(label, `the calendar has no cell for day ${farDay}`);
++  if (!picked.ok) fail(label, `the calendar has no cell for day ${farDay}`);
+   else {
+     const centred = await page.evaluate(() => {
+       const chips = [...document.querySelector('[role="group"]').querySelectorAll(":scope > button")];
+@@ -1002,7 +1026,8 @@ async function checkFeedTop(browser, lang, width, height) {
+     });
+     expectAt(label, "far pick lands in chip slot", centred.pressedIndex, 3, 0);
+     if (centred.fourth !== farDay) fail(label, `4th chip reads ${centred.fourth}, want ${farDay}`);
+-    if (centred.cards !== 0 || !centred.empty)
++    // Only meaningful on an empty matchday (see the dot-free cell pick).
++    if (picked.dotFree && (centred.cards !== 0 || !centred.empty))
+       fail(label, `feed not filtered to the picked day (cards=${centred.cards}, empty=${centred.empty})`);
+     await page.screenshot({ path: `${REVIEW5}/far-date-${lang}-${width}.png` });
+   }
+diff --git a/server/cli.ts b/server/cli.ts
+index 3ad1f5c..89a5f50 100644
+--- a/server/cli.ts
++++ b/server/cli.ts
+@@ -5,6 +5,7 @@
+  *   npm run sync                          # scoreboard sweep + summaries + standings
+  *   npm run sync -- sync-match eng.1 401874934
+  *   npm run sync -- standings
++ *   npm run sync -- horizon              # backfill fixtures out to the 3-month calendar range
+  *   npm run sync -- understat             # league-wide xG/xPts (the expected tables)
+  *   npm run sync -- dev-token 12345       # print a dev auth token (needs DEV_AUTH_SECRET set)
+  *   npm run sync -- --dry-run             # fetch + normalize, print, write nothing
+@@ -82,6 +83,14 @@ async function main(): Promise<void> {
+       await standings();
+       break;
+     }
++    case "horizon": {
++      // Manual backfill of the ± 3-month calendar range (see syncFixtureHorizon):
++      // for a fresh database that must not wait for the daily cron tick.
++      const { syncFixtureHorizon } = await import("./sync/service.js");
++      const goals = await syncFixtureHorizon();
++      log(`fixture horizon applied; ${goals.length} goal(s) detected`);
++      break;
++    }
+     case "rosters": {
+       const { syncRosters } = await import("./sync/service.js");
+       await syncRosters();
+@@ -112,7 +121,7 @@ async function main(): Promise<void> {
+     default:
+       log(`unknown command: ${cmd}`);
+       log(
+-        "commands: sync-all | sync-match <league> <eventId> | standings | rosters | understat | dev-token <id> [--dry-run]",
++        "commands: sync-all | sync-match <league> <eventId> | standings | horizon | rosters | understat | dev-token <id> [--dry-run]",
+       );
+       process.exit(1);
+   }
+diff --git a/server/matches/feed.ts b/server/matches/feed.ts
+index e05197d..24db741 100644
+--- a/server/matches/feed.ts
++++ b/server/matches/feed.ts
+@@ -25,6 +25,14 @@ export const FINISHED_LOOKBACK_DAYS = 3;
+ export const UPCOMING_LOOKAHEAD_DAYS = 14;
+ /** Default cap on the window. Generous enough for a fortnight of the catalog. */
+ export const FEED_LIMIT = 300;
++/**
++ * Absolute ceiling when a caller ASKS for more than the default. The matchday
++ * calendar spans today ± 3 months (six months of the big-five catalog is on
++ * the order of 1.5k fixtures), so range queries legitimately need a wider
++ * ceiling than the default window ever fills. A query that doesn't request a
++ * big limit still gets FEED_LIMIT, so relevance-window responses can't grow.
++ */
++export const FEED_MAX_LIMIT = 2000;
+ 
+ /** Statuses that mean "in progress right now" — always inside the window. */
+ const IN_PROGRESS = ["live", "halftime"];
+@@ -71,7 +79,7 @@ function dayOf(iso: string): string {
+ function clampLimit(raw: number | string | null | undefined): number {
+   const n = Number.parseInt(String(raw ?? ""), 10);
+   if (!Number.isFinite(n) || n <= 0) return FEED_LIMIT;
+-  return Math.min(500, n);
++  return Math.min(FEED_MAX_LIMIT, n);
+ }
+ 
+ /**
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index df1cc0b..c44f5c2 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -87,6 +87,43 @@ export async function syncScoreboardWindow(backDays: number, forwardDays: number
+   return goals;
+ }
+ 
++/**
++ * How far ahead fixtures are kept sweepable. The matchday calendar spans
++ * today ± 3 months, so its range query needs real fixture rows that far out —
++ * the routine 21-day lookahead stops well short of that.
++ */
++export const FIXTURE_HORIZON_DAYS = 95;
++
++/**
++ * The fixture horizon: every day from just past the routine lookahead out to
++ * `FIXTURE_HORIZON_DAYS`, so the ± 3-month calendar query returns real games
++ * instead of quiet months. Far-future fixtures move rarely (rescheduling
++ * clusters within weeks of kickoff), so a DAILY pass is enough upkeep — the
++ * 6h window sweep stays narrow and stays the thing that keeps statuses fresh.
++ *
++ * Load accounting: with the big-five catalog this is ~75 days × 5 leagues ≈
++ * 375 scoreboard calls a day, sequential, once daily — deliberately cheaper
++ * per sweep than widening the 6h pass would have been.
++ */
++export async function syncFixtureHorizon(): Promise<GoalAlert[]> {
++  const goals: GoalAlert[] = [];
++  for (const league of LEAGUES) {
++    const win = pollWindow(league);
++    const from = Math.max(1, win.forward) + 1;
++    for (let off = from; off <= FIXTURE_HORIZON_DAYS; off++) {
++      try {
++        const json = await fetchScoreboard(league, datesAroundToday(off));
++        applyScoreboard(db, json, league);
++      } catch (err) {
++        // Same contract as syncScoreboardWindow: log loudly, keep walking —
++        // one dead day must not strand the rest of the horizon.
++        console.error(`[sync] horizon ${league} (${off}) FAILED:`, String(err));
++      }
++    }
++  }
++  return goals;
++}
++
+ /**
+  * Matches currently being summarized. The live summary pass and the live pulse
+  * BOTH fan out to syncMatchSummary, and each loop has its own overlap guard —
+@@ -370,6 +407,7 @@ let started = false;
+ let summariesRunning = false;
+ let scoreboardsRunning = false;
+ let windowRunning = false;
++let horizonRunning = false;
+ let pulseRunning = false;
+ 
+ /** Start the cron loops. Called once from server/index.ts. */
+@@ -382,6 +420,15 @@ export function startSyncLoop(): void {
+   void syncScoreboardWindow(1, 21).catch((err) => console.error("[sync] initial window sweep error:", err));
+   console.log("[sync] triggering initial standings sweep on boot...");
+   void syncStandings().catch((err) => console.error("[sync] initial standings sweep error:", err));
++  // And the fixture horizon, so a fresh install has the ± 3-month calendar
++  // range populated within minutes of boot rather than at the next daily tick.
++  horizonRunning = true;
++  void syncFixtureHorizon()
++    .then(() => recordSyncPassOk())
++    .catch((err) => console.error("[sync] initial horizon sweep error:", err))
++    .finally(() => {
++      horizonRunning = false;
++    });
+ 
+   // The live loop: summary of live matches every LIVE_SUMMARY_SECONDS.
+   // A plain interval (not cron) because the cadence is env-configurable and
+@@ -478,6 +525,27 @@ export function startSyncLoop(): void {
+     void syncStandings().catch((err) => console.error("[sync] standings loop error:", err));
+   });
+ 
++  // Daily, a little after the standings tick: the fixture horizon, so the
++  // ± 3-month calendar range keeps real games far beyond the 21-day window
++  // sweep. Its own overlap guard + its own hour keeps one slow ESPN stretch
++  // from colliding with anything else.
++  cron.schedule(`50 ${hour} * * *`, () => {
++    if (horizonRunning) {
++      log("horizon pass still running — skipping this tick");
++      return;
++    }
++    horizonRunning = true;
++    void syncFixtureHorizon()
++      .then(() => recordSyncPassOk())
++      .catch((err) => {
++        recordSyncPassFail();
++        console.error("[sync] horizon loop error:", err);
++      })
++      .finally(() => {
++        horizonRunning = false;
++      });
++  });
++
+   // Every 6h: fixture window sweep so future fixtures exist for browsing and
+   // predicting before they enter ESPN's default window. The 21-day lookahead
+   // covers international breaks where the next matchday is 2+ weeks out — but
+diff --git a/src/components/panels/CalendarSheet.tsx b/src/components/panels/CalendarSheet.tsx
+index 000d2dd..3f378df 100644
+--- a/src/components/panels/CalendarSheet.tsx
++++ b/src/components/panels/CalendarSheet.tsx
+@@ -3,14 +3,24 @@ import { BottomSheet } from "../BottomSheet";
+ import { dayKey } from "../DateStrip";
+ import { ChevronLeftIcon, ChevronRightIcon } from "../icons";
+ import { useI18n } from "../../i18n/context";
++import {
++  addJalaliMonths,
++  jalaliMonthIndex,
++  jalaliMonthLength,
++  jalaliToGregorian,
++  JALALI_MONTHS_FA,
++  toJalali,
++} from "../../lib/jalali";
+ import { cx } from "../../lib/cx";
+ import { selectionHaptic } from "../../lib/telegram";
+ 
+ /**
+- * Month names for the picker header. Persian gets its own list — a
+- * localized month name is not the English one in a different script — and the
+- * year and the day numbers come from Intl, because "۲۱" is not "21" in
+- * another font.
++ * Persian gets its own calendar SYSTEM, not a transliterated month list: the
++ * sheet under Persian runs on the Solar Hijri (Jalali) calendar — فروردین
++ * first, Jalali year, Jalali day numbers — while the underlying cells stay
++ * real `Date` objects so day keys and match dots never disagree. English keeps
++ * the Gregorian month list. The year and day numbers still come from Intl,
++ * because "۲۱" is not "21" in another font.
+  */
+ const MONTH_NAMES_EN = [
+   "January",
+@@ -26,20 +36,6 @@ const MONTH_NAMES_EN = [
+   "November",
+   "December",
+ ];
+-const MONTH_NAMES_FA = [
+-  "ژانویه",
+-  "فوریه",
+-  "مارس",
+-  "آوریل",
+-  "مه",
+-  "ژوئن",
+-  "ژوئیه",
+-  "اوت",
+-  "سپتامبر",
+-  "اکتبر",
+-  "نوامبر",
+-  "دسامبر",
+-];
+ 
+ /**
+  * Weekday headers. The grid keeps the Sunday-first order in both languages —
+@@ -48,15 +44,53 @@ const MONTH_NAMES_FA = [
+ const DOW_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+ const DOW_FA = ["شن", "یک", "دو", "سه", "چه", "پن", "جمع"];
+ 
++/**
++ * How many months the sheet may travel from today — 3 back, 3 ahead. The
++ * month grid can only land on whole months of the active calendar, so the
++ * clamp compares month indices of that calendar; the day feed covers the
++ * full range (see Matches).
++ */
++const HORIZON_MONTHS = 3;
++
++/**
++ * The month under construction, one calendar per language: Jalali {jy, jm}
++ * (1-based months) under Persian, Gregorian {y, m} (0-based) under English.
++ */
++interface MonthView {
++  y: number;
++  /** 1-based under Persian, 0-based under English — never mixed. */
++  m: number;
++}
++
++/** Gregorian month arithmetic on a 0-based index (Dec→Jan rollover free). */
++function addGregorianMonths(y: number, m: number, delta: number): MonthView {
++  const idx = y * 12 + m + delta;
++  return { y: Math.floor(idx / 12), m: ((idx % 12) + 12) % 12 };
++}
++
++/** Jalali month offset reshaped to a view tile (addJalaliMonths speaks {jy, jm}). */
++function offsetJalali(jy: number, jm: number, delta: number): MonthView {
++  const r = addJalaliMonths(jy, jm, delta);
++  return { y: r.jy, m: r.jm };
++}
++
++/** Clamp a view into the reachable ±HORIZON_MONTHS band of its calendar. */
++function clampView(view: MonthView, min: MonthView, max: MonthView): MonthView {
++  if (view.y * 12 + view.m < min.y * 12 + min.m) return min;
++  if (view.y * 12 + view.m > max.y * 12 + max.m) return max;
++  return view;
++}
++
+ /**
+  * Month-view date picker — the jump-to-any-day escape hatch at the end of the
+  * date strip.
+  *
+- * The strip covers three weeks; this covers everything, so a user looking for
+- * a match two months back does not have to hunt for it in a strip that is not
+- * there. It is a picker first: a day outside the synced fixture window shows
+- * no dot, and picking it lands on the feed's "no matches on this day" state
+- * rather than a lie.
++ * The strip covers three weeks; this covers today ± 3 months, in the ACTIVE
++ * calendar (Solar Hijri in Persian, Gregorian in English), so a user looking
++ * for a match months away hunts for it in their own month names without
++ * browsing outside the synced fixture window. It is a picker first: a day
++ * outside any fixtures shows no dot, and picking an empty day lands on the
++ * feed's "no matches on this day" state rather than a lie.
+  */
+ export function CalendarSheet({
+   open,
+@@ -79,87 +113,115 @@ export function CalendarSheet({
+     [isFa],
+   );
+ 
++  // The reachable band, anchored at TODAY's month of each calendar. Computed
++  // per render from the clock (cheap math), so an app left open across a month
++  // boundary drifts its clamp along instead of sticking.
++  const [minView, maxView] = useMemo<[MonthView, MonthView]>(() => {
++    const now = new Date();
++    if (isFa) {
++      const t = toJalali(now);
++      return [
++        offsetJalali(t.jy, t.jm, -HORIZON_MONTHS),
++        offsetJalali(t.jy, t.jm, HORIZON_MONTHS),
++      ];
++    }
++    return [
++      addGregorianMonths(now.getFullYear(), now.getMonth(), -HORIZON_MONTHS),
++      addGregorianMonths(now.getFullYear(), now.getMonth(), HORIZON_MONTHS),
++    ];
++  }, [isFa]);
++
+   // The month on screen. Re-opening the sheet always lands on the selected
+-  // day's month — otherwise a user who browsed to March would come back to
+-  // March after picking a day in October.
+-  const [view, setView] = useState({
+-    month: selected.getMonth(),
+-    year: selected.getFullYear(),
+-  });
++  // day's month (clamped into the band) — otherwise a user who browsed to a
++  // far month would come back to it after picking a day elsewhere.
++  const [view, setView] = useState<MonthView>(() => clampView(viewOf(selected, isFa), minView, maxView));
+   // Open/close phase, so the reset above runs on the open EDGE and not on
+   // every render (the selected date is a fresh object each minute).
+   const [wasOpen, setWasOpen] = useState(open);
+   if (open && !wasOpen) {
+     setWasOpen(true);
+-    setView({ month: selected.getMonth(), year: selected.getFullYear() });
++    setView(clampView(viewOf(selected, isFa), minView, maxView));
+   }
+   if (!open && wasOpen) setWasOpen(false);
+ 
+-  const monthName = isFa ? MONTH_NAMES_FA[view.month] : MONTH_NAMES_EN[view.month];
++  const monthName = isFa ? JALALI_MONTHS_FA[view.m - 1] : MONTH_NAMES_EN[view.m];
+   const dowNames = isFa ? DOW_FA : DOW_EN;
+ 
+-  /** The month's days, padded to whole weeks so the grid never shifts. */
++  /** The month's days as real Dates, padded to whole weeks. */
+   const cells = useMemo(() => {
+-    const first = new Date(view.year, view.month, 1);
+-    const last = new Date(view.year, view.month + 1, 0);
+     const out: Array<Date | null> = [];
+-    // Leading blanks: the first day of the month sits in its own weekday
+-    // column.
+-    // In FA mode, the week starts on Saturday (day 6 in JS getDay()),
+-    // so we shift by 1: Saturday (6) becomes 0, Sunday (0) becomes 1, etc.
+-    // In EN mode, the week starts on Sunday, so getDay() is used as-is.
+-    const startDow = lang === "fa"
+-      ? (first.getDay() + 1) % 7   // Sat=0, Sun=1, Mon=2, Tue=3, Wed=4, Thu=5, Fri=6
+-      : first.getDay();            // Sun=0, Mon=1, ... (unchanged)
++    const first = isFa ? jalaliToGregorian(view.y, view.m, 1) : new Date(view.y, view.m, 1);
++    const days = isFa ? jalaliMonthLength(view.y, view.m) : lastGregDay(view.y, view.m);
++    // Leading blanks: the month's first day sits in its own weekday column.
++    // Both languages read the grid Saturday-first in Persian (Sat=0) and
++    // Sunday-first in English, so the shift survives the calendar switch.
++    const startDow = isFa ? (first.getDay() + 1) % 7 : first.getDay();
+     for (let i = 0; i < startDow; i++) out.push(null);
+-    for (let d = 1; d <= last.getDate(); d++) out.push(new Date(view.year, view.month, d));
++    if (isFa) {
++      for (let d = 1; d <= days; d++) out.push(jalaliToGregorian(view.y, view.m, d));
++    } else {
++      for (let d = 1; d <= days; d++) out.push(new Date(view.y, view.m, d));
++    }
+     // Trailing blanks fill the last row.
+     while (out.length % 7 !== 0) out.push(null);
+     return out;
+-  }, [view.year, view.month, lang]);
++  }, [view.y, view.m, isFa]);
+ 
+   const todayKey = dayKey(new Date());
+   const selectedKey = dayKey(selected);
+ 
++  const atMin = isFa
++    ? jalaliMonthIndex(view.y, view.m) <= jalaliMonthIndex(minView.y, minView.m)
++    : view.y * 12 + view.m <= minView.y * 12 + minView.m;
++  const atMax = isFa
++    ? jalaliMonthIndex(view.y, view.m) >= jalaliMonthIndex(maxView.y, maxView.m)
++    : view.y * 12 + view.m >= maxView.y * 12 + maxView.m;
++
+   const prevMonth = () =>
+-    setView((v) =>
+-      v.month === 0 ? { month: 11, year: v.year - 1 } : { month: v.month - 1, year: v.year },
+-    );
++    setView((v) => (isFa ? offsetJalali(v.y, v.m, -1) : addGregorianMonths(v.y, v.m, -1)));
+   const nextMonth = () =>
+-    setView((v) =>
+-      v.month === 11 ? { month: 0, year: v.year + 1 } : { month: v.month + 1, year: v.year },
+-    );
++    setView((v) => (isFa ? offsetJalali(v.y, v.m, 1) : addGregorianMonths(v.y, v.m, 1)));
+ 
+   return (
+     <BottomSheet open={open} onClose={onClose} title={t("calendar.title")}>
+       {/* Month navigation. The chevrons point at the side they move to, and
+           mirror themselves in Persian — the document direction flips the row,
+-          so a fixed left arrow would point away from the month it opens. */}
++          so a fixed left arrow would point away from the month it opens.
++          At the band's edge the step is a no-op and the chevron dimmed: the
++          clamp, not a silently-drifting grid, is what holds the horizon. */}
+       <div className="mb-4 flex items-center justify-between">
+         <button
+           type="button"
+           onClick={prevMonth}
++          disabled={atMin}
+           aria-label={t("calendar.prevMonth")}
+-          className="grid h-11 w-11 flex-none place-items-center rounded-lg border border-line text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96]"
++          className={cx(
++            "grid h-11 w-11 flex-none place-items-center rounded-lg border transition-colors duration-[var(--t-fast)] active:scale-[0.96]",
++            atMin ? "border-line/50 text-ink-3/60" : "border-line text-ink-2 hover:bg-elevated",
++          )}
+         >
+           <ChevronLeftIcon className="rtl:-scale-x-100" />
+         </button>
+         <span className="min-w-0 flex-1 truncate text-center text-md font-bold text-ink">
+-          {monthName} {digits.format(view.year)}
++          {monthName} {digits.format(view.y)}
+         </span>
+         <button
+           type="button"
+           onClick={nextMonth}
++          disabled={atMax}
+           aria-label={t("calendar.nextMonth")}
+-          className="grid h-11 w-11 flex-none place-items-center rounded-lg border border-line text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96]"
++          className={cx(
++            "grid h-11 w-11 flex-none place-items-center rounded-lg border transition-colors duration-[var(--t-fast)] active:scale-[0.96]",
++            atMax ? "border-line/50 text-ink-3/60" : "border-line text-ink-2 hover:bg-elevated",
++          )}
+         >
+           <ChevronRightIcon />
+         </button>
+       </div>
+ 
+       {/* Back to today. The sheet opens on the selected day's month, so after
+-          browsing to March the current week is many taps away; this is the one
+-          tap back. 44px tall, like every other control in the sheet. */}
++          browsing to a far month the current week is many taps away; this is
++          the one tap back. 44px tall, like every other control in the sheet. */}
+       <button
+         type="button"
+         onClick={() => {
+@@ -181,7 +243,9 @@ export function CalendarSheet({
+         ))}
+       </div>
+ 
+-      {/* The month. */}
++      {/* The month. In Persian mode the numbers are the JALALI day of the
++          cell — the Jalali month can straddle two Gregorian months, and the
++          display must follow the name in the header, not the host calendar. */}
+       <div className="grid grid-cols-7 gap-1">
+         {cells.map((day, index) => {
+           if (!day) {
+@@ -193,6 +257,7 @@ export function CalendarSheet({
+           const isToday = key === todayKey;
+           const isSelected = key === selectedKey;
+           const hasMatches = daysWithMatches?.has(key) ?? false;
++          const dayNum = isFa ? toJalali(day).jd : day.getDate();
+           return (
+             <button
+               key={key}
+@@ -213,7 +278,7 @@ export function CalendarSheet({
+                     : "border-line bg-transparent text-ink",
+               )}
+             >
+-              <span className="num-display tabular-nums">{digits.format(day.getDate())}</span>
++              <span className="num-display tabular-nums">{digits.format(dayNum)}</span>
+               {hasMatches ? (
+                 // A day with fixtures carries a dot, so a busy Saturday reads as
+                 // busy before the tap. The selected day's fill IS the marker.
+@@ -235,3 +300,17 @@ export function CalendarSheet({
+     </BottomSheet>
+   );
+ }
++
++/** The view (month tile) the given date belongs to, in the active calendar. */
++function viewOf(date: Date, isFa: boolean): MonthView {
++  if (isFa) {
++    const j = toJalali(date);
++    return { y: j.jy, m: j.jm };
++  }
++  return { y: date.getFullYear(), m: date.getMonth() };
++}
++
++/** Last local day of a Gregorian month (day-before-first-of-next). */
++function lastGregDay(y: number, m: number): number {
++  return new Date(y, m + 1, 0).getDate();
++}
+diff --git a/src/lib/jalali.ts b/src/lib/jalali.ts
+new file mode 100644
+index 0000000..e224404
+--- /dev/null
++++ b/src/lib/jalali.ts
+@@ -0,0 +1,182 @@
++/**
++ * Jalali (Solar Hijri) ⇄ Gregorian calendar conversion.
++ *
++ * Pure math — no Intl dependency — so the calendar sheet's grid can be built
++ * from Jalali months and still produce the real `Date` objects the app files
++ * matches under. The algorithm is the standard Khayyam-style "breaks" table
++ * (the one publicized as jalaali-js): a port, not an invention, and pinned
++ * against Intl's own `ca-persian` conversion in tests/jalali.test.ts.
++ *
++ * Everything is LOCAL: `toJalali` reads a Date's local Y/M/D the same way
++ * `dayKey` does, and `jalaliToGregorian` builds a local-midnight Date. UTC
++ * helpers would file east-of-UTC days (this app's users are UTC+3:30) under
++ * the wrong day.
++ */
++
++/** `trunc(a / b)` — exactly what jalaali-js's `~~(a / b)` does. NOT floor. */
++const div = (a: number, b: number) => Math.trunc(a / b);
++/** Truncated remainder, paired with `div` above. */
++const mod = (a: number, b: number) => a - Math.trunc(a / b) * b;
++
++/**
++ * Leap-year boundaries between 33-year cycles (AP years 1..3177). Any year
++ * outside throws — centuries beyond any plausible user, but not silently
++ * misconverted.
++ */
++const BREAKS: number[] = [
++  -61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181, 1210, 1635, 2060, 2097, 2192,
++  2262, 2324, 2394, 2456, 3178,
++];
++
++/** Days from the epoch (4713 BC Jan 1 Julian) for a Gregorian date. */
++function g2d(gy: number, gm: number, gd: number): number {
++  let d =
++    div((gy + div(gm - 8, 6) + 100100) * 1461, 4) +
++    div(153 * mod(gm + 9, 12) + 2, 5) +
++    gd -
++    34840408;
++  d = d - div(div(gy + 100100 + div(gm - 8, 6), 100) * 3, 4) + 752;
++  return d;
++}
++
++/** Gregorian date for a day count from `g2d`. */
++function d2g(jdn: number): { gy: number; gm: number; gd: number } {
++  let j = 4 * jdn + 139361631;
++  j = j + div(div(4 * jdn + 183187720, 146097) * 3, 4) * 4 - 3908;
++  const i = div(mod(j, 1461), 4) * 5 + 308;
++  const gd = div(mod(i, 153), 5) + 1;
++  const gm = mod(div(i, 153), 12) + 1;
++  const gy = div(j, 1461) - 100100 + div(8 - gm, 6);
++  return { gy, gm, gd };
++}
++
++/**
++ * Where the Jalali year sits in its 33-year cycle: the day in March Gregorian
++ * Nawruz falls on (`march`), and a cycle marker (`leap`) the ported d2j needs.
++ */
++function jalCal(jy: number): { leap: number; gy: number; march: number } {
++  const bl = BREAKS.length;
++  const gy = jy + 621;
++  let leapJ = -14;
++  let jp = BREAKS[0];
++  let jump = 0;
++  let n = 0;
++  if (jy < jp || jy >= BREAKS[bl - 1]) throw new Error(`Jalali year out of range: ${jy}`);
++  for (let i = 1; i < bl; i += 1) {
++    const jm = BREAKS[i];
++    jump = jm - jp;
++    if (jy < jm) break;
++    leapJ = leapJ + div(jump, 33) * 8 + div(mod(jump, 33), 4);
++    jp = jm;
++  }
++  n = jy - jp;
++  leapJ = leapJ + div(n, 33) * 8 + div(mod(n, 33) + 3, 4);
++  if (mod(jump, 33) === 4 && jump - n === 4) leapJ += 1;
++  const leapG = div(gy, 4) - div((div(gy, 100) + 1) * 3, 4) - 150;
++  const march = 20 + leapJ - leapG;
++  if (jump - n < 6) n = n - jump + div(jump + 4, 33) * 33;
++  let leap = mod(mod(n + 1, 33) - 1, 4);
++  if (leap === -1) leap = 4;
++  return { leap, gy, march };
++}
++
++/** Leap-year test used for Esfand's length (leap Jalali year → 30 days). */
++function isJalaliLeap(jy: number): boolean {
++  const bl = BREAKS.length;
++  const jp0 = BREAKS[0];
++  if (jy < jp0 || jy >= BREAKS[bl - 1]) throw new Error(`Jalali year out of range: ${jy}`);
++  let leapJ = -14;
++  let jp = jp0;
++  let jump = 0;
++  let n = 0;
++  for (let i = 1; i < bl; i += 1) {
++    const jm = BREAKS[i];
++    jump = jm - jp;
++    if (jy < jm) break;
++    leapJ = leapJ + div(jump, 33) * 8 + div(mod(jump, 33), 4);
++    jp = jm;
++  }
++  n = jy - jp;
++  if (jump - n < 6) n = n - jump + div(jump + 4, 33) * 33;
++  let leap = mod(mod(n + 1, 33) - 1, 4);
++  if (leap === -1) leap = 4;
++  return leap === 0;
++}
++
++/** Day count for a Jalali date (inverse construction of j2d/d2j). */
++function j2d(jy: number, jm: number, jd: number): number {
++  const r = jalCal(jy);
++  return g2d(r.gy, 3, r.march) + (jm - 1) * 31 - div(jm, 7) * (jm - 7) + jd - 1;
++}
++
++export interface JalaliDate {
++  /** Jalali (AP) year. */
++  jy: number;
++  /** Jalali month, 1 (Farvardin) .. 12 (Esfand). */
++  jm: number;
++  /** Jalali day of month, 1..31. */
++  jd: number;
++}
++
++/** The Jalali date of a Date, read from its LOCAL Y/M/D. */
++export function toJalali(date: Date): JalaliDate {
++  const jdn = g2d(date.getFullYear(), date.getMonth() + 1, date.getDate());
++  const gy = d2g(jdn).gy;
++  const r = jalCal(gy - 621);
++  const jdn1f = g2d(gy, 3, r.march);
++  const jy = gy - 621;
++  let k = jdn - jdn1f;
++  if (k >= 0) {
++    if (k <= 185) return { jy: jy, jm: 1 + div(k, 31), jd: mod(k, 31) + 1 };
++    k -= 186;
++  } else {
++    k += 179;
++    if (r.leap === 1) k += 1;
++    return { jy: jy - 1, jm: 7 + div(k, 30), jd: mod(k, 30) + 1 };
++  }
++  return { jy, jm: 7 + div(k, 30), jd: mod(k, 30) + 1 };
++}
++
++/** The LOCAL Date of a Jalali date (`new Date(gy, gm-1, gd)` — midnight). */
++export function jalaliToGregorian(jy: number, jm: number, jd: number): Date {
++  const { gy, gm, gd } = d2g(j2d(jy, jm, jd));
++  return new Date(gy, gm - 1, gd);
++}
++
++/** Days in a Jalali month: 31 / 30 for months 1–11, 29 or 30 for Esfand. */
++export function jalaliMonthLength(jy: number, jm: number): number {
++  if (jm < 1 || jm > 12) throw new Error(`Jalali month out of range: ${jm}`);
++  if (jm <= 6) return 31;
++  if (jm <= 11) return 30;
++  return isJalaliLeap(jy) ? 30 : 29;
++}
++
++/**
++ * Jalali months are 1-based, so month arithmetic must run on a 0-based index:
++ * Farvardin 1404 minus one is Esfand 1403.
++ */
++export function addJalaliMonths(jy: number, jm: number, delta: number): { jy: number; jm: number } {
++  const idx = jy * 12 + (jm - 1) + delta;
++  return { jy: Math.floor(idx / 12), jm: mod(idx, 12) + 1 };
++}
++
++/** Stable ordering key for a Jalali year/month pair (mimics addJalaliMonths). */
++export function jalaliMonthIndex(jy: number, jm: number): number {
++  return jy * 12 + (jm - 1);
++}
++
++/** Persian month names, Farvardin first. */
++export const JALALI_MONTHS_FA = [
++  "فروردین",
++  "اردیبهشت",
++  "خرداد",
++  "تیر",
++  "مرداد",
++  "شهریور",
++  "مهر",
++  "آبان",
++  "آذر",
++  "دی",
++  "بهمن",
++  "اسفند",
++] as const;
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 3fd4567..7307fc1 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -31,6 +31,12 @@ import { CalendarSheet } from "../components/panels/CalendarSheet";
+ import { usePullToRefresh } from "../hooks/usePullToRefresh";
+ import { useLiveUpdates } from "../hooks/useLiveUpdates";
+ import { PullIndicator } from "../components/PullToRefresh";
++import {
++  addJalaliMonths,
++  jalaliMonthLength,
++  jalaliToGregorian,
++  toJalali,
++} from "../lib/jalali";
+ import type { Match } from "../types";
+ 
+ /**
+@@ -46,6 +52,42 @@ const LEAGUE_CHIP_ON = "border-volt bg-volt/15 text-volt";
+ const LEAGUE_CHIP_OFF = "border-line text-ink-3";
+ 
+ const pad = (n: number) => String(n).padStart(2, "0");
++const localDayKey = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
++
++/**
++ * The calendar sheet spans today ± this many months (see CalendarSheet), so
++ * the feed query must cover every day in that band: a picked day three months
++ * out HAS fixtures to show, not the old “no matches” lie. With `from`/`to`
++ * set the server runs its range mode, unbounded by the 3-week relevance
++ * window — hence the explicit limit matching the server's range ceiling.
++ */
++const CALENDAR_HORIZON_MONTHS = 3;
++const FEED_RANGE_LIMIT = 2000;
++
++/**
++ * The band's first/last day, anchored at month bounds of the ACTIVE calendar
++ * (Solar Hijri under Persian, Gregorian under English) so every tile the
++ * sheet can clip into — its grid steps whole months of that calendar — is
++ * inside the fetched range. Computed once per language: an app left open
++ * across a month boundary would rebolt the range on reload, and the mid-band
++ * days it misses next session are caught by the cache-busting refetch.
++ */
++function feedRange(lang: "en" | "fa"): { from: string; to: string } {
++  const now = new Date();
++  if (lang === "fa") {
++    const t = toJalali(now);
++    const min = addJalaliMonths(t.jy, t.jm, -CALENDAR_HORIZON_MONTHS);
++    const max = addJalaliMonths(t.jy, t.jm, CALENDAR_HORIZON_MONTHS);
++    return {
++      from: localDayKey(jalaliToGregorian(min.jy, min.jm, 1)),
++      to: localDayKey(jalaliToGregorian(max.jy, max.jm, jalaliMonthLength(max.jy, max.jm))),
++    };
++  }
++  return {
++    from: localDayKey(new Date(now.getFullYear(), now.getMonth() - CALENDAR_HORIZON_MONTHS, 1)),
++    to: localDayKey(new Date(now.getFullYear(), now.getMonth() + CALENDAR_HORIZON_MONTHS + 1, 0)),
++  };
++}
+ 
+ function GroupHeader({ id, label, count, tone }: { id: string; label: string; count: number; tone: "live" | "gold" | "muted" }) {
+   return (
+@@ -115,7 +157,15 @@ export default function Matches() {
+   const [bannerDismissed, setBannerDismissed] = useLocalState<boolean>(PICK_BANNER_KEY, false);
+   const showPickBanner = favCount === 0 && !bannerDismissed;
+ 
+-  const matchesQuery = useMatches({ league: activeLeague });
++  // The calendar's full reach, not just the relevance window: the day feed and
++  // the sheet's fixture dots both read this one list.
++  const range = useMemo(() => feedRange(lang), [lang]);
++  const matchesQuery = useMatches({
++    league: activeLeague,
++    from: range.from,
++    to: range.to,
++    limit: FEED_RANGE_LIMIT,
++  });
+   // Stable identity: every memo below keys on it, and `data ?? []` would hand
+   // them a fresh array on each render (query data is stable between refetches).
+   const matches = useMemo(() => matchesQuery.data ?? [], [matchesQuery.data]);
+diff --git a/tests/feed.test.ts b/tests/feed.test.ts
+index 778eff4..1983353 100644
+--- a/tests/feed.test.ts
++++ b/tests/feed.test.ts
+@@ -15,7 +15,7 @@ import fs from "node:fs";
+ import os from "node:os";
+ import path from "node:path";
+ import { migrate } from "../server/db/schema.js";
+-import { buildFeedQuery, isoDayOffset, FEED_LIMIT } from "../server/matches/feed.js";
++import { buildFeedQuery, isoDayOffset, FEED_LIMIT, FEED_MAX_LIMIT } from "../server/matches/feed.js";
+ 
+ /** Fixed clock so the window never drifts with the wall clock. */
+ const NOW = new Date("2026-10-03T12:00:00.000Z");
+@@ -164,7 +164,7 @@ function testLimit(): void {
+   );
+   assert.equal(buildFeedQuery({ limit: "-4" }).limit, FEED_LIMIT, "a negative limit falls back too");
+   assert.equal(buildFeedQuery({ limit: "abc" }).limit, FEED_LIMIT, "a non-numeric limit falls back");
+-  assert.equal(buildFeedQuery({ limit: "99999" }).limit, 500, "clamped at 500");
++  assert.equal(buildFeedQuery({ limit: "99999" }).limit, FEED_MAX_LIMIT, "clamped at the range ceiling");
+ }
+ 
+ /**
+diff --git a/tests/jalali.test.ts b/tests/jalali.test.ts
+new file mode 100644
+index 0000000..e685bbd
+--- /dev/null
++++ b/tests/jalali.test.ts
+@@ -0,0 +1,109 @@
++/**
++ * The Jalali port has two independent sources of truth to agree with:
++ *
++ *  1. Intl's own Persian calendar (`fa-IR` defaults to `ca-persian` in every
++ *     full-ICU runtime) — a completely different implementation. Any porting
++ *     mistake drifts away from it and fails here.
++ *  2. Round-trips: jalaliToGregorian(toJalali(d)) must return the same LOCAL
++ *     day, because the app files matches under local day keys.
++ *
++ * Named edge cases anchor the leap-year logic: Jalali 1403 is a leap year, so
++ * Esfand 1403 has 30 days and ends on Gregorian 2025-03-20; Nowruz 1404 is
++ * therefore 2025-03-21. (Jalali leap years drift from Gregorian leap years —
++ * 1404 is NOT a Gregorian leap year but Farvardin still starts the day after
++ * the 1403 Esfand 30th.)
++ */
++import assert from "node:assert/strict";
++import {
++  addJalaliMonths,
++  jalaliMonthLength,
++  jalaliMonthIndex,
++  jalaliToGregorian,
++  JALALI_MONTHS_FA,
++  toJalali,
++} from "../src/lib/jalali.js";
++
++/** One Intl-produced Jalali triple for a Date, or null if ICU lacks the calendar. */
++function intlJalali(d: Date): { jy: number; jm: number; jd: number } | null {
++  const fmt = new Intl.DateTimeFormat("en-US-u-ca-persian", {
++    year: "numeric",
++    month: "numeric",
++    day: "numeric",
++    timeZone: "UTC",
++  });
++  const parts = fmt.formatToParts(d);
++  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
++  const y = get("year");
++  const m = get("month");
++  const day = get("day");
++  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(day)) return null;
++  return { jy: y, jm: m, jd: day };
++}
++
++const utcAtLocal = (d: Date) =>
++  new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
++
++export function runJalaliTests(): void {
++  // ICU sanity: if this runtime has no Persian calendar, Intl silently falls
++  // back (or throws) — the cross-check below would be meaningless, so bail out
++  // loudly in the miss report rather than asserting against the wrong thing.
++  const probe = intlJalali(new Date(2025, 2, 21));
++  if (probe === null) {
++    console.log("[jalali] ICU lacks ca-persian — skipping Intl cross-check");
++  } else {
++    // Daily sweep across three years: covers two year boundaries and both
++    // halves of the Jalali calendar.
++    const start = new Date(2024, 0, 1);
++    for (let i = 0; i < 3 * 366; i += 1) {
++      const d = new Date(start);
++      d.setDate(d.getDate() + i);
++      const want = intlJalali(utcAtLocal(d));
++      if (want === null) throw new Error("Intl lost the Persian calendar mid-sweep");
++      const got = toJalali(d);
++      assert.deepEqual(
++        got,
++        want,
++        `toJalali(${d.toDateString()}) = ${got.jy}/${got.jm}/${got.jd}, Intl says ${want.jy}/${want.jm}/${want.jd}`,
++      );
++      // Round-trip: the calendar sheet builds cells from these Dates.
++      const back = jalaliToGregorian(got.jy, got.jm, got.jd);
++      assert.equal(
++        `${back.getFullYear()}-${back.getMonth()}-${back.getDate()}`,
++        `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`,
++        `round-trip broke for ${d.toDateString()}`,
++      );
++    }
++    // Month lengths: 31/30 halves and the 1403 leap Esfand.
++    assert.equal(jalaliMonthLength(1403, 1), 31);
++    assert.equal(jalaliMonthLength(1403, 6), 31);
++    assert.equal(jalaliMonthLength(1403, 11), 30);
++    assert.equal(jalaliMonthLength(1403, 12), 30, "Jalali 1403 is a leap year: Esfand has 30 days");
++    assert.equal(jalaliMonthLength(1404, 12), 29, "Jalali 1404 is not a leap year");
++  }
++
++  // Named day anchor: Jalali 1404-01-01 == Gregorian 2025-03-21 (Nowruz).
++  const nowruz = jalaliToGregorian(1404, 1, 1);
++  assert.deepEqual(
++    [nowruz.getFullYear(), nowruz.getMonth() + 1, nowruz.getDate()],
++    [2025, 3, 21],
++    "Nowruz 1404 must be 2025-03-21",
++  );
++  assert.deepEqual(toJalali(new Date(2025, 2, 21)), { jy: 1404, jm: 1, jd: 1 });
++  assert.deepEqual(toJalali(new Date(2025, 2, 20)), { jy: 1403, jm: 12, jd: 30 });
++
++  // Month arithmetic: year wrap both directions.
++  assert.deepEqual(addJalaliMonths(1404, 3, 10), { jy: 1405, jm: 1 });
++  assert.deepEqual(addJalaliMonths(1404, 1, -1), { jy: 1403, jm: 12 });
++  // A Jalali month negative offset never leaves month bounds, so the clamp
++  // arithmetic never needs a day fixup.
++  assert.deepEqual(addJalaliMonths(1404, 12, 1), { jy: 1405, jm: 1 });
++
++  // Ordering helper agrees with addJalaliMonths.
++  assert.equal(jalaliMonthIndex(1404, 12) + 1, jalaliMonthIndex(1405, 1));
++  assert.equal(jalaliMonthIndex(1404, 1) - 1, jalaliMonthIndex(1403, 12));
++
++  // Twelve names, starting at Farvardin.
++  assert.equal(JALALI_MONTHS_FA.length, 12);
++  assert.equal(JALALI_MONTHS_FA[0], "فروردین");
++  assert.equal(JALALI_MONTHS_FA[11], "اسفند");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 468f10a..7e2e6b8 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -51,6 +51,7 @@ import { runSentinelTests } from "./sentinel.test.js";
+ import { runFaStringsTests } from "./faStrings.test.js";
+ import { runMatchReconcileTests } from "./matchReconcile.test.js";
+ import { runTeamStatsTests } from "./teamStats.test.js";
++import { runJalaliTests } from "./jalali.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -113,6 +114,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ],
+   // Owns getDb() too (router under test, module-scope handle): stays last.
+   ["teamStats", runTeamStatsTests],
++  ["jalali", runJalaliTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

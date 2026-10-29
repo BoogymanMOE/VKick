@@ -1,0 +1,156 @@
+From 7a6b418fbef6a5c2c97d297c7faab20820cda363 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 13:31:04 +0330
+Subject: [PATCH 194/230] feat(dateStrip): 21-day scrollable strip with
+ auto-center on today and selected day
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The matchday strip showed five chips that filled the width, so days more
+than three ahead were unreachable. It now carries two weeks back and one
+week forward on a swipeable row, and lands on today instead of the far
+end of the window.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/DateStrip.tsx | 44 ++++++++++++++++++++++++++++++++----
+ src/index.css                |  9 ++++++++
+ src/pages/Matches.tsx        |  4 ++--
+ 3 files changed, 50 insertions(+), 7 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index 40272b2..d49af18 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -1,4 +1,4 @@
+-import { useMemo } from "react";
++import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+ import { useI18n } from "../i18n/context";
+ 
+ /**
+@@ -32,12 +32,17 @@ const startOfDay = (d: Date) => {
+ export const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+ 
+ /**
+- * Yesterday … +3 as local calendar days. `setDate` (not millisecond arithmetic)
++ * 13 days back … 7 days forward (21 chips) as local calendar days — the past
++ * two weeks and the coming week. `setDate` (not millisecond arithmetic)
+  * because a DST change makes one local day 23 or 25 hours long.
+  */
++const DAY_OFFSETS = [
++  -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7,
++];
++
+ function buildDays(): Date[] {
+   const today = startOfDay(new Date());
+-  return [-1, 0, 1, 2, 3].map((offset) => {
++  return DAY_OFFSETS.map((offset) => {
+     const d = new Date(today);
+     d.setDate(today.getDate() + offset);
+     return d;
+@@ -59,12 +64,34 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
+   const days = useMemo(buildDays, [todayKey]);
+   const selectedKey = dayKey(selected);
+ 
++  const containerRef = useRef<HTMLDivElement>(null);
++
++  // Land on today, centered, before the first paint the user sees: a 21-chip
++  // strip opens on its left end otherwise, which is two weeks of nothing.
++  useLayoutEffect(() => {
++    const container = containerRef.current;
++    if (!container) return;
++    const todayChip = container.querySelector<HTMLElement>('[aria-current="date"]');
++    todayChip?.scrollIntoView({ behavior: "auto", inline: "center", block: "nearest" });
++  }, []);
++
++  // A picked day (a chip tap, or a date chosen in the calendar sheet) comes to
++  // the middle too — the selected chip is the one thing that must never sit
++  // half off-screen. `nearest` keeps the page itself from scrolling.
++  useEffect(() => {
++    const container = containerRef.current;
++    if (!container) return;
++    const selectedChip = container.querySelector<HTMLElement>('[aria-pressed="true"]');
++    selectedChip?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
++  }, [selectedKey]);
++
+   return (
+     // A group of pressable day buttons, not a tablist: they are toggles with an
+     // explicit pressed state, and role=tab would promise arrow-key semantics
+     // this row does not implement.
+     <div
+-      className="mt-4 flex items-center gap-1 overflow-x-auto px-[var(--space-page-x,16px)]"
++      ref={containerRef}
++      className="date-strip mt-4 flex items-center gap-1 overflow-x-auto px-[var(--space-page-x,16px)] pb-1"
+       role="group"
+       aria-label={t("dateStrip.label")}
+     >
+@@ -82,7 +109,7 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
+             // so the user always knows where they are in the week.
+             aria-current={isToday ? "date" : undefined}
+             onClick={() => onSelect(day)}
+-            className={`min-h-11 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-lg border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.96] ${
++            className={`min-h-11 min-w-[52px] flex-none flex flex-col items-center justify-center gap-0.5 rounded-lg border px-2 py-2 text-center transition-all duration-[var(--t-fast)] active:scale-[0.96] ${
+               isSelected
+                 ? "border-volt bg-volt text-on-volt active:bg-volt/80"
+                 : isToday
+@@ -110,6 +137,13 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
+           </button>
+         );
+       })}
++      {/* Trailing spacer: a scroll container's end padding is not part of its
++          scrollable overflow on every engine, so the last chip would sit flush
++          against the screen edge. The spacer carries that padding instead. */}
++      <span
++        aria-hidden="true"
++        className="w-[var(--space-page-x,16px)] flex-none"
++      />
+     </div>
+   );
+ }
+diff --git a/src/index.css b/src/index.css
+index cd9104d..47a2877 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -397,6 +397,15 @@
+     }
+   }
+ 
++  /* Date strip: a swipe surface, not a scroll pane. The scrollbar is hidden so
++     the row reads as a strip of days, and the strip scrolls under the finger. */
++  .date-strip {
++    scrollbar-width: none;
++  }
++  .date-strip::-webkit-scrollbar {
++    display: none;
++  }
++
+   /* Signature animation 3: timeline entrance, staggered 40ms. */
+   .timeline-in {
+     animation: timeline-in var(--t-std) var(--ease-out) both;
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 1d84ec5..34290a0 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -125,7 +125,7 @@ export default function Matches() {
+   const [lastSync, setLastSync] = useState<Date | null>(null);
+   const [burst, setBurst] = useState(0);
+ 
+-  // Date strip: 5 day chips. `picked` is null while "today" is selected — the
++  // Date strip: 21 day chips. `picked` is null while "today" is selected — the
+   // day is then recomputed from the clock every minute, so an app left open
+   // past local midnight rolls over to the new day instead of sticking on the
+   // one it booted with.
+@@ -309,7 +309,7 @@ export default function Matches() {
+       <div className="relative">
+         <PullIndicator pull={pull} />
+ 
+-        {/* Date strip: 5 day chips, today selected by default. */}
++        {/* Date strip: 21 day chips, today selected by default. */}
+         <DateStrip selected={selectedDay} onSelect={setPicked} daysWithMatches={daysWithMatches} />
+ 
+         {/* Favorite leagues — the start page's own way in. One tap re-scopes
+-- 
+2.54.0.windows.1
+

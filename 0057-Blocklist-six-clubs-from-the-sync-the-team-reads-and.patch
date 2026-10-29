@@ -1,0 +1,399 @@
+From 1587c32a34aa4477ecfa28d50110d84dbba0a8f1 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 11 Oct 2026 00:20:26 +0330
+Subject: [PATCH 057/230] Blocklist six clubs from the sync, the team reads and
+ the seed
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Boca Juniors, River Plate, Rangers, Dynamo Kyiv, Flamengo and Palmeiras are
+excluded by product decision. A shared blocklist now applies at every point a
+team can enter or be read: the sync skips their team rows (and the fixtures and
+standings that would FK-fail without them), GET /api/teams filters them out,
+GET /api/teams/:id 404s, and the static seed refuses to insert them.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/db/blockedTeams.ts  |  69 +++++++++++++++++++++
+ server/db/seedTeams.ts     |   4 ++
+ server/routes/football.ts  |  22 ++++---
+ server/sync/upserts.ts     |  18 +++++-
+ tests/blockedTeams.test.ts | 120 +++++++++++++++++++++++++++++++++++++
+ tests/run.ts               |   2 +
+ 6 files changed, 225 insertions(+), 10 deletions(-)
+ create mode 100644 server/db/blockedTeams.ts
+ create mode 100644 tests/blockedTeams.test.ts
+
+diff --git a/server/db/blockedTeams.ts b/server/db/blockedTeams.ts
+new file mode 100644
+index 0000000..c8ebd90
+--- /dev/null
++++ b/server/db/blockedTeams.ts
+@@ -0,0 +1,69 @@
++/**
++ * A hard blocklist of clubs that must never enter the app.
++ *
++ * These six sides were removed by product decision. The static seed does not
++ * contain them, but ESPN's sync loop discovers clubs dynamically (they play in
++ * leagues/cups the catalog polls), so the block has to live in the sync itself:
++ *
++ *  - server/sync/upserts.ts skips them on every team upsert — no insert and no
++ *    update, so a pre-existing row is frozen rather than refreshed;
++ *  - server/routes/football.ts hides them from GET /api/teams and 404s
++ *    GET /api/teams/:id, so they cannot appear in the picker or a team page.
++ *
++ * Matching is by ESPN id first (stable, exact), with a normalised-name fallback
++ * for the case where a club reappears under a corrected id. The ids were taken
++ * from ESPN's own team lists; Rangers is already present in our database as 257.
++ *
++ * Note: this blocks TEAMS. Match/standings rows that already reference a blocked
++ * club are left untouched (per the "do not update them" rule); the match feed
++ * inner-joins `teams`, so a blocked club with no team row drops out of the feed
++ * automatically.
++ */
++
++/** ESPN team ids to block, in a stable order. */
++export const BLOCKED_TEAM_IDS: readonly string[] = [
++  "5", // Boca Juniors
++  "16", // River Plate
++  "257", // Rangers
++  "440", // Dynamo Kyiv
++  "819", // Flamengo
++  "2029", // Palmeiras
++];
++
++const BLOCKED_TEAM_ID_SET = new Set(BLOCKED_TEAM_IDS);
++
++/** Normalised (trimmed, lower-cased) ESPN display names to block. */
++const BLOCKED_TEAM_NAMES = new Set([
++  "boca juniors",
++  "river plate",
++  "rangers",
++  "dynamo kyiv",
++  "flamengo",
++  "palmeiras",
++]);
++
++/** Minimal shape needed to test a team row or a normalized ESPN team. */
++export interface BlockableTeam {
++  id?: string | number | null;
++  name?: string | null;
++}
++
++/** True when a team id is blocked. */
++export function isBlockedTeamId(id: string | number | null | undefined): boolean {
++  return id != null && BLOCKED_TEAM_ID_SET.has(String(id));
++}
++
++/** True when a team (id and/or name) is blocked. */
++export function isBlockedTeam(team: BlockableTeam): boolean {
++  if (isBlockedTeamId(team.id)) return true;
++  const name = typeof team.name === "string" ? team.name.trim().toLowerCase() : "";
++  return name.length > 0 && BLOCKED_TEAM_NAMES.has(name);
++}
++
++/**
++ * Drop blocked rows from a team list, preserving order. Used by the read routes
++ * that serve `teams` rows, so the picker and team screens never see them.
++ */
++export function filterOutBlockedTeams<T extends { id: string }>(rows: T[]): T[] {
++  return rows.filter((row) => !isBlockedTeamId(row.id));
++}
+diff --git a/server/db/seedTeams.ts b/server/db/seedTeams.ts
+index b3835be..2f05425 100644
+--- a/server/db/seedTeams.ts
++++ b/server/db/seedTeams.ts
+@@ -28,6 +28,7 @@
+  */
+ 
+ import type { DatabaseSync } from "node:sqlite";
++import { isBlockedTeam } from "./blockedTeams.js";
+ 
+ export interface SeedTeam {
+   id: string;
+@@ -1485,6 +1486,9 @@ export function seedTeams(db: DatabaseSync): number {
+   );
+   let inserted = 0;
+   for (const t of SEED_TEAMS) {
++    // Defense in depth: a blocklisted club must never be seeded, even if a row
++    // is added to SEED_TEAMS by hand (see server/db/blockedTeams.ts).
++    if (isBlockedTeam(t)) continue;
+     const res = stmt.run(t.id, t.name, t.short_name, t.abbreviation, t.logo_url ?? null, t.color, t.league);
+     inserted += Number(res.changes ?? 0);
+   }
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index d8c614a..431778c 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -6,6 +6,7 @@
+  */
+ import express from "express";
+ import { getDb, all, get } from "../db/index.js";
++import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
+ import { isCup } from "../espn/types.js";
+ import { competitionCatalog } from "../espn/catalog.js";
+ import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
+@@ -169,29 +170,32 @@ matchesRouter.get("/api/matches/:id/timeline", (req, res) => {
+  */
+ matchesRouter.get("/api/teams", (req, res) => {
+   const league = req.query.league ? String(req.query.league) : null;
++  // Blocklisted clubs are hidden everywhere the team list is read, so they can
++  // never surface in the picker or a team-scoped screen.
+   if (league) {
+-    res.json({
+-      teams: all(
+-        db,
+-        "SELECT *, CASE WHEN league != '' THEN league ELSE 'other' END AS group_key FROM teams WHERE league = ? ORDER BY name ASC",
+-        [league],
+-      ),
+-    });
++    const teams = all<{ id: string }>(
++      db,
++      "SELECT *, CASE WHEN league != '' THEN league ELSE 'other' END AS group_key FROM teams WHERE league = ? ORDER BY name ASC",
++      [league],
++    );
++    res.json({ teams: filterOutBlockedTeams(teams) });
+     return;
+   }
+-  const rows = all(
++  const rows = all<{ id: string }>(
+     db,
+     `SELECT t.*, ${TEAM_GROUP_SQL} AS group_key
+      FROM teams t
+      ORDER BY t.league ASC, t.name ASC`,
+     [...TEAM_GROUP_PARAMS],
+   );
+-  res.json({ teams: rows });
++  res.json({ teams: filterOutBlockedTeams(rows) });
+ });
+ 
+ // A single team with its season stat line.
+ matchesRouter.get("/api/teams/:id", (req, res) => {
+   const teamId = String(req.params.id);
++  // A blocked club has no team page either — same 404 as any unknown id.
++  if (isBlockedTeamId(teamId)) return bad(res, "not found", 404);
+   const team = get(db, "SELECT * FROM teams WHERE id = ?", [teamId]);
+   if (!team) return bad(res, "not found", 404);
+   const seasonStats = get(
+diff --git a/server/sync/upserts.ts b/server/sync/upserts.ts
+index 70eb60d..f7376f2 100644
+--- a/server/sync/upserts.ts
++++ b/server/sync/upserts.ts
+@@ -20,6 +20,7 @@ import {
+   getSeasonKey,
+   type EspnTeamStatsPayload,
+ } from "./teamStats.js";
++import { isBlockedTeam, isBlockedTeamId } from "../db/blockedTeams.js";
+ import type { NormMatch, NormTeam } from "../espn/types.js";
+ 
+ export interface GoalAlert {
+@@ -54,6 +55,8 @@ export function applyScoreboard(db: DB, json: unknown, league: string): void {
+   const { teams, matches } = normalizeScoreboard(json, league);
+   tx(db, () => {
+     for (const t of teams) {
++      // Blocklisted clubs are skipped entirely: no insert, no update.
++      if (isBlockedTeam(t)) continue;
+       upsertCoalesce(
+         db,
+         "teams",
+@@ -65,6 +68,10 @@ export function applyScoreboard(db: DB, json: unknown, league: string): void {
+       );
+     }
+     for (const m of matches) {
++      // A fixture involving a blocklisted club is skipped too: its team row was
++      // never written, so the FK on matches.home/away_team_id would reject the
++      // insert and roll back the whole competition's sync.
++      if (isBlockedTeamId(m.home_team_id) || isBlockedTeamId(m.away_team_id)) continue;
+       const existing = get<{ status: string; home_score: number | null; away_score: number | null }>(
+         db,
+         "SELECT status, home_score, away_score FROM matches WHERE id = ?",
+@@ -109,6 +116,10 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
+   const { home, away } = normalizeSummaryTeams(json);
+   const match = normalizeSummaryMatch(json);
+   if (!match.id) return { match, goals: [] };
++  // A blocklisted club's match is ignored entirely — see applyScoreboard.
++  if (isBlockedTeamId(match.home_team_id) || isBlockedTeamId(match.away_team_id)) {
++    return { match, goals: [] };
++  }
+ 
+   const prev = get<{
+     home_score: number | null;
+@@ -121,7 +132,8 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
+ 
+   tx(db, () => {
+     for (const t of [home, away]) {
+-      if (t)
++      // Blocklisted clubs are skipped entirely: no insert, no update.
++      if (t && !isBlockedTeam(t))
+         upsertCoalesce(
+           db,
+           "teams",
+@@ -357,6 +369,8 @@ export function applyStandings(db: DB, json: unknown, league: string, season: st
+   const { teams, rows } = normalizeStandings(json, league);
+   tx(db, () => {
+     for (const t of teams) {
++      // Blocklisted clubs are skipped entirely: no insert, no update.
++      if (isBlockedTeam(t)) continue;
+       upsertCoalesce(
+         db,
+         "teams",
+@@ -367,6 +381,8 @@ export function applyStandings(db: DB, json: unknown, league: string, season: st
+       );
+     }
+     for (const r of rows) {
++      // Same FK rule as matches: no team row means no standings row.
++      if (isBlockedTeamId(r.team_id)) continue;
+       upsert(
+         db,
+         "standings",
+diff --git a/tests/blockedTeams.test.ts b/tests/blockedTeams.test.ts
+new file mode 100644
+index 0000000..61bbf5e
+--- /dev/null
++++ b/tests/blockedTeams.test.ts
+@@ -0,0 +1,120 @@
++/**
++ * The blocked-team list (server/db/blockedTeams.ts).
++ *
++ * Six clubs are removed by product decision. This suite pins the three places
++ * that guarantee "gone": the predicate, the read-side filter, and the sync —
++ * a blocked club must never be inserted, and a pre-existing row must never be
++ * updated by a later sync.
++ */
++import { strict as assert } from "node:assert";
++import { DatabaseSync } from "node:sqlite";
++import fs from "node:fs";
++import os from "node:os";
++import path from "node:path";
++import { migrate } from "../server/db/schema.js";
++import { SEED_TEAMS } from "../server/db/seedTeams.js";
++import {
++  BLOCKED_TEAM_IDS,
++  filterOutBlockedTeams,
++  isBlockedTeam,
++  isBlockedTeamId,
++} from "../server/db/blockedTeams.js";
++import { applyScoreboard } from "../server/sync/upserts.js";
++
++function testPredicate(): void {
++  for (const id of BLOCKED_TEAM_IDS) {
++    assert.ok(isBlockedTeamId(id), `${id} is blocked by id`);
++    assert.ok(isBlockedTeam({ id }), `${id} is blocked as a team`);
++  }
++  assert.ok(isBlockedTeamId(257), "numeric ids coerce");
++  assert.ok(isBlockedTeam({ name: "  Boca Juniors " }), "names match trimmed/cased-down");
++  assert.ok(isBlockedTeam({ name: "FLAMENGO" }));
++  assert.ok(isBlockedTeam({ name: "Dynamo Kyiv" }));
++  assert.ok(!isBlockedTeam({ id: "359", name: "Arsenal" }), "unrelated clubs are not blocked");
++  assert.ok(!isBlockedTeamId("359"));
++  assert.ok(!isBlockedTeam({}), "an empty team is not blocked");
++  assert.ok(!isBlockedTeam({ name: "" }));
++}
++
++function testSeedHasNoBlockedTeams(): void {
++  for (const t of SEED_TEAMS) {
++    assert.ok(!isBlockedTeam(t), `${t.id} ${t.name} must not be in the static seed`);
++  }
++}
++
++function testReadFilter(): void {
++  const rows = [{ id: "359" }, { id: "257" }, { id: "819" }, { id: "86" }, { id: "2029" }];
++  assert.deepEqual(
++    filterOutBlockedTeams(rows).map((r) => r.id),
++    ["359", "86"],
++    "blocked rows drop out, order preserved",
++  );
++}
++
++function tempDb(): { db: DatabaseSync; file: string } {
++  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vkick-blocked-")), "test.db");
++  const db = new DatabaseSync(file);
++  migrate(db);
++  return { db, file };
++}
++
++/** One ESPN scoreboard event, shaped like the live payload. */
++function scoreboard(homeId: string, homeName: string, awayId: string, awayName: string): unknown {
++  return {
++    events: [
++      {
++        id: "block-probe",
++        date: "2026-09-26T14:00:00Z",
++        competitions: [
++          {
++            status: { type: { state: "pre", completed: false } },
++            competitors: [
++              { homeAway: "home", team: { id: homeId, displayName: homeName } },
++              { homeAway: "away", team: { id: awayId, displayName: awayName } },
++            ],
++          },
++        ],
++      },
++    ],
++  };
++}
++
++function testSyncNeverInsertsBlockedTeam(): void {
++  const { db } = tempDb();
++  applyScoreboard(db, scoreboard("819", "Flamengo", "86", "Real Madrid"), "esp.1");
++
++  const blocked = db.prepare("SELECT id FROM teams WHERE id = '819'").get();
++  assert.equal(blocked, undefined, "a blocked club is never inserted by the sync");
++  assert.ok(db.prepare("SELECT id FROM teams WHERE id = '86'").get(), "other clubs still sync");
++  // The fixture is skipped as well, or the FK on matches.home/away_team_id
++  // would reject it and roll back the whole competition.
++  assert.equal(
++    db.prepare("SELECT id FROM matches WHERE id = 'block-probe'").get(),
++    undefined,
++    "a fixture involving a blocked club is not inserted",
++  );
++  db.close();
++}
++
++function testSyncNeverUpdatesExistingBlockedRow(): void {
++  const { db } = tempDb();
++  db.prepare(
++    `INSERT INTO teams (id, name, short_name, abbreviation, logo_url, color, league)
++     VALUES ('257', 'Rangers', 'Rangers', 'RAN', NULL, '#0000FF', 'sco.1')`,
++  ).run();
++
++  applyScoreboard(db, scoreboard("257", "RENAMED BY SYNC", "86", "Real Madrid"), "esp.1");
++
++  const row = db.prepare("SELECT name FROM teams WHERE id = '257'").get() as { name: string } | undefined;
++  assert.equal(row?.name, "Rangers", "an existing blocked row is frozen, never updated");
++  db.close();
++}
++
++export function runBlockedTeamsTests(): void {
++  testPredicate();
++  testSeedHasNoBlockedTeams();
++  testReadFilter();
++  testSyncNeverInsertsBlockedTeam();
++  testSyncNeverUpdatesExistingBlockedRow();
++  console.log("  blockedTeams: predicate, seed exclusion, read filter, sync skip/freeze OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 29a992c..1cbea29 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -11,6 +11,7 @@ import { runPredictionScoreTests } from "./predictionScore.test.js";
+ import { runMigrateTests } from "./migrate.test.js";
+ import { runSeedTeamsTests } from "./seedTeams.test.js";
+ import { runTelegramUrlTests } from "./telegramUrl.test.js";
++import { runBlockedTeamsTests } from "./blockedTeams.test.js";
+ import { runPasswordTests } from "./password.test.js";
+ import { runNotificationTests } from "./notifications.test.js";
+ import { runUnderstatTests } from "./understat.test.js";
+@@ -52,6 +53,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["migrate", runMigrateTests],
+   ["seedTeams", runSeedTeamsTests],
+   ["telegramUrl", runTelegramUrlTests],
++  ["blockedTeams", runBlockedTeamsTests],
+   ["password", runPasswordTests],
+   ["notifications", runNotificationTests],
+   ["understat", runUnderstatTests],
+-- 
+2.54.0.windows.1
+

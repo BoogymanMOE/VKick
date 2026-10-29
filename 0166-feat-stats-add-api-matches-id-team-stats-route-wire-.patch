@@ -1,0 +1,479 @@
+From 882d2c3c4b2155da10f1afe8c299397b7d0e5545 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 15:56:21 +0330
+Subject: [PATCH 166/230] feat(stats): add /api/matches/:id/team-stats route +
+ wire possession/corners/pass-accuracy into comparison view
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- GET /api/matches/:id/team-stats serves both sides from match_team_stats
+  (percentages rounded, goals off the matches row), answers { home: null,
+  away: null } when the box score has not synced, and 404s for
+  non-allowlist leagues like every other match-detail endpoint.
+- api client: TeamStats type + getMatchTeamStats.
+- StatsTab: synced box score builds all 8 comparison rows (possession,
+  shots, on target, corners, fouls, offsides, pass accuracy, saves);
+  player aggregates remain the fallback only; player tables unchanged.
+- tests/teamStats.test.ts: driven over real HTTP in a child process —
+  synced shape, unsynced nulls, allowlist 404.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/routes/football.ts |  55 +++++++++++
+ src/lib/api.ts            |  21 +++++
+ src/pages/MatchDetail.tsx |  82 +++++++++++++----
+ tests/run.ts              |   3 +
+ tests/teamStats.test.ts   | 188 ++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 329 insertions(+), 20 deletions(-)
+ create mode 100644 tests/teamStats.test.ts
+
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index b942976..48cd4a1 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -160,6 +160,61 @@ matchesRouter.get("/api/matches/:id/players", (req, res) => {
+   res.json({ players: rows });
+ });
+ 
++/**
++ * Team-vs-team box score for the match detail comparison view, straight from
++ * the per-match team stats synced off ESPN's summary boxscore
++ * (match_team_stats). Goals ride on the matches row itself — the boxscore
++ * table carries no goals column. A match whose stats have not synced yet
++ * answers nulls, never 404: the match exists, the numbers just are not in.
++ */
++matchesRouter.get("/api/matches/:id/team-stats", (req, res) => {
++  const matchId = String(req.params.id);
++  if (!assertMatchAllowed(res, matchId)) return;
++  const match = get<{
++    home_team_id: string;
++    away_team_id: string;
++    home_score: number | null;
++    away_score: number | null;
++  }>(
++    db,
++    "SELECT home_team_id, away_team_id, home_score, away_score FROM matches WHERE id = ?",
++    [matchId],
++  );
++  if (!match) return bad(res, "not found", 404);
++  const rows = all<{ [key: string]: unknown }>(
++    db,
++    `SELECT team_id, possession_pct, shots, shots_on_target, corners,
++            fouls, offsides, saves, pass_accuracy_pct
++     FROM match_team_stats
++     WHERE match_id = ?`,
++    [matchId],
++  );
++  // The synced percentages arrive as REALs (86.4); the display contract is a
++  // whole number. Counts stay as-is; anything missing rides out as 0.
++  const pct = (v: unknown): number | null =>
++    typeof v === "number" && Number.isFinite(v) ? Math.round(v) : null;
++  const count = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
++  const side = (teamId: string, goals: number | null) => {
++    const row = rows.find((r) => r.team_id === teamId);
++    if (!row) return null;
++    return {
++      possession_pct: pct(row.possession_pct),
++      corners: count(row.corners),
++      pass_accuracy_pct: pct(row.pass_accuracy_pct),
++      shots: count(row.shots),
++      shots_on_target: count(row.shots_on_target),
++      fouls: count(row.fouls),
++      offsides: count(row.offsides),
++      saves: count(row.saves),
++      goals,
++    };
++  };
++  res.json({
++    home: side(match.home_team_id, match.home_score),
++    away: side(match.away_team_id, match.away_score),
++  });
++});
++
+ matchesRouter.get("/api/matches/:id/lineups", (req, res) => {
+   const matchId = String(req.params.id);
+   if (!assertMatchAllowed(res, matchId)) return;
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 667e9a6..ec77992 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -277,6 +277,24 @@ export interface LeagueTeamStatRow {
+   total_fouls?: number | null;
+ }
+ 
++/**
++ * One side of GET /api/matches/:id/team-stats — the per-match box score from
++ * match_team_stats. Goals come off the matches row (the boxscore table carries
++ * none). A null field means the stat did not sync for this match; the whole
++ * side is null when no row exists yet (stats not synced, match still upcoming).
++ */
++export interface TeamStats {
++  possession_pct: number | null;
++  corners: number | null;
++  pass_accuracy_pct: number | null;
++  shots: number | null;
++  shots_on_target: number | null;
++  fouls: number | null;
++  offsides: number | null;
++  saves: number | null;
++  goals: number | null;
++}
++
+ export interface ApiStanding {
+   team_id: string;
+   /** The competition this table belongs to — also feeds teamFromApi's league mapping. */
+@@ -581,6 +599,9 @@ export const api = {
+   getMatchPlayers: (matchId: string) =>
+     request<{ players: Record<string, unknown>[] }>(`/matches/${matchId}/players`),
+ 
++  getMatchTeamStats: (matchId: string) =>
++    request<{ home: TeamStats | null; away: TeamStats | null }>(`/matches/${matchId}/team-stats`),
++
+   getFavorites: () => request<{ favorites: ApiFavorite[] }>("/me/favorites"),
+ 
+   addFavorite: (teamId: string) =>
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index a45398a..c216585 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -370,12 +370,24 @@ function StatsTab({
+     queryFn: () => api.getMatchPlayers(matchId),
+   });
+   const rows = (query.data?.players ?? []) as Array<Record<string, unknown>>;
++  // The synced box score (possession/corners/pass accuracy only exist here).
++  // A failure or a missing pair falls back to the player aggregates below —
++  // the tab never blanks because one feed went quiet.
++  const teamStatsQuery = useQuery({
++    queryKey: ["matchTeamStats", matchId],
++    queryFn: () => api.getMatchTeamStats(matchId),
++    staleTime: 60_000,
++  });
++  const served =
++    teamStatsQuery.data?.home && teamStatsQuery.data?.away
++      ? { home: teamStatsQuery.data.home, away: teamStatsQuery.data.away }
++      : null;
+ 
+-  if (query.isLoading) return <StatsTableSkeleton />;
++  if (query.isLoading || teamStatsQuery.isLoading) return <StatsTableSkeleton />;
+   if (query.isError) {
+     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+   }
+-  if (rows.length === 0) {
++  if (rows.length === 0 && !served) {
+     return <EmptyState icon="📊" title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
+   }
+ 
+@@ -384,10 +396,8 @@ function StatsTab({
+   const teamRows = (teamId: string) =>
+     rows.filter((r) => r.team_id === teamId && (r.started || asNum(r.minutes_played) > 0));
+ 
+-  // Team-vs-team totals, aggregated from the per-player stat rows the players
+-  // endpoint already serves — there is no client-reachable route for the
+-  // server-side per-match team stats, so possession/corners/pass accuracy
+-  // (which only exist there) are omitted rather than invented.
++  // Fallback totals aggregated from the per-player stat rows, used only when
++  // the synced box score has no row for this match — never alongside it.
+   const totalsFor = (teamId: string) => {
+     const rowsOf = rows.filter((r) => r.team_id === teamId);
+     const sum = (key: string) => rowsOf.reduce((acc, r) => acc + asNum(r[key]), 0);
+@@ -403,14 +413,29 @@ function StatsTab({
+ 
+   const homeTotals = totalsFor(home.id);
+   const awayTotals = totalsFor(away.id);
+-  const statRows: Array<{ label: string; homeValue: number; awayValue: number }> = [
+-    { label: t("stats.goals"), homeValue: homeTotals.goals, awayValue: awayTotals.goals },
+-    { label: t("stats.shots"), homeValue: homeTotals.shots, awayValue: awayTotals.shots },
+-    { label: t("stats.onTarget"), homeValue: homeTotals.onTarget, awayValue: awayTotals.onTarget },
+-    { label: t("stats.fouls"), homeValue: homeTotals.fouls, awayValue: awayTotals.fouls },
+-    { label: t("stats.offsides"), homeValue: homeTotals.offsides, awayValue: awayTotals.offsides },
+-    { label: t("stats.saves"), homeValue: homeTotals.saves, awayValue: awayTotals.saves },
+-  ];
++  // Synced box score first: all eight stats in display order. Possession and
++  // pass accuracy are shares of 100 shown as "63%", with the bar split by the
++  // raw percentage instead of a ratio.
++  const statRows: Array<{ label: string; homeValue: number | null; awayValue: number | null; pct?: boolean }> =
++    served
++      ? [
++          { label: t("stats.possession"), homeValue: served.home.possession_pct, awayValue: served.away.possession_pct, pct: true },
++          { label: t("stats.shots"), homeValue: served.home.shots, awayValue: served.away.shots },
++          { label: t("stats.onTarget"), homeValue: served.home.shots_on_target, awayValue: served.away.shots_on_target },
++          { label: t("stats.corners"), homeValue: served.home.corners, awayValue: served.away.corners },
++          { label: t("stats.fouls"), homeValue: served.home.fouls, awayValue: served.away.fouls },
++          { label: t("stats.offsides"), homeValue: served.home.offsides, awayValue: served.away.offsides },
++          { label: t("stats.passAccuracy"), homeValue: served.home.pass_accuracy_pct, awayValue: served.away.pass_accuracy_pct, pct: true },
++          { label: t("stats.saves"), homeValue: served.home.saves, awayValue: served.away.saves },
++        ]
++      : [
++          { label: t("stats.goals"), homeValue: homeTotals.goals, awayValue: awayTotals.goals },
++          { label: t("stats.shots"), homeValue: homeTotals.shots, awayValue: awayTotals.shots },
++          { label: t("stats.onTarget"), homeValue: homeTotals.onTarget, awayValue: awayTotals.onTarget },
++          { label: t("stats.fouls"), homeValue: homeTotals.fouls, awayValue: awayTotals.fouls },
++          { label: t("stats.offsides"), homeValue: homeTotals.offsides, awayValue: awayTotals.offsides },
++          { label: t("stats.saves"), homeValue: homeTotals.saves, awayValue: awayTotals.saves },
++        ];
+ 
+   const homeRows = teamRows(home.id);
+   const awayRows = teamRows(away.id);
+@@ -461,19 +486,36 @@ function StatsTab({
+ }
+ 
+ /** One team-stat row: home value, label, away value, and the proportion bar
+-    underneath — volt half for home (left), live-coral half for away. */
+-function StatCompareRow({ label, homeValue, awayValue }: { label: string; homeValue: number; awayValue: number }) {
+-  const total = homeValue + awayValue;
++    underneath — volt half for home (left), live-coral half for away. A synced
++    percentage row (`pct`) prints "63%" and splits the bar by the raw
++    percentage itself; a count splits by ratio. A null rides as "–" and counts
++    as zero; zeros on both sides settle into an even, muted 50/50. */
++function StatCompareRow({
++  label,
++  homeValue,
++  awayValue,
++  pct = false,
++}: {
++  label: string;
++  homeValue: number | null;
++  awayValue: number | null;
++  pct?: boolean;
++}) {
++  const show = (v: number | null) => (v === null ? "–" : pct ? `${v}%` : String(v));
++  const hv = homeValue ?? 0;
++  const av = awayValue ?? 0;
++  const total = hv + av;
+   // With nothing on either side the track is an even 50/50 in a muted grey —
+   // an equal-looking bar that never reads as "someone is winning something".
+-  const homePct = total > 0 ? Math.round((homeValue / total) * 100) : 50;
++  // A percentage splits by its own raw value: 63% possession means a 63/37 bar.
++  const homePct = total > 0 ? (pct ? hv : Math.round((hv / total) * 100)) : 50;
+   const fill = total > 0;
+   return (
+     <div dir="ltr">
+       <div className="flex items-center gap-2 text-xs">
+-        <Num className="w-7 text-end font-black text-ink">{homeValue}</Num>
++        <Num className="w-8 text-end font-black text-ink">{show(homeValue)}</Num>
+         <span className="flex-1 truncate text-center text-[11px] font-bold text-ink-2">{label}</span>
+-        <Num className="w-7 font-black text-ink">{awayValue}</Num>
++        <Num className="w-8 font-black text-ink">{show(awayValue)}</Num>
+       </div>
+       <div className="mt-1 flex h-1.5 gap-0.5 overflow-hidden">
+         <span
+diff --git a/tests/run.ts b/tests/run.ts
+index f0fc3ed..d45389e 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -49,6 +49,7 @@ import { runTimelineScoreTests } from "./timelineScore.test.js";
+ import { runSentinelTests } from "./sentinel.test.js";
+ import { runFaStringsTests } from "./faStrings.test.js";
+ import { runMatchReconcileTests } from "./matchReconcile.test.js";
++import { runTeamStatsTests } from "./teamStats.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -100,6 +101,8 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["sentinel", runSentinelTests],
+   ["faStrings", runFaStringsTests],
+   ["matchReconcile", runMatchReconcileTests],
++  // Owns getDb() too (router under test, module-scope handle): stays last.
++  ["teamStats", runTeamStatsTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+diff --git a/tests/teamStats.test.ts b/tests/teamStats.test.ts
+new file mode 100644
+index 0000000..1f65b13
+--- /dev/null
++++ b/tests/teamStats.test.ts
+@@ -0,0 +1,188 @@
++/**
++ * GET /api/matches/:id/team-stats, driven over real HTTP against the real
++ * router with a real (temp) SQLite database.
++ *
++ * The three contracts the Stats comparison view rides on:
++ *  1. a match with synced box-score rows answers both teams' stat objects
++ *     (percentages rounded to whole numbers, goals taken off the matches row);
++ *  2. a match whose stats have not synced yet answers { home: null, away: null
++ *     } with 200 — the match exists, the numbers just aren't in, and 404 would
++ *     read as "this match is gone";
++ *  3. a match whose league is outside the big-five allowlist answers 404,
++ *     exactly like every other match-detail endpoint.
++ *
++ * WHY A CHILD PROCESS: `matchesRouter` reads `getDb()` at module scope, and
++ * that handle closes (and its temp file is deleted) when the suite finishes —
++ * ESM caches the module per process, so the shared runner would keep a closed
++ * handle and every later router suite would serve stale errors. A child
++ * process (same pattern as guestMerge/errors) owns its own module graph.
++ * The temp SQLITE_PATH is set inside the child before the dynamic import.
++ */
++import { strict as assert } from "node:assert";
++import fs from "node:fs";
++import http from "node:http";
++import os from "node:os";
++import path from "node:path";
++import { spawnSync } from "node:child_process";
++import { fileURLToPath, pathToFileURL } from "node:url";
++import type { AddressInfo } from "node:net";
++import express from "express";
++import { closeDb, getDb, run } from "../server/db/index.js";
++
++const CHILD_FLAG = "VKICK_TEAMSTATS_CHILD";
++
++const SUMMARY =
++  "  teamStats: synced box score as home/away objects, unsynced match answers nulls, non-allowlist league 404 OK";
++
++interface Res {
++  status: number;
++  body: Record<string, unknown> | null;
++}
++
++function listen(app: express.Express): Promise<{ port: number; close: () => Promise<void> }> {
++  const server = app.listen(0);
++  return new Promise((resolve) => {
++    server.once("listening", () => {
++      const port = (server.address() as AddressInfo).port;
++      resolve({ port, close: () => new Promise<void>((r) => server.close(() => r())) });
++    });
++  });
++}
++
++function get(port: number, url: string): Promise<Res> {
++  return new Promise((resolve, reject) => {
++    const req = http.request({ host: "127.0.0.1", port, path: url, method: "GET" }, (res) => {
++      let buf = "";
++      res.on("data", (c) => (buf += c));
++      res.on("end", () => {
++        let body: Record<string, unknown> | null = null;
++        try {
++          body = JSON.parse(buf) as Record<string, unknown>;
++        } catch {
++          body = { raw: buf.slice(0, 120) };
++        }
++        resolve({ status: res.statusCode ?? 0, body });
++      });
++    });
++    req.on("error", reject);
++    req.end();
++  });
++}
++
++async function suite(): Promise<void> {
++  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-teamstats-"));
++  const previousDb = process.env.SQLITE_PATH;
++  closeDb();
++  process.env.SQLITE_PATH = path.join(dir, "teamstats.db");
++  try {
++    const { matchesRouter } = await import(
++      pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), "../server/routes/football.js")).href
++    );
++
++    const db = getDb();
++    // Teams + matches: one finished big-five match, one scheduled (by alignment)
++    // big-five match, and one Turkish-league match outside the allowlist.
++    run(
++      db,
++      `INSERT INTO teams (id, name, short_name, league) VALUES
++         ('th1', 'Test Home', 'TH', 'eng.1'),
++         ('ta1', 'Test Away', 'TA', 'eng.1'),
++         ('th2', 'Test Home 2', 'T2', 'eng.1'),
++         ('ta2', 'Test Away 2', 'A2', 'eng.1'),
++         ('th3', 'Turk Home', 'TR', 'tur.1'),
++         ('ta3', 'Turk Away', 'TU', 'tur.1');`,
++    );
++    run(
++      db,
++      `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
++       VALUES
++         ('m_stats', 'eng.1', 'th1', 'ta1', '2026-10-18T15:00:00.000Z', 'finished', 2, 1),
++         ('m_nostats', 'eng.1', 'th2', 'ta2', '2026-10-20T15:00:00.000Z', 'scheduled', NULL, NULL),
++         ('m_turk', 'tur.1', 'th3', 'ta3', '2026-10-18T17:00:00.000Z', 'finished', 1, 1);`,
++    );
++    // Box score for the finished match only. The percentages arrive as REALs,
++    // exactly as the ESPN sync writes them.
++    run(
++      db,
++      `INSERT INTO match_team_stats
++         (match_id, team_id, possession_pct, shots, shots_on_target, corners, fouls, offsides, saves, passes_total, passes_accurate, pass_accuracy_pct)
++       VALUES
++         ('m_stats', 'th1', 62.4, 14, 6, 5, 9, 2, 3, 540, 470, 87.0),
++         ('m_stats', 'ta1', 37.6, 8, 3, 2, 12, 1, 4, 330, 271, 82.1);`,
++    );
++
++    const app = express();
++    app.use(matchesRouter);
++    const { port, close } = await listen(app);
++
++    try {
++      // 1. Synced: both sides, whole-number percentages, goals from the match.
++      const synced = await get(port, "/api/matches/m_stats/team-stats");
++      assert.equal(synced.status, 200);
++      const home = synced.body?.home as Record<string, unknown> | null;
++      const away = synced.body?.away as Record<string, unknown> | null;
++      assert.ok(home && away, "both sides present when the box score synced");
++      assert.deepEqual(
++        home,
++        {
++          possession_pct: 62,
++          corners: 5,
++          pass_accuracy_pct: 87,
++          shots: 14,
++          shots_on_target: 6,
++          fouls: 9,
++          offsides: 2,
++          saves: 3,
++          goals: 2,
++        },
++        "home side carries the whole contract shape",
++      );
++      assert.equal(away.possession_pct, 38, "away percentage rounded");
++      assert.equal(away.goals, 1, "away goals come off the matches row");
++      assert.equal(synced.body?.home, home, "the JSON shape is { home, away } at the top level");
++
++      // 2. Unsynced: the match exists, the stats don't — nulls with 200, never 404.
++      const unsynced = await get(port, "/api/matches/m_nostats/team-stats");
++      assert.equal(unsynced.status, 200, "missing stats are not an error");
++      assert.deepEqual(unsynced.body, { home: null, away: null }, "both sides null before the box score syncs");
++
++      // 3. Allowlist: a league outside the big five answers 404 like the rest.
++      const turk = await get(port, "/api/matches/m_turk/team-stats");
++      assert.equal(turk.status, 404, "non-allowlist league answers 404");
++      assert.ok(turk.body, "the 404 is a JSON body, not HTML");
++
++      // 4. Unknown match id: 404 as well.
++      const missing = await get(port, "/api/matches/nope/team-stats");
++      assert.equal(missing.status, 404, "unknown match answers 404");
++    } finally {
++      await close();
++    }
++  } finally {
++    closeDb();
++    if (previousDb === undefined) delete process.env.SQLITE_PATH;
++    else process.env.SQLITE_PATH = previousDb;
++    fs.rmSync(dir, { recursive: true, force: true });
++  }
++}
++
++/** Runs the suite in a child process so its closeDb() and module imports
++    cannot poison the shared runner's cached router modules. */
++export async function runTeamStatsTests(): Promise<void> {
++  if (process.env[CHILD_FLAG] === "1") {
++    await suite();
++    return;
++  }
++  const result = spawnSync(process.execPath, ["--import", "tsx", fileURLToPath(import.meta.url)], {
++    stdio: "inherit",
++    env: { ...process.env, [CHILD_FLAG]: "1" },
++  });
++  if (result.error) throw result.error;
++  assert.equal(result.status, 0, `teamStats child process failed (exit ${result.status})`);
++  console.log(SUMMARY);
++}
++
++// Child or standalone execution: tsx tests/teamStats.test.ts — importing this
++// module from tests/run.ts must never fire the suite directly.
++if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
++  await runTeamStatsTests();
++}
+-- 
+2.54.0.windows.1
+

@@ -276,6 +276,32 @@ interface EspnRosterEndpoint {
   athletes?: EspnAthlete[];
 }
 
+interface EspnAvailabilityRecord {
+  id?: string | number;
+  athleteId?: string | number;
+  playerId?: string | number;
+  fullName?: string;
+  displayName?: string;
+  name?: string;
+  status?: string | { name?: string; type?: string; abbreviation?: string };
+  type?: string;
+  detail?: string;
+  description?: string;
+  reason?: string;
+  expectedReturn?: string;
+  returnDate?: string;
+  date?: string;
+  athlete?: { id?: string | number; fullName?: string; displayName?: string; name?: string };
+  player?: { id?: string | number; fullName?: string; displayName?: string; name?: string };
+  details?: Record<string, unknown>;
+  injuries?: EspnAvailabilityRecord[];
+  items?: EspnAvailabilityRecord[];
+  athletes?: EspnAvailabilityRecord[];
+  players?: EspnAvailabilityRecord[];
+  entries?: EspnAvailabilityRecord[];
+  sidelined?: EspnAvailabilityRecord[];
+}
+
 interface EspnStandingEntry {
   id?: string | number;
   /** v2: the team object; summary standings: the team NAME as a plain string. */
@@ -308,19 +334,30 @@ const POS_MAP: Record<string, "GK" | "DEF" | "MID" | "FWD"> = {
   G: "GK",
   GK: "GK",
   GDP: "GK",
+  GOALKEEPER: "GK",
   D: "DEF",
   DEF: "DEF",
+  DEFENDER: "DEF",
   CB: "DEF",
+  CENTERBACK: "DEF",
+  CENTREBACK: "DEF",
   LB: "DEF",
+  LEFTBACK: "DEF",
   RB: "DEF",
+  RIGHTBACK: "DEF",
+  WB: "DEF",
+  WINGBACK: "DEF",
   LWB: "DEF",
   RWB: "DEF",
+  LF: "FWD",
+  RF: "FWD",
   "CD-L": "DEF",
   "CD-R": "DEF",
   "CD-M": "DEF",
   "CD-C": "DEF",
   M: "MID",
   MID: "MID",
+  MIDFIELDER: "MID",
   CM: "MID",
   DM: "MID",
   AM: "MID",
@@ -345,6 +382,9 @@ const POS_MAP: Record<string, "GK" | "DEF" | "MID" | "FWD"> = {
   "W-R": "MID",
   F: "FWD",
   FWD: "FWD",
+  FORWARD: "FWD",
+  ATTACKER: "FWD",
+  ATTACK: "FWD",
   ST: "FWD",
   CF: "FWD",
   SS: "FWD",
@@ -370,18 +410,18 @@ export function isPositional(abbr: string | undefined | null): boolean {
 const NON_POSITIONAL = new Set(["SUB", "N/A", "NA", "-", "--", "NONE", "OUT", "RES"]);
 
 export function normalizePosition(abbr: string | undefined | null): string {
-  if (!abbr) return "MID"; // conservative default
+  if (!abbr) return "OTHER";
   const raw = String(abbr).trim();
   const mapped = POS_MAP[raw.toUpperCase()] ?? POS_MAP[raw];
   if (mapped) return mapped;
   const a = raw.toUpperCase();
-  if (a.includes("GK") || a.includes("GOALKEEPER")) return "GK";
+  if (a.includes("GK") || a.includes("GOALKEEPER") || /GOAL.?KEEPER/.test(a)) return "GK";
   if (a.includes("BACK") || /^(C|L|R)?[DB]/.test(a)) return "DEF";
   if (a.includes("FWD") || a.includes("STRIKER") || a.endsWith("F")) return "FWD";
   if (a.includes("MID") || a.includes("WING")) return "MID";
-  if (a.includes("FORWARD") || a.includes("ATTACK")) return "FWD";
-  if (a.includes("DEF")) return "DEF";
-  return "MID";
+  if (a.includes("FORWARD") || a.includes("ATTACK") || a.startsWith("LF") || a.startsWith("RF")) return "FWD";
+  if (a.includes("DEF") || a.includes("BACK")) return "DEF";
+  return "OTHER";
 }
 
 /** Full name forms ("Goalkeeper", "Centre-Back"), which roster feeds use when
@@ -1000,13 +1040,14 @@ export function normalizeRosterPlayers(raw: unknown): NormPlayer[] {
   const json = raw as EspnRosterEndpoint;
   const teamId = String(json.team?.id ?? "");
   const out: NormPlayer[] = [];
+  const seen = new Set<string>();
   for (const a of json.athletes ?? []) {
     const id = String(a.id ?? "");
-    if (!id) continue;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
     const abbr = a.position?.abbreviation ?? null;
-    const pos = isPositional(abbr)
-      ? abbr
-      : normalizePositionName(a.position?.name ?? a.position?.displayName);
+    const namedPosition = normalizePositionName(a.position?.name ?? a.position?.displayName);
+    const pos = namedPosition && namedPosition !== "OTHER" ? namedPosition : abbr;
     out.push({
       id,
       team_id: teamId,
@@ -1019,6 +1060,77 @@ export function normalizeRosterPlayers(raw: unknown): NormPlayer[] {
     });
   }
   return out;
+}
+
+/**
+ * ESPN's team injuries feed is sparsely populated and has appeared in multiple
+ * nested forms. Walk its known collection keys and retain only the three
+ * statuses the team page presents; roster-embedded injury rows use the same
+ * shape and can be normalized by this helper too.
+ */
+export interface NormTeamAvailability {
+  player_id: string;
+  player_name: string;
+  status: "injured" | "suspended" | "doubtful";
+  reason: string | null;
+  expected_return: string | null;
+}
+
+function availabilityStatus(value: string): NormTeamAvailability["status"] | null {
+  const text = value.toLowerCase();
+  if (text.includes("suspend") || text.includes("banned")) return "suspended";
+  if (text.includes("doubt") || text.includes("question") || text.includes("uncertain")) return "doubtful";
+  if (text.includes("injur") || text.includes("out") || text.includes("sideline")) return "injured";
+  return null;
+}
+
+export function normalizeTeamAvailability(raw: unknown): NormTeamAvailability[] {
+  const out = new Map<string, NormTeamAvailability>();
+  const seen = new Set<object>();
+  const visit = (value: unknown, inherited?: { id?: string; name?: string }): void => {
+    if (!value || typeof value !== "object") return;
+    if (seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child, inherited);
+      return;
+    }
+
+    const row = value as EspnAvailabilityRecord;
+    const athlete = row.athlete ?? row.player;
+    const id = String(athlete?.id ?? row.athleteId ?? row.playerId ?? inherited?.id ?? row.id ?? "");
+    const name = athlete?.displayName ?? athlete?.fullName ?? athlete?.name ?? row.fullName ?? row.displayName ?? row.name ?? inherited?.name;
+    const statusValue = typeof row.status === "string"
+      ? row.status
+      : row.status?.name ?? row.status?.type ?? row.status?.abbreviation ?? "";
+    const status = availabilityStatus(`${statusValue} ${row.type ?? ""}`) ??
+      availabilityStatus(typeof row.details?.type === "string" ? row.details.type : "");
+
+    if (id && status) {
+      const details = row.details ?? {};
+      const reason = row.reason ?? row.detail ?? row.description ??
+        (typeof details.detail === "string" ? details.detail : null) ??
+        (typeof details.type === "string" ? details.type : null);
+      const expectedReturn = row.expectedReturn ?? row.returnDate ??
+        (typeof details.returnDate === "string" ? details.returnDate : null) ??
+        (typeof details.expectedReturn === "string" ? details.expectedReturn : null) ?? null;
+      out.set(id, {
+        player_id: id,
+        player_name: name ?? id,
+        status,
+        reason: reason ? String(reason) : null,
+        expected_return: expectedReturn ? String(expectedReturn) : null,
+      });
+    }
+
+    const next = { id: id || inherited?.id, name: name || inherited?.name };
+    for (const key of ["injuries", "items", "athletes", "players", "entries", "sidelined"] as const) {
+      const nested = row[key];
+      if (nested) visit(nested, next);
+    }
+  };
+  visit(raw);
+  return [...out.values()];
 }
 
 /* ------------------------------------------------------------ standings */

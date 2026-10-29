@@ -1,0 +1,255 @@
+From aa8e1a9feb6f915ca9cba7f0f1c4025a56cdf73a Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 20 Oct 2026 23:38:33 +0330
+Subject: [PATCH 184/230] feat(feed): boot splash, card skeletons and real
+ empty-day state
+
+---
+ index.html                   | 53 ++++++++++++++++++++++++------------
+ src/components/Skeletons.tsx | 13 +++++----
+ src/i18n/strings.ts          |  6 ++++
+ src/index.css                |  6 ++++
+ src/main.tsx                 | 10 ++-----
+ src/pages/Matches.tsx        | 20 ++++++++++----
+ 6 files changed, 72 insertions(+), 36 deletions(-)
+
+diff --git a/index.html b/index.html
+index 36e5550..8253cf4 100644
+--- a/index.html
++++ b/index.html
+@@ -20,25 +20,42 @@
+         background: #081613;
+         color-scheme: dark;
+       }
+-      /* Boot splash: visible from the first paint, removed by React when the
+-         shell is interactive. Kept here (not in index.css) so it needs zero
+-         JS and zero app CSS to render. */
++      /* Boot splash: sits INSIDE #root (React's first render replaces it).
++         Literal brand colours, not tokens — this runs before the CSS bundle.
++         The 150ms animation delay keeps fast loads flash-free; reduced motion
++         gets a static plate with no spinning ring. */
+       #boot {
+-        position: fixed;
+-        inset: 0;
+-        z-index: 9999;
++        min-height: 100svh;
+         display: grid;
+-        place-items: center;
++        place-content: center;
++        justify-items: center;
++        gap: 18px;
+         background: #081613;
+-        transition: opacity 250ms ease-out;
++        opacity: 0;
++        animation: bootIn 0.2s ease 0.15s forwards;
+       }
+-      #boot img {
+-        width: 96px;
+-        height: 96px;
++      .boot-ring {
++        width: 28px;
++        height: 28px;
++        border-radius: 50%;
++        border: 3px solid #1e3b34;
++        border-top-color: #1fbfa0;
++        animation: bootSpin 0.8s linear infinite;
+       }
+-      html.boot-done #boot {
+-        opacity: 0;
+-        pointer-events: none;
++      @keyframes bootIn {
++        to {
++          opacity: 1;
++        }
++      }
++      @keyframes bootSpin {
++        to {
++          transform: rotate(360deg);
++        }
++      }
++      @media (prefers-reduced-motion: reduce) {
++        .boot-ring {
++          animation: none;
++        }
+       }
+     </style>
+     <meta
+@@ -75,10 +92,12 @@
+     <!-- END Tapsell ad loader -->
+   </head>
+   <body>
+-    <div id="boot" aria-hidden="true">
+-      <img src="/vkick-mark.svg" alt="" width="96" height="96" />
++    <div id="root">
++      <div id="boot" role="status" aria-label="Loading">
++        <img src="/vkick-mark.svg" width="64" height="64" alt="" />
++        <span class="boot-ring"></span>
++      </div>
+     </div>
+-    <div id="root"></div>
+     <!-- Telegram's official SDK: initData must exist when AuthProvider first
+          reads it, or the Telegram login silently degrades to a guest account
+          (no bot pushes).
+diff --git a/src/components/Skeletons.tsx b/src/components/Skeletons.tsx
+index 4e692fc..fc007ee 100644
+--- a/src/components/Skeletons.tsx
++++ b/src/components/Skeletons.tsx
+@@ -2,27 +2,28 @@ import { cx } from "../lib/cx";
+ 
+ const bar = "shimmer rounded";
+ 
+-/** Signature animation 8: 1.4s shimmer sweep, shaped like the real component. */
++/** Signature animation 8: 1.4s shimmer sweep, shaped like the real component.
++ *  Height matches a filled match card (≈108px): verified in the Task 3 check. */
+ export function MatchCardSkeleton() {
+   return (
+-    <li className="rounded-card border border-line bg-surface p-3">
+-      <div className="mb-2 flex items-center justify-between">
++    <li className="rounded-card border border-line bg-surface p-2">
++      <div className="mb-1.5 flex items-center justify-between">
+         <span className={cx(bar, "h-3 w-28")} />
+         <span className={cx(bar, "h-5 w-16 rounded-md")} />
+       </div>
+       {/* Square crest placeholders, not circles: TeamBadge renders the crest in
+           a square footprint so nothing changes shape when the card fills in. */}
+       <div className="flex items-center gap-2">
+-        <span className={cx(bar, "h-9 w-9")} />
++        <span className={cx(bar, "h-8 w-8")} />
+         <span className={cx(bar, "h-4 w-20")} />
+         <span className="flex-1" />
+         <span className={cx(bar, "h-7 w-5")} />
+         <span className={cx(bar, "h-4 w-2")} />
+         <span className={cx(bar, "h-7 w-5")} />
+         <span className={cx(bar, "h-4 w-20")} />
+-        <span className={cx(bar, "h-9 w-9")} />
++        <span className={cx(bar, "h-8 w-8")} />
+       </div>
+-      <div className="mt-3 flex items-center justify-between border-t border-line pt-2">
++      <div className="mt-2 flex items-center justify-between border-t border-line pt-1">
+         <span className={cx(bar, "h-3 w-20")} />
+         <span className={cx(bar, "h-5 w-24 rounded-full")} />
+       </div>
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 45ad44f..1e6059e 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -75,6 +75,9 @@ export const strings = {
+     "matches.groupLater": "Later today",
+     "matches.groupUpcoming": "Upcoming",
+     "matches.groupFinished": "Finished",
++    "matches.emptyDay": "No matches on {day}",
++    "matches.emptyNext": "The next match day is {day}",
++    "matches.goToDay": "Go to {day}",
+     "leagues.title": "Favorite leagues",
+     "leagues.subtitle": "Follow a league or cup — its matches lead the feed and its alerts reach you.",
+     "leagues.notifyHint":
+@@ -715,6 +718,9 @@ export const strings = {
+     "matches.groupLater": "بعداً امروز",
+     "matches.groupUpcoming": "بازی‌های پیش‌رو",
+     "matches.groupFinished": "تمام‌شده",
++    "matches.emptyDay": "در {day} بازی‌ای نیست",
++    "matches.emptyNext": "روز بعدیِ بازی‌ها {day} است",
++    "matches.goToDay": "برو به {day}",
+     "leagues.title": "لیگ‌های موردعلاقه",
+     "leagues.subtitle": "یک لیگ یا جام را دنبال کن — بازی‌هایش اول فید می‌آید و هشدارهایش به تو می‌رسد.",
+     "leagues.notifyHint": "گل، ترکیب و یادآور شروع بازی برای هر بازی در مسابقاتی که دنبال می‌کنی.",
+diff --git a/src/index.css b/src/index.css
+index 0b3a0fd..0f1b5c0 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -269,6 +269,12 @@
+       background-position: -200% 0;
+     }
+   }
++  /* Reduced motion: the skeleton shows its mid-gradient fill statically. */
++  @media (prefers-reduced-motion: reduce) {
++    .shimmer {
++      animation: none;
++    }
++  }
+ 
+   /* Signature animation 1: goal flash — volt sweep across a match card. */
+   .goal-flash::after {
+diff --git a/src/main.tsx b/src/main.tsx
+index 17b3e13..50d32fa 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -24,13 +24,9 @@ try {
+   /* non-Telegram browser: no-op */
+ }
+ 
+-// Fade out the index.html boot splash once React owns the screen. The class is
+-// on <html> so the transition lives entirely in the head style; the node is
+-// removed after the fade so it can never intercept pointer events.
+-requestAnimationFrame(() => {
+-  document.documentElement.classList.add("boot-done");
+-  setTimeout(() => document.getElementById("boot")?.remove(), 350);
+-});
++// The index.html boot splash lives INSIDE #root now, so React's very first
++// render replaces it — no hand-over animation or manual removal needed, and
++// a dead splash node can never intercept pointer events again.
+ 
+ // The one and only cache. (A second client used to exist in App.tsx, nested
+ // inside this provider, so it silently won — the two disagreed on
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 72cf657..e2e1cd3 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -93,7 +93,9 @@ export default function Matches() {
+   const { push } = useToast();
+   const navigate = useNavigate();
+   const locale = lang === "fa" ? "fa-IR" : undefined;
+-  const queryClient = useQueryClient();
++  /** Localized short day label ("Wed 21" / "پ، ۲۱") for the empty-day copy. */
++  const dayLabel = (d: Date) =>
++    new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric" }).format(d);  const queryClient = useQueryClient();
+   useLiveUpdates();
+ 
+   // Deep link from Browse: /matches?league=eng.1 narrows the feed to one
+@@ -373,8 +375,9 @@ export default function Matches() {
+         ) : null}
+ 
+         {/* No favorites yet: above the groups, because it is the answer to an
+-            empty feed rather than a footnote under one. */}
+-        {showPickBanner ? (
++            empty feed rather than a footnote under one. Hidden while the first
++            payload loads — the skeleton list stands in for the whole feed. */}
++        {showPickBanner && !matchesQuery.isLoading ? (
+           <div
+             role="region"
+             aria-label={t("matches.pickBanner")}
+@@ -411,6 +414,7 @@ export default function Matches() {
+             <MatchCardSkeleton />
+             <MatchCardSkeleton />
+             <MatchCardSkeleton />
++            <MatchCardSkeleton />
+           </ul>
+         ) : hasFeedError ? (
+           <div className="mt-4">
+@@ -420,8 +424,12 @@ export default function Matches() {
+           <div className="mt-4">
+             <EmptyState
+               icon="⚽"
+-              title={t("matches.empty")}
+-              hint={t("matches.emptyHint")}
++              title={t("matches.emptyDay", { day: dayLabel(selectedDay) })}
++              hint={
++                nextMatchDay
++                  ? t("matches.emptyNext", { day: dayLabel(nextMatchDay) })
++                  : t("matches.emptyHint")
++              }
+               action={
+                 nextMatchDay ? (
+                   <button
+@@ -432,7 +440,7 @@ export default function Matches() {
+                     }}
+                     className="min-h-11 rounded-full border border-volt px-5 text-sm font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                   >
+-                    {t("matches.nextDay")}
++                    {t("matches.goToDay", { day: dayLabel(nextMatchDay) })}
+                   </button>
+                 ) : null
+               }
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,111 @@
+From 94a9501e93e3318904b55e999d46e55d2f32429e Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 11 Oct 2026 14:25:16 +0330
+Subject: [PATCH 064/230] Fix Telegram auto-login: profile shows real auth mode
+ for session tokens
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The /api/me endpoint was reporting authMode from the request (always
+"session" for mg_ tokens), so a Telegram user who entered via
+/api/auth/guest and now carries a session token appeared as "session"
+in the Profile — showing "Not linked" instead of "Signed in via
+Telegram". Fix: derive authMode from the user's telegram_id format
+(numeric = Telegram, guest:/pwd: prefix = session, dev auth = dev),
+not from the request's authMode.
+
+Also add server-side logging for initData verification failures in
+the guest endpoint (when initData is sent but rejected) so Render logs
+show exactly why a Telegram user falls back to a guest account, and
+add dev-mode console logging to the client's enterApp flow for
+debugging the auto-login path.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/routes/auth.ts | 11 +++++++++++
+ server/routes/me.ts   |  9 ++++++++-
+ src/hooks/useAuth.tsx | 15 ++++++++++++++-
+ 3 files changed, 33 insertions(+), 2 deletions(-)
+
+diff --git a/server/routes/auth.ts b/server/routes/auth.ts
+index 6e756e2..4fb04a8 100644
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -162,6 +162,17 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
+   const initData = String(req.body?.initData ?? "");
+   const verified = initData && botToken() ? verifyInitData(initData, botToken()) : null;
+ 
++  // Log why initData verification failed (when initData was sent but didn't verify).
++  // This is the key diagnostic for "why am I a guest inside Telegram" — without it
++  // we only see successful telegram logins and guest logins with no initData, never
++  // the middle case where the client sent initData but the server rejected it.
++  if (initData && !verified?.ok && process.env.AUTH_PROBE === "1") {
++    console.log(
++      `[auth:guest] initData VERIFICATION FAILED reason=${verified?.reason ?? "unknown"} ` +
++        `botToken=${botToken() ? "set" : "MISSING"} keys=[${[...new URLSearchParams(initData).keys()].sort().join(",")}]`,
++    );
++  }
++
+   // Telegram identity wins over the guest id, so reopening in the Mini App
+   // merges straight into the Telegram account instead of a second profile.
+   if (verified?.ok) {
+diff --git a/server/routes/me.ts b/server/routes/me.ts
+index 173e243..0b3cd18 100644
+--- a/server/routes/me.ts
++++ b/server/routes/me.ts
+@@ -60,11 +60,18 @@ meRouter.get("/api/me", requireUser, (req, res) => {
+   // The language the client last reported, so a fresh device can adopt it
+   // rather than guessing from navigator.language.
+   const prefs = get<{ language: string }>(db, "SELECT language FROM users WHERE id = ?", [u.id]);
++  // Determine the real auth mode from the user's telegram_id, not from the
++  // request's authMode (which is "session" for any mg_ token). A Telegram user
++  // who entered via /api/auth/guest and now carries a session token is still a
++  // Telegram user — their telegram_id is a numeric Telegram id, not a
++  // guest:<device> or pwd:<username> synthetic id.
++  const authMode: "telegram" | "session" | "dev" =
++    req.authMode === "dev" ? "dev" : /^\d+$/.test(u.telegram_id) ? "telegram" : "session";
+   res.json({
+     user: { ...u, username: cred?.username ?? null, language: prefs?.language ?? "en" },
+     favorites: favCount?.n ?? 0,
+     leagues: leagueCount?.n ?? 0,
+-    authMode: req.authMode ?? "telegram",
++    authMode,
+   });
+ });
+ 
+diff --git a/src/hooks/useAuth.tsx b/src/hooks/useAuth.tsx
+index 615f09d..8082f7c 100644
+--- a/src/hooks/useAuth.tsx
++++ b/src/hooks/useAuth.tsx
+@@ -94,13 +94,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+       // Wait out the SDK before reading initData: older Telegram clients
+       // inject telegram-web-app.js late, and racing it turned the Telegram
+       // login into a guest account with no bot pushes.
+-      await waitForTelegram();
++      const tg = await waitForTelegram();
+       const initData = telegramInitData();
++      if (import.meta.env.DEV) {
++        console.log(
++          `[auth] enterApp tg=${tg ? "present" : "null"} initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
++        );
++      }
+       const res = await api.guest(getDeviceId(), initData);
++      if (import.meta.env.DEV) {
++        console.log(
++          `[auth] enterApp result mode=${res.mode} token=${res.token.slice(0, 8)}... user=${res.user.display_name}`,
++        );
++      }
+       if (!res.ok) throw new Error("GUEST_ENTRY_FAILED");
+       // Persistent slot either way: entry must survive restarts.
+       applyAuthSuccess(res.token, true);
+     } catch (err) {
++      if (import.meta.env.DEV) {
++        console.error(`[auth] enterApp failed:`, err);
++      }
+       enteredRef.current = false; // allow a retry from the Login screen
+       throw err;
+     } finally {
+-- 
+2.54.0.windows.1
+

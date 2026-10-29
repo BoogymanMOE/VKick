@@ -1,0 +1,142 @@
+From 13c11aff44089e4ec524ee7dc2911cd6d295cf44 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 20:04:03 +0330
+Subject: [PATCH 138/230] test(i18n): gate Persian text integrity on codepoint
+ bug classes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+bel.1's garbled row ("لیگ برزیل پرو" — Persian copy holding Korean
+characters) proves nobody ever machine-checks the FA strings, and a
+human review pass cannot catch what a future data edit writes after
+it. Two gates in the tracked suite, scanning string literals of
+strings.ts, names.ts and server/messages.ts:
+
+- Arabic ي (U+064A) / ك (U+0643) standing in for Persian ی/ک — the
+  copy-paste-from-Arabic bug class that breaks search and shaping;
+- any CJK character inside a string literal — no surface in this app
+  is Korean/Japanese/Chinese, so any match is an accident;
+- long untranslated Latin prose inside majority-Persian copy.
+
+The reviewed names for sco.1 and bel.1 are pinned so renames are
+deliberate. What still needs a native speaker: register/word-choice
+review of the ~523 FA strings — documented in the report, not
+assertable by code.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ tests/faStrings.test.ts | 79 +++++++++++++++++++++++++++++++++++++++++
+ tests/run.ts            |  2 ++
+ 2 files changed, 81 insertions(+)
+ create mode 100644 tests/faStrings.test.ts
+
+diff --git a/tests/faStrings.test.ts b/tests/faStrings.test.ts
+new file mode 100644
+index 0000000..5b55f92
+--- /dev/null
++++ b/tests/faStrings.test.ts
+@@ -0,0 +1,79 @@
++/**
++ * Persian text integrity — the bug classes that quietly degrade the currency
++ * of every FA surface at once.
++ *
++ * 1. ARABIC codepoints standing in for Persian ones. U+064A (Arabic yeh) and
++ *    U+0643 (Arabic kaf) render almost identically to U+06CC/U+06A9 but break
++ *    searching, sorting and font shaping; they arrive from copy-pasted Arabic
++ *    sources (bel.1's garbled row shipped this way inverted — with CJK).
++ * 2. CJK characters: nothing in this app is Korean/Japanese/Chinese — any
++ *    match is a copy-paste accident, exactly what happened to bel.1.
++ * 3. Locale pinning: sco.1 and bel.1 were reviewed against native-standard
++ *    names ("لیگ برتر اسکاتلند", "لیگ برتر بلژیک"); renames must be deliberate,
++ *    so the reviewed values are pinned here.
++ *
++ * Scans string literals, not comments, so explanatory markdown stays free.
++ */
++import { strict as assert } from "node:assert";
++import fs from "node:fs";
++import path from "node:path";
++
++const ROOT = path.join(import.meta.dirname, "..");
++
++const FA_FILES = [
++  "src/i18n/strings.ts",
++  "src/i18n/names.ts",
++  "server/messages.ts",
++];
++
++// String literals only: single- or double-quoted, or template-literal bodies
++// that hold no interpolation markers (`{` still appears inside Persian copy as
++// placeholders — those are legitimately Latin and excluded from Latin checks).
++function stringLiterals(source: string): string[] {
++  const out: string[] = [];
++  const re = /"((?:[^"\\\n]|\\.)*)"/g;
++  let m: RegExpExecArray | null;
++  while ((m = re.exec(source))) out.push(m[1]);
++  return out;
++}
++
++export function runFaStringsTests(): void {
++  for (const rel of FA_FILES) {
++    const source = fs.readFileSync(path.join(ROOT, rel), "utf8");
++    const literals = stringLiterals(source);
++
++    for (const [i, lit] of literals.entries()) {
++      assert.ok(
++        !/[\u064A\u0643]/.test(lit),
++        `${rel} literal #${i} uses Arabic ي/ك (U+064A/U+0643) instead of Persian ی/ک: ${lit.slice(0, 60)}`,
++      );
++      assert.ok(
++        !/[\uAC00-\uD7AF\u3040-\u30FF\u4E00-\u9FFF\u3130-\u318F]/.test(lit),
++        `${rel} literal #${i} contains CJK characters — a copy-paste accident, not Persian: ${lit.slice(0, 60)}`,
++      );
++      // Majority-Persian strings must not carry long untranslated Latin
++      // prose inside them (the per-row placement bug from the bel.1 incident
++      // was Persian copy holding an English sentence).
++      const persian = (lit.match(/[\u0600-\u06FF]/g) ?? []).length;
++      if (persian > 4) {
++        const latinWords = (lit.match(/[A-Za-z]{4,}/g) ?? []).filter(
++          (w) => !/^x[PG]A$|^PPDA|^VAR$|^ESPN$|^Understat$|^MVP$|^viewers?$/i.test(w),
++        );
++        // Untranslated long English prose inside a Persian-heavy string —
++        // flag it.
++        assert.ok(
++          latinWords.length <= 3,
++          `${rel} literal #${i} mixes long Latin prose into Persian copy — translate or split it: ${lit.slice(0, 80)}`,
++        );
++      }
++    }
++  }
++
++  // The reviewed competition names are pinned: a rename must show up here and
++  // be agreed, not drift in through a data edit.
++  const leagues = fs.readFileSync(path.join(ROOT, "src/lib/leagues.ts"), "utf8");
++  assert.ok(leagues.includes('"sco.1": { en: "Scottish Premiership", fa: "لیگ برتر اسکاتلند" }'),
++    "sco.1 Persian name drifted from the reviewed value");
++  assert.ok(leagues.includes('"bel.1": { en: "Belgian Pro League", fa: "لیگ برتر بلژیک" }'),
++    "bel.1 Persian name drifted from the reviewed value");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index ba36ce5..370fdee 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -47,6 +47,7 @@ import { runAdsgramTests } from "./adsgram.test.js";
+ import { runBotMenuTests } from "./botMenu.test.js";
+ import { runTimelineScoreTests } from "./timelineScore.test.js";
+ import { runSentinelTests } from "./sentinel.test.js";
++import { runFaStringsTests } from "./faStrings.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -96,6 +97,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["botMenu", runBotMenuTests],
+   ["timelineScore", runTimelineScoreTests],
+   ["sentinel", runSentinelTests],
++  ["faStrings", runFaStringsTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

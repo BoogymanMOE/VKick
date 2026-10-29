@@ -1,0 +1,136 @@
+From 9dd9760c9eee75c60258fcb544d1a359bc08516a Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 17 Oct 2026 23:07:29 +0330
+Subject: [PATCH 116/230] fix(feed): DateStrip local days, a11y and RTL
+
+---
+ src/components/DateStrip.tsx | 97 ++++++++++++++++++++++--------------
+ 1 file changed, 59 insertions(+), 38 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index 9156d27..9653690 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -13,60 +13,81 @@ interface DateStripProps {
+   onSelect: (date: Date) => void;
+ }
+ 
++const startOfDay = (d: Date) => {
++  const x = new Date(d);
++  x.setHours(0, 0, 0, 0);
++  return x;
++};
++
++/**
++ * Local calendar-day key — never `toISOString()`, which is UTC and files a
++ * local midnight east of UTC under the previous day.
++ */
++const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
++
++/**
++ * Yesterday … +3 as local calendar days. `setDate` (not millisecond arithmetic)
++ * because a DST change makes one local day 23 or 25 hours long.
++ */
++function buildDays(): Date[] {
++  const today = startOfDay(new Date());
++  return [-1, 0, 1, 2, 3].map((offset) => {
++    const d = new Date(today);
++    d.setDate(today.getDate() + offset);
++    return d;
++  });
++}
++
+ export function DateStrip({ selected, onSelect }: DateStripProps) {
+-  const { t } = useI18n();
+-  const days = useMemo(() => {
+-    const now = new Date();
+-    now.setHours(0, 0, 0, 0);
+-    return [
+-      new Date(now.getTime() - 86400000), // yesterday
+-      now, // today
+-      new Date(now.getTime() + 86400000), // tomorrow
+-      new Date(now.getTime() + 2 * 86400000),
+-      new Date(now.getTime() + 3 * 86400000),
+-    ];
+-  }, []);
++  const { t, lang } = useI18n();
++  const locale = lang === "fa" ? "fa-IR" : undefined;
++  // Localized day number: Farsi reads ۱۴ not 14.
++  const digits = useMemo(
++    () => new Intl.NumberFormat(locale, { useGrouping: false }),
++    [locale],
++  );
+ 
+-  const isToday = (d: Date) => {
+-    const today = new Date();
+-    return d.getFullYear() === today.getFullYear() &&
+-      d.getMonth() === today.getMonth() &&
+-      d.getDate() === today.getDate();
+-  };
++  // Recomputed when the calendar day changes, so a strip left open past
++  // midnight rolls its window forward instead of pointing at yesterday.
++  const todayKey = dayKey(new Date());
++  const days = useMemo(buildDays, [todayKey]);
++  const selectedKey = dayKey(selected);
+ 
+   return (
++    // A group of pressable day buttons, not a tablist: they are toggles with an
++    // explicit pressed state, and role=tab would promise arrow-key semantics
++    // this row does not implement.
+     <div
+       className="mt-4 flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)]"
+-      role="tablist"
++      role="group"
+       aria-label={t("dateStrip.label")}
+     >
+       {days.map((day) => {
+-        const today = isToday(day);
++        const key = dayKey(day);
++        const isToday = key === todayKey;
++        const isSelected = key === selectedKey;
+         return (
+           <button
+-            key={day.toISOString()}
++            key={key}
+             type="button"
+-            role="tab"
+-            aria-selected={selected.getTime() === day.getTime()}
+-            onClick={() => {
+-              onSelect(day);
+-            }}
+-            className="min-h-[48px] flex-1 flex flex-col items-center justify-center rounded-[12px] border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.97]"
+-            style={{
+-              borderColor: today ? "var(--volt)" : "var(--line)",
+-              backgroundColor: today
+-                ? "var(--volt)"
+-                : "transparent",
+-              color: today
+-                ? "#04221a"
+-                : "var(--ink-3)",
+-            }}
++            aria-pressed={isSelected}
++            // "Today" keeps its own marker even when another day is selected,
++            // so the user always knows where they are in the week.
++            aria-current={isToday ? "date" : undefined}
++            onClick={() => onSelect(day)}
++            className={`min-h-12 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-[12px] border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.97] ${
++              isSelected
++                ? "border-volt bg-volt text-[color:var(--bg-base)]"
++                : isToday
++                  ? "border-volt bg-transparent text-volt"
++                  : "border-line bg-transparent text-ink-3"
++            }`}
+           >
+-            <span className="text-[12px] font-bold">
++            <span className="text-xs font-bold">
+               {t(`dates.day.${DAY_NAMES[day.getDay()]}` as never)}
+             </span>
+             <span className="text-[15px] font-bold leading-none">
+-              {day.getDate()}
++              {digits.format(day.getDate())}
+             </span>
+           </button>
+         );
+-- 
+2.54.0.windows.1
+

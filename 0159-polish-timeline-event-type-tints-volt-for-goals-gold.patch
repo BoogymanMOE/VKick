@@ -1,0 +1,67 @@
+From 04d6a24f300f41998ab4881b59a3ab0beebf8835 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 15:12:28 +0330
+Subject: [PATCH 159/230] =?UTF-8?q?polish(timeline):=20event-type=20tints?=
+ =?UTF-8?q?=20=E2=80=94=20volt=20for=20goals,=20gold=20for=20cards,=20neut?=
+ =?UTF-8?q?ral=20for=20subs?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/TimelineList.tsx | 28 ++++++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index b29cbd9..418b4a6 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -175,6 +175,31 @@ export function TimelineList({
+         );
+         const count = event.commentCount + (event.commentCount > 0 ? 0 : pinned.length);
+ 
++        // Card type, for both the tint and the accent edge: ESPN folds a red
++        // (including a second yellow) into `card`, so its text is the signal.
++        const redCard = event.type === "card" && /\bred card\b|second yellow/i.test(event.description);
++        // Subtle fill that lets the timeline read as coloured bands instead of
++        // a monochrome list: a goal washes volt, a booking washes gold (or the
++        // sending-off's red), a substitution keeps only its neutral edge, and
++        // breaks (VAR/halftime/fulltime) stay quiet. The wash is additive —
++        // icon, minute and text are untouched. `border-s-*` is the logical
++        // property, so the accent flips to the right side in the FA layout.
++        const tinted = event.type === "goal" || event.type === "card" || event.type === "substitution";
++        const tint =
++          event.type === "goal"
++            ? "color-mix(in srgb, var(--volt) 8%, transparent)"
++            : event.type === "card"
++              ? `color-mix(in srgb, var(--${redCard ? "live" : "gold"}) 8%, transparent)`
++              : undefined;
++        const edge =
++          event.type === "goal"
++            ? "border-s-volt"
++            : event.type === "card"
++              ? redCard
++                ? "border-s-danger"
++                : "border-s-gold"
++              : "border-s-line";
++
+         return (
+           <Fragment key={event.id}>
+             <li
+@@ -206,8 +231,11 @@ export function TimelineList({
+                 className={cx(
+                   "rounded-card border bg-surface p-3",
+                   isGoal ? "border-volt/40" : "border-line",
++                  tinted && "border-s-2",
++                  tinted && edge,
+                   isNewestLive && "live-edge",
+                 )}
++                style={tint ? { background: tint } : undefined}
+               >
+                 <div className="flex items-center gap-2">
+                   <Num className="grid h-6 min-w-[38px] place-items-center rounded-md border border-line bg-elevated px-1 text-[11px] text-ink-2">
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,1630 @@
+From 879bc2ca5399f76932b8c43b0e23b1e67c8fad61 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 02:42:47 +0330
+Subject: [PATCH 188/230] design(type): 4-step type scale (xs/sm/md/lg/display)
+ replacing 12 ad-hoc sizes
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Tokens --type-xs/sm/md/lg/display live in tokens.css (named --type-* so the
+Tailwind v4 --text-* namespace never self-references) and map to text-xs/sm/
+md/lg/display utilities in index.css. All 140 arbitrary pixel size classes
+(9/10/11/13/15/18/28/40/48px) are swept to the named scale; the Login clamp()
+stays (responsive display, not part of the scale). The text-[color:...] colour
+utilities become named colour utilities instead: text-live for the live state,
+and a new --text-on-volt token for ink on a volt surface. The date chip needs
+that one — the sweep's blind size rewrite turned its colour utility into
+text-base, which is a font size, leaving light ink on volt at 2.13:1; the
+named ink holds 7.95:1. The FA floor override now targets .text-xs (a no-op
+at 12px, kept as a guarantee).
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/BottomSheet.tsx              |  2 +-
+ src/components/ClubCard.tsx                 | 12 +++----
+ src/components/Countdown.tsx                |  4 +--
+ src/components/DateStrip.tsx                |  6 ++--
+ src/components/ErrorBoundary.tsx            |  4 +--
+ src/components/InlineAd.tsx                 |  2 +-
+ src/components/LegalLinks.tsx               |  2 +-
+ src/components/MatchCard.tsx                | 10 +++---
+ src/components/PickerTabs.tsx               |  2 +-
+ src/components/RatingRow.tsx                | 14 ++++----
+ src/components/ReportButton.tsx             |  2 +-
+ src/components/RulesSheet.tsx               |  4 +--
+ src/components/StreakWidget.tsx             |  2 +-
+ src/components/TabBar.tsx                   |  2 +-
+ src/components/TimelineList.tsx             | 10 +++---
+ src/components/panels/CommentsPanel.tsx     | 10 +++---
+ src/components/panels/LeaguePickerSheet.tsx |  4 +--
+ src/components/panels/LineupPicker.tsx      | 14 ++++----
+ src/components/panels/LineupsPanel.tsx      | 10 +++---
+ src/components/panels/PitchView.tsx         | 12 +++----
+ src/components/panels/PredictionsHub.tsx    | 20 ++++++------
+ src/components/panels/RateSheet.tsx         | 12 +++----
+ src/components/panels/ShotPredictor.tsx     |  4 +--
+ src/components/panels/StatsPanel.tsx        |  2 +-
+ src/components/panels/SubBoard.tsx          |  2 +-
+ src/components/ui.tsx                       | 16 ++++-----
+ src/index.css                               | 21 ++++++++----
+ src/pages/Admin.tsx                         |  4 +--
+ src/pages/Cups.tsx                          |  8 ++---
+ src/pages/Leaderboards.tsx                  |  8 ++---
+ src/pages/Legal.tsx                         |  2 +-
+ src/pages/Login.tsx                         |  6 ++--
+ src/pages/MatchDetail.tsx                   | 18 +++++------
+ src/pages/Matches.tsx                       | 12 +++----
+ src/pages/NotFound.tsx                      |  6 ++--
+ src/pages/Onboarding.tsx                    | 14 ++++----
+ src/pages/PlayerStats.tsx                   |  8 ++---
+ src/pages/Predictions.tsx                   | 10 +++---
+ src/pages/Profile.tsx                       |  4 +--
+ src/pages/Ratings.tsx                       |  2 +-
+ src/pages/Table.tsx                         | 12 +++----
+ src/pages/TeamPage.tsx                      | 36 ++++++++++-----------
+ tokens.css                                  | 16 +++++++++
+ 43 files changed, 197 insertions(+), 174 deletions(-)
+
+diff --git a/src/components/BottomSheet.tsx b/src/components/BottomSheet.tsx
+index fe9cb88..6ad2abc 100644
+--- a/src/components/BottomSheet.tsx
++++ b/src/components/BottomSheet.tsx
+@@ -140,7 +140,7 @@ export function BottomSheet({
+ 
+         <div className="flex items-start gap-3 border-b border-line px-4 pb-3">
+           <div className="min-w-0 flex-1">
+-            <h2 className="truncate text-base font-bold text-ink">{title}</h2>
++            <h2 className="truncate text-md font-bold text-ink">{title}</h2>
+             {subtitle ? <p className="truncate text-xs text-ink-2">{subtitle}</p> : null}
+           </div>
+           <button
+diff --git a/src/components/ClubCard.tsx b/src/components/ClubCard.tsx
+index 8a44a74..a760dd9 100644
+--- a/src/components/ClubCard.tsx
++++ b/src/components/ClubCard.tsx
+@@ -39,17 +39,17 @@ export function ClubFixtureCard({
+     const goalsFor = live.home.id === team.id ? live.homeScore : live.awayScore;
+     const goalsAgainst = live.home.id === team.id ? live.awayScore : live.homeScore;
+     status = (
+-      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-live">
++      <span className="inline-flex items-center gap-1 text-xs font-bold text-live">
+         <LiveDot />
+         <Num>
+           {goalsFor}-{goalsAgainst}
+         </Num>
+-        <span className="text-[10px] font-normal text-ink-3">{live.minute}</span>
++        <span className="text-xs font-normal text-ink-3">{live.minute}</span>
+       </span>
+     );
+   } else if (next) {
+     status = (
+-      <span className="flex w-full flex-col items-center gap-0.5 text-[10px] leading-tight text-ink-3">
++      <span className="flex w-full flex-col items-center gap-0.5 text-xs leading-tight text-ink-3">
+         <span className="w-full truncate">
+           {t("myTeams.vsOpp", { opp: localize(opponentOf(team.id, next).shortName) })}
+         </span>
+@@ -58,12 +58,12 @@ export function ClubFixtureCard({
+     );
+   } else if (last) {
+     status = (
+-      <span className="w-full truncate text-[11px] text-ink-3">
++      <span className="w-full truncate text-xs text-ink-3">
+         <Num>{last.homeScore}</Num>-<Num>{last.awayScore}</Num>
+       </span>
+     );
+   } else {
+-    status = <span className="text-[10px] text-ink-3">{t("matches.noMatch")}</span>;
++    status = <span className="text-xs text-ink-3">{t("matches.noMatch")}</span>;
+   }
+ 
+   const body = (
+@@ -74,7 +74,7 @@ export function ClubFixtureCard({
+       )}
+     >
+       <TeamBadge team={team} size="md" />
+-      <span className="w-full truncate text-[11px] font-bold text-ink">{name}</span>
++      <span className="w-full truncate text-xs font-bold text-ink">{name}</span>
+       {status}
+       {anchored ? (
+         <span className="text-gold">
+diff --git a/src/components/Countdown.tsx b/src/components/Countdown.tsx
+index bc9555f..8f535dd 100644
+--- a/src/components/Countdown.tsx
++++ b/src/components/Countdown.tsx
+@@ -51,7 +51,7 @@ export function Countdown({
+ 
+   if (expired) {
+     return (
+-      <span className={cx("font-bold text-danger", size === "lg" ? "text-2xl" : "text-sm")}>
++      <span className={cx("font-bold text-danger", size === "lg" ? "text-lg" : "text-sm")}>
+         {t("deadline.locked")}
+       </span>
+     );
+@@ -64,7 +64,7 @@ export function Countdown({
+       className={cx(
+         "num-display tabular-nums inline-flex items-baseline transition-colors duration-[var(--t-slow)]",
+         color,
+-        size === "lg" ? "text-2xl" : "text-base",
++        size === "lg" ? "text-lg" : "text-md",
+         heat === "panic" && "tick-panic",
+       )}
+     >
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index 60cc55e..147d064 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -77,7 +77,7 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
+             onClick={() => onSelect(day)}
+             className={`min-h-11 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-[12px] border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.96] ${
+               isSelected
+-                ? "border-volt bg-volt text-[color:var(--bg-base)] active:bg-volt/80"
++                ? "border-volt bg-volt text-on-volt active:bg-volt/80"
+                 : isToday
+                   ? "border-volt bg-transparent text-volt active:bg-volt/15"
+                   : "border-line bg-transparent text-ink-3 active:bg-line/20"
+@@ -86,13 +86,13 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
+             <span className="text-xs font-bold">
+               {t(`dates.day.${DAY_NAMES[day.getDay()]}` as never)}
+             </span>
+-            <span className="text-[15px] font-bold leading-none">
++            <span className="text-md font-bold leading-none">
+               {digits.format(day.getDate())}
+             </span>
+             {isToday ? (
+               <span
+                 aria-hidden="true"
+-                className={`mt-0.5 h-1 w-1 rounded-full ${isSelected ? "bg-[color:var(--bg-base)]" : "bg-volt"}`}
++                className={`mt-0.5 h-1 w-1 rounded-full ${isSelected ? "bg-on-volt" : "bg-volt"}`}
+               />
+             ) : null}
+           </button>
+diff --git a/src/components/ErrorBoundary.tsx b/src/components/ErrorBoundary.tsx
+index 3e66512..20211bd 100644
+--- a/src/components/ErrorBoundary.tsx
++++ b/src/components/ErrorBoundary.tsx
+@@ -61,10 +61,10 @@ export function FallbackCard({ onRetry }: { onRetry: () => void }) {
+   return (
+     <div role="alert" className="grid min-h-[100svh] place-items-center px-6">
+       <div className="w-full max-w-[380px] rounded-card border border-line bg-surface p-5 text-center">
+-        <p className="text-3xl" aria-hidden="true">
++        <p className="text-lg" aria-hidden="true">
+           ⚽
+         </p>
+-        <p className="mt-2 text-base font-bold text-ink">Something went wrong</p>
++        <p className="mt-2 text-md font-bold text-ink">Something went wrong</p>
+         <p className="mt-1 text-xs leading-relaxed text-ink-2">
+           The screen hit an unexpected error. Retrying usually fixes it.
+         </p>
+diff --git a/src/components/InlineAd.tsx b/src/components/InlineAd.tsx
+index d53025e..7473a43 100644
+--- a/src/components/InlineAd.tsx
++++ b/src/components/InlineAd.tsx
+@@ -17,7 +17,7 @@ export function InlineAd() {
+           arbitrary pill, so the slot reads as branded furniture. */}
+       <span
+         aria-label="Advertisement"
+-        className="grid h-7 min-w-[34px] flex-none place-items-center rounded-md border border-line bg-surface px-1.5 text-[10px] font-bold uppercase tracking-wide text-ink-3"
++        className="grid h-7 min-w-[34px] flex-none place-items-center rounded-md border border-line bg-surface px-1.5 text-xs font-bold uppercase tracking-wide text-ink-3"
+       >
+         Ad
+       </span>
+diff --git a/src/components/LegalLinks.tsx b/src/components/LegalLinks.tsx
+index c68ee6d..8616905 100644
+--- a/src/components/LegalLinks.tsx
++++ b/src/components/LegalLinks.tsx
+@@ -12,7 +12,7 @@ export function LegalLinks({ className }: { className?: string }) {
+   const { t } = useI18n();
+   const linkClass = "underline decoration-line underline-offset-2 transition-colors hover:text-ink-2";
+   return (
+-    <p className={cx("text-center text-[11px] text-ink-3", className)}>
++    <p className={cx("text-center text-xs text-ink-3", className)}>
+       <Link to={LEGAL_ROUTES.privacy} className={linkClass}>
+         {t("legal.privacyTitle")}
+       </Link>
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index 6185c98..517713d 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -140,14 +140,14 @@ export const MatchCard = memo(function MatchCard({
+                   centred between the two rows that will always be there for a
+                   live/halftime/finished card. */}
+               <span className="min-h-[23px]" />
+-              <span data-testid="match-center" className="text-2xl font-extrabold leading-7 text-ink">
++              <span data-testid="match-center" className="text-lg font-extrabold leading-7 text-ink">
+                 {homeScore}–{awayScore}
+               </span>
+               <span className="flex min-h-[23px] items-center">
+                 {isLive ? (
+                   // Running match: red dot + minute — the live tint on the border
+                   // already says "in play", so the dot is the affordance.
+-                  <span className="flex items-center gap-1 text-xs font-bold text-[color:var(--live)]">
++                  <span className="flex items-center gap-1 text-xs font-bold text-live">
+                     <LiveDot />
+                     <Num>{minuteLabel}</Num>
+                   </span>
+@@ -163,12 +163,12 @@ export const MatchCard = memo(function MatchCard({
+             <>
+               {/* Weekday: 18px bold, 23px line height so the row is 23px tall even
+                   when the period below is empty (Persian). */}
+-              <span className="min-h-[23px] text-[18px] font-bold leading-[23px] text-ink-2">{parts.day}</span>
++              <span className="min-h-[23px] text-md font-bold leading-[23px] text-ink-2">{parts.day}</span>
+               {/* Clock: the exact centre row. 18px bold, 23px leading, LTR isolated. */}
+-              <span data-testid="match-center" className="text-[18px] font-bold leading-[23px] text-ink-2">{parts.clock}</span>
++              <span data-testid="match-center" className="text-md font-bold leading-[23px] text-ink-2">{parts.clock}</span>
+               {/* Period: AM/PM for en-US, empty 23px spacer for fa-IR. Same fixed
+                   height keeps the clock vertically centred in both scripts. */}
+-              <span className="min-h-[23px] text-[18px] font-bold leading-[23px] text-ink-2">{parts.period}</span>
++              <span className="min-h-[23px] text-md font-bold leading-[23px] text-ink-2">{parts.period}</span>
+             </>
+           )}
+         </div>
+diff --git a/src/components/PickerTabs.tsx b/src/components/PickerTabs.tsx
+index 4cf51d5..29e071a 100644
+--- a/src/components/PickerTabs.tsx
++++ b/src/components/PickerTabs.tsx
+@@ -37,7 +37,7 @@ export function PickerTabs({
+             onChange(group.value);
+           }}
+           className={cx(
+-            "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
++            "min-h-11 flex-none rounded-full border px-3.5 text-xs font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+             value === group.value ? "border-volt text-volt" : "border-line text-ink-3 hover:text-ink-2",
+           )}
+         >
+diff --git a/src/components/RatingRow.tsx b/src/components/RatingRow.tsx
+index 958b437..55f2d1f 100644
+--- a/src/components/RatingRow.tsx
++++ b/src/components/RatingRow.tsx
+@@ -58,15 +58,15 @@ export function RatingRow({
+               {t(`pos.${rating.position}`)}
+             </Chip>
+             {hasCrowd ? (
+-              <span className="text-[11px] text-ink-3">{t("ratings.votes", { count: rating.votes })}</span>
++              <span className="text-xs text-ink-3">{t("ratings.votes", { count: rating.votes })}</span>
+             ) : (
+-              <span className="text-[11px] text-ink-3">{t("ratings.pending")}</span>
++              <span className="text-xs text-ink-3">{t("ratings.pending")}</span>
+             )}
+           </div>
+           {/* The eye-test comment — the crowd's why, not just its number. */}
+           {(rating.myComment || rating.latestComment) && onTap ? (
+             <div className="mt-1 flex items-start gap-2">
+-              <p className="min-w-0 flex-1 line-clamp-2 text-[11px] italic text-ink-3">
++              <p className="min-w-0 flex-1 line-clamp-2 text-xs italic text-ink-3">
+                 “{rating.myComment || rating.latestComment}”
+               </p>
+               {!rating.myComment && rating.latestCommentId ? (
+@@ -78,14 +78,14 @@ export function RatingRow({
+ 
+         {/* Crowd rating — gold, the only accent that means crowd approval. */}
+         <div className="flex-none text-center">
+-          <Num className={cx("block text-xl leading-none", hasCrowd ? "text-gold" : "text-ink-3")}>
++          <Num className={cx("block text-lg leading-none", hasCrowd ? "text-gold" : "text-ink-3")}>
+             {hasCrowd ? rating.crowdRating!.toFixed(1) : "–"}
+           </Num>
+           <span className="label text-ink-3">{t("ratings.crowd")}</span>
+         </div>
+ 
+         <div className="flex-none text-center">
+-          <Num className="block text-xl leading-none text-ink">{rating.fantasyPoints}</Num>
++          <Num className="block text-lg leading-none text-ink">{rating.fantasyPoints}</Num>
+           <span className="label text-ink-3">{t("ratings.points")}</span>
+         </div>
+ 
+@@ -108,7 +108,7 @@ export function RatingRow({
+               <Num>{rating.myRating}</Num>
+             </span>
+           ) : (
+-            <span className="flex-none text-[11px] font-bold text-ink-3">{t("ratings.tapToRate")}</span>
++            <span className="flex-none text-xs font-bold text-ink-3">{t("ratings.tapToRate")}</span>
+           )
+         ) : null}
+       </Tag>
+@@ -156,7 +156,7 @@ export function RatingSlider({
+         onPointerUp={(e) => onChange(Number((e.target as HTMLInputElement).value))}
+         className="h-11 w-20 accent-[var(--volt)]"
+       />
+-      <Num className="text-[11px] text-ink-3">{value ?? "–"}</Num>
++      <Num className="text-xs text-ink-3">{value ?? "–"}</Num>
+     </label>
+   );
+ }
+diff --git a/src/components/ReportButton.tsx b/src/components/ReportButton.tsx
+index d29e932..1105105 100644
+--- a/src/components/ReportButton.tsx
++++ b/src/components/ReportButton.tsx
+@@ -48,7 +48,7 @@ export function ReportButton({
+       }}
+       disabled={busy || done}
+       className={cx(
+-        "flex-none text-[10px] font-bold text-ink-3 underline-offset-2 transition-colors hover:text-danger hover:underline disabled:opacity-60",
++        "flex-none text-xs font-bold text-ink-3 underline-offset-2 transition-colors hover:text-danger hover:underline disabled:opacity-60",
+         className,
+       )}
+     >
+diff --git a/src/components/RulesSheet.tsx b/src/components/RulesSheet.tsx
+index 0b86207..6a23b8a 100644
+--- a/src/components/RulesSheet.tsx
++++ b/src/components/RulesSheet.tsx
+@@ -49,7 +49,7 @@ export function RulesButton({
+                 className,
+               )
+             : cx(
+-                "-my-2 inline-flex min-h-11 flex-none items-center px-1 text-[11px] font-bold text-volt transition-colors duration-[var(--t-fast)] hover:underline",
++                "-my-2 inline-flex min-h-11 flex-none items-center px-1 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:underline",
+                 className,
+               )
+         }
+@@ -66,7 +66,7 @@ export function RulesButton({
+             </li>
+           ))}
+         </ul>
+-        <p className="mt-3 text-[11px] leading-relaxed text-ink-3">{t("rules.settle")}</p>
++        <p className="mt-3 text-xs leading-relaxed text-ink-3">{t("rules.settle")}</p>
+       </BottomSheet>
+     </>
+   );
+diff --git a/src/components/StreakWidget.tsx b/src/components/StreakWidget.tsx
+index 8c6818e..29420b3 100644
+--- a/src/components/StreakWidget.tsx
++++ b/src/components/StreakWidget.tsx
+@@ -45,7 +45,7 @@ export function StreakWidget({ className }: { className?: string }) {
+         </span>
+         <div className="min-w-0 flex-1">
+           <p className="truncate text-sm font-bold text-ink">{t("streak.title")}</p>
+-          <p className="truncate text-[11px] text-ink-3">
++          <p className="truncate text-xs text-ink-3">
+             {streak.active
+               ? t("streak.activeSubtitle", { count: streak.current })
+               : t("streak.idleSubtitle", { count: streak.current })}
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index c97127e..deb4370 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -35,7 +35,7 @@ export function TabBar() {
+               onClick={() => haptic("light")}
+               className={({ isActive }) =>
+                 cx(
+-                  "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-bold transition-[color,background-color] duration-[var(--t-fast)]",
++                  "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-xs font-bold transition-[color,background-color] duration-[var(--t-fast)]",
+                   // Inactive tabs sit at secondary, not muted: "available but
+                   // not selected", never "disabled".
+                   isActive && !isTeamSubPage
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index a3ecaac..bc080df 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -88,19 +88,19 @@ function PinnedComment({
+     >
+       <div className="flex items-center gap-2">
+         <span
+-          className="grid h-6 w-6 flex-none place-items-center rounded-full border border-line bg-surface text-[10px] font-extrabold text-ink-2"
++          className="grid h-6 w-6 flex-none place-items-center rounded-full border border-line bg-surface text-xs font-extrabold text-ink-2"
+           aria-hidden="true"
+         >
+           {(comment.isMine ? t("comments.you") : comment.author).slice(0, 1).toUpperCase()}
+         </span>
+-        <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-ink-2">
++        <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink-2">
+           {comment.isMine ? t("comments.you") : comment.author}
+         </span>
+         {comment.mediaLink ? (
+           <button
+             type="button"
+             onClick={() => onOpenClip(comment)}
+-            className="flex-none text-[11px] font-bold text-volt underline-offset-2 hover:underline"
++            className="flex-none text-xs font-bold text-volt underline-offset-2 hover:underline"
+           >
+             {t("comments.attachOpen")} ↗
+           </button>
+@@ -192,7 +192,7 @@ export function TimelineList({
+       {liveMinute !== undefined ? (
+         <li
+           role="status"
+-          className="flex items-center gap-2 px-1 py-1 text-xs font-bold text-[color:var(--live)]"
++          className="flex items-center gap-2 px-1 py-1 text-xs font-bold text-live"
+         >
+           <LiveDot />
+           <span>{t("status.live")}</span>
+@@ -354,7 +354,7 @@ export function TimelineList({
+                 {/* The composer is intentionally unmounted for now, so the
+                     thread must SAY it is view-only: a thread the user can
+                     open but never answer otherwise reads as a broken form. */}
+-                <p role="note" className="mb-1 text-[11px] leading-relaxed text-ink-3">
++                <p role="note" className="mb-1 text-xs leading-relaxed text-ink-3">
+                   {t("comments.readOnly")}
+                 </p>
+                 <ul>
+diff --git a/src/components/panels/CommentsPanel.tsx b/src/components/panels/CommentsPanel.tsx
+index e8e7972..07061d8 100644
+--- a/src/components/panels/CommentsPanel.tsx
++++ b/src/components/panels/CommentsPanel.tsx
+@@ -140,12 +140,12 @@ export function CommentsSection({
+           {comments.map((comment) => (
+             <li key={comment.id} className="rounded-card border border-line bg-surface p-3">
+               <div className="flex items-center gap-2">
+-                <Num className="grid h-6 min-w-[38px] place-items-center rounded-md border border-line bg-elevated px-1 text-[11px] text-ink-2">
++                <Num className="grid h-6 min-w-[38px] place-items-center rounded-md border border-line bg-elevated px-1 text-xs text-ink-2">
+                   {comment.minuteDisplay ?? "?"}
+                 </Num>
+                 <span
+                   className={cx(
+-                    "min-w-0 flex-1 truncate text-[11px] font-bold",
++                    "min-w-0 flex-1 truncate text-xs font-bold",
+                     comment.isMine ? "text-gold" : "text-ink-2",
+                   )}
+                 >
+@@ -155,7 +155,7 @@ export function CommentsSection({
+                   <button
+                     type="button"
+                     onClick={() => (onOpenClip ? onOpenClip(comment) : setClipUrl(comment.mediaLink ?? ""))}
+-                    className="flex-none text-[11px] font-bold text-volt underline-offset-2 hover:underline"
++                    className="flex-none text-xs font-bold text-volt underline-offset-2 hover:underline"
+                   >
+                     {t("comments.attachOpen")} ↗
+                   </button>
+@@ -215,10 +215,10 @@ export function CommentsSection({
+           className="mt-2 w-full resize-none rounded-card border border-line bg-elevated p-3 text-sm text-ink placeholder:text-ink-3 focus-visible:outline-2 focus-visible:outline-volt"
+         />
+         <div className="mt-1 flex items-center justify-between">
+-          <span className="text-[10px] text-ink-3">
++          <span className="text-xs text-ink-3">
+             {t("comments.media")}: {t("comments.mediaHint")}
+           </span>
+-          <Num className="text-[10px] text-ink-3">{text.length}/500</Num>
++          <Num className="text-xs text-ink-3">{text.length}/500</Num>
+         </div>
+         <input
+           value={mediaLink}
+diff --git a/src/components/panels/LeaguePickerSheet.tsx b/src/components/panels/LeaguePickerSheet.tsx
+index 6238482..6fa5848 100644
+--- a/src/components/panels/LeaguePickerSheet.tsx
++++ b/src/components/panels/LeaguePickerSheet.tsx
+@@ -84,7 +84,7 @@ export function LeaguePickerSheet({ open, onClose }: { open: boolean; onClose: (
+           <Chip tone={full ? "gold" : "volt"}>
+             {t("leagues.count", { count: followed.count, max: MAX_FOLLOWED_LEAGUES })}
+           </Chip>
+-          <span className="min-w-0 flex-1 text-end text-[10px] leading-tight text-ink-3">
++          <span className="min-w-0 flex-1 text-end text-xs leading-tight text-ink-3">
+             {t(full ? "leagues.capHint" : "leagues.notifyHint", { max: MAX_FOLLOWED_LEAGUES })}
+           </span>
+         </div>
+@@ -161,7 +161,7 @@ export function LeaguePickerSheet({ open, onClose }: { open: boolean; onClose: (
+                         {soon ? (
+                           <Chip tone="muted">{t("browse.soon")}</Chip>
+                         ) : on ? (
+-                          <span className="flex flex-none items-center gap-1 text-[11px] font-bold text-volt">
++                          <span className="flex flex-none items-center gap-1 text-xs font-bold text-volt">
+                             <CheckIcon className="marker-pop h-3.5 w-3.5" aria-hidden="true" />
+                             {t("leagues.following")}
+                           </span>
+diff --git a/src/components/panels/LineupPicker.tsx b/src/components/panels/LineupPicker.tsx
+index 82c1e48..657fbe6 100644
+--- a/src/components/panels/LineupPicker.tsx
++++ b/src/components/panels/LineupPicker.tsx
+@@ -65,7 +65,7 @@ function LineupPitch({
+               <span
+                 key={player ? player.id : `empty-${rowIndex}-${index}`}
+                 className={cx(
+-                  "grid h-6 flex-1 place-items-center rounded-full border text-[10px] font-bold tabular-nums",
++                  "grid h-6 flex-1 place-items-center rounded-full border text-xs font-bold tabular-nums",
+                   player ? "border-transparent bg-volt text-black" : "border-line border-dashed text-ink-3",
+                 )}
+               >
+@@ -75,7 +75,7 @@ function LineupPitch({
+           </div>
+         ))}
+       </div>
+-      <p className="mt-2 border-t border-line pt-1.5 text-center text-[10px] text-ink-3">
++      <p className="mt-2 border-t border-line pt-1.5 text-center text-xs text-ink-3">
+         {candidates.length}/{XI_SIZE} · {formationId}
+       </p>
+     </div>
+@@ -103,13 +103,13 @@ function PlayerRow({
+           picked ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
+         )}
+       >
+-        <Num className="grid h-7 w-7 flex-none place-items-center rounded-md border border-line bg-elevated text-[11px] text-ink-2">
++        <Num className="grid h-7 w-7 flex-none place-items-center rounded-md border border-line bg-elevated text-xs text-ink-2">
+           {player.jersey ?? "–"}
+         </Num>
+         <span className="min-w-0 flex-1">
+           <span className="block truncate text-sm font-bold text-ink">{localize(player.name)}</span>
+           {player.appearances ? (
+-            <span className="block text-[10px] text-ink-3">
++            <span className="block text-xs text-ink-3">
+               <Num>{player.appearances}</Num> {t("lineup.apps")}
+               {player.goals ? (
+                 <>
+@@ -250,7 +250,7 @@ export function LineupPicker({
+         <Chip tone={complete ? "pitch" : "volt"}>
+           <Num>{picked.length}</Num>/{XI_SIZE}
+         </Chip>
+-        <span className="text-[11px] text-ink-3">
++        <span className="text-xs text-ink-3">
+           {t("lineup.perStarter")} · {t("lineup.exactFormation")}
+         </span>
+       </div>
+@@ -306,7 +306,7 @@ export function LineupPicker({
+                   <div className="sticky top-0 z-10 flex items-center justify-between bg-surface/95 py-1 backdrop-blur-sm">
+                     <span className="label text-ink-2">{t(`lineup.unit.${unit}`)}</span>
+                     <span
+-                      className={cx("text-[10px] font-bold tabular-nums", done ? "text-volt" : "text-ink-3")}
++                      className={cx("text-xs font-bold tabular-nums", done ? "text-volt" : "text-ink-3")}
+                     >
+                       {count?.picked ?? 0}/{required[unit]}
+                     </span>
+@@ -329,7 +329,7 @@ export function LineupPicker({
+       </div>
+ 
+       {picked.length === XI_SIZE && !shapeMatches ? (
+-        <p className="text-[11px] font-bold text-gold">{t("lineup.shapeMismatch")}</p>
++        <p className="text-xs font-bold text-gold">{t("lineup.shapeMismatch")}</p>
+       ) : null}
+ 
+       <div className="flex gap-2">
+diff --git a/src/components/panels/LineupsPanel.tsx b/src/components/panels/LineupsPanel.tsx
+index 9603d07..64528fa 100644
+--- a/src/components/panels/LineupsPanel.tsx
++++ b/src/components/panels/LineupsPanel.tsx
+@@ -95,11 +95,11 @@ function PitchSlot({ player, name }: { player: LineupPlayer | null; name: string
+     <span className="flex min-w-0 flex-1 flex-col items-center">
+       <span className="relative">
+         <PlayerAvatar name={name} src={player.headshot} size="md" className="border-pitch/60" />
+-        <Num className="absolute -end-1 -bottom-1 grid h-4 min-w-4 place-items-center rounded-full bg-volt px-0.5 text-[9px] leading-none text-black">
++        <Num className="absolute -end-1 -bottom-1 grid h-4 min-w-4 place-items-center rounded-full bg-volt px-0.5 text-xs leading-none text-black">
+           {player.number > 0 ? player.number : "–"}
+         </Num>
+       </span>
+-      <span className="mt-1 block w-full truncate text-center text-[9px] font-bold text-ink-2">{name}</span>
++      <span className="mt-1 block w-full truncate text-center text-xs font-bold text-ink-2">{name}</span>
+     </span>
+   );
+ }
+@@ -148,7 +148,7 @@ export function LineupsPanel({
+         {/* The coach is not in every feed, and the lineups route has no coach
+             endpoint at all — a bare "Coach:" label is worse than no line. */}
+         {lineup.coach ? (
+-          <p className="mt-3 border-t border-line pt-2 text-[11px] text-ink-3">
++          <p className="mt-3 border-t border-line pt-2 text-xs text-ink-3">
+             {t("lineups.coach")}: {localize(lineup.coach)}
+           </p>
+         ) : null}
+@@ -168,10 +168,10 @@ export function LineupsPanel({
+                   className="flex w-[52px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center"
+                   title={localize(player.name)}
+                 >
+-                  <Num className="grid h-6 w-6 place-items-center rounded-full bg-elevated px-0.5 text-[10px] font-black text-ink-2">
++                  <Num className="grid h-6 w-6 place-items-center rounded-full bg-elevated px-0.5 text-xs font-black text-ink-2">
+                     {player.number > 0 ? player.number : "–"}
+                   </Num>
+-                  <span className="w-full truncate text-[10px] font-bold text-ink">
++                  <span className="w-full truncate text-xs font-bold text-ink">
+                     {localize(player.name).slice(0, 1)}.
+                   </span>
+                 </div>
+diff --git a/src/components/panels/PitchView.tsx b/src/components/panels/PitchView.tsx
+index d41de97..2f04389 100644
+--- a/src/components/panels/PitchView.tsx
++++ b/src/components/panels/PitchView.tsx
+@@ -79,7 +79,7 @@ export function PitchView({
+         ]}
+       />
+ 
+-      <p className="mt-2 mb-2 text-[11px] text-ink-3">{t("pitchView.hint")}</p>
++      <p className="mt-2 mb-2 text-xs text-ink-3">{t("pitchView.hint")}</p>
+ 
+       {mode === "grid" ? (
+         <GoalGrid events={located} home={home} away={away} />
+@@ -88,7 +88,7 @@ export function PitchView({
+       )}
+ 
+       {located.length === 0 ? (
+-        <p className="mt-3 rounded-card border border-dashed border-line px-3 py-4 text-center text-[11px] text-ink-3">
++        <p className="mt-3 rounded-card border border-dashed border-line px-3 py-4 text-center text-xs text-ink-3">
+           <span className="block font-bold text-ink-2">{t("pitchView.empty")}</span>
+           {t("pitchView.emptyHint")}
+         </p>
+@@ -119,7 +119,7 @@ function Legend({ events, home, away }: { events: LocatedEvent[]; home: Side; aw
+   return (
+     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line pt-2">
+       {[home, away].map((side) => (
+-        <span key={side.id} className="inline-flex items-center gap-1.5 text-[11px] text-ink-2">
++        <span key={side.id} className="inline-flex items-center gap-1.5 text-xs text-ink-2">
+           <span
+             className="h-2.5 w-2.5 rounded-full"
+             style={{ backgroundColor: side.color }}
+@@ -128,12 +128,12 @@ function Legend({ events, home, away }: { events: LocatedEvent[]; home: Side; aw
+           <span className="truncate">{localize(side.shortName)}</span>
+         </span>
+       ))}
+-      <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-3">
++      <span className="inline-flex items-center gap-1.5 text-xs text-ink-3">
+         <span className="h-2.5 w-2.5 rounded-full ring-1 ring-white/70" aria-hidden="true" />
+         {t("pitchView.goal")}
+       </span>
+       {hasShot ? (
+-        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-3">
++        <span className="inline-flex items-center gap-1.5 text-xs text-ink-3">
+           <span className="h-2.5 w-2.5 rounded-full border border-white/70" aria-hidden="true" />
+           {t("pitchView.shot")}
+         </span>
+@@ -197,7 +197,7 @@ function GoalGrid({ events, home, away }: { events: LocatedEvent[]; home: Side;
+                   />
+                 ))}
+                 {pins.length > 4 ? (
+-                  <Num className="text-[9px] font-bold text-ink-2">+{pins.length - 4}</Num>
++                  <Num className="text-xs font-bold text-ink-2">+{pins.length - 4}</Num>
+                 ) : null}
+               </div>
+             );
+diff --git a/src/components/panels/PredictionsHub.tsx b/src/components/panels/PredictionsHub.tsx
+index 8690c35..954cb80 100644
+--- a/src/components/panels/PredictionsHub.tsx
++++ b/src/components/panels/PredictionsHub.tsx
+@@ -246,24 +246,24 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+   return (
+     <div className="space-y-2">
+       <div className="flex items-center justify-between gap-3">
+-        <p className="min-w-0 text-[11px] text-ink-3">{t("predict.hubHint")}</p>
++        <p className="min-w-0 text-xs text-ink-3">{t("predict.hubHint")}</p>
+         {/* The scoring tables live in the app now, not only in scoring-rules.md. */}
+         <RulesButton variant="link" />
+       </div>
+       {showLockSoon ? (
+         <Card className="border-danger/50 bg-danger/5 p-2.5">
+-          <span className="text-[11px] font-bold text-danger animate-pulse">{t("predict.lockSoon")}</span>
++          <span className="text-xs font-bold text-danger animate-pulse">{t("predict.lockSoon")}</span>
+         </Card>
+       ) : null}
+       {showHowTo ? (
+         <Card className="border-volt/40 bg-elevated p-3">
+           <p className="text-xs font-bold text-ink">{t("predict.howToTitle")}</p>
+-          <p className="mt-1 text-[11px] text-ink-2">{t("predict.howToBody")}</p>
++          <p className="mt-1 text-xs text-ink-2">{t("predict.howToBody")}</p>
+         </Card>
+       ) : null}
+       {halftime ? (
+         <Card className="border-live/40 p-2.5">
+-          <span className="text-[11px] font-bold text-live">{t("sub.halftimeBanner")}</span>
++          <span className="text-xs font-bold text-live">{t("sub.halftimeBanner")}</span>
+         </Card>
+       ) : null}
+ 
+@@ -293,7 +293,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+               <div className="flex items-center gap-2">
+                 <span
+                   className={cx(
+-                    "grid h-8 min-w-8 place-items-center rounded-full border px-1 text-[10px] font-extrabold",
++                    "grid h-8 min-w-8 place-items-center rounded-full border px-1 text-xs font-extrabold",
+                     meta.tone === "gold"
+                       ? "border-gold text-gold"
+                       : meta.tone === "live"
+@@ -306,7 +306,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+                 </span>
+                 <span className="min-w-0 flex-1">
+                   <span className="block truncate text-sm font-bold text-ink">{t(meta.key as never)}</span>
+-                  <span className="block truncate text-[11px] text-ink-3">{t(meta.hintKey as never)}</span>
++                  <span className="block truncate text-xs text-ink-3">{t(meta.hintKey as never)}</span>
+                 </span>
+                 {statusChip(row)}
+               </div>
+@@ -615,7 +615,7 @@ function VersusEditor({
+ 
+   return (
+     <div className="space-y-3">
+-      <p className="text-[11px] text-ink-3">{t("predict.versusNewHint")}</p>
++      <p className="text-xs text-ink-3">{t("predict.versusNewHint")}</p>
+       {teams.map((teamId, index) => (
+         <div key={teamId}>
+           <p className="mb-1.5 label text-ink-2">{index === 0 ? "A" : "B"}</p>
+@@ -691,7 +691,7 @@ function MechanicSummary({
+   const summary = pickSummary(mechanic, payload, { t, nameOf });
+   if (summary) {
+     return (
+-      <span className="max-w-[50%] truncate text-[10px] text-ink-3" dir="auto">
++      <span className="max-w-[50%] truncate text-xs text-ink-3" dir="auto">
+         {summary}
+       </span>
+     );
+@@ -699,12 +699,12 @@ function MechanicSummary({
+   // No payload we can summarize: fall back to a bare count rather than nothing.
+   if (mechanic === "sub") {
+     const subs = Array.isArray(parsed.subs) ? parsed.subs.length : 0;
+-    return <Num className="text-[10px] text-ink-3">{subs}</Num>;
++    return <Num className="text-xs text-ink-3">{subs}</Num>;
+   }
+   if (mechanic === "lineup") {
+     const ids = Array.isArray(parsed.playerIds) ? parsed.playerIds.length : 0;
+     return (
+-      <Num className="text-[10px] text-ink-3">
++      <Num className="text-xs text-ink-3">
+         {ids} · {String(parsed.formation ?? "")}
+       </Num>
+     );
+diff --git a/src/components/panels/RateSheet.tsx b/src/components/panels/RateSheet.tsx
+index b0d8bab..de1b9d6 100644
+--- a/src/components/panels/RateSheet.tsx
++++ b/src/components/panels/RateSheet.tsx
+@@ -70,12 +70,12 @@ export function RateSheet({
+     >
+       <div className="text-center">
+         {/* keyed so the pulse retriggers on every integer change */}
+-        <Num key={value} className="rating-pulse text-[40px] leading-none text-gold">
++        <Num key={value} className="rating-pulse text-display leading-none text-gold">
+           {value}
+         </Num>
+-        <p className="text-[11px] text-ink-3">{t("ratings.yourRating")}</p>
++        <p className="text-xs text-ink-3">{t("ratings.yourRating")}</p>
+         {typeof cardsUsed === "number" && typeof cardsMax === "number" ? (
+-          <p className="mt-1 text-[10px] text-ink-3">
++          <p className="mt-1 text-xs text-ink-3">
+             {t("ratings.cards", { used: cardsUsed, max: cardsMax })}
+           </p>
+         ) : null}
+@@ -95,7 +95,7 @@ export function RateSheet({
+         className="mt-4 h-11 w-full accent-[var(--gold)]"
+       />
+ 
+-      <div className="flex justify-between text-[10px] text-ink-3">
++      <div className="flex justify-between text-xs text-ink-3">
+         <span>1</span>
+         <span>5</span>
+         <span>10</span>
+@@ -138,12 +138,12 @@ export function RateSheet({
+                 )}
+                 style={{ height: `${Math.max(3, (count / peak) * 64)}px` }}
+               />
+-              <span className="text-[9px] text-ink-3">{index + 1}</span>
++              <span className="text-xs text-ink-3">{index + 1}</span>
+             </div>
+           ))}
+         </div>
+ 
+-        <div className="mt-2 flex items-center justify-between text-[11px] text-ink-3">
++        <div className="mt-2 flex items-center justify-between text-xs text-ink-3">
+           <span>{t("ratings.votes", { count: totalVotes })}</span>
+           <Chip tone="gold">{t("ratings.eyeTest")}</Chip>
+         </div>
+diff --git a/src/components/panels/ShotPredictor.tsx b/src/components/panels/ShotPredictor.tsx
+index 413d1f2..412de6b 100644
+--- a/src/components/panels/ShotPredictor.tsx
++++ b/src/components/panels/ShotPredictor.tsx
+@@ -137,14 +137,14 @@ export function ShotPredictor({
+ 
+       <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
+         {ZONE_KEYS.map((key) => (
+-          <span key={key} className="text-[9px] text-ink-3">
++          <span key={key} className="text-xs text-ink-3">
+             {t(key as never)}
+           </span>
+         ))}
+       </div>
+ 
+       <div className="flex items-center justify-between">
+-        <span className="text-[11px] text-ink-3">{t("predict.shotNewHint")}</span>
++        <span className="text-xs text-ink-3">{t("predict.shotNewHint")}</span>
+         {cell ? (
+           <Chip tone="volt">{t(ZONE_LABEL_KEY[cellZone(cell.gridX, cell.gridY)] as never)}</Chip>
+         ) : null}
+diff --git a/src/components/panels/StatsPanel.tsx b/src/components/panels/StatsPanel.tsx
+index 2c0770f..1a2a690 100644
+--- a/src/components/panels/StatsPanel.tsx
++++ b/src/components/panels/StatsPanel.tsx
+@@ -51,7 +51,7 @@ export function StatsPanel({
+         ))}
+       </ul>
+ 
+-      <div className="mt-4 flex items-center justify-between border-t border-line pt-3 text-[11px] text-ink-3">
++      <div className="mt-4 flex items-center justify-between border-t border-line pt-3 text-xs text-ink-3">
+         <span>{t("stats.source")}</span>
+         <Num>{t("stats.live")}</Num>
+       </div>
+diff --git a/src/components/panels/SubBoard.tsx b/src/components/panels/SubBoard.tsx
+index 2121047..3f8bec7 100644
+--- a/src/components/panels/SubBoard.tsx
++++ b/src/components/panels/SubBoard.tsx
+@@ -89,7 +89,7 @@ export function SubBoard({
+                 <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">
+                   {nameOf(pair.offId)}
+                 </span>
+-                <span className="flex-none text-[11px] text-ink-3">→</span>
++                <span className="flex-none text-xs text-ink-3">→</span>
+                 <span className="min-w-0 flex-1 truncate text-xs font-bold text-volt">
+                   {nameOf(pair.onId)}
+                 </span>
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index d3b6299..cecedfc 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -167,10 +167,10 @@ export function CollapsibleSection({
+  */
+ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md" | "lg" | "xl" }) {
+   const dims = {
+-    sm: "h-6 w-6 text-[10px]",
++    sm: "h-6 w-6 text-xs",
+     md: "h-9 w-9 text-xs",
+     lg: "h-12 w-12 text-sm",
+-    xl: "h-16 w-16 text-base",
++    xl: "h-16 w-16 text-md",
+   }[size];
+   const [broken, setBroken] = useState(false);
+   const [remoteBroken, setRemoteBroken] = useState(false);
+@@ -288,7 +288,7 @@ export function Chip({
+   return (
+     <span
+       className={cx(
+-        "inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-[11px] font-bold",
++        "inline-flex items-center gap-1.5 rounded-md border px-1.5 py-0.5 text-xs font-bold",
+         !normalCase && "uppercase",
+         toneClass,
+         className,
+@@ -328,7 +328,7 @@ export function PlayerAvatar({
+ }) {
+   const [broken, setBroken] = useState(false);
+   const [loaded, setLoaded] = useState(false);
+-  const dims = { sm: "h-8 w-8 text-[10px]", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm" }[size];
++  const dims = { sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm" }[size];
+   const photo = src && !broken ? src : null;
+   return (
+     <span
+@@ -633,7 +633,7 @@ export function StatBar({
+   }, []);
+   return (
+     <li className="space-y-1">
+-      <div className="flex items-center justify-between text-[11px]">
++      <div className="flex items-center justify-between text-xs">
+         <Num className={cx("w-8", home >= away ? "text-ink" : "text-ink-2")}>{home}</Num>
+         <span className="text-ink-3">{label}</span>
+         <Num className={cx("w-8 text-end", away >= home ? "text-ink" : "text-ink-2")}>{away}</Num>
+@@ -674,7 +674,7 @@ export function ProgressBar({
+   return (
+     <div className="space-y-1">
+       {label || valueLabel ? (
+-        <div className="flex items-center justify-between text-[11px] text-ink-2">
++        <div className="flex items-center justify-between text-xs text-ink-2">
+           <span>{label}</span>
+           {valueLabel}
+         </div>
+@@ -715,7 +715,7 @@ export function Avatar({
+   tone?: "volt" | "muted";
+   size?: "sm" | "md" | "lg";
+ }) {
+-  const dims = { sm: "h-7 w-7 text-[11px]", md: "h-9 w-9 text-sm", lg: "h-12 w-12 text-lg" }[size];
++  const dims = { sm: "h-7 w-7 text-xs", md: "h-9 w-9 text-sm", lg: "h-12 w-12 text-lg" }[size];
+   return (
+     <span
+       className={cx(
+@@ -946,7 +946,7 @@ export function PredictionIcons({ kinds }: { kinds: string[] }) {
+         return (
+           <span
+             key={k}
+-            className="grid h-5 min-w-5 place-items-center rounded-full border border-volt px-1 text-[10px] font-bold text-volt"
++            className="grid h-5 min-w-5 place-items-center rounded-full border border-volt px-1 text-xs font-bold text-volt"
+             style={{ backgroundColor: "color-mix(in srgb, var(--volt) 12%, transparent)" }}
+             aria-hidden="true"
+           >
+diff --git a/src/index.css b/src/index.css
+index 0f1b5c0..ee58711 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -18,6 +18,7 @@
+   --color-ink: var(--text-primary);
+   --color-ink-2: var(--text-secondary);
+   --color-ink-3: var(--text-muted);
++  --color-on-volt: var(--text-on-volt);
+ 
+   --color-volt: var(--volt);
+   --color-live: var(--live);
+@@ -25,8 +26,14 @@
+   --color-danger: var(--danger);
+   --color-pitch: var(--pitch);
+ 
+-  --font-ui: var(--font-body);
+-  --font-num: var(--font-display);
++  /* Type scale — 4 steps + display, from the --type-* tokens. xs/sm mirror
++     Tailwind's old defaults (12/14px) so existing uses are unchanged; lg
++     firms to 22px, and md/display are the named steps call sites map to. */
++  --text-xs: var(--type-xs);
++  --text-sm: var(--type-sm);
++  --text-md: var(--type-md);
++  --text-lg: var(--type-lg);
++  --text-display: var(--type-display);
+ 
+   --radius-card: 14px;
+   --radius-e-card: var(--radius-card);
+@@ -101,11 +108,11 @@
+     font-size: 14px;
+   }
+ 
+-  /* Persian floor: Vazirmatn at 9-11px is unreadable, so every micro-size
+-     utility is lifted to 12px in fa while Latin keeps the designed scale. */
+-  html[lang="fa"] .text-\[9px\],
+-  html[lang="fa"] .text-\[10px\],
+-  html[lang="fa"] .text-\[11px\] {
++  /* Persian floor: Vazirmatn at 9-11px was unreadable, and every micro-size
++     arbitrary class is now the named text-xs (12px = the floor itself), so
++     this override is a no-op kept as a belt-and-braces guarantee that FA
++     never renders below 12px, wherever a future size creeps in. */
++  html[lang="fa"] .text-xs {
+     font-size: 12px;
+   }
+ 
+diff --git a/src/pages/Admin.tsx b/src/pages/Admin.tsx
+index 9917fc8..12d59cf 100644
+--- a/src/pages/Admin.tsx
++++ b/src/pages/Admin.tsx
+@@ -115,8 +115,8 @@ export default function Admin() {
+ function StatCard({ label, value }: { label: string; value?: number }) {
+   return (
+     <Card className="p-3">
+-      <p className="text-[11px] text-ink-3">{label}</p>
+-      <Num className="mt-0.5 text-2xl text-ink">{value !== undefined ? value.toLocaleString() : "—"}</Num>
++      <p className="text-xs text-ink-3">{label}</p>
++      <Num className="mt-0.5 text-lg text-ink">{value !== undefined ? value.toLocaleString() : "—"}</Num>
+     </Card>
+   );
+ }
+diff --git a/src/pages/Cups.tsx b/src/pages/Cups.tsx
+index 27abb70..3f455ed 100644
+--- a/src/pages/Cups.tsx
++++ b/src/pages/Cups.tsx
+@@ -110,7 +110,7 @@ export default function Cups() {
+ 
+       {/* Name the competition the fixtures below belong to — without it a strip
+           of knockout fixtures has no context. */}
+-      <h2 className="mt-4 text-base font-extrabold text-ink">
++      <h2 className="mt-4 text-md font-extrabold text-ink">
+         {localize(comps.find((c) => c.slug === active)?.name ?? "") ||
+           competitionName(active, lang)}
+       </h2>
+@@ -154,7 +154,7 @@ export default function Cups() {
+                   haptic("light");
+                   setRoundsOverride((prev) => (prev === null ? false : !prev));
+                 }}
+-                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-[11px] font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
++                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-xs font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
+               >
+                 {roundsOverride === false ? t("common.expandAll") : t("common.collapseAll")}
+               </button>
+@@ -239,7 +239,7 @@ export default function Cups() {
+         </>
+       )}
+ 
+-      <p className="mt-6 text-center text-[11px] text-ink-3">{t("cups.noTable")}</p>
++      <p className="mt-6 text-center text-xs text-ink-3">{t("cups.noTable")}</p>
+     </>
+   );
+ }
+@@ -331,7 +331,7 @@ function TieCard({ tie }: { tie: BracketTie }) {
+       ) : null}
+       <CupMatchList matches={tie.legs} bare />
+       {showFooter ? (
+-        <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11px]">
++        <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2 text-xs">
+           {tie.winnerId ? (
+             <span className="min-w-0 truncate font-bold text-volt">
+               <span aria-hidden="true">→ </span>
+diff --git a/src/pages/Leaderboards.tsx b/src/pages/Leaderboards.tsx
+index b1ded82..23ee479 100644
+--- a/src/pages/Leaderboards.tsx
++++ b/src/pages/Leaderboards.tsx
+@@ -124,7 +124,7 @@ export default function Leaderboards() {
+                     )}
+                   >
+                     <span
+-                      className="grid h-8 w-8 place-items-center rounded-full border text-[10px] font-extrabold"
++                      className="grid h-8 w-8 place-items-center rounded-full border text-xs font-extrabold"
+                       style={{
+                         borderColor: `color-mix(in srgb, ${team.color} 55%, transparent)`,
+                         backgroundColor: `color-mix(in srgb, ${team.color} 18%, transparent)`,
+@@ -133,7 +133,7 @@ export default function Leaderboards() {
+                     >
+                       {team.abbreviation}
+                     </span>
+-                    <span className="w-full truncate text-[11px] font-bold text-ink">
++                    <span className="w-full truncate text-xs font-bold text-ink">
+                       {localize(team.shortName)}
+                     </span>
+                   </button>
+@@ -225,7 +225,7 @@ function StandingStrip({
+       <div className="min-w-0">
+         <p className="label text-ink-3">{t("board.yourStanding")}</p>
+         <p className="truncate text-sm font-bold text-ink">{t("board.you")}</p>
+-        {belowPage ? <p className="text-[11px] text-ink-3">{t("board.belowPage")}</p> : null}
++        {belowPage ? <p className="text-xs text-ink-3">{t("board.belowPage")}</p> : null}
+       </div>
+       <div className="flex flex-none items-center gap-4 text-end">
+         <div>
+@@ -319,7 +319,7 @@ function BoardRow({
+         {youLabel ? <Chip tone="volt">{youLabel}</Chip> : null}
+         <RankDelta delta={delta} />
+       </span>
+-      <CountUp value={total} className="text-end text-base text-gold" />
++      <CountUp value={total} className="text-end text-md text-gold" />
+     </li>
+   );
+ }
+diff --git a/src/pages/Legal.tsx b/src/pages/Legal.tsx
+index c848e4c..4081f6c 100644
+--- a/src/pages/Legal.tsx
++++ b/src/pages/Legal.tsx
+@@ -20,7 +20,7 @@ export function LegalPage({ kind }: { kind: LegalKind }) {
+             <p className="mt-1.5 text-xs leading-relaxed text-ink-2">{t(section.body)}</p>
+           </Card>
+         ))}
+-        <p className="px-1 text-[11px] text-ink-3">{t("legal.updated")}</p>
++        <p className="px-1 text-xs text-ink-3">{t("legal.updated")}</p>
+       </div>
+     </>
+   );
+diff --git a/src/pages/Login.tsx b/src/pages/Login.tsx
+index dc83080..ede2d71 100644
+--- a/src/pages/Login.tsx
++++ b/src/pages/Login.tsx
+@@ -173,7 +173,7 @@ export default function Login() {
+               </label>
+ 
+               {mode === "register" ? (
+-                <p className="px-1 text-[11px] leading-relaxed text-ink-3">{t("auth.createHint")}</p>
++                <p className="px-1 text-xs leading-relaxed text-ink-3">{t("auth.createHint")}</p>
+               ) : null}
+ 
+               {error ? (
+@@ -220,7 +220,7 @@ export default function Login() {
+               </Button>
+ 
+               {isTelegram() ? (
+-                <p className="px-2 text-center text-[11px] leading-relaxed text-ink-3">
++                <p className="px-2 text-center text-xs leading-relaxed text-ink-3">
+                   {tgName ? t("auth.telegramSignedHint") : t("auth.telegramHint")}
+                 </p>
+               ) : null}
+@@ -239,7 +239,7 @@ export default function Login() {
+             </div>
+           )}
+         </Card>        <p
+-          className="rise-in mt-6 px-1 text-center text-[11px] leading-relaxed text-ink-3"
++          className="rise-in mt-6 px-1 text-center text-xs leading-relaxed text-ink-3"
+           style={{ "--stagger": "140ms" } as CSSProperties}>
+           {t("auth.legal")}
+         </p>
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index eeff525..d89ad3f 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -203,7 +203,7 @@ export default function MatchDetail() {
+           flashScore ? "goal-flash border-volt/60 bg-elevated" : "border-line",
+         )}
+       >
+-        <p className="pb-2 text-center text-[11px] font-bold text-ink-2">
++        <p className="pb-2 text-center text-xs font-bold text-ink-2">
+           {leagueLabel} · {formatKickoff(new Date(match.kickoff_at), locale)}
+         </p>
+         <div className="flex items-center justify-between gap-3">
+@@ -220,21 +220,21 @@ export default function MatchDetail() {
+                 the honest read, and dashes ("– : –") read as a broken scoreboard.
+                 Once a side has a number the score rolls up as it moves. */}
+             {match.home_score === null && match.away_score === null ? (
+-              <Num className="text-[28px] leading-none text-ink-2">
++              <Num className="text-lg leading-none text-ink-2">
+                 {formatClock(new Date(match.kickoff_at), locale)}
+               </Num>
+             ) : (
+               <span className="flex items-baseline gap-1">
+                 {match.home_score === null ? (
+-                  <Num className="text-[48px] leading-none text-ink">–</Num>
++                  <Num className="text-display leading-none text-ink">–</Num>
+                 ) : (
+-                  <CountUp value={match.home_score} className="text-[48px] leading-none text-ink" />
++                  <CountUp value={match.home_score} className="text-display leading-none text-ink" />
+                 )}
+-                <Num className="text-[48px] leading-none text-ink">:</Num>
++                <Num className="text-display leading-none text-ink">:</Num>
+                 {match.away_score === null ? (
+-                  <Num className="text-[48px] leading-none text-ink">–</Num>
++                  <Num className="text-display leading-none text-ink">–</Num>
+                 ) : (
+-                  <CountUp value={match.away_score} className="text-[48px] leading-none text-ink" />
++                  <CountUp value={match.away_score} className="text-display leading-none text-ink" />
+                 )}
+               </span>
+             )}
+@@ -535,7 +535,7 @@ function StatCompareRow({
+     <div dir="ltr">
+       <div className="flex items-center gap-2 text-xs">
+         <Num className="w-8 text-end font-black text-ink">{show(homeValue)}</Num>
+-        <span className="flex-1 truncate text-center text-[11px] font-bold text-ink-2">{label}</span>
++        <span className="flex-1 truncate text-center text-xs font-bold text-ink-2">{label}</span>
+         <Num className="w-8 font-black text-ink">{show(awayValue)}</Num>
+       </div>
+       <div className="mt-1 flex h-1.5 gap-0.5 overflow-hidden">
+@@ -596,7 +596,7 @@ function MatchPlayerTable({
+             <tr key={str(r.player_id)} className="border-t border-line">
+               <td className="p-2">
+                 <span className="block truncate font-bold text-ink">{localize(str(r.full_name))}</span>
+-                <span className="text-[10px] text-ink-3">
++                <span className="text-xs text-ink-3">
+                   {num(r.minutes_played)}&#39; {r.started ? "· XI" : ""}
+                 </span>
+               </td>
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index e2e1cd3..c871272 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -37,7 +37,7 @@ import type { Match } from "../types";
+  * language wanted a tighter pill without shrinking what a thumb can hit.
+  */
+ const LEAGUE_CHIP =
+-  "relative h-9 flex-none rounded-full border px-3.5 text-[13px] font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97] after:absolute after:-inset-x-0.5 after:-inset-y-1 after:content-['']";
++  "relative h-9 flex-none rounded-full border px-3.5 text-sm font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97] after:absolute after:-inset-x-0.5 after:-inset-y-1 after:content-['']";
+ 
+ /** Selected league chip: filled volt pill — the row's one "picked" affordance. */
+ const LEAGUE_CHIP_ON = "border-volt bg-volt/15 text-volt";
+@@ -51,8 +51,8 @@ function GroupHeader({ id, label, count, tone }: { id: string; label: string; co
+       <h2
+         id={id}
+         className={cx(
+-          "text-[13px] font-extrabold",
+-          tone === "live" ? "text-[color:var(--live)]" : tone === "gold" ? "text-gold" : "text-ink-2",
++          "text-sm font-extrabold",
++          tone === "live" ? "text-live" : tone === "gold" ? "text-gold" : "text-ink-2",
+         )}
+       >
+         {label}
+@@ -367,7 +367,7 @@ export default function Matches() {
+                 haptic("light");
+                 navigate("/matches");
+               }}
+-              className="inline-flex min-h-11 flex-none items-center rounded-full border border-volt px-3 text-[11px] font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++              className="inline-flex min-h-11 flex-none items-center rounded-full border border-volt px-3 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+             >
+               {t("matches.showAll")}
+             </button>
+@@ -455,7 +455,7 @@ export default function Matches() {
+               <section className="mt-4">
+                 <div className="mb-2 flex items-center gap-2">
+                   <StarFilledIcon className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
+-                  <h2 className="text-[13px] font-bold text-ink-2">{t("matches.myTeams")}</h2>
++                  <h2 className="text-sm font-bold text-ink-2">{t("matches.myTeams")}</h2>
+                 </div>
+                 <ul className="space-y-2">
+                   {myTeamsMatches.map((match, index) => (
+@@ -534,7 +534,7 @@ export default function Matches() {
+ 
+         {/* Sync note, not a second refresh button: pull-to-refresh and the
+           TopBar icon already carry the action, so this line only reports it. */}
+-        <p className="mt-6 text-center text-[11px] text-ink-3">
++        <p className="mt-6 text-center text-xs text-ink-3">
+           {t("matches.hint")}
+           {syncStale
+             ? ` · ${t("matches.syncDelayed")}`
+diff --git a/src/pages/NotFound.tsx b/src/pages/NotFound.tsx
+index fcc414a..4bee6a8 100644
+--- a/src/pages/NotFound.tsx
++++ b/src/pages/NotFound.tsx
+@@ -16,15 +16,15 @@ export default function NotFound() {
+     <>
+       <TopBar title={t("notFound.title")} back />
+       <Card className="mt-6 flex flex-col items-center p-6 text-center">
+-        <p className="font-num text-4xl font-black text-ink-3" aria-hidden="true">
++        <p className="font-num text-display font-black text-ink-3" aria-hidden="true">
+           404
+         </p>
+         <p className="mt-2 text-sm font-bold text-ink">{t("notFound.body")}</p>
+-        <p className="mt-1 break-all text-[11px] text-ink-3">{location.pathname}</p>
++        <p className="mt-1 break-all text-xs text-ink-3">{location.pathname}</p>
+         <Button className="mt-4" onClick={() => window.history.back()}>
+           {t("common.back")}
+         </Button>
+-        <p className="mt-3 text-[11px] text-ink-3">{t("notFound.browse")}</p>
++        <p className="mt-3 text-xs text-ink-3">{t("notFound.browse")}</p>
+       </Card>
+     </>
+   );
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 9e2637f..0604a00 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -238,7 +238,7 @@ export default function Onboarding() {
+ 
+       {step === 0 ? (
+         <section className="mt-5 rise-in">
+-          <h2 className="text-xl font-extrabold text-ink">{t("onboarding.favoriteTitle")}</h2>
++          <h2 className="text-lg font-extrabold text-ink">{t("onboarding.favoriteTitle")}</h2>
+           <p className="mt-1 text-sm text-ink-2">{t("onboarding.favoriteHint")}</p>
+ 
+           {/* The pick so far, named and faced: survives tab switches, so the
+@@ -251,7 +251,7 @@ export default function Onboarding() {
+               <TeamBadge team={anchorTeam} size="md" />
+               <div className="min-w-0 flex-1">
+                 <p className="truncate text-sm font-bold text-ink">{anchorName}</p>
+-                <p className="flex items-center gap-1 text-[11px] font-bold text-gold">
++                <p className="flex items-center gap-1 text-xs font-bold text-gold">
+                   <StarFilledIcon className="star-pop h-3 w-3 flex-none" />
+                   {t("onboarding.isFavorite")}
+                 </p>
+@@ -320,7 +320,7 @@ export default function Onboarding() {
+ 
+       {step === 1 ? (
+         <section className="mt-5 rise-in">
+-          <h2 className="text-xl font-extrabold text-ink">{t("onboarding.clubsTitle")}</h2>
++          <h2 className="text-lg font-extrabold text-ink">{t("onboarding.clubsTitle")}</h2>
+           <p className="mt-1 text-sm text-ink-2">{t("onboarding.clubsHint")}</p>
+ 
+           {/* Picked clubs so far, removable: the count chip alone makes people
+@@ -333,7 +333,7 @@ export default function Onboarding() {
+                   <li key={team.id} className="relative flex-none">
+                     <div className="flex w-[76px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center">
+                       <TeamBadge team={team} size="sm" />
+-                      <span className="w-full truncate text-[10px] font-bold text-ink">
++                      <span className="w-full truncate text-xs font-bold text-ink">
+                         {localize(team.shortName)}
+                       </span>
+                     </div>
+@@ -425,13 +425,13 @@ export default function Onboarding() {
+               </Chip>
+             ) : null}
+           </div>
+-          <p className="mt-2 text-center text-[11px] text-ink-3">{t("onboarding.intlHint")}</p>
++          <p className="mt-2 text-center text-xs text-ink-3">{t("onboarding.intlHint")}</p>
+         </section>
+       ) : null}
+ 
+       {step === 2 ? (
+         <section className="mt-5 rise-in">
+-          <h2 className="text-xl font-extrabold text-ink">{t("onboarding.leaguesTitle")}</h2>
++          <h2 className="text-lg font-extrabold text-ink">{t("onboarding.leaguesTitle")}</h2>
+           <p className="mt-1 text-sm text-ink-2">{t("onboarding.leaguesHint")}</p>
+ 
+           <ul className="mt-3 space-y-2">
+@@ -560,7 +560,7 @@ function Intro({ onDone }: { onDone: () => void }) {
+         </span>
+         {/* The intro has no TopBar, so this brand line is the screen's only
+             heading — h1, not h2, or the document opens at a level down. */}
+-        <h1 className="intro-in mt-5 text-2xl font-extrabold text-ink">{t("app.name")}</h1>
++        <h1 className="intro-in mt-5 text-lg font-extrabold text-ink">{t("app.name")}</h1>
+ 
+         <ul className="intro-in mt-5 space-y-4">
+           {SLIDES.map(({ key, titleKey, bodyKey, Glyph }) => (
+diff --git a/src/pages/PlayerStats.tsx b/src/pages/PlayerStats.tsx
+index dbeefde..df57f18 100644
+--- a/src/pages/PlayerStats.tsx
++++ b/src/pages/PlayerStats.tsx
+@@ -159,7 +159,7 @@ function PlayerBoard({
+                 {index + 1}
+               </Num>
+               <div
+-                className="grid h-9 w-9 flex-none place-items-center rounded-full text-[10px] font-bold"
++                className="grid h-9 w-9 flex-none place-items-center rounded-full text-xs font-bold"
+                 style={{ backgroundColor: row.teamColor ?? TEAM_FALLBACK, color: readableInk(row.teamColor) }}
+                 aria-hidden="true"
+               >
+@@ -167,14 +167,14 @@ function PlayerBoard({
+               </div>
+               <div className="min-w-0 flex-1">
+                 <p className="truncate text-sm font-bold text-ink">{localize(row.name)}</p>
+-                <p className="truncate text-[11px] text-ink-3">
++                <p className="truncate text-xs text-ink-3">
+                   {localize(row.teamShort ?? row.teamName)} · {t(`pos.${row.position}` as StringKey)} ·{" "}
+                   <Num>{row.appearances}</Num>
+                   {t("table.played" as StringKey)}
+                 </p>
+               </div>
+               <div className="flex-none text-end">
+-                <Num className={cx("block text-xl leading-none", index === 0 ? "text-gold" : "text-ink")}>
++                <Num className={cx("block text-lg leading-none", index === 0 ? "text-gold" : "text-ink")}>
+                   {formatValue(row, sort)}
+                 </Num>
+                 <span className="label text-ink-3">{t(activeSort.labelKey)}</span>
+@@ -270,7 +270,7 @@ function TeamBoard({ league }: { league: string }) {
+ function Metric({ label, value }: { label: string; value: string }) {
+   return (
+     <div>
+-      <p className="text-[10px] text-ink-3">{label}</p>
++      <p className="text-xs text-ink-3">{label}</p>
+       <Num className="text-sm text-ink">{value}</Num>
+     </div>
+   );
+diff --git a/src/pages/Predictions.tsx b/src/pages/Predictions.tsx
+index 143a0a2..b2e5ca5 100644
+--- a/src/pages/Predictions.tsx
++++ b/src/pages/Predictions.tsx
+@@ -154,12 +154,12 @@ function PredictionCard({
+       </div>
+ 
+       {pick ? (
+-        <p className="mt-1 truncate text-[11px] text-ink-2" dir="auto">
++        <p className="mt-1 truncate text-xs text-ink-2" dir="auto">
+           {pick}
+         </p>
+       ) : null}
+ 
+-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-2 text-[11px] text-ink-3">
++      <div className="mt-2 flex items-center justify-between gap-2 border-t border-line pt-2 text-xs text-ink-3">
+         <span>
+           {row.kickoffAt ? formatKickoff(new Date(row.kickoffAt), lang === "fa" ? "fa-IR" : undefined) : ""}
+           {hasScore ? ` · ${row.homeScore}–${row.awayScore}` : ""}
+@@ -184,7 +184,7 @@ function PredictionCard({
+           )}
+           <Link
+             to={`/match/${row.matchId}`}
+-            className="-my-3 inline-flex min-h-11 items-center px-1 text-[11px] font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:text-ink"
++            className="-my-3 inline-flex min-h-11 items-center px-1 text-xs font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:text-ink"
+           >
+             {t("match.summary")}
+           </Link>
+@@ -195,8 +195,8 @@ function PredictionCard({
+         <dl className="mt-2 space-y-1 border-t border-line pt-2">
+           {items.map((item) => (
+             <div key={item.key} className="flex items-baseline justify-between gap-3">
+-              <dt className={`text-[11px] ${item.flag ? "text-ink-3" : "text-ink-2"}`}>{item.label}</dt>
+-              <dd className={`font-num text-[11px] font-bold ${item.flag ? "text-ink-3" : "text-ink"}`}>
++              <dt className={`text-xs ${item.flag ? "text-ink-3" : "text-ink-2"}`}>{item.label}</dt>
++              <dd className={`font-num text-xs font-bold ${item.flag ? "text-ink-3" : "text-ink"}`}>
+                 {item.value}
+               </dd>
+             </div>
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 242facf..8f4b8cf 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -163,7 +163,7 @@ export default function Profile() {
+       <Card className="mt-3 flex items-center gap-3 p-4">
+         <Avatar name={displayName} tone="volt" size="lg" />
+         <div className="min-w-0 flex-1">
+-          <p className="truncate text-base font-bold text-ink">{displayName}</p>
++          <p className="truncate text-md font-bold text-ink">{displayName}</p>
+           <p className="truncate text-xs text-ink-2">
+             {viaUsername && user?.username
+               ? `@${user.username}`
+@@ -538,7 +538,7 @@ function FavoriteTeamsStrip() {
+             className="flex w-[76px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
+           >
+             <TeamBadge team={team} size="sm" />
+-            <span className="w-full truncate text-[10px] font-bold text-ink">{localize(team.shortName)}</span>
++            <span className="w-full truncate text-xs font-bold text-ink">{localize(team.shortName)}</span>
+           </Link>
+         </li>
+       ))}
+diff --git a/src/pages/Ratings.tsx b/src/pages/Ratings.tsx
+index 7648bf5..f96cf9c 100644
+--- a/src/pages/Ratings.tsx
++++ b/src/pages/Ratings.tsx
+@@ -211,7 +211,7 @@ function MatchRatings({
+       <section className="mt-4">
+         <SectionHeading
+           title={t("match.tabRatings")}
+-          action={<span className="text-[11px] text-ink-3">{t("ratings.tapToRate")}</span>}
++          action={<span className="text-xs text-ink-3">{t("ratings.tapToRate")}</span>}
+         />
+         <ul className="mt-2 space-y-2">
+           {rows.map((rating, index) => (
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index f8307d2..c96b8eb 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -114,10 +114,10 @@ export default function Table() {
+                   )}
+                 >
+                   <TeamBadge team={club} size="sm" />
+-                  <span className="w-full truncate text-[11px] font-bold text-ink">
++                  <span className="w-full truncate text-xs font-bold text-ink">
+                     {localize(club.shortName)}
+                   </span>
+-                  <span className="text-[10px] text-ink-3">{t(`league.${club.league}`)}</span>
++                  <span className="text-xs text-ink-3">{t(`league.${club.league}`)}</span>
+                 </button>
+               </li>
+             ))}
+@@ -141,7 +141,7 @@ export default function Table() {
+               title={tabLabel(active)}
+               action={
+                 standingsQuery.data?.length ? (
+-                  <span className="text-[11px] text-ink-3">
++                  <span className="text-xs text-ink-3">
+                     {t("table.gw", { gw: standingsQuery.data[0]?.played ?? 0 })}
+                   </span>
+                 ) : null
+@@ -207,7 +207,7 @@ export default function Table() {
+                           ))}
+                         </ul>
+                       </div>
+-                      <p className="mt-2 text-[11px] text-ink-3">{t("table.expectedHint")}</p>
++                      <p className="mt-2 text-xs text-ink-3">{t("table.expectedHint")}</p>
+                     </>
+                   ) : (
+                     <EmptyState title={t("table.expectedEmpty")} hint={t("table.expectedEmptyHint")} />
+@@ -356,7 +356,7 @@ function BrowseContent() {
+                             <span className="block truncate text-sm font-bold text-ink">
+                               {localize(comp.name)}
+                             </span>
+-                            <span className="block truncate text-[11px] text-ink-3">
++                            <span className="block truncate text-xs text-ink-3">
+                               {soon ? t("browse.comingSoon") : t("browse.liveScores")}
+                             </span>
+                           </span>
+@@ -469,7 +469,7 @@ function FormStrip({ form }: { form: string }) {
+       role="img"
+       aria-label={`${t("table.form")}: ${label}`}
+       dir="ltr"
+-      className="flex flex-none gap-0.5 text-[11px] font-black leading-none"
++      className="flex flex-none gap-0.5 text-xs font-black leading-none"
+     >
+       {results.map((result, index) => (
+         <span
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index ec3cf6f..91f6448 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -206,7 +206,7 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+       {/* The squad rows carry colour-coded numbers with no key; a colour-blind
+           reader cannot tell goals from assists. The legend names both. */}
+       <div
+-        className="flex items-center gap-3 text-[11px] font-bold"
++        className="flex items-center gap-3 text-xs font-bold"
+         style={{ padding: "8px 0", borderBottom: "1px solid var(--border-subtle)" }}
+       >
+         <span className="flex items-center gap-1" style={{ color: "var(--volt)" }}>
+@@ -284,7 +284,7 @@ function SquadSection({
+                 dir={dir}
+                 className="player-row rounded-card border border-line bg-surface p-2.5"
+               >
+-                <Num className="player-number text-[11px] font-bold text-ink-3">
++                <Num className="player-number text-xs font-bold text-ink-3">
+                   {num(player.jersey ?? "–")}
+                 </Num>
+                 {/* A face for every squad member: the ESPN headshot where the
+@@ -297,7 +297,7 @@ function SquadSection({
+                         bidi run in Persian. */}
+                     <bdi>{localize(player.name)}</bdi>
+                   </span>
+-                  <span className="block truncate text-[11px] text-ink-3">
++                  <span className="block truncate text-xs text-ink-3">
+                     {player.espnPosition ?? t(`pos.${player.position}`)}
+                     {player.appearances
+                       ? ` · ${t("team.appearances", { count: num(player.appearances) })}`
+@@ -457,7 +457,7 @@ function StatCard({ title, rows }: { title: string; rows: Array<{ label: string;
+           <div key={row.label} className="flex items-center justify-between gap-3 py-2.5">
+             <dt className="text-xs text-ink-3">{row.label}</dt>
+             <dd>
+-              <Num className="text-base font-bold text-ink">{row.value}</Num>
++              <Num className="text-md font-bold text-ink">{row.value}</Num>
+             </dd>
+           </div>
+         ))}
+@@ -523,19 +523,19 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+         <SectionHeading title={t("xg.title")} />
+         <div className="mt-3 grid grid-cols-2 gap-4">
+           <div>
+-            <p className="text-[11px] font-semibold text-ink-3">{t("xg.for")}</p>
+-            <Num className="text-2xl font-black text-volt">{fixed(teamXg)}</Num>
++            <p className="text-xs font-semibold text-ink-3">{t("xg.for")}</p>
++            <Num className="text-lg font-black text-volt">{fixed(teamXg)}</Num>
+             {perMatch(teamXg) ? (
+-              <p className="text-[11px] text-ink-3">
++              <p className="text-xs text-ink-3">
+                 <Num>{perMatch(teamXg)}</Num> {t("xg.perMatch")}
+               </p>
+             ) : null}
+           </div>
+           <div className="text-end">
+-            <p className="text-[11px] font-semibold text-ink-3">{t("xg.against")}</p>
+-            <Num className="text-2xl font-black text-ink-2">{fixed(teamXga)}</Num>
++            <p className="text-xs font-semibold text-ink-3">{t("xg.against")}</p>
++            <Num className="text-lg font-black text-ink-2">{fixed(teamXga)}</Num>
+             {perMatch(teamXga) ? (
+-              <p className="text-[11px] text-ink-3">
++              <p className="text-xs text-ink-3">
+                 <Num>{perMatch(teamXga)}</Num> {t("xg.perMatch")}
+               </p>
+             ) : null}
+@@ -545,7 +545,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+         {delta != null ? (
+           <div className="mt-3 flex items-baseline justify-between gap-2 border-t border-line pt-3">
+             <span className="text-xs text-ink-2">{t("xg.points")}</span>
+-            <span className="text-[11px] text-ink-3">
++            <span className="text-xs text-ink-3">
+               <Num className="text-sm font-bold text-ink">{points}</Num>
+               {" · "}
+               {t("xg.expected")} <Num className="text-sm font-bold text-gold">{expected?.toFixed(1)}</Num>{" "}
+@@ -561,7 +561,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+           <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3">
+             {extra.map((row) => (
+               <div key={row.label}>
+-                <dt className="text-[11px] font-semibold text-ink-3">{row.label}</dt>
++                <dt className="text-xs font-semibold text-ink-3">{row.label}</dt>
+                 <dd>
+                   <Num className="text-sm font-bold text-ink">{row.value}</Num>
+                 </dd>
+@@ -574,7 +574,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+       {situations.length > 0 ? (
+         <Card className="p-4">
+           <SectionHeading title={t("xg.situations")} />
+-          <p className="mt-1 text-[11px] text-ink-3">{t("xg.situationsHint")}</p>
++          <p className="mt-1 text-xs text-ink-3">{t("xg.situationsHint")}</p>
+           <ul className="mt-3 space-y-3">
+             {situations.map((situation) => {
+               const key = SITUATION_KEY[situation.situation];
+@@ -582,7 +582,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+                 <li key={situation.situation}>
+                   <div className="flex items-baseline justify-between gap-2">
+                     <span className="text-xs text-ink-2">{key ? t(key) : situation.situation}</span>
+-                    <span className="text-[11px] text-ink-3">
++                    <span className="text-xs text-ink-3">
+                       <Num>{situation.shots ?? 0}</Num> {t("stats.shots")} · <Num>{situation.goals ?? 0}</Num>{" "}
+                       {t("stats.goals")}
+                     </span>
+@@ -594,7 +594,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+                         style={{ width: `${(((situation.xg ?? 0) / widest) * 100).toFixed(1)}%` }}
+                       />
+                     </span>
+-                    <Num className="w-9 flex-none text-end text-[11px] font-bold text-ink">
++                    <Num className="w-9 flex-none text-end text-xs font-bold text-ink">
+                       {fixed(situation.xg ?? 0)}
+                     </Num>
+                   </div>
+@@ -613,13 +613,13 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+           <ul className="mt-2 divide-y divide-line">
+             {players.slice(0, 10).map((player) => (
+               <li key={player.id} className="flex items-center gap-3 px-3 py-2">
+-                <Num className="grid h-6 w-6 flex-none place-items-center rounded-full bg-elevated text-[10px] text-ink-2">
++                <Num className="grid h-6 w-6 flex-none place-items-center rounded-full bg-elevated text-xs text-ink-2">
+                   {player.jersey ?? "–"}
+                 </Num>
+                 <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">
+                   {localize(player.name)}
+                 </span>
+-                <span className="flex-none text-[11px] text-ink-3">
++                <span className="flex-none text-xs text-ink-3">
+                   <Num className="me-2 text-ink-2">
+                     {t("xg.xa")} {fixed(player.xa ?? 0)}
+                   </Num>
+@@ -628,7 +628,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+               </li>
+             ))}
+           </ul>
+-          <p className="px-3 pb-3 pt-2 text-[11px] text-ink-3">{t("xg.source")}</p>
++          <p className="px-3 pb-3 pt-2 text-xs text-ink-3">{t("xg.source")}</p>
+         </Card>
+       ) : null}
+     </div>
+diff --git a/tokens.css b/tokens.css
+index a09e6b9..82a71aa 100644
+--- a/tokens.css
++++ b/tokens.css
+@@ -14,6 +14,10 @@
+   --border-subtle: #1e3b34;
+   --text-primary: #edf7f3;
+   --text-secondary: #93aea6;
++  /* Ink for text drawn ON a volt surface (the selected date chip, primary
++     surfaces). The base canvas colour is the darkest thing in the palette
++     and clears 8:1 on the volt fill; a light ink here would drop to 2:1. */
++  --text-on-volt: var(--bg-base);
+   /* #7B958C clears 4.5:1 on --bg-elevated as well as --bg-surface; the old
+      #6E8880 failed AA there and this token carries every 10-11px hint. */
+   --text-muted: #7b958c;
+@@ -36,6 +40,18 @@
+   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+   --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+ 
++  /* Type scale — 4 steps + display. Named so call sites express intent,
++     not pixels. (Named --type-* rather than --text-* because Tailwind v4
++     owns the --text-* namespace for font sizes — a --text-* token here
++     plus a --text-* mapping in @theme would self-reference and collapse.)
++     Persian floor (12px) is enforced by the fa overrides in index.css;
++     anything below 12 is lifted there automatically. */
++  --type-xs: 12px;      /* micro-labels, meta, hints — the floor */
++  --type-sm: 14px;      /* body text, team names, card primary */
++  --type-md: 16px;      /* section emphasis, list-row labels */
++  --type-lg: 22px;      /* card headers, screen subtitles */
++  --type-display: 48px; /* score hero, login wordmark */
++
+   /* Page gutter — shared horizontal space between content and screen edge.
+      16px from each edge on a 360px webview is the modern mobile norm; the
+      previous 12px (px-3) read as cramped. */
+-- 
+2.54.0.windows.1
+

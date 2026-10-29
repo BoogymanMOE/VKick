@@ -1,0 +1,111 @@
+From ba5b7f2c6957d117b0fa034e65841634e1c7f7d3 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 26 Oct 2026 20:26:08 +0330
+Subject: [PATCH 1/4] =?UTF-8?q?fix(i18n):=20one=20calendar=20system=20per?=
+ =?UTF-8?q?=20FA=20screen=20=E2=80=94=20strip=20+=20header=20now=20Jalali?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Under fa-IR, the date strip and the header subtitle forced
+`calendar: "gregory"`, printing "۲۶ اکتبر" while the calendar sheet
+rendered the same day as "۴ آبان" (Jalali). Two calendar systems on one
+screen is jarring for an Iranian audience.
+
+Fix: drop `calendar: "gregory"` from both formatters (DateStrip.tsx
+fullDate, Matches.tsx headerDayFormatter) so fa-IR uses its native
+Jalali calendar. Also render the chip day number via `toJalali(day).jd`
+under fa-IR so the visible chip matches the sheet. The chip's
+aria-label still names the same day its digits show.
+
+EN is unchanged (Gregorian, no edits). CalendarSheet.tsx is unchanged
+(already Jalali for FA). The strip's window math and `dayKey` stay
+Gregorian — only the printed number changes.
+
+Audit finding: audit-full.md, row 3 (HIGH).
+Files: src/components/DateStrip.tsx, src/pages/Matches.tsx.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/DateStrip.tsx | 15 ++++++++++-----
+ src/pages/Matches.tsx        |  5 ++---
+ 2 files changed, 12 insertions(+), 8 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index 9977a9f..c03fd28 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -1,5 +1,6 @@
+ import { useMemo } from "react";
+ import { useI18n } from "../i18n/context";
++import { toJalali } from "../lib/jalali";
+ 
+ /**
+  * Catalog keys, not display labels: `dates.day.*` carries the short day name in
+@@ -93,16 +94,16 @@ export function DateStrip({ selected, onSelect, daysWithFavorites }: DateStripPr
+   const locale = lang === "fa" ? "fa-IR" : undefined;
+   // Localized day number: Farsi reads ۱۴ not 14.
+   const digits = useMemo(() => new Intl.NumberFormat(locale, { useGrouping: false }), [locale]);
+-  // The chip's accessible name is the full date. `calendar: "gregory"` keeps
+-  // fa-IR on the same day number the chip prints (fa-IR's default Persian
+-  // calendar would name a different day than the digits show).
++  // The chip's accessible name is the full date, in the calendar the chip
++  // prints: fa-IR's default Solar Hijri (which the header and the calendar
++  // sheet use too). An explicit `calendar: "gregory"` here used to name a
++  // different day than the Jalali digits show.
+   const fullDate = useMemo(
+     () =>
+       new Intl.DateTimeFormat(locale, {
+         weekday: "long",
+         day: "numeric",
+         month: "long",
+-        calendar: "gregory",
+       }),
+     [locale],
+   );
+@@ -147,6 +148,10 @@ export function DateStrip({ selected, onSelect, daysWithFavorites }: DateStripPr
+         const isToday = key === todayKey;
+         const isSelected = key === selectedKey;
+         const hasFavorites = daysWithFavorites?.has(key) ?? false;
++        // Same calendar as the header and the calendar sheet: Solar Hijri
++        // under Persian. Only the PRINTED number changes; the window and the
++        // day keys stay Gregorian (they come from the feed's real dates).
++        const dayNum = lang === "fa" ? toJalali(day).jd : day.getDate();
+         return (
+           <button
+             key={key}
+@@ -171,7 +176,7 @@ export function DateStrip({ selected, onSelect, daysWithFavorites }: DateStripPr
+             <span className="max-w-full truncate text-xs font-bold leading-[14px]">
+               {t(`dates.day.${DAY_NAMES[day.getDay()]}` as never)}
+             </span>
+-            <span className="max-w-full truncate text-md font-extrabold leading-5">{digits.format(day.getDate())}</span>
++            <span className="max-w-full truncate text-md font-extrabold leading-5">{digits.format(dayNum)}</span>
+             {isToday ? (
+               <span
+                 aria-hidden="true"
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 5a942f0..8f19a44 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -275,15 +275,14 @@ export default function Matches() {
+   const hasFeedError = matchesQuery.isError && !matchesQuery.data;
+ 
+   // Localization: localized short-month header date and localized digits.
+-  // calendar: "gregory" keeps fa-IR on the same month/day number the strip's
+-  // chips print (fa-IR's default Persian calendar renames them).
++  // No explicit calendar: fa-IR's default Solar Hijri is what the strip's
++  // chips and the calendar sheet print, so the header matches them.
+   const headerDayFormatter = useMemo(
+     () =>
+       new Intl.DateTimeFormat(locale, {
+         weekday: "long",
+         day: "numeric",
+         month: "short",
+-        calendar: "gregory",
+       }),
+     [locale],
+   );
+-- 
+2.54.0.windows.1
+

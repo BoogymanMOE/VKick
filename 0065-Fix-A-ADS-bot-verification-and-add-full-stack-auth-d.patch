@@ -1,0 +1,172 @@
+From 8f7ac6028663da5739e350ba9629774ea58571c2 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 11 Oct 2026 15:04:04 +0330
+Subject: [PATCH 065/230] Fix A-ADS bot verification and add full-stack auth
+ debug logging
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A-ADS bot crawls the static HTML, so the ad iframe is now embedded in
+index.html (hidden) so it ships in the initial response. The client can
+still manage placement.
+
+Telegram auth debugging: all auth-probe guest logging and the
+requireUser initData-failure log now always emit (no AUTH_PROBE gate),
+and useAuth's enterApp logs are no longer dev-only, so the exact failure
+path is visible in both Render and browser consoles.
+
+Checks: typecheck, lint (2 pre-existing warnings only), prettier,
+tests passing, production build OK.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ index.html              | 17 +++++++++++++++++
+ server/routes/auth.ts   | 27 ++++++++++-----------------
+ server/routes/shared.ts |  6 ++++++
+ src/hooks/useAuth.tsx   | 21 ++++++++-------------
+ 4 files changed, 41 insertions(+), 30 deletions(-)
+
+diff --git a/index.html b/index.html
+index f611154..f671791 100644
+--- a/index.html
++++ b/index.html
+@@ -95,5 +95,22 @@
+       })();
+     </script>
+     <script type="module" src="/src/main.tsx"></script>
++    <!-- BEGIN AADS AD UNIT 2458182 -->
++    <div id="aads-frame" style="width: 100%; margin: auto; position: relative; z-index: 1; display: none">
++      <iframe
++        data-aa="2458182"
++        src="//acceptable.a-ads.com/2458182/?size=Adaptive"
++        style="
++          border: 0;
++          padding: 0;
++          width: 70%;
++          height: auto;
++          overflow: hidden;
++          display: block;
++          margin: auto;
++        "
++      ></iframe>
++    </div>
++    <!-- END AADS AD UNIT 2458182 -->
+   </body>
+ </html>
+diff --git a/server/routes/auth.ts b/server/routes/auth.ts
+index 4fb04a8..a4007f2 100644
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -30,27 +30,19 @@ export const authRouter = express.Router();
+ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
+ 
+ /* ---------------------------------------------------------------------------
+- * TEMP AUTH PROBE — delete this block and its one call site once a real
+- * Telegram client has been observed on a device.
+- *
+- * Off by default (AUTH_PROBE != "1" prints nothing), so production and the
+- * test suite stay silent; the call site can stay in place until then.
+- *
+- * One line per /api/auth/guest call so a phone test is readable at a glance:
+- * was initData sent, did it verify, and did the user end up Telegram or a
+- * guest.
+- *
+- * It logs initData KEY NAMES and booleans only — never the initData string,
+- * never the hash, never the signature value, never the bot token. Field
+- * names are not secrets and are what actually matter here: whether the
+- * client sent `signature` decides which check-string algorithm is correct.
++ * Auth probe — logs every guest attempt so Telegram login failures are
++ * visible in production Render logs. Logs initData KEY NAMES and booleans
++ * only — never the initData string, never the hash, never the signature
++ * value, never the bot token. Field names are not secrets and are what
++ * actually matter here: whether the client sent `signature` decides which
++ * check-string algorithm is correct.
+  */
+ function authProbeGuest(
+   initData: string,
+   verified: { ok: true } | { ok: false; reason: string } | null,
+   outcome: "telegram" | "guest",
+ ): void {
+-  if (process.env.AUTH_PROBE !== "1") return;
++  // Always log: the user needs to see why Telegram login fails in the Render logs.
+   const keys = initData ? [...new URLSearchParams(initData).keys()].sort().join(",") : "";
+   const hasSignature = initData ? new URLSearchParams(initData).has("signature") : false;
+   const verdict = !initData
+@@ -63,7 +55,7 @@ function authProbeGuest(
+           ? "pass"
+           : `fail(${verified.reason})`;
+   console.log(
+-    `[auth:guest] PROBE initData=${initData ? "yes" : "no"} verify=${verdict} ` +
++    `[auth:guest] initData=${initData ? "yes" : "no"} verify=${verdict} ` +
+       `signature=${hasSignature ? "yes" : "no"} outcome=${outcome} keys=[${keys}]`,
+   );
+ }
+@@ -166,7 +158,8 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
+   // This is the key diagnostic for "why am I a guest inside Telegram" — without it
+   // we only see successful telegram logins and guest logins with no initData, never
+   // the middle case where the client sent initData but the server rejected it.
+-  if (initData && !verified?.ok && process.env.AUTH_PROBE === "1") {
++  // Always log: the user needs to see the exact failure reason in Render logs.
++  if (initData && !verified?.ok) {
+     console.log(
+       `[auth:guest] initData VERIFICATION FAILED reason=${verified?.reason ?? "unknown"} ` +
+         `botToken=${botToken() ? "set" : "MISSING"} keys=[${[...new URLSearchParams(initData).keys()].sort().join(",")}]`,
+diff --git a/server/routes/shared.ts b/server/routes/shared.ts
+index 390ffd3..bf547a8 100644
+--- a/server/routes/shared.ts
++++ b/server/routes/shared.ts
+@@ -103,6 +103,12 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
+   if (real.ok) {
+     tg = real.user;
+   } else {
++    // Always log initData verification failures so the exact reason is visible
++    // in server logs, even when the caller falls through to the dev token path.
++    console.log(
++      `[auth:requireUser] initData VERIFICATION FAILED reason=${real.reason ?? "unknown"} ` +
++        `botToken=${botToken() ? "set" : "MISSING"}`,
++    );
+     const dev = verifyDevToken(token, devSecret());
+     if (dev.ok) {
+       tg = dev.user;
+diff --git a/src/hooks/useAuth.tsx b/src/hooks/useAuth.tsx
+index 8082f7c..7adcdc5 100644
+--- a/src/hooks/useAuth.tsx
++++ b/src/hooks/useAuth.tsx
+@@ -96,24 +96,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+       // login into a guest account with no bot pushes.
+       const tg = await waitForTelegram();
+       const initData = telegramInitData();
+-      if (import.meta.env.DEV) {
+-        console.log(
+-          `[auth] enterApp tg=${tg ? "present" : "null"} initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
+-        );
+-      }
++      console.log(
++        `[auth] enterApp tg=${tg ? "present" : "null"} initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
++      );
+       const res = await api.guest(getDeviceId(), initData);
+-      if (import.meta.env.DEV) {
+-        console.log(
+-          `[auth] enterApp result mode=${res.mode} token=${res.token.slice(0, 8)}... user=${res.user.display_name}`,
+-        );
+-      }
++      console.log(
++        `[auth] enterApp result mode=${res.mode} token=${res.token.slice(0, 8)}... user=${res.user.display_name}`,
++      );
++
+       if (!res.ok) throw new Error("GUEST_ENTRY_FAILED");
+       // Persistent slot either way: entry must survive restarts.
+       applyAuthSuccess(res.token, true);
+     } catch (err) {
+-      if (import.meta.env.DEV) {
+-        console.error(`[auth] enterApp failed:`, err);
+-      }
++      console.error(`[auth] enterApp failed:`, err);
+       enteredRef.current = false; // allow a retry from the Login screen
+       throw err;
+     } finally {
+-- 
+2.54.0.windows.1
+

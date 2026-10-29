@@ -1,0 +1,169 @@
+From 51f47e7593992ff30416181dfde87dcc29d0c064 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 9 Oct 2026 21:05:15 +0330
+Subject: [PATCH 040/230] Claim the anchor on the first club pick so a
+ same-tick second pick cannot re-anchor
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Two onboarding club tiles tapped in the same tick both saw the favorite count
+as 0 and both ran the follow-then-anchor flow, so two anchor PUTs fired and the
+last one won — the anchor landed on the second club, not the first. A
+synchronous first-pick coordinator now claims the anchor for the earliest pick;
+any pick arriving while it is in flight is only followed, and the claim is
+released on settle so a real retry can still anchor. A same-tick test pins one
+anchor request, on the first-picked club, with both clubs followed.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/hooks/useFavorites.ts | 20 +++++++++++++------
+ src/lib/favoriteAnchor.ts | 30 ++++++++++++++++++++++++++++
+ tests/anchorRace.test.ts  | 42 ++++++++++++++++++++++++++++++++++++++-
+ 3 files changed, 85 insertions(+), 7 deletions(-)
+
+diff --git a/src/hooks/useFavorites.ts b/src/hooks/useFavorites.ts
+index 7b171d1..0889065 100644
+--- a/src/hooks/useFavorites.ts
++++ b/src/hooks/useFavorites.ts
+@@ -1,6 +1,6 @@
+ import { useMemo } from "react";
+ import { useFavorites as useFavoritesQuery, useFollowedLeagues } from "./useApi";
+-import { followThenAnchor } from "../lib/favoriteAnchor";
++import { createFirstPickCoordinator } from "../lib/favoriteAnchor";
+ import type { Team } from "../types";
+ 
+ /**
+@@ -37,6 +37,18 @@ export function useFavorites() {
+   const intlCount = useMemo(() => teams.filter(isInternational).length, [teams]);
+   const clubCount = count - intlCount;
+ 
++  // The first-pick coordinator holds the in-tick anchor claim (see
++  // lib/favoriteAnchor.ts): two club tiles tapped in the same tick follow both
++  // clubs but send exactly ONE anchor request — the first-picked club's.
++  const coordinateFirstPick = useMemo(
++    () =>
++      createFirstPickCoordinator(
++        (id: string) => add.mutateAsync(id),
++        (id: string) => setAnchor.mutateAsync(id),
++      ),
++    [add, setAnchor],
++  );
++
+   const toggle = (team: Team): FavoriteResult => {
+     if (isFavorite(team.id)) {
+       remove.mutate(team.id);
+@@ -65,11 +77,7 @@ export function useFavorites() {
+     const intl = isInternational(team);
+     const full = intl ? intlCount >= MAX_INTERNATIONALS : clubCount >= MAX_FAVORITES;
+     if (full) return { ok: false, reason: intl ? "intlCap" : "cap" };
+-    void followThenAnchor(
+-      team.id,
+-      (id) => add.mutateAsync(id),
+-      (id) => setAnchor.mutateAsync(id),
+-    ).catch(() => {
++    void coordinateFirstPick(team.id).catch(() => {
+       /* surfaced by the mutations' onError handlers (see doc block) */
+     });
+     return { ok: true, added: true, team };
+diff --git a/src/lib/favoriteAnchor.ts b/src/lib/favoriteAnchor.ts
+index 8e2ef0e..11647e2 100644
+--- a/src/lib/favoriteAnchor.ts
++++ b/src/lib/favoriteAnchor.ts
+@@ -72,3 +72,33 @@ export async function followThenAnchor(
+     }
+   }
+ }
++
++/**
++ * A SYNCHRONOUS first-pick coordinator for the picker.
++ *
++ * `followThenAnchor` fixes the follow-before-anchor ordering, but it is still
++ * called once per pick — so two club tiles tapped in the SAME tick (both see
++ * the favorite count as 0, before the optimistic update re-renders the list)
++ * both run the anchor step, and the last PUT wins: two anchor requests fire and
++ * the anchor ends up on the second club instead of the first.
++ *
++ * This wraps that flow with an in-tick claim: the FIRST pick takes the claim
++ * and owns the anchor; any pick that arrives while the first is still in flight
++ * is only FOLLOWED (never anchored). The claim is released when the first flow
++ * settles, so a genuine retry after a failure can still anchor. The claim is
++ * set and read synchronously, so no amount of same-tick batching can slip a
++ * second anchor through.
++ */
++export function createFirstPickCoordinator(
++  follow: (teamId: string) => Promise<unknown>,
++  anchor: (teamId: string) => Promise<unknown>,
++): (teamId: string) => Promise<void> {
++  let claimed = false;
++  return function pick(teamId: string): Promise<void> {
++    if (claimed) return follow(teamId).then(() => undefined);
++    claimed = true;
++    return followThenAnchor(teamId, follow, anchor).finally(() => {
++      claimed = false;
++    });
++  };
++}
+diff --git a/tests/anchorRace.test.ts b/tests/anchorRace.test.ts
+index 7cba8e3..18a9e75 100644
+--- a/tests/anchorRace.test.ts
++++ b/tests/anchorRace.test.ts
+@@ -12,7 +12,11 @@
+  * and failures propagate so the UI can surface them.
+  */
+ import { strict as assert } from "node:assert";
+-import { followThenAnchor, isRetryableAnchorError } from "../src/lib/favoriteAnchor.js";
++import {
++  createFirstPickCoordinator,
++  followThenAnchor,
++  isRetryableAnchorError,
++} from "../src/lib/favoriteAnchor.js";
+ 
+ /** An ApiRequestError-shaped failure (src/lib/api.ts attaches `status`). */
+ function httpError(status: number): Error & { status: number } {
+@@ -143,5 +147,41 @@ export async function runAnchorRaceTests(): Promise<void> {
+     assert.equal(isRetryableAnchorError(httpError(403)), false);
+   }
+ 
++  // 7. Same-tick double pick: two club tiles tapped in ONE tick (both still see
++  //    count 0) must follow both clubs but send exactly ONE anchor request, and
++  //    that anchor must be the FIRST-picked club — not the last one to finish.
++  {
++    const calls: string[] = [];
++    const pick = createFirstPickCoordinator(
++      async (id) => {
++        calls.push(`follow:${id}`);
++      },
++      async (id) => {
++        calls.push(`anchor:${id}`);
++      },
++    );
++    // Fired together, before either has settled.
++    await Promise.all([pick("359"), pick("349")]);
++    assert.deepEqual(
++      calls.filter((c) => c.startsWith("anchor:")),
++      ["anchor:359"],
++      "exactly one anchor request, for the first-picked club",
++    );
++    assert.deepEqual(
++      calls.filter((c) => c.startsWith("follow:")).sort(),
++      ["follow:349", "follow:359"],
++      "both clubs are still followed",
++    );
++
++    // The claim releases when the first flow settles, so a later genuine pick
++    // (e.g. after a failed first attempt) can still claim the anchor.
++    await pick("111");
++    assert.equal(
++      calls.filter((c) => c.startsWith("anchor:")).at(-1),
++      "anchor:111",
++      "a later pick can anchor once the previous flow has settled",
++    );
++  }
++
+   console.log("  anchor ordering + retry OK");
+ }
+-- 
+2.54.0.windows.1
+

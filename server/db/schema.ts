@@ -711,7 +711,7 @@ export function migrate(db: DatabaseSync): void {
       DROP TABLE user_credentials;
       ALTER TABLE user_credentials_v2 RENAME TO user_credentials;
       PRAGMA foreign_keys = ON;
-    `);
+  `);
   }
 
   // bot_push_queue gained retry bookkeeping after v1; older DBs get the
@@ -846,4 +846,25 @@ export function migrate(db: DatabaseSync): void {
       ? `[db] team seed inserted ${seeded} missing row(s)`
       : "[db] team seed: all rows already present (no-op)",
   );
+
+  // Availability is an additive cache for existing installations.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS team_availability (
+      team_id         TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+      player_id       TEXT NOT NULL,
+      player_name     TEXT NOT NULL,
+      status          TEXT NOT NULL,
+      reason          TEXT,
+      expected_return TEXT,
+      fetched_at      TEXT NOT NULL,
+      PRIMARY KEY (team_id, player_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_team_availability_team ON team_availability(team_id);
+
+    -- Separate fetch metadata lets an empty injury report be cached too.
+    CREATE TABLE IF NOT EXISTS team_availability_cache (
+      team_id   TEXT PRIMARY KEY REFERENCES teams(id) ON DELETE CASCADE,
+      fetched_at TEXT NOT NULL
+    );
+  `);
 }

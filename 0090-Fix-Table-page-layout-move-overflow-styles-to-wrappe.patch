@@ -1,0 +1,28 @@
+From 5e39bcc6f63e7bfc05aff60e218af939c5302a28 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 19:39:17 +0330
+Subject: [PATCH 090/230] Fix Table page layout: move overflow styles to
+ wrapper, keep min-w on styled container
+
+---
+ src/pages/Table.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index 52549de..f6a8bcc 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -189,8 +189,8 @@ export default function Table() {
+             ) : null}
+ 
+             {view === "actual" ? (
+-              <div className="overflow-x-auto rounded-card border border-line bg-surface">
+-                <div className="min-w-[640px]">
++              <div className="overflow-x-auto">
++                <div className="min-w-[640px] overflow-hidden rounded-card border border-line bg-surface">
+                   <div
+                     aria-hidden="true"
+                     className="grid grid-cols-[1.5rem_1fr_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_1.5rem_3rem] gap-2 border-b border-line bg-elevated px-3 py-2 label text-ink-3"
+-- 
+2.54.0.windows.1
+

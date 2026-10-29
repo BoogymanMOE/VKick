@@ -1,0 +1,231 @@
+From d51d3fd8ddd394bc4bd246e422bf180a8bbf282f Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 00:32:03 +0330
+Subject: [PATCH 121/230] fix(server): gate ratings notifications and bot copy
+ behind RATINGS_ENABLED
+
+The rating-window push is now dropped at queue time and at send time, and the /start welcome stops promising player ratings while the feature is hidden.
+---
+ server/bot/index.ts         |  8 +++--
+ server/messages.ts          | 34 ++++++++++++++------
+ server/notifications.ts     | 14 ++++++--
+ tests/notifications.test.ts | 64 +++++++++++++++++++++++++++++++++++--
+ 4 files changed, 103 insertions(+), 17 deletions(-)
+
+diff --git a/server/bot/index.ts b/server/bot/index.ts
+index 89c43a0..280b234 100644
+--- a/server/bot/index.ts
++++ b/server/bot/index.ts
+@@ -3,7 +3,7 @@ import path from "node:path";
+ import { fileURLToPath } from "node:url";
+ import { Bot, InlineKeyboard, InputFile } from "grammy";
+ import { getDb, all, run, get } from "../db/index.js";
+-import { asPushKind, isOptedOut, shouldSkipPredictionPush } from "../notifications.js";
++import { asPushKind, isOptedOut, shouldSkipPredictionPush, shouldSkipRatingsPush } from "../notifications.js";
+ import {
+   asPushLang,
+   botCommandMenu,
+@@ -307,7 +307,11 @@ async function drainPushes(): Promise<void> {
+       // mute it is hidden — those rows are retired as sent-without-delivery
+       // rather than delivered late if the flag ever comes back.
+       const kind = asPushKind(row.kind);
+-      if (shouldSkipPredictionPush(kind) || isOptedOut(db, row.telegram_id, kind)) {
++      if (
++        shouldSkipPredictionPush(kind) ||
++        shouldSkipRatingsPush(kind) ||
++        isOptedOut(db, row.telegram_id, kind)
++      ) {
+         run(db, "UPDATE bot_push_queue SET sent_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
+         continue;
+       }
+diff --git a/server/messages.ts b/server/messages.ts
+index defc927..e8443fe 100644
+--- a/server/messages.ts
++++ b/server/messages.ts
+@@ -18,7 +18,7 @@
+  * it here would mean two tables drifting apart. Numbers in interpolated values
+  * (scores, minutes) stay Latin too, matching how the app renders scorelines.
+  */
+-import { predictionsEnabled } from "./features.js";
++import { predictionsEnabled, ratingsEnabled } from "./features.js";
+ export type PushLang = "en" | "fa";
+ 
+ /** Anything that isn't `fa` is English — same default as the `users` column. */
+@@ -100,16 +100,30 @@ export function ratingsPush(lang: PushLang, v: MatchPushVars): string {
+  */
+ 
+ export function botStartText(lang: PushLang): string {
+-  // With predictions gated off the welcome must not promise them: the buttons,
+-  // tabs and leaderboards it names no longer exist in the app.
+-  if (!predictionsEnabled()) {
+-    return lang === "fa"
+-      ? "به Vkick خوش آمدی! ⚽\n\nباشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، نتایج زنده را ببین، جدول‌ها را نگاه کن و به بازیکنان تأثیرگذار امتیاز بده.\n\nبرای شروع دکمه زیر را بزن."
+-      : "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, follow live scores, check every table, and rate the players who mattered most.\n\nTap below to get started.";
++  // Gated features must not be promised in the welcome: with a flag off the
++  // buttons, tabs and screens the copy names do not exist in the app.
++  const predict = predictionsEnabled();
++  const rate = ratingsEnabled();
++
++  if (lang === "fa") {
++    const line = predict
++      ? rate
++        ? "باشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، ترکیب و تعویض و شوت و بازیکن برتر هر بازی را پیش‌بینی کن، در جدول امتیازهای فصل بالا برو و به بازیکنان تأثیرگذار امتیاز بده."
++        : "باشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، ترکیب و تعویض و شوت و بازیکن برتر هر بازی را پیش‌بینی کن و در جدول امتیازهای فصل بالا برو."
++      : rate
++        ? "باشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، نتایج زنده را ببین، جدول‌ها را نگاه کن و به بازیکنان تأثیرگذار امتیاز بده."
++        : "باشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، نتایج زنده را ببین و جدول‌ها را نگاه کن.";
++    return `به Vkick خوش آمدی! ⚽\n\n${line}\n\nبرای شروع دکمه زیر را بزن.`;
+   }
+-  return lang === "fa"
+-    ? "به Vkick خوش آمدی! ⚽\n\nباشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، ترکیب و تعویض و شوت و بازیکن برتر هر بازی را پیش‌بینی کن، در جدول امتیازهای فصل بالا برو و به بازیکنان تأثیرگذار امتیاز بده.\n\nبرای شروع دکمه زیر را بزن."
+-    : "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, predict lineups, subs, shots and standout players, climb the season leaderboards, and rate the players who mattered most.\n\nTap below to get started.";
++
++  const line = predict
++    ? rate
++      ? "Follow your favorite clubs and leagues, predict lineups, subs, shots and standout players, climb the season leaderboards, and rate the players who mattered most."
++      : "Follow your favorite clubs and leagues, predict lineups, subs, shots and standout players, and climb the season leaderboards."
++    : rate
++      ? "Follow your favorite clubs and leagues, follow live scores, check every table, and rate the players who mattered most."
++      : "Follow your favorite clubs and leagues, follow live scores and check every table.";
++  return `Welcome to Vkick! ⚽\n\n${line}\n\nTap below to get started.`;
+ }
+ 
+ export function botNoAccountText(lang: PushLang): string {
+diff --git a/server/notifications.ts b/server/notifications.ts
+index 492d586..fe3ebe1 100644
+--- a/server/notifications.ts
++++ b/server/notifications.ts
+@@ -36,7 +36,7 @@ import {
+   type PushLang,
+ } from "./messages.js";
+ import { lineupPublished } from "./predictions/window.js";
+-import { predictionsEnabled } from "./features.js";
++import { predictionsEnabled, ratingsEnabled } from "./features.js";
+ 
+ /** Every kind of push the app sends. Also the dedupe stage for matchday pushes. */
+ export type PushKind = "goal" | "lineup" | "lock" | "halftime" | "ratings";
+@@ -64,6 +64,16 @@ export function shouldSkipPredictionPush(kind: PushKind): boolean {
+   return !predictionsEnabled() && PREDICTION_KINDS.has(kind);
+ }
+ 
++/**
++ * The rating-window push belongs to the (currently hidden) player-ratings
++ * feature. With `RATINGS_ENABLED` off there is nowhere to spend the rating
++ * cards, and the Profile switch that muted it is hidden too — so it is dropped
++ * at the emit site AND at send time, exactly like the prediction kinds.
++ */
++export function shouldSkipRatingsPush(kind: PushKind): boolean {
++  return !ratingsEnabled() && kind === "ratings";
++}
++
+ /**
+  * Which Profile switch owns each kind. `deadline` covers the whole prediction
+  * lifecycle (the sub board opening on the lineup drop, locking at half-time,
+@@ -377,7 +387,7 @@ export function queueMatchdayAlerts(db: DB, now: Date = new Date()): number {
+  * same club each get their own wording.
+  */
+ function emit(db: DB, matchId: string, stage: PushKind, copy: (lang: PushLang) => string): number {
+-  if (shouldSkipPredictionPush(stage)) return 0;
++  if (shouldSkipPredictionPush(stage) || shouldSkipRatingsPush(stage)) return 0;
+   let sent = 0;
+   for (const r of matchRecipients(db, matchId, stage)) {
+     if (!claimNotification(db, r.telegramId, matchId, stage)) continue;
+diff --git a/tests/notifications.test.ts b/tests/notifications.test.ts
+index 72cb900..8ba4cca 100644
+--- a/tests/notifications.test.ts
++++ b/tests/notifications.test.ts
+@@ -22,8 +22,14 @@ import {
+   queueGoalAlerts,
+   queueMatchdayAlerts,
+   shouldSkipPredictionPush,
++  shouldSkipRatingsPush,
+ } from "../server/notifications.js";
+-import { predictionsEnabled, setPredictionsEnabledForTest } from "../server/features.js";
++import {
++  predictionsEnabled,
++  ratingsEnabled,
++  setPredictionsEnabledForTest,
++  setRatingsEnabledForTest,
++} from "../server/features.js";
+ import { asPushLang, botCommandMenu, botStartText } from "../server/messages.js";
+ 
+ /** Fixed clock: the producers take `now`, so every window is deterministic. */
+@@ -612,10 +618,60 @@ function testPredictionPushesGatedOff() {
+   db.close();
+ }
+ 
++/**
++ * RATINGS_ENABLED=false retires the rating-window push: a finished match queues
++ * nothing, a row already in the queue is skipped at send time, and goal alerts
++ * keep working. Turning the flag back on restores the old behaviour.
++ */
++function testRatingsPushesGatedOff() {
++  const db = tempDb();
++  seed(db);
++  // A finished match inside the 6h rating window is exactly what used to queue
++  // the "rate the players" push.
++  addMatch(db, "m_ft", "finished", minutesFromNow(-120), { home: 2, away: 1 });
++
++  setRatingsEnabledForTest(false);
++  assert.equal(ratingsEnabled(), false, "test seam puts the flag off");
++
++  assert.equal(queueMatchdayAlerts(db, NOW), 0, "flag off queues no rating push");
++  assert.deepEqual(idsOf(db, "ratings"), [], "no rating-window pushes");
++  // Nothing was claimed, so turning the flag back on can still send it.
++  assert.equal(shouldSkipRatingsPush("ratings"), true, "queued ratings rows are skipped when off");
++  assert.equal(shouldSkipRatingsPush("goal"), false, "goal rows are never skipped by the ratings gate");
++
++  const goalsOff = queueGoalAlerts(db, [
++    { matchId: "m_ft", scoringTeamId: "H", scorerName: "Saka", minute: "55", homeScore: 2, awayScore: 1 },
++  ]);
++  assert.equal(goalsOff, 3, "goal alerts still deliver with ratings off");
++  assert.deepEqual(idsOf(db, "goal"), ["u1", "u2", "u3"]);
++
++  // Bot copy: the welcome no longer promises rating players.
++  assert.ok(
++    !/\brat(e|ing)\b|\bratings\b/i.test(botStartText("en")),
++    `welcome must not promise ratings: ${botStartText("en")}`,
++  );
++  assert.ok(
++    !botStartText("fa").includes("امتیاز بده"),
++    `Persian welcome must not promise ratings: ${botStartText("fa")}`,
++  );
++
++  // Flag on: the rating-window push returns for the same fixture.
++  setRatingsEnabledForTest(true);
++  assert.equal(shouldSkipRatingsPush("ratings"), false, "send-time gate opens with the flag on");
++  assert.equal(queueMatchdayAlerts(db, NOW), 3, "flag on queues the rating-window push");
++  assert.deepEqual(idsOf(db, "ratings"), ["u1", "u2", "u3"], "ratings push is back");
++  assert.ok(/\brat(e|ing)\b/i.test(botStartText("en")), "welcome promises ratings again");
++
++  setRatingsEnabledForTest(null);
++  db.close();
++}
++
+ export async function runNotificationTests(): Promise<void> {
+-  // The legacy-behaviour tests below assert that prediction pushes fire; they
+-  // run with the flag on, and testPredictionPushesGatedOff covers the off state.
++  // The legacy-behaviour tests below assert that prediction and rating pushes
++  // fire; they run with both flags on, and the two gated-off tests below cover
++  // the hidden states.
+   setPredictionsEnabledForTest(true);
++  setRatingsEnabledForTest(true);
+   testDedupeAndBothClubs();
+   testPreferenceGates();
+   testWindowGates();
+@@ -627,10 +683,12 @@ export async function runNotificationTests(): Promise<void> {
+   testKindColumnBackfill();
+   testDeliverabilityFilter();
+   testPredictionPushesGatedOff();
++  testRatingsPushesGatedOff();
+   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
+   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
+   console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
+   console.log("  notifications: followed leagues deliver stages + goals, deduped against clubs OK");
+   console.log("  notifications: guest/pwd/dev accounts never enter the push queue OK");
+   console.log("  notifications: PREDICTIONS_ENABLED gates lineup/lock/halftime, goals+ratings survive OK");
++  console.log("  notifications: RATINGS_ENABLED gates the rating-window push, goals survive OK");
+ }
+-- 
+2.54.0.windows.1
+

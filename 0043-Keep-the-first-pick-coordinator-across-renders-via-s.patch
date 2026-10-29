@@ -1,0 +1,26 @@
+From 2cc99a7a9ff3614d72f17a997d6b0e15715cb6dc Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 10 Oct 2026 00:29:19 +0330
+Subject: [PATCH 043/230] Keep the first-pick coordinator across renders via
+ stable mutateAsync deps
+
+---
+ src/hooks/useFavorites.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/hooks/useFavorites.ts b/src/hooks/useFavorites.ts
+index 0889065..e47b591 100644
+--- a/src/hooks/useFavorites.ts
++++ b/src/hooks/useFavorites.ts
+@@ -46,7 +46,7 @@ export function useFavorites() {
+         (id: string) => add.mutateAsync(id),
+         (id: string) => setAnchor.mutateAsync(id),
+       ),
+-    [add, setAnchor],
++    [add.mutateAsync, setAnchor.mutateAsync],
+   );
+ 
+   const toggle = (team: Team): FavoriteResult => {
+-- 
+2.54.0.windows.1
+

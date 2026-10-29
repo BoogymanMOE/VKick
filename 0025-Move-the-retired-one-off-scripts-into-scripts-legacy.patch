@@ -1,0 +1,341 @@
+From c62eb3be7792d571fbca1e02848b8441f085c4de Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 7 Oct 2026 01:29:00 +0330
+Subject: [PATCH 025/230] Move the retired one-off scripts into scripts/legacy
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The debug, audit and ad-hoc verification scripts are not part of any npm
+script and were cluttering scripts/ next to the asset tools that are
+(fetch-logos, import-logos, make-cover). They move wholesale — no content
+changes beyond the legacy audit pages that probed the now-removed replay
+route.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ scripts/{ => legacy}/add-favs.ts        | 2 +-
+ scripts/{ => legacy}/audit-fa.mjs       | 0
+ scripts/{ => legacy}/audit-fixed.mjs    | 1 -
+ scripts/{ => legacy}/audit-fresh.mjs    | 1 -
+ scripts/{ => legacy}/check-bar.ts       | 2 +-
+ scripts/{ => legacy}/check-fk.ts        | 2 +-
+ scripts/{ => legacy}/check-stats.ts     | 4 ++--
+ scripts/{ => legacy}/check-team.ts      | 2 +-
+ scripts/{ => legacy}/check-teams.ts     | 2 +-
+ scripts/{ => legacy}/clear-test.ts      | 2 +-
+ scripts/{ => legacy}/debug-sync.ts      | 2 +-
+ scripts/{ => legacy}/debug-understat.ts | 0
+ scripts/{ => legacy}/debug-upsert.ts    | 2 +-
+ scripts/{ => legacy}/list-laliga.ts     | 2 +-
+ scripts/legacy/make-cover.mjs           | 6 +++---
+ scripts/{ => legacy}/test-ala.ts        | 2 +-
+ scripts/{ => legacy}/test-bar.ts        | 2 +-
+ scripts/{ => legacy}/test-cron.ts       | 2 +-
+ scripts/{ => legacy}/test-understat.ts  | 2 +-
+ scripts/{ => legacy}/ui-rtl-check.mjs   | 0
+ scripts/{ => legacy}/verify-data.ts     | 2 +-
+ scripts/{ => legacy}/verify-rma.ts      | 2 +-
+ 22 files changed, 20 insertions(+), 22 deletions(-)
+ rename scripts/{ => legacy}/add-favs.ts (94%)
+ rename scripts/{ => legacy}/audit-fa.mjs (100%)
+ rename scripts/{ => legacy}/audit-fixed.mjs (99%)
+ rename scripts/{ => legacy}/audit-fresh.mjs (99%)
+ rename scripts/{ => legacy}/check-bar.ts (73%)
+ rename scripts/{ => legacy}/check-fk.ts (92%)
+ rename scripts/{ => legacy}/check-stats.ts (78%)
+ rename scripts/{ => legacy}/check-team.ts (84%)
+ rename scripts/{ => legacy}/check-teams.ts (74%)
+ rename scripts/{ => legacy}/clear-test.ts (87%)
+ rename scripts/{ => legacy}/debug-sync.ts (70%)
+ rename scripts/{ => legacy}/debug-understat.ts (100%)
+ rename scripts/{ => legacy}/debug-upsert.ts (95%)
+ rename scripts/{ => legacy}/list-laliga.ts (82%)
+ rename scripts/{ => legacy}/test-ala.ts (70%)
+ rename scripts/{ => legacy}/test-bar.ts (70%)
+ rename scripts/{ => legacy}/test-cron.ts (67%)
+ rename scripts/{ => legacy}/test-understat.ts (84%)
+ rename scripts/{ => legacy}/ui-rtl-check.mjs (100%)
+ rename scripts/{ => legacy}/verify-data.ts (93%)
+ rename scripts/{ => legacy}/verify-rma.ts (97%)
+
+diff --git a/scripts/add-favs.ts b/scripts/legacy/add-favs.ts
+similarity index 94%
+rename from scripts/add-favs.ts
+rename to scripts/legacy/add-favs.ts
+index ccb9de3..bcdd3a2 100644
+--- a/scripts/add-favs.ts
++++ b/scripts/legacy/add-favs.ts
+@@ -1,4 +1,4 @@
+-import { getDb } from "../server/db/index.js";
++import { getDb } from "../../server/db/index.js";
+ 
+ const db = getDb();
+ 
+diff --git a/scripts/audit-fa.mjs b/scripts/legacy/audit-fa.mjs
+similarity index 100%
+rename from scripts/audit-fa.mjs
+rename to scripts/legacy/audit-fa.mjs
+diff --git a/scripts/audit-fixed.mjs b/scripts/legacy/audit-fixed.mjs
+similarity index 99%
+rename from scripts/audit-fixed.mjs
+rename to scripts/legacy/audit-fixed.mjs
+index 9e3cbf5..11147ec 100644
+--- a/scripts/audit-fixed.mjs
++++ b/scripts/legacy/audit-fixed.mjs
+@@ -96,7 +96,6 @@ const pages = [
+   ["05-table", "table"],
+   ["06-stats", "stats"],
+   ["07-leaderboards", "leaderboards"],
+-  ["08-replay", "match/401882858/replay"],
+   ["09-profile", "profile"],
+ ];
+ 
+diff --git a/scripts/audit-fresh.mjs b/scripts/legacy/audit-fresh.mjs
+similarity index 99%
+rename from scripts/audit-fresh.mjs
+rename to scripts/legacy/audit-fresh.mjs
+index a386ccd..3629269 100644
+--- a/scripts/audit-fresh.mjs
++++ b/scripts/legacy/audit-fresh.mjs
+@@ -33,7 +33,6 @@ const pages = [
+   ["11-myteams", "my-teams"],
+   ["12-matchdetail-live", `match/${live}`],
+   ["13-matchdetail-finished", `match/${big}`],
+-  ["14-replay", `match/${big}/replay`],
+   ["15-team", `team/${big ? "" : ""}`].filter(Boolean), // replaced below
+ ];
+ pages.pop(); // drop the placeholder team entry
+diff --git a/scripts/check-bar.ts b/scripts/legacy/check-bar.ts
+similarity index 73%
+rename from scripts/check-bar.ts
+rename to scripts/legacy/check-bar.ts
+index 3b22da9..85a491c 100644
+--- a/scripts/check-bar.ts
++++ b/scripts/legacy/check-bar.ts
+@@ -1,4 +1,4 @@
+-import { getDb } from "../server/db/index.js";
++import { getDb } from "../../server/db/index.js";
+ 
+ const db = getDb();
+ const bar = db.prepare("SELECT id, abbreviation FROM teams WHERE abbreviation = 'BAR'").get();
+diff --git a/scripts/check-fk.ts b/scripts/legacy/check-fk.ts
+similarity index 92%
+rename from scripts/check-fk.ts
+rename to scripts/legacy/check-fk.ts
+index 1009778..bf91e96 100644
+--- a/scripts/check-fk.ts
++++ b/scripts/legacy/check-fk.ts
+@@ -1,4 +1,4 @@
+-import { getDb } from "../server/db/index.js";
++import { getDb } from "../../server/db/index.js";
+ 
+ const db = getDb();
+ 
+diff --git a/scripts/check-stats.ts b/scripts/legacy/check-stats.ts
+similarity index 78%
+rename from scripts/check-stats.ts
+rename to scripts/legacy/check-stats.ts
+index 261d0f1..672c968 100644
+--- a/scripts/check-stats.ts
++++ b/scripts/legacy/check-stats.ts
+@@ -1,5 +1,5 @@
+-import { fetchTeamData } from "../server/understat/client.js";
+-import { normalizeShotSituationsFromApi } from "../server/understat/normalize.js";
++import { fetchTeamData } from "../../server/understat/client.js";
++import { normalizeShotSituationsFromApi } from "../../server/understat/normalize.js";
+ 
+ async function main() {
+   const data = await fetchTeamData("Real_Madrid", 2023);
+diff --git a/scripts/check-team.ts b/scripts/legacy/check-team.ts
+similarity index 84%
+rename from scripts/check-team.ts
+rename to scripts/legacy/check-team.ts
+index d470a01..7157508 100644
+--- a/scripts/check-team.ts
++++ b/scripts/legacy/check-team.ts
+@@ -1,4 +1,4 @@
+-import { getDb } from "../server/db/index.js";
++import { getDb } from "../../server/db/index.js";
+ 
+ const db = getDb();
+ const team = db.prepare("SELECT id, abbreviation, name FROM teams WHERE id = '86'").get();
+diff --git a/scripts/check-teams.ts b/scripts/legacy/check-teams.ts
+similarity index 74%
+rename from scripts/check-teams.ts
+rename to scripts/legacy/check-teams.ts
+index 1f2ff46..5cfadff 100644
+--- a/scripts/check-teams.ts
++++ b/scripts/legacy/check-teams.ts
+@@ -1,4 +1,4 @@
+-import { getDb } from "../server/db/index.js";
++import { getDb } from "../../server/db/index.js";
+ 
+ const db = getDb();
+ const teams = db.prepare("SELECT id, abbreviation, name FROM teams WHERE league='esp.1' LIMIT 20").all();
+diff --git a/scripts/clear-test.ts b/scripts/legacy/clear-test.ts
+similarity index 87%
+rename from scripts/clear-test.ts
+rename to scripts/legacy/clear-test.ts
+index 7bf20c6..a0f36a2 100644
+--- a/scripts/clear-test.ts
++++ b/scripts/legacy/clear-test.ts
+@@ -1,4 +1,4 @@
+-import { getDb } from "../server/db/index.js";
++import { getDb } from "../../server/db/index.js";
+ 
+ const db = getDb();
+ db.prepare("DELETE FROM team_understat_stats WHERE team_id = '86' AND season = 2026").run();
+diff --git a/scripts/debug-sync.ts b/scripts/legacy/debug-sync.ts
+similarity index 70%
+rename from scripts/debug-sync.ts
+rename to scripts/legacy/debug-sync.ts
+index 756df0f..fa4d753 100644
+--- a/scripts/debug-sync.ts
++++ b/scripts/legacy/debug-sync.ts
+@@ -1,4 +1,4 @@
+-import { syncTeamUnderstat } from "../server/sync/understat.js";
++import { syncTeamUnderstat } from "../../server/sync/understat.js";
+ 
+ async function main() {
+   await syncTeamUnderstat("RMA", "86", "esp.1");
+diff --git a/scripts/debug-understat.ts b/scripts/legacy/debug-understat.ts
+similarity index 100%
+rename from scripts/debug-understat.ts
+rename to scripts/legacy/debug-understat.ts
+diff --git a/scripts/debug-upsert.ts b/scripts/legacy/debug-upsert.ts
+similarity index 95%
+rename from scripts/debug-upsert.ts
+rename to scripts/legacy/debug-upsert.ts
+index 5a9f800..1b533a7 100644
+--- a/scripts/debug-upsert.ts
++++ b/scripts/legacy/debug-upsert.ts
+@@ -1,4 +1,4 @@
+-import { getDb } from "../server/db/index.js";
++import { getDb } from "../../server/db/index.js";
+ 
+ const db = getDb();
+ 
+diff --git a/scripts/list-laliga.ts b/scripts/legacy/list-laliga.ts
+similarity index 82%
+rename from scripts/list-laliga.ts
+rename to scripts/legacy/list-laliga.ts
+index a632f17..cc1c7ed 100644
+--- a/scripts/list-laliga.ts
++++ b/scripts/legacy/list-laliga.ts
+@@ -1,4 +1,4 @@
+-import { getDb } from "../server/db/index.js";
++import { getDb } from "../../server/db/index.js";
+ 
+ const db = getDb();
+ const teams = db.prepare("SELECT id, abbreviation, name FROM teams WHERE league = 'esp.1'").all();
+diff --git a/scripts/legacy/make-cover.mjs b/scripts/legacy/make-cover.mjs
+index d3a9ffb..b83c2d9 100644
+--- a/scripts/legacy/make-cover.mjs
++++ b/scripts/legacy/make-cover.mjs
+@@ -6,7 +6,7 @@ const output = "D:/football/telegram-miniapp-640x360.png";
+ const resizedLogo = await sharp(input)
+   .resize(360, 360, {
+     fit: "contain",
+-    background: { r: 0, g: 0, b: 0, alpha: 1 }
++    background: { r: 0, g: 0, b: 0, alpha: 1 },
+   })
+   .toBuffer();
+ 
+@@ -15,8 +15,8 @@ await sharp({
+     width: 640,
+     height: 360,
+     channels: 4,
+-    background: { r: 0, g: 0, b: 0, alpha: 1 }
+-  }
++    background: { r: 0, g: 0, b: 0, alpha: 1 },
++  },
+ })
+   .composite([{ input: resizedLogo, gravity: "center" }])
+   .png()
+diff --git a/scripts/test-ala.ts b/scripts/legacy/test-ala.ts
+similarity index 70%
+rename from scripts/test-ala.ts
+rename to scripts/legacy/test-ala.ts
+index 70a5072..b3e3986 100644
+--- a/scripts/test-ala.ts
++++ b/scripts/legacy/test-ala.ts
+@@ -1,4 +1,4 @@
+-import { syncTeamUnderstat } from "../server/sync/understat.js";
++import { syncTeamUnderstat } from "../../server/sync/understat.js";
+ 
+ async function main() {
+   await syncTeamUnderstat("ALA", "96", "esp.1");
+diff --git a/scripts/test-bar.ts b/scripts/legacy/test-bar.ts
+similarity index 70%
+rename from scripts/test-bar.ts
+rename to scripts/legacy/test-bar.ts
+index 0357bb9..3b54278 100644
+--- a/scripts/test-bar.ts
++++ b/scripts/legacy/test-bar.ts
+@@ -1,4 +1,4 @@
+-import { syncTeamUnderstat } from "../server/sync/understat.js";
++import { syncTeamUnderstat } from "../../server/sync/understat.js";
+ 
+ async function main() {
+   await syncTeamUnderstat("BAR", "83", "esp.1");
+diff --git a/scripts/test-cron.ts b/scripts/legacy/test-cron.ts
+similarity index 67%
+rename from scripts/test-cron.ts
+rename to scripts/legacy/test-cron.ts
+index e5d8043..58605ea 100644
+--- a/scripts/test-cron.ts
++++ b/scripts/legacy/test-cron.ts
+@@ -1,4 +1,4 @@
+-import { syncAllFavoriteTeamsUnderstat } from "../server/sync/understat.js";
++import { syncAllFavoriteTeamsUnderstat } from "../../server/sync/understat.js";
+ 
+ async function main() {
+   await syncAllFavoriteTeamsUnderstat();
+diff --git a/scripts/test-understat.ts b/scripts/legacy/test-understat.ts
+similarity index 84%
+rename from scripts/test-understat.ts
+rename to scripts/legacy/test-understat.ts
+index f74b106..0fc947c 100644
+--- a/scripts/test-understat.ts
++++ b/scripts/legacy/test-understat.ts
+@@ -1,4 +1,4 @@
+-import { syncTeamUnderstat } from "../server/sync/understat.js";
++import { syncTeamUnderstat } from "../../server/sync/understat.js";
+ 
+ async function main() {
+   const abbr = process.argv[2] ?? "ALA";
+diff --git a/scripts/ui-rtl-check.mjs b/scripts/legacy/ui-rtl-check.mjs
+similarity index 100%
+rename from scripts/ui-rtl-check.mjs
+rename to scripts/legacy/ui-rtl-check.mjs
+diff --git a/scripts/verify-data.ts b/scripts/legacy/verify-data.ts
+similarity index 93%
+rename from scripts/verify-data.ts
+rename to scripts/legacy/verify-data.ts
+index 2441efc..314f806 100644
+--- a/scripts/verify-data.ts
++++ b/scripts/legacy/verify-data.ts
+@@ -1,4 +1,4 @@
+-import { getDb } from "../server/db/index.js";
++import { getDb } from "../../server/db/index.js";
+ 
+ const db = getDb();
+ 
+diff --git a/scripts/verify-rma.ts b/scripts/legacy/verify-rma.ts
+similarity index 97%
+rename from scripts/verify-rma.ts
+rename to scripts/legacy/verify-rma.ts
+index e353b0a..e107964 100644
+--- a/scripts/verify-rma.ts
++++ b/scripts/legacy/verify-rma.ts
+@@ -1,4 +1,4 @@
+-import { getDb } from "../server/db/index.js";
++import { getDb } from "../../server/db/index.js";
+ 
+ const db = getDb();
+ 
+-- 
+2.54.0.windows.1
+

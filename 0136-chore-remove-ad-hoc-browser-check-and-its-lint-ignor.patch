@@ -1,0 +1,37 @@
+From e9cd4c336389b9acabec18d41b9912c759a6f799 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 18:27:38 +0330
+Subject: [PATCH 136/230] chore: remove ad-hoc browser check and its lint
+ ignore
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+tests/browser-check.mjs was an untracked throwaway Playwright script,
+never part of the test suite; delete it and revert the
+tests/browser-check.mjs entry added to eslint.config.js in 0341e56 —
+with the file gone the ignore is dead weight that future test files
+under tests/ would silently inherit.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ eslint.config.js | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/eslint.config.js b/eslint.config.js
+index e90fc37..c942ef4 100644
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -14,7 +14,7 @@ import prettier from "eslint-config-prettier";
+  * as a lint error.
+  */
+ export default tseslint.config(
+-  { ignores: ["dist", "dist-server", "node_modules", "**/*.tsbuildinfo", "scripts/**", ".tmp/**", "tests/browser-check.mjs"] },
++  { ignores: ["dist", "dist-server", "node_modules", "**/*.tsbuildinfo", "scripts/**", ".tmp/**"] },
+   js.configs.recommended,
+   ...tseslint.configs.recommended,
+   {
+-- 
+2.54.0.windows.1
+

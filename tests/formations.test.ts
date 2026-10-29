@@ -70,12 +70,12 @@ function testLineUnits(): void {
 
 /** The per-unit requirements are what the pitch counters and validation use. */
 function testRequiredUnits(): void {
-  assert.deepEqual(requiredUnits("4-3-3"), { GK: 1, DEF: 4, MID: 3, FWD: 3 }, "4-3-3");
-  assert.deepEqual(requiredUnits("4-2-3-1"), { GK: 1, DEF: 4, MID: 5, FWD: 1 }, "two midfield bands merge");
-  assert.deepEqual(requiredUnits("3-4-2-1"), { GK: 1, DEF: 3, MID: 6, FWD: 1 }, "3-4-2-1");
+  assert.deepEqual(requiredUnits("4-3-3"), { GK: 1, DEF: 4, MID: 3, FWD: 3, OTHER: 0 }, "4-3-3");
+  assert.deepEqual(requiredUnits("4-2-3-1"), { GK: 1, DEF: 4, MID: 5, FWD: 1, OTHER: 0 }, "two midfield bands merge");
+  assert.deepEqual(requiredUnits("3-4-2-1"), { GK: 1, DEF: 3, MID: 6, FWD: 1, OTHER: 0 }, "3-4-2-1");
   for (const f of FORMATIONS) {
     const r = requiredUnits(f.id);
-    assert.equal(r.GK + r.DEF + r.MID + r.FWD, XI_SIZE, `${f.id} requires exactly 11`);
+    assert.equal(r.GK + r.DEF + r.MID + r.FWD + r.OTHER, XI_SIZE, `${f.id} requires exactly 11`);
   }
   assert.deepEqual(getFormation("nonsense").id, FORMATIONS[0].id, "unknown id falls back to the default");
 }
@@ -382,7 +382,7 @@ function testPublishedShape(): void {
   ]);
   assert.deepEqual(
     unitCounts(balanced),
-    { GK: 0, DEF: 0, MID: 5, FWD: 1 },
+    { GK: 0, DEF: 0, MID: 5, FWD: 1, OTHER: 0 },
     "a 4-2-3-1's five midfielders stay midfielders",
   );
 
@@ -393,7 +393,7 @@ function testPublishedShape(): void {
     c("cm3", "CM", 6, "MID"),
     c("cm4", "CM", 4, "MID"),
   ]);
-  assert.deepEqual(unitCounts(allCentral).MID, 4, "no winger, nothing promoted");
+  assert.deepEqual(unitCounts(allCentral), { GK: 0, DEF: 0, MID: 4, FWD: 0, OTHER: 0 }, "plain midfielders stay grouped");
 }
 
 /** Rows always hold every candidate, whatever the shape says. */
@@ -462,6 +462,13 @@ function testFormationPlaceTiebreak(): void {
 }
 
 /** The squad list reads in the same order the pitch does. */
+function testUnknownPositionsStayVisible(): void {
+  const unknown = c("unknown", "MYSTERY", null, "OTHER");
+  const placed = placePublishedXI("4-3-3", [unknown]);
+  assert.equal(placed.rows.reduce((sum, row) => sum + row.size, 0), 1, "fallback category is drawn instead of dropped");
+  assert.equal(placed.slots.flat().filter((player) => player?.id === "unknown").length, 1, "unknown player appears once");
+}
+
 function testCompareSquad(): void {
   const sorted = [
     c("gk", "G", 1, "GK"),
@@ -495,5 +502,6 @@ export function runFormationTests(): void {
   testFillFormationPlacement();
   testFormationPlaceTiebreak();
   testCompareSquad();
+  testUnknownPositionsStayVisible();
   console.log(`  formations: ${FORMATIONS.length} shapes, unit mapping, XI rules, slot placement OK`);
 }

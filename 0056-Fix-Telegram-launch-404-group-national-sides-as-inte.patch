@@ -1,0 +1,1050 @@
+From 9f6af1c5aff9b01d2494996c503782d76cc22fac Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 11 Oct 2026 00:03:02 +0330
+Subject: [PATCH 056/230] Fix Telegram launch 404, group national sides as
+ international, seed rest-of-world clubs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Telegram appends init data to the launch URL, and any form of it breaks boot:
+the canonical hash made HashRouter read `tgWebAppData=...` as a route (404
+screen), while the path form tripped the SPA fallback's file-extension 404.
+Strip the params before React Router is created and keep the init data for
+auth, so a Telegram user is neither 404'd nor downgraded to a guest.
+
+National sides now group as `international` from a `league=''` default even
+with no fixture synced yet, while clubs from lower leagues and cup-only sides
+fall into `other`. The seed gains ~56 famous non-big-five clubs (Ajax, Porto,
+Celtic, Galatasaray, …) under their real ESPN slugs to fill that Other tab,
+each verified against logos.json and team-colors.json.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/db/seedTeams.ts    | 493 +++++++++++++++++++++++++++++++++++++-
+ server/db/teamGroups.ts   |  38 ++-
+ server/index.ts           |   8 +-
+ src/hooks/useAuth.tsx     |   4 +-
+ src/lib/auth.ts           |  14 +-
+ src/lib/telegramUrl.ts    | 113 +++++++++
+ src/main.tsx              |   7 +
+ tests/run.ts              |   2 +
+ tests/seedTeams.test.ts   |  20 +-
+ tests/teamGroups.test.ts  |  25 +-
+ tests/telegramUrl.test.ts |  73 ++++++
+ 11 files changed, 759 insertions(+), 38 deletions(-)
+ create mode 100644 src/lib/telegramUrl.ts
+ create mode 100644 tests/telegramUrl.test.ts
+
+diff --git a/server/db/seedTeams.ts b/server/db/seedTeams.ts
+index a83d3c5..b3835be 100644
+--- a/server/db/seedTeams.ts
++++ b/server/db/seedTeams.ts
+@@ -2,14 +2,17 @@
+  * Static team seed — runs inside migrate() so a fresh Render deploy lands with
+  * a populated teams table on first boot, before the ESPN sync loop has run.
+  *
+- * Scope is deliberately narrow — the Top 5 European leagues and nothing else:
+- *  - clubs from eng.1, esp.1, ger.1, ita.1, fra.1 (each carries its domestic
+- *    league slug; the favorites/picker rule depends on it), and
+- *  - national sides in international tournaments (league="", so they land in
+- *    the "international" picker group once a match exists for them).
+- * Sides from other leagues (Eredivisie, Primeira Liga, …) are NOT seeded: the
+- * static picker only offers the big five plus the two catch-alls, and the live
+- * sync still widens the catalog beyond them.
++ * Scope:
++ *  - every club from the Top 5 European leagues (eng.1, esp.1, ger.1, ita.1,
++ *    fra.1), each carrying its own slug so it groups under its league tab;
++ *  - a curated set of famous clubs from OUTSIDE the big five (Ajax, Porto,
++ *    Celtic, Galatasaray, …), each carrying its real ESPN slug (ned.1, por.1,
++ *    ukr.1, …) so it groups under the "other" shelf;
++ *  - national sides (league=""), which group as "international".
++ *
++ * The picker only renders the big five plus Other/International, so the
++ * non-big-five slugs above are identifiers, not tabs — the server's grouping
++ * maps them to "other" (see server/db/teamGroups.ts).
+  *
+  * Every row is copied from the verified ESPN sync data, cross-checked against
+  * the bundled-asset manifests: every id resolves to a bundled crest in
+@@ -36,7 +39,36 @@ export interface SeedTeam {
+   league: string;
+ }
+ 
+-/** Big-five domestic clubs + national sides (Top 5 only; see the header). */
++/**
++ * Leagues a famous "rest of the world" seed club carries. Exposed so the tests
++ * can assert the seed never grows a slug outside this list, the big five or "".
++ */
++export const REST_OF_WORLD_LEAGUES = [
++  "aut.1",
++  "bel.1",
++  "bul.1",
++  "cro.1",
++  "cyp.1",
++  "cze.1",
++  "den.1",
++  "gre.1",
++  "hun.1",
++  "isr.1",
++  "ned.1",
++  "nor.1",
++  "pol.1",
++  "por.1",
++  "rou.1",
++  "sco.1",
++  "srb.1",
++  "sui.1",
++  "svk.1",
++  "svn.1",
++  "tur.1",
++  "ukr.1",
++] as const;
++
++/** Big-five clubs + famous rest-of-world clubs + national sides (see header). */
+ export const SEED_TEAMS: SeedTeam[] = [
+   // ---- Premier League (eng.1) ----
+   {
+@@ -683,6 +715,449 @@ export const SEED_TEAMS: SeedTeam[] = [
+   },
+   { id: "170", name: "Troyes", short_name: "Troyes", abbreviation: "TRY", color: "#0000BF", league: "fra.1" },
+ 
++  // ---- Rest of the World — famous clubs outside the big five (Other tab) ----
++  // ---- aut.1 ----
++  {
++    id: "4411",
++    name: "LASK Linz",
++    short_name: "LASK Linz",
++    abbreviation: "LAS",
++    color: "#FFFFFF",
++    league: "aut.1",
++  },
++  {
++    id: "2790",
++    name: "RB Salzburg",
++    short_name: "RB Salzburg",
++    abbreviation: "SLZ",
++    color: "#D82C3A",
++    league: "aut.1",
++  },
++  {
++    id: "3746",
++    name: "SK Sturm Graz",
++    short_name: "Sturm Graz",
++    abbreviation: "STG",
++    color: "#FFFFFF",
++    league: "aut.1",
++  },
++  // ---- bel.1 ----
++  {
++    id: "441",
++    name: "Anderlecht",
++    short_name: "Anderlecht",
++    abbreviation: "AND",
++    color: "#695196",
++    league: "bel.1",
++  },
++  {
++    id: "570",
++    name: "Club Brugge",
++    short_name: "Club Brugge",
++    abbreviation: "BRU",
++    color: "#0081FF",
++    league: "bel.1",
++  },
++  {
++    id: "3611",
++    name: "KAA Gent",
++    short_name: "KAA Gent",
++    abbreviation: "GENT",
++    color: "#0000FF",
++    league: "bel.1",
++  },
++  {
++    id: "936",
++    name: "Sint-Truidense",
++    short_name: "Sint-Truidense",
++    abbreviation: "STVV",
++    color: "#F8EA2C",
++    league: "bel.1",
++  },
++  {
++    id: "5807",
++    name: "Union St.-Gilloise",
++    short_name: "Union SG",
++    abbreviation: "USG",
++    color: "#FCEE33",
++    league: "bel.1",
++  },
++  // ---- bul.1 ----
++  {
++    id: "10834",
++    name: "CSKA Sofia",
++    short_name: "CSKA Sofia",
++    abbreviation: "CSKA",
++    color: "#C60000",
++    league: "bul.1",
++  },
++  {
++    id: "490",
++    name: "Levski Sofia",
++    short_name: "Levski Sofia",
++    abbreviation: "LEV",
++    color: "#6182CF",
++    league: "bul.1",
++  },
++  // ---- cro.1 ----
++  {
++    id: "597",
++    name: "Dinamo Zagreb",
++    short_name: "Dinamo Zagreb",
++    abbreviation: "DZG",
++    color: "#0000BB",
++    league: "cro.1",
++  },
++  {
++    id: "489",
++    name: "Hajduk Split",
++    short_name: "Hajduk Split",
++    abbreviation: "HAJ",
++    color: "#FFCCCC",
++    league: "cro.1",
++  },
++  // ---- cyp.1 ----
++  {
++    id: "617",
++    name: "Omonia Nicosia",
++    short_name: "Omonia",
++    abbreviation: "OMON",
++    color: "#025719",
++    league: "cyp.1",
++  },
++  { id: "22281", name: "Pafos", short_name: "Pafos", abbreviation: "PAF", color: "#82C0FE", league: "cyp.1" },
++  // ---- cze.1 ----
++  {
++    id: "494",
++    name: "Slavia Prague",
++    short_name: "Slavia Prague",
++    abbreviation: "SLP",
++    color: "#DC1F26",
++    league: "cze.1",
++  },
++  {
++    id: "433",
++    name: "Sparta Prague",
++    short_name: "Sparta",
++    abbreviation: "SPP",
++    color: "#791B29",
++    league: "cze.1",
++  },
++  {
++    id: "11706",
++    name: "Viktoria Plzen",
++    short_name: "Viktoria Plzen",
++    abbreviation: "PLZ",
++    color: "#0000DD",
++    league: "cze.1",
++  },
++  // ---- den.1 ----
++  { id: "7853", name: "AGF", short_name: "AGF", abbreviation: "AGF", color: "#FFFFFF", league: "den.1" },
++  {
++    id: "909",
++    name: "F.C. København",
++    short_name: "København",
++    abbreviation: "KBH",
++    color: "#FFFFFF",
++    league: "den.1",
++  },
++  {
++    id: "572",
++    name: "FC Midtjylland",
++    short_name: "Midtjylland",
++    abbreviation: "MID",
++    color: "#444444",
++    league: "den.1",
++  },
++  {
++    id: "3101",
++    name: "FC Nordsjælland",
++    short_name: "Nordsjælland",
++    abbreviation: "FCN",
++    color: "#CF010E",
++    league: "den.1",
++  },
++  // ---- gre.1 ----
++  {
++    id: "887",
++    name: "AEK Athens",
++    short_name: "AEK Athens",
++    abbreviation: "AEK",
++    color: "#FFFF00",
++    league: "gre.1",
++  },
++  {
++    id: "1010",
++    name: "OFI Crete",
++    short_name: "OFI Crete",
++    abbreviation: "OFI",
++    color: "#FFFFFF",
++    league: "gre.1",
++  },
++  {
++    id: "435",
++    name: "Olympiacos",
++    short_name: "Olympiacos",
++    abbreviation: "OLY",
++    color: "#D01729",
++    league: "gre.1",
++  },
++  {
++    id: "443",
++    name: "Panathinaikos",
++    short_name: "Panathinaikos",
++    abbreviation: "PAO",
++    color: "#2B6A36",
++    league: "gre.1",
++  },
++  // ---- hun.1 ----
++  {
++    id: "622",
++    name: "Ferencvaros",
++    short_name: "Ferencvaros",
++    abbreviation: "FER",
++    color: "#239B56",
++    league: "hun.1",
++  },
++  // ---- isr.1 ----
++  {
++    id: "13083",
++    name: "Hapoel Be'er",
++    short_name: "Hapoel Be'er",
++    abbreviation: "HBE",
++    color: "#FD0000",
++    league: "isr.1",
++  },
++  // ---- ned.1 ----
++  {
++    id: "139",
++    name: "Ajax Amsterdam",
++    short_name: "Ajax",
++    abbreviation: "AJA",
++    color: "#DF1B27",
++    league: "ned.1",
++  },
++  {
++    id: "140",
++    name: "AZ Alkmaar",
++    short_name: "AZ Alkmaar",
++    abbreviation: "AZ",
++    color: "#EF2F24",
++    league: "ned.1",
++  },
++  {
++    id: "152",
++    name: "FC Twente",
++    short_name: "FC Twente",
++    abbreviation: "TWE",
++    color: "#F31522",
++    league: "ned.1",
++  },
++  {
++    id: "142",
++    name: "Feyenoord Rotterdam",
++    short_name: "Feyenoord",
++    abbreviation: "FEY",
++    color: "#EF2F24",
++    league: "ned.1",
++  },
++  {
++    id: "147",
++    name: "NEC Nijmegen",
++    short_name: "NEC",
++    abbreviation: "NEC",
++    color: "#EF2F24",
++    league: "ned.1",
++  },
++  {
++    id: "148",
++    name: "PSV Eindhoven",
++    short_name: "PSV",
++    abbreviation: "PSV",
++    color: "#EF2F24",
++    league: "ned.1",
++  },
++  // ---- nor.1 ----
++  {
++    id: "2980",
++    name: "Bodo/Glimt",
++    short_name: "Bodo/Glimt",
++    abbreviation: "BODO",
++    color: "#FCEE33",
++    league: "nor.1",
++  },
++  {
++    id: "987",
++    name: "Lillestrom",
++    short_name: "Lillestrom",
++    abbreviation: "LSK",
++    color: "#E8E337",
++    league: "nor.1",
++  },
++  {
++    id: "620",
++    name: "SK Brann",
++    short_name: "SK Brann",
++    abbreviation: "SKBR",
++    color: "#FF0000",
++    league: "nor.1",
++  },
++  {
++    id: "510",
++    name: "Viking FK",
++    short_name: "Viking FK",
++    abbreviation: "VIK",
++    color: "#000080",
++    league: "nor.1",
++  },
++  // ---- pol.1 ----
++  {
++    id: "11505",
++    name: "Jagiellonia Bialystok",
++    short_name: "Jagiellonia ",
++    abbreviation: "JAG",
++    color: "#FFED00",
++    league: "pol.1",
++  },
++  {
++    id: "2990",
++    name: "Lech Poznan",
++    short_name: "Lech Poznan",
++    abbreviation: "LECH",
++    color: "#004B92",
++    league: "pol.1",
++  },
++  // ---- por.1 ----
++  {
++    id: "1929",
++    name: "Benfica",
++    short_name: "Benfica",
++    abbreviation: "SLB",
++    color: "#CA281D",
++    league: "por.1",
++  },
++  { id: "2994", name: "Braga", short_name: "Braga", abbreviation: "SCB", color: "#DE1F26", league: "por.1" },
++  {
++    id: "437",
++    name: "FC Porto",
++    short_name: "FC Porto",
++    abbreviation: "FCP",
++    color: "#0000DD",
++    league: "por.1",
++  },
++  {
++    id: "2250",
++    name: "Sporting CP",
++    short_name: "Sporting",
++    abbreviation: "SCP",
++    color: "#008127",
++    league: "por.1",
++  },
++  // ---- rou.1 ----
++  {
++    id: "8089",
++    name: "CSU Craiova",
++    short_name: "CSU Craiova",
++    abbreviation: "UCRA",
++    color: "#88CCEE",
++    league: "rou.1",
++  },
++  // ---- sco.1 ----
++  { id: "256", name: "Celtic", short_name: "Celtic", abbreviation: "CEL", color: "#009921", league: "sco.1" },
++  {
++    id: "262",
++    name: "Heart of Midlothian",
++    short_name: "Hearts",
++    abbreviation: "HOM",
++    color: "#8E003B",
++    league: "sco.1",
++  },
++  // ---- srb.1 ----
++  {
++    id: "2290",
++    name: "Red Star Belgrade",
++    short_name: "Red Star",
++    abbreviation: "RSB",
++    color: "#FF0000",
++    league: "srb.1",
++  },
++  // ---- sui.1 ----
++  {
++    id: "7672",
++    name: "FC Lugano",
++    short_name: "FC Lugano",
++    abbreviation: "LUG",
++    color: "#555555",
++    league: "sui.1",
++  },
++  {
++    id: "3024",
++    name: "FC Thun",
++    short_name: "FC Thun",
++    abbreviation: "THUN",
++    color: "#FF0900",
++    league: "sui.1",
++  },
++  // ---- svk.1 ----
++  {
++    id: "521",
++    name: "Slovan Bratislava",
++    short_name: "S Bratislava",
++    abbreviation: "SLB",
++    color: "#81C0FF",
++    league: "svk.1",
++  },
++  // ---- svn.1 ----
++  {
++    id: "3362",
++    name: "NK Celje",
++    short_name: "NK Celje",
++    abbreviation: "NKC",
++    color: "#000099",
++    league: "svn.1",
++  },
++  // ---- tur.1 ----
++  {
++    id: "1895",
++    name: "Besiktas",
++    short_name: "Besiktas",
++    abbreviation: "BES",
++    color: "#FFFFFF",
++    league: "tur.1",
++  },
++  {
++    id: "436",
++    name: "Fenerbahce",
++    short_name: "Fenerbahce",
++    abbreviation: "FEN",
++    color: "#FFFF00",
++    league: "tur.1",
++  },
++  {
++    id: "432",
++    name: "Galatasaray",
++    short_name: "Galatasaray",
++    abbreviation: "GAL",
++    color: "#AA0031",
++    league: "tur.1",
++  },
++  {
++    id: "997",
++    name: "Trabzonspor",
++    short_name: "Trabzonspor",
++    abbreviation: "TRAB",
++    color: "#5699EB",
++    league: "tur.1",
++  },
++  // ---- ukr.1 ----
++  {
++    id: "493",
++    name: "Shakhtar Donetsk",
++    short_name: "Shakhtar",
++    abbreviation: "SHK",
++    color: "#FF5900",
++    league: "ukr.1",
++  },
+   // ---- International tournaments — national sides (league="") ----
+   { id: "585", name: "Albania", short_name: "Albania", abbreviation: "ALB", color: "#E70000", league: "" },
+   {
+diff --git a/server/db/teamGroups.ts b/server/db/teamGroups.ts
+index 6443e56..ca49bfc 100644
+--- a/server/db/teamGroups.ts
++++ b/server/db/teamGroups.ts
+@@ -1,15 +1,15 @@
+-import { INTERNATIONALS } from "../espn/types.js";
++import { INTERNATIONALS, LEAGUES } from "../espn/types.js";
+ 
+ /**
+  * The picker-group vocabulary and the favorites caps, in one place.
+  *
+  * `group_key` (see GET /api/teams) files every side under a picker tab: a
+- * league slug for domestic clubs, `international` for national teams, `other`
+- * for clubs known only through cup football. The favorites caps are defined
+- * on those same buckets — five clubs, plus an OPTIONAL shelf of up to five
+- * international sides for users who want them — so a tap on a tab always hits
+- * a rule the user can see: the club shelf filling never blocks a national
+- * team pick, and vice versa.
++ * big-five league slug for those clubs, `other` for every other club (lower
++ * leagues, cup-only sides), `international` for national teams. The favorites
++ * caps are defined on those same buckets — five clubs, plus an OPTIONAL shelf
++ * of up to five international sides for users who want them — so a tap on a tab
++ * always hits a rule the user can see: the club shelf filling never blocks a
++ * national team pick, and vice versa.
+  *
+  * TEAM_GROUP_SQL is the single source of the grouping: the favorites
+  * endpoints, the guest merge and GET /api/teams all share it, so the cap
+@@ -26,23 +26,37 @@ export const MAX_INTERNATIONAL_FAVORITES = 5;
+ 
+ /**
+  * SQL CASE for the team alias `t` computing `group_key`, exactly as
+- * GET /api/teams serves it: a non-empty league wins, then any side seen in an
+- * international-tournament match is a national team, and the rest are
+- * cup-only clubs. Bind TEAM_GROUP_PARAMS (the international slugs) before any
++ * GET /api/teams serves it. In order:
++ *
++ *  1. a big-five league keeps its slug (the Top-5 picker tabs);
++ *  2. any other non-empty league is a club outside the big five → `other`;
++ *  3. a side seen in an international-tournament match is a national team;
++ *  4. a side with NO matches at all is a national team too — this is the seed's
++ *     `league = ''` default, so seeded national sides land in the International
++ *     tab on a fresh database before any fixture has been synced, instead of
++ *     being stranded in `other`;
++ *  5. everything else (a cup-only club, seen only in club competitions) → `other`.
++ *
++ * Bind TEAM_GROUP_PARAMS (big-five slugs then international slugs) before any
+  * other placeholder in the same statement.
+  */
+ export const TEAM_GROUP_SQL = `CASE
+-    WHEN t.league != '' THEN t.league
++    WHEN t.league IN (${LEAGUES.map(() => "?").join(", ")}) THEN t.league
++    WHEN t.league != '' THEN '${OTHER_GROUP}'
+     WHEN EXISTS (
+       SELECT 1 FROM matches m
+       WHERE (m.home_team_id = t.id OR m.away_team_id = t.id)
+         AND m.league IN (${INTERNATIONALS.map(() => "?").join(", ")})
+     ) THEN '${INTL_GROUP}'
++    WHEN NOT EXISTS (
++      SELECT 1 FROM matches m2
++      WHERE m2.home_team_id = t.id OR m2.away_team_id = t.id
++    ) THEN '${INTL_GROUP}'
+     ELSE '${OTHER_GROUP}'
+   END`;
+ 
+ /** Bind values for the placeholders inside TEAM_GROUP_SQL, in order. */
+-export const TEAM_GROUP_PARAMS: string[] = [...INTERNATIONALS];
++export const TEAM_GROUP_PARAMS: string[] = [...LEAGUES, ...INTERNATIONALS];
+ 
+ /** True when a group_key is the international (national-team) bucket. */
+ export function isInternationalGroup(group: string | null | undefined): boolean {
+diff --git a/server/index.ts b/server/index.ts
+index 272bcd6..23b8a02 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -147,7 +147,13 @@ app.use((req, res, next) => {
+   // A MISS on a real file must 404 rather than fall through to the shell —
+   // returning index.html with 200 for /assets/whatever.js is what turns a
+   // post-deploy stale page into "Unexpected token '<'" instead of a reload.
+-  if (/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type("text/plain").send("Not found");
++  // Telegram's init params are the exception: they arrive appended straight
++  // after the path (`/tgWebAppData=...&tgWebAppVersion=7.0`), which would trip
++  // the dot check above and 404 before the bundle ever loads. Serve the shell
++  // so the client-side normaliser (lib/telegramUrl) can lift them out.
++  const telegramLaunchPath = req.path.includes("tgWebApp");
++  if (!telegramLaunchPath && /\.[a-z0-9]+$/i.test(req.path))
++    return res.status(404).type("text/plain").send("Not found");
+   return res.sendFile(path.join(ROOT_DIR, "dist", "index.html"), (err) => {
+     if (err) next(err);
+   });
+diff --git a/src/hooks/useAuth.tsx b/src/hooks/useAuth.tsx
+index 6a26f42..615f09d 100644
+--- a/src/hooks/useAuth.tsx
++++ b/src/hooks/useAuth.tsx
+@@ -37,7 +37,9 @@ function hasExternalIdentity(): boolean {
+   if (!token) return false; // explicit sign-out or production guest — force the Login screen
+   // Session tokens are checked via /api/me below; initData and dev:* count as
+   // direct identities (server validates them on the /me call anyway).
+-  return isSessionToken(token) || token.startsWith("dev:") || Boolean(window.Telegram?.WebApp?.initData);
++  // telegramInitData() also covers init data recovered from the launch URL when
++  // the SDK script was blocked, so a Telegram user is still not bounced to Login.
++  return isSessionToken(token) || token.startsWith("dev:") || Boolean(telegramInitData());
+ }
+ 
+ export function AuthProvider({ children }: { children: ReactNode }) {
+diff --git a/src/lib/auth.ts b/src/lib/auth.ts
+index c576e11..15b886d 100644
+--- a/src/lib/auth.ts
++++ b/src/lib/auth.ts
+@@ -15,6 +15,8 @@
+  * fallbacks; the next explicit Enter clears it.
+  */
+ 
++import { capturedTelegramInitData } from "./telegramUrl";
++
+ const KEY = "matchday.session";
+ const EPHEMERAL_KEY = "matchday.session.session";
+ const LOGGED_OUT_KEY = "matchday.loggedOut";
+@@ -111,10 +113,18 @@ function clearLoggedOut(): void {
+   safeSet(localStorage, LOGGED_OUT_KEY, null);
+ }
+ 
+-/** The Telegram initData, when the app actually runs inside Telegram. */
++/**
++ * The Telegram initData, when the app actually runs inside Telegram.
++ *
++ * Prefers the SDK's parsed value; falls back to the init data recovered from
++ * the launch URL (see lib/telegramUrl) so a Telegram user is still themselves
++ * when telegram.org is unreachable and the SDK script never loads — which is
++ * exactly the network this app ships to.
++ */
+ export function telegramInitData(): string | null {
+   const tg = window.Telegram?.WebApp;
+-  return typeof tg?.initData === "string" && tg.initData ? tg.initData : null;
++  if (typeof tg?.initData === "string" && tg.initData) return tg.initData;
++  return capturedTelegramInitData();
+ }
+ 
+ /**
+diff --git a/src/lib/telegramUrl.ts b/src/lib/telegramUrl.ts
+new file mode 100644
+index 0000000..90b88b7
+--- /dev/null
++++ b/src/lib/telegramUrl.ts
+@@ -0,0 +1,113 @@
++/**
++ * Telegram Mini App URL normalisation.
++ *
++ * Telegram hands the Mini App its init data by appending it to the launch URL:
++ *   https://app/#tgWebAppData=...&tgWebAppVersion=7.0&tgWebAppPlatform=android
++ * Older/newer clients differ on WHERE they put it (hash is canonical, but some
++ * builds use the query string, and some mangle it straight after the path:
++ * `https://app/tgWebAppData=...`).
++ *
++ * Both shapes break the app:
++ *  - the HASH one is fatal: HashRouter reads the whole fragment as the route, so
++ *    `tgWebAppData=...` becomes an unknown path and renders the 404 screen.
++ *  - the PATH one is fatal server-side: the SPA fallback treats a path with a
++ *    dot (e.g. `tgWebAppVersion=7.0`) as a missing file and 404s before the
++ *    bundle ever loads.
++ *
++ * So before React Router is created we lift any `tgWebApp*` params out of the
++ * URL (keeping the init data for auth) and rewrite it to a clean `/` (or `#`).
++ *
++ * ORDERING IS LOAD-BEARING: this must run only AFTER the Telegram SDK has
++ * parsed the URL (`tg-sdk-settled`), otherwise we would strip the data before
++ * telegram-web-app.js reads it. main.tsx calls it at the top of mount().
++ */
++
++/** Every Telegram init param starts with this. */
++const TG_PARAM_PREFIX = "tgWebApp";
++/** The one param auth actually needs. */
++const INIT_DATA_KEY = "tgWebAppData";
++
++export interface NormalizedTelegramUrl {
++  /** The URL with any Telegram init params removed. */
++  url: string;
++  /** SDK-parsed init data when present, else the value recovered from the URL. */
++  initData: string | null;
++  /** True when Telegram params were present and the URL was rewritten. */
++  changed: boolean;
++}
++
++/**
++ * Pure URL rewrite. `sdkInitData` (from `window.Telegram.WebApp.initData`) wins
++ * when non-empty because the SDK is the authoritative parser; otherwise the
++ * value is recovered from the URL so auth still works when the SDK script was
++ * blocked (e.g. telegram.org unreachable) but Telegram still passed the data.
++ */
++export function normalizeTelegramUrl(href: string, sdkInitData = ""): NormalizedTelegramUrl {
++  let url: URL;
++  try {
++    url = new URL(href);
++  } catch {
++    return { url: href, initData: sdkInitData || null, changed: false };
++  }
++
++  let recovered: string | null = null;
++  let changed = false;
++
++  // 1) Hash — Telegram's canonical carrier. The whole fragment is Telegram's
++  //    params, so drop it entirely; HashRouter then sees "/". Trigger on ANY
++  //    `tgWebApp*` key, not just init data, so a launch that only carries
++  //    `tgWebAppStartParam` still cannot masquerade as a route.
++  const hash = url.hash.replace(/^#/, "");
++  if (hash.includes(TG_PARAM_PREFIX)) {
++    recovered = new URLSearchParams(hash).get(INIT_DATA_KEY) ?? recovered;
++    url.hash = "";
++    changed = true;
++  }
++
++  // 2) Query string — some clients append `?tgWebAppData=...` instead. Drop
++  //    only the Telegram keys so unrelated params (e.g. ?devUser=) survive.
++  const searchKeys = [...url.searchParams.keys()];
++  if (searchKeys.some((key) => key.startsWith(TG_PARAM_PREFIX))) {
++    recovered = recovered ?? url.searchParams.get(INIT_DATA_KEY);
++    for (const key of searchKeys) {
++      if (key.startsWith(TG_PARAM_PREFIX)) url.searchParams.delete(key);
++    }
++    changed = true;
++  }
++
++  // 3) Path — the mangled form `/<params>` with no `?`. Parse the leading
++  //    segment as a query string and reset the path to the app root.
++  if (url.pathname.includes(TG_PARAM_PREFIX)) {
++    recovered = recovered ?? new URLSearchParams(url.pathname.replace(/^\/+/, "")).get(INIT_DATA_KEY);
++    url.pathname = "/";
++    changed = true;
++  }
++
++  return { url: url.toString(), initData: sdkInitData || recovered, changed };
++}
++
++/** The URL-recovered init data, kept so auth survives a blocked SDK script. */
++let capturedInitData: string | null = null;
++
++/**
++ * Rewrite the live URL once, on boot. Safe to call more than once (a second
++ * call is a no-op because the params are already gone). Never throws into the
++ * boot path — a malformed URL must not stop the app from mounting.
++ */
++export function applyTelegramUrlNormalization(): void {
++  if (typeof window === "undefined") return;
++  try {
++    const sdkInitData =
++      typeof window.Telegram?.WebApp?.initData === "string" ? window.Telegram.WebApp.initData : "";
++    const result = normalizeTelegramUrl(window.location.href, sdkInitData);
++    capturedInitData = result.initData;
++    if (result.changed) window.history.replaceState(null, "", result.url);
++  } catch {
++    /* keep booting; the worst case is a 404 screen, not a crash */
++  }
++}
++
++/** Init data recovered from the URL, for when the SDK global is unavailable. */
++export function capturedTelegramInitData(): string | null {
++  return capturedInitData;
++}
+diff --git a/src/main.tsx b/src/main.tsx
+index d4038b5..17b3e13 100644
+--- a/src/main.tsx
++++ b/src/main.tsx
+@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
+ import { ToastProvider } from "./components/Toast";
+ import { I18nProvider } from "./i18n/I18nProvider";
+ import { initTelegram } from "./lib/telegram";
++import { applyTelegramUrlNormalization } from "./lib/telegramUrl";
+ import { installErrorReporting } from "./lib/errorReporting";
+ import "./index.css";
+ 
+@@ -59,6 +60,12 @@ let mounted = false;
+ function mount() {
+   if (mounted) return;
+   mounted = true;
++  // Normalise the launch URL FIRST, before HashRouter reads it. Telegram
++  // appends init data to the URL (hash canonically, sometimes the path); an
++  // un-normalised hash makes HashRouter treat `tgWebAppData=...` as a route
++  // and render the 404 screen. This runs only after the SDK settled, so
++  // telegram-web-app.js has already parsed and stored the init data.
++  applyTelegramUrlNormalization();
+   // The module-level call above ran at parse time, which may predate the SDK
+   // settling; repeat it so header colour and ready() see a present SDK.
+   try {
+diff --git a/tests/run.ts b/tests/run.ts
+index 4d635ba..29a992c 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -10,6 +10,7 @@ import { runNormalizeTests } from "./normalize.test.js";
+ import { runPredictionScoreTests } from "./predictionScore.test.js";
+ import { runMigrateTests } from "./migrate.test.js";
+ import { runSeedTeamsTests } from "./seedTeams.test.js";
++import { runTelegramUrlTests } from "./telegramUrl.test.js";
+ import { runPasswordTests } from "./password.test.js";
+ import { runNotificationTests } from "./notifications.test.js";
+ import { runUnderstatTests } from "./understat.test.js";
+@@ -50,6 +51,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["predictionScore", runPredictionScoreTests],
+   ["migrate", runMigrateTests],
+   ["seedTeams", runSeedTeamsTests],
++  ["telegramUrl", runTelegramUrlTests],
+   ["password", runPasswordTests],
+   ["notifications", runNotificationTests],
+   ["understat", runUnderstatTests],
+diff --git a/tests/seedTeams.test.ts b/tests/seedTeams.test.ts
+index 3dcf1b9..07663ff 100644
+--- a/tests/seedTeams.test.ts
++++ b/tests/seedTeams.test.ts
+@@ -18,11 +18,12 @@ import fs from "node:fs";
+ import os from "node:os";
+ import path from "node:path";
+ import { migrate } from "../server/db/schema.js";
+-import { SEED_TEAMS } from "../server/db/seedTeams.js";
++import { REST_OF_WORLD_LEAGUES, SEED_TEAMS } from "../server/db/seedTeams.js";
+ import logos from "../src/data/logos.json";
+ import colors from "../src/data/team-colors.json";
+ 
+ const BIG_FIVE = new Set(["eng.1", "esp.1", "ger.1", "ita.1", "fra.1"]);
++const ALLOWED_LEAGUES = new Set<string>([...BIG_FIVE, ...REST_OF_WORLD_LEAGUES, ""]);
+ const logosById = logos as Record<string, string>;
+ const colorsById = colors as Record<string, string>;
+ 
+@@ -34,8 +35,8 @@ function testSeedAgainstManifests(): void {
+     seen.add(t.id);
+ 
+     assert.ok(
+-      BIG_FIVE.has(t.league) || t.league === "",
+-      `${t.id} ${t.name}: league ${JSON.stringify(t.league)} is not a Top-5 slug or ""`,
++      ALLOWED_LEAGUES.has(t.league),
++      `${t.id} ${t.name}: league ${JSON.stringify(t.league)} is not a seeded league slug or ""`,
+     );
+     assert.ok(t.name.length > 0, `${t.id} has no name`);
+     assert.ok(t.abbreviation, `${t.id} ${t.name} has no abbreviation`);
+@@ -64,9 +65,16 @@ function testSeedAgainstManifests(): void {
+     SEED_TEAMS.some((t) => t.league === "" && t.name === "England"),
+     'national sides are seeded with league=""',
+   );
++  // Famous rest-of-world clubs fill the Other tab, each under a real slug.
++  const rest = SEED_TEAMS.filter((t) => REST_OF_WORLD_LEAGUES.includes(t.league as never));
++  assert.ok(rest.length >= 45, `expected ~50 rest-of-world clubs, found ${rest.length}`);
+   assert.ok(
+-    !SEED_TEAMS.some((t) => t.league !== "" && !BIG_FIVE.has(t.league)),
+-    "no seed row carries a non-big-five league",
++    rest.some((t) => t.name === "Ajax Amsterdam"),
++    "a named rest-of-world club (Ajax) is seeded",
++  );
++  assert.ok(
++    !SEED_TEAMS.some((t) => t.league !== "" && !ALLOWED_LEAGUES.has(t.league)),
++    "no seed row carries an undeclared league slug",
+   );
+ }
+ 
+@@ -93,5 +101,5 @@ function testSeedBootsAndIsIdempotent(): void {
+ export function runSeedTeamsTests(): void {
+   testSeedAgainstManifests();
+   testSeedBootsAndIsIdempotent();
+-  console.log("  seedTeams: Top-5 scope, manifest colour/crest lockstep, idempotent boot OK");
++  console.log("  seedTeams: scope, manifest colour/crest lockstep, rest-of-world clubs, idempotent boot OK");
+ }
+diff --git a/tests/teamGroups.test.ts b/tests/teamGroups.test.ts
+index bac1ac3..a1efc13 100644
+--- a/tests/teamGroups.test.ts
++++ b/tests/teamGroups.test.ts
+@@ -88,16 +88,23 @@ function favoriteGroups(db: DatabaseSync, userId: number): Array<{ team_id: stri
+ function testTeamGroupSql(): void {
+   const { db } = tempDb();
+ 
+-  // A domestic club, a cup-only club, and two national teams (a national team
+-  // is any side with no league that appears in an international match).
++  // A big-five club, a lower-league club, a cup-only club, a seeded national
++  // side with no match yet, and two national sides with an international match.
+   seedTeam(db, "arsenal", "eng.1");
++  seedTeam(db, "twente", "ned.1");
+   seedTeam(db, "ajax", "");
++  seedTeam(db, "novak", "");
+   seedTeam(db, "brazil", "");
+   seedTeam(db, "scotland", "");
+   db.prepare(
+     `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
+      VALUES ('m1', 'fifa.world', 'brazil', 'scotland', '2026-06-11T00:00:00.000Z', 'finished', 2, 1)`,
+   ).run();
++  // A club-cup match makes a league-less club "cup-only", not a national team.
++  db.prepare(
++    `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
++     VALUES ('m2', 'uefa.champions', 'ajax', 'twente', '2026-09-15T00:00:00.000Z', 'finished', 1, 1)`,
++  ).run();
+ 
+   db.prepare(`INSERT INTO users (telegram_id, display_name, created_at) VALUES ('u1', 'U1', ?)`).run(
+     new Date().toISOString(),
+@@ -109,14 +116,18 @@ function testTeamGroupSql(): void {
+     ).run(user.id, teamId, new Date().toISOString());
+   }
+ 
+-  const rows = favoriteGroups(db, user.id);
+-  const byTeam = Object.fromEntries(rows.map((r) => [r.team_id, r.group_key]));
+-  assert.equal(byTeam.arsenal, "eng.1", "a domestic club groups under its league slug");
++  const allGroups = db
++    .prepare(`SELECT t.id AS id, ${TEAM_GROUP_SQL} AS group_key FROM teams t`)
++    .all(...TEAM_GROUP_PARAMS) as Array<{ id: string; group_key: string }>;
++  const byTeam = Object.fromEntries(allGroups.map((r) => [r.id, r.group_key]));
++  assert.equal(byTeam.arsenal, "eng.1", "a big-five club groups under its league slug");
++  assert.equal(byTeam.twente, OTHER_GROUP, "a club outside the big five lands in 'other'");
+   assert.equal(byTeam.ajax, OTHER_GROUP, "a cup-only club lands in the 'other' shelf");
++  assert.equal(byTeam.novak, INTL_GROUP, "a league-less side with no match yet is a national team");
+   assert.equal(byTeam.brazil, INTL_GROUP, "a side seen in an international match is a national team");
+ 
+-  // The cap rule fed by that SQL: 2 club slots + 4 intl slots still free.
+-  const groups = rows.map((r) => r.group_key);
++  // The cap rule fed by the favorites query: 2 club slots + 4 intl slots free.
++  const groups = favoriteGroups(db, user.id).map((r) => r.group_key);
+   assert.equal(favoriteCapError(groups, "esp.1"), null);
+   assert.equal(favoriteCapError(groups, INTL_GROUP), null);
+   assert.equal(
+diff --git a/tests/telegramUrl.test.ts b/tests/telegramUrl.test.ts
+new file mode 100644
+index 0000000..4701bda
+--- /dev/null
++++ b/tests/telegramUrl.test.ts
+@@ -0,0 +1,73 @@
++/**
++ * Telegram launch-URL normalisation.
++ *
++ * The Mini App is launched by Telegram with init data appended to the URL. Any
++ * form left in place breaks boot: the hash form makes HashRouter treat
++ * `tgWebAppData=...` as a route (404 screen), the path form trips the server's
++ * file-extension 404. These cases pin the rewrite contract, including keeping
++ * an unrelated query param and never touching a real hash route.
++ */
++import { strict as assert } from "node:assert";
++import { normalizeTelegramUrl } from "../src/lib/telegramUrl.js";
++
++/** Telegram init data is a query string that itself is percent-encoded. */
++const INIT = "user=%7B%22id%22%3A1%7D&auth_date=1700000000&hash=abc";
++
++function testHashForm(): void {
++  const href = `https://app.example/#tgWebAppData=${encodeURIComponent(INIT)}&tgWebAppVersion=7.0&tgWebAppPlatform=android`;
++  const out = normalizeTelegramUrl(href);
++  assert.equal(out.changed, true, "the hash form is rewritten");
++  assert.equal(out.url, "https://app.example/", "the Telegram fragment is stripped");
++  assert.equal(out.initData, INIT, "init data is URL-decoded back to its raw value");
++}
++
++function testQueryForm(): void {
++  const href = `https://app.example/?tgWebAppData=${encodeURIComponent(INIT)}&tgWebAppVersion=7.0&devUser=2`;
++  const out = normalizeTelegramUrl(href);
++  assert.equal(out.changed, true, "the query form is rewritten");
++  assert.equal(out.initData, INIT, "init data recovered from the query string");
++  assert.ok(out.url.includes("devUser=2"), "unrelated params survive");
++  assert.ok(!out.url.includes("tgWebAppData"), "Telegram params are dropped");
++}
++
++function testPathForm(): void {
++  // The mangled form the user reported: params straight after the path.
++  const href = `https://app.example/tgWebAppData=${encodeURIComponent(INIT)}&tgWebAppVersion=7.0`;
++  const out = normalizeTelegramUrl(href);
++  assert.equal(out.changed, true, "the path form is rewritten");
++  assert.equal(new URL(out.url).pathname, "/", "the mangled path resets to the app root");
++  assert.equal(out.initData, INIT, "init data recovered from the path");
++}
++
++function testStartParamOnly(): void {
++  // A launch carrying only a start param (no init data) must still be stripped,
++  // or HashRouter would treat it as a route.
++  const out = normalizeTelegramUrl("https://app.example/#tgWebAppStartParam=deeplink");
++  assert.equal(out.changed, true, "tgWebAppStartParam alone is rewritten");
++  assert.equal(out.url, "https://app.example/");
++  assert.equal(out.initData, null, "no init data is invented");
++}
++
++function testLeavesRealRoutesAlone(): void {
++  const out = normalizeTelegramUrl("https://app.example/#/matches");
++  assert.equal(out.changed, false, "a real hash route is untouched");
++  assert.equal(out.url, "https://app.example/#/matches");
++  assert.equal(out.initData, null, "no init data invented for a plain browser");
++}
++
++function testSdkValueWins(): void {
++  const href = `https://app.example/#tgWebAppData=${encodeURIComponent(INIT)}`;
++  const out = normalizeTelegramUrl(href, "sdk-parsed-init-data");
++  assert.equal(out.initData, "sdk-parsed-init-data", "the SDK's parsed value is authoritative");
++  assert.equal(out.url, "https://app.example/", "the URL is still normalised");
++}
++
++export function runTelegramUrlTests(): void {
++  testHashForm();
++  testQueryForm();
++  testPathForm();
++  testStartParamOnly();
++  testLeavesRealRoutesAlone();
++  testSdkValueWins();
++  console.log("  telegramUrl: hash/query/path init-data extraction + real-route passthrough OK");
++}
+-- 
+2.54.0.windows.1
+

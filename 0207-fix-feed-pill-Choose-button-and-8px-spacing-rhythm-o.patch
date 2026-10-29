@@ -1,0 +1,130 @@
+From 35be7a9e467b8f30a43680b897ffe7dfce1e8125 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 02:15:44 +0330
+Subject: [PATCH 207/230] fix(feed): pill Choose button and 8px spacing rhythm
+ on the feed top
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The "Choose" link was a flat block glued to the banner's edge and the feed
+top stacked 12, 10 and 6px gaps between banner, group headers and cards.
+
+Choose is now a 36px pill with a 44px hit band inside a 48px banner, and
+every gap on the feed top sits on the 8px grid: 12px under the header and
+the strip, 16px around group headers, 8px inside a group. The league chip
+row loses its -my-1 compensation, which was eating 4px of the gap to the
+first group header.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/ui.tsx |  7 ++++++-
+ src/pages/Matches.tsx | 24 ++++++++++++++++--------
+ 2 files changed, 22 insertions(+), 9 deletions(-)
+
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index b72a6cf..d9996ce 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -78,6 +78,10 @@ export function CollapsibleSection({
+   collapsedBadge,
+   /** Heading level; 3 unless this section is a top level of the page itself. */
+   level = 3,
++  /** Spacing override for the outer <section>: the feed's 8px rhythm places
++   *  its groups 16px apart, while a standalone collapsible keeps the default
++   *  24px page-level break. */
++  className,
+   children,
+ }: {
+   id: string;
+@@ -89,6 +93,7 @@ export function CollapsibleSection({
+   onUserToggle?: () => void;
+   collapsedBadge?: ReactNode;
+   level?: 2 | 3;
++  className?: string;
+   children: ReactNode;
+ }) {
+   const [storedOpen, setOpen] = useLocalState<boolean>(`section.open.${id}`, defaultOpen);
+@@ -117,7 +122,7 @@ export function CollapsibleSection({
+     setOpen((value) => !value);
+   };
+   return (
+-    <section className="mt-6">
++    <section className={className ?? "mt-6"}>
+       <Heading id={headingId} className="mb-2">
+         <button
+           ref={headerRef}
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 2ed4eb5..3fd4567 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -351,11 +351,15 @@ export default function Matches() {
+             and the row is here even with nothing followed so leagues are
+             pickable from the feed rather than only during onboarding.
+ 
+-            py-1 with -my-1 keeps the chips' 4px invisible hit band INSIDE this
+-            scroll container: overflow-x-auto clips vertically too, so without
+-            the padding the extra target area above and below is unreachable. */}
++            py-1 keeps the chips' 4px invisible hit band INSIDE this scroll
++            container: overflow-x-auto clips vertically too, so without the
++            padding the extra target area above and below is unreachable. It is
++            a plain 12px margin above now, not the old -my-1 compensation: the
++            row is part of the 8px rhythm (12px under the strip, and the first
++            group header 16px under the row), and a -4px bottom margin was
++            eating 4px of that header gap. */}
+         {!league && (followed.count > 0 || favCount > 0) ? (
+-          <div className="-mx-[var(--space-page-x,16px)] -my-1 mt-md flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
++          <div className="-mx-[var(--space-page-x,16px)] mt-md flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
+             {followed.count > 0 ? (
+               <>
+                 <button
+@@ -431,14 +435,16 @@ export default function Matches() {
+           <div
+             role="region"
+             aria-label={t("matches.pickBanner")}
+-            className="mt-2 flex min-h-11 items-center gap-2 rounded-card border border-line bg-elevated ps-3 pe-1"
++            className="mt-md flex min-h-12 items-center gap-2 rounded-card border border-line bg-elevated ps-3 pe-0.5"
+           >
+             <StarFilledIcon className="h-4 w-4 flex-none text-gold" aria-hidden="true" />
+             <p className="min-w-0 flex-1 text-xs font-bold text-ink">{t("matches.pickBanner")}</p>
+             <Link
+               to="/onboarding"
+               onClick={() => haptic("light")}
+-              className="inline-flex min-h-11 flex-none items-center rounded-lg bg-volt px-4 text-xs font-bold text-black"
++              // A pill, not a block glued to the banner's edge: 36px tall
++              // inside the 48px banner, with an invisible band to 44px.
++              className="relative inline-flex h-9 flex-none items-center rounded-full bg-volt px-4 text-[13px] font-bold text-black after:absolute after:-inset-1 after:content-['']"
+             >
+               {t("matches.pickBannerCta")}
+             </Link>
+@@ -449,7 +455,7 @@ export default function Matches() {
+                 haptic("light");
+                 setBannerDismissed(true);
+               }}
+-              className="grid h-11 w-11 flex-none place-items-center rounded-lg text-ink-3"
++              className="grid h-11 w-11 flex-none place-items-center rounded-full text-ink-3"
+             >
+               <CloseIcon className="h-4 w-4" aria-hidden="true" />
+             </button>
+@@ -502,7 +508,7 @@ export default function Matches() {
+           <div key={selectedKey} className="day-swap">
+             {/* My teams group: matches where a favorite team is playing. */}
+             {favCount > 0 && myTeamsMatches.length > 0 && (
+-              <section className="mt-md">
++              <section className="mt-4">
+                 <div className="mb-2 flex items-center gap-2">
+                   <StarFilledIcon className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
+                   <h2 className="text-sm font-bold text-ink-2">{t("matches.myTeams")}</h2>
+@@ -568,6 +574,8 @@ export default function Matches() {
+               <CollapsibleSection
+                 id="feed-finished"
+                 level={2}
++                // Same 16px between-group rhythm as GroupHeader's mt-4.
++                className="mt-4"
+                 title={t("matches.groupFinished")}
+                 count={groups.finished.length}
+                 defaultOpen={onlyFinishedHasContent}
+-- 
+2.54.0.windows.1
+

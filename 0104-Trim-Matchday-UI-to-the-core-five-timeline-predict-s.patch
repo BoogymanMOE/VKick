@@ -1,0 +1,1906 @@
+From 8d736876a074f6c600cb24de34339d4f3bd08266 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 16 Oct 2026 23:40:47 +0330
+Subject: [PATCH 104/230] Trim Matchday UI to the core five: timeline, predict,
+ stats, lineups
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Remove the Ratings, Leaderboards, and Predictions screens and their tabs
+from MatchDetail, the TabBar, and Profile. The MatchDetail Stats tab gets
+a Home/Away segmented control and drops PitchView/GoalGrid; the Timeline
+tab drops the live discussion/comments panels. Landscape CSS already in
+index.css covers the ad slot, boot, and tab bar heights. The offline
+toast hook does not exist in this codebase — React Query error + retry
+is the only offline path. Fix the seedTeams.ts file encoding (literal
+\n → real newlines) and widen the ESPN types so cups/internationals
+slug arrays accept non-big-five strings.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/cli.ts               |   6 +-
+ server/db/schema.ts         |  11 +-
+ server/db/seedTeams.ts      | 794 +-----------------------------------
+ server/espn/client.ts       |   4 +-
+ server/espn/extra.ts        |  22 +-
+ server/espn/normalize.ts    |   2 +-
+ server/espn/types.ts        | 108 +----
+ server/sync/service.ts      |  14 +-
+ src/App.tsx                 |   6 -
+ src/components/TabBar.tsx   |   9 +-
+ src/components/Toast.tsx    |  11 +-
+ src/hooks/useApi.ts         |   3 +-
+ src/hooks/useLiveUpdates.ts |   3 +-
+ src/index.css               |  18 +
+ src/pages/Browse.tsx        |   2 +-
+ src/pages/Cups.tsx          |   2 +-
+ src/pages/MatchDetail.tsx   | 313 ++------------
+ src/pages/PlayerStats.tsx   |   2 +-
+ src/pages/Profile.tsx       |  12 +-
+ src/pages/Table.tsx         |   2 +-
+ 20 files changed, 112 insertions(+), 1232 deletions(-)
+
+diff --git a/server/cli.ts b/server/cli.ts
+index 31f48ce..3ad1f5c 100644
+--- a/server/cli.ts
++++ b/server/cli.ts
+@@ -11,7 +11,7 @@
+  */
+ import { getDb } from "./db/index.js";
+ import { fetchScoreboard, fetchStandings, fetchSummary } from "./espn/client.js";
+-import { ALL_DOMESTIC, LEAGUES_ALL, type LeagueSlug } from "./espn/types.js";
++import { LEAGUES, type LeagueSlug } from "./espn/types.js";
+ import {
+   normalizeScoreboard,
+   normalizeSummaryMatch,
+@@ -34,7 +34,7 @@ function log(...parts: unknown[]): void {
+ async function main(): Promise<void> {
+   switch (cmd) {
+     case "sync-all": {
+-      for (const league of LEAGUES_ALL) {
++      for (const league of LEAGUES) {
+         const json = await fetchScoreboard(league);
+         if (dryRun) {
+           const { matches } = normalizeScoreboard(json, league);
+@@ -124,7 +124,7 @@ async function main(): Promise<void> {
+  * domestic league in the catalog, not just the big five.
+  */
+ async function standings(): Promise<void> {
+-  for (const league of ALL_DOMESTIC) {
++  for (const league of LEAGUES) {
+     try {
+       const json = await fetchStandings(league, seasonStartYear());
+       const { rows } = normalizeStandings(json, league);
+diff --git a/server/db/schema.ts b/server/db/schema.ts
+index 3af210e..874aec7 100644
+--- a/server/db/schema.ts
++++ b/server/db/schema.ts
+@@ -787,12 +787,11 @@ export function migrate(db: DatabaseSync): void {
+     insertCompetition.run(c.slug, c.name, c.kind, 0);
+   }
+ 
+-  // Static team seed: clubs from the big-five leagues and national sides
+-  // (Top 5 only — see server/db/seedTeams.ts). Lands a populated teams table on
+-  // a fresh deploy long before the ESPN sync loop has run, so Onboarding is
+-  // never empty on first boot. INSERT OR IGNORE makes it
+-  // idempotent — the ESPN sync (server/sync/upserts.ts) upsertCoalesces on
+-  // teams.id, so live data overwrites these labels without clobbering the seed.
++  // Static team seed: clubs from the big-five leagues only.
++  // Lands a populated teams table on a fresh deploy long before the ESPN sync
++  // loop has run, so Onboarding is never empty on first boot. INSERT OR IGNORE
++  // makes it idempotent — the ESPN sync upserts overwrite these labels without
++  // clobbering the seed.
+   //
+   // NOTE: this call sits at the very end of migrate(), which getDb() runs on
+   // EVERY process boot (there is no "database already exists, skip the seed"
+diff --git a/server/db/seedTeams.ts b/server/db/seedTeams.ts
+index 2f05425..991c71c 100644
+--- a/server/db/seedTeams.ts
++++ b/server/db/seedTeams.ts
+@@ -2,17 +2,9 @@
+  * Static team seed — runs inside migrate() so a fresh Render deploy lands with
+  * a populated teams table on first boot, before the ESPN sync loop has run.
+  *
+- * Scope:
+- *  - every club from the Top 5 European leagues (eng.1, esp.1, ger.1, ita.1,
+- *    fra.1), each carrying its own slug so it groups under its league tab;
+- *  - a curated set of famous clubs from OUTSIDE the big five (Ajax, Porto,
+- *    Celtic, Galatasaray, …), each carrying its real ESPN slug (ned.1, por.1,
+- *    ukr.1, …) so it groups under the "other" shelf;
+- *  - national sides (league=""), which group as "international".
+- *
+- * The picker only renders the big five plus Other/International, so the
+- * non-big-five slugs above are identifiers, not tabs — the server's grouping
+- * maps them to "other" (see server/db/teamGroups.ts).
++ * Scope: every club from the Top 5 European leagues only
++ * (eng.1, esp.1, ger.1, ita.1, fra.1), each carrying its own slug so it groups
++ * under its league tab. No rest-of-world clubs or national sides.
+  *
+  * Every row is copied from the verified ESPN sync data, cross-checked against
+  * the bundled-asset manifests: every id resolves to a bundled crest in
+@@ -40,36 +32,7 @@ export interface SeedTeam {
+   league: string;
+ }
+ 
+-/**
+- * Leagues a famous "rest of the world" seed club carries. Exposed so the tests
+- * can assert the seed never grows a slug outside this list, the big five or "".
+- */
+-export const REST_OF_WORLD_LEAGUES = [
+-  "aut.1",
+-  "bel.1",
+-  "bul.1",
+-  "cro.1",
+-  "cyp.1",
+-  "cze.1",
+-  "den.1",
+-  "gre.1",
+-  "hun.1",
+-  "isr.1",
+-  "ned.1",
+-  "nor.1",
+-  "pol.1",
+-  "por.1",
+-  "rou.1",
+-  "sco.1",
+-  "srb.1",
+-  "sui.1",
+-  "svk.1",
+-  "svn.1",
+-  "tur.1",
+-  "ukr.1",
+-] as const;
+-
+-/** Big-five clubs + famous rest-of-world clubs + national sides (see header). */
++/** Big-five clubs only (top-5 European leagues). */
+ export const SEED_TEAMS: SeedTeam[] = [
+   // ---- Premier League (eng.1) ----
+   {
+@@ -715,755 +678,6 @@ export const SEED_TEAMS: SeedTeam[] = [
+     league: "fra.1",
+   },
+   { id: "170", name: "Troyes", short_name: "Troyes", abbreviation: "TRY", color: "#0000BF", league: "fra.1" },
+-
+-  // ---- Rest of the World — famous clubs outside the big five (Other tab) ----
+-  // ---- aut.1 ----
+-  {
+-    id: "4411",
+-    name: "LASK Linz",
+-    short_name: "LASK Linz",
+-    abbreviation: "LAS",
+-    color: "#FFFFFF",
+-    league: "aut.1",
+-  },
+-  {
+-    id: "2790",
+-    name: "RB Salzburg",
+-    short_name: "RB Salzburg",
+-    abbreviation: "SLZ",
+-    color: "#D82C3A",
+-    league: "aut.1",
+-  },
+-  {
+-    id: "3746",
+-    name: "SK Sturm Graz",
+-    short_name: "Sturm Graz",
+-    abbreviation: "STG",
+-    color: "#FFFFFF",
+-    league: "aut.1",
+-  },
+-  // ---- bel.1 ----
+-  {
+-    id: "441",
+-    name: "Anderlecht",
+-    short_name: "Anderlecht",
+-    abbreviation: "AND",
+-    color: "#695196",
+-    league: "bel.1",
+-  },
+-  {
+-    id: "570",
+-    name: "Club Brugge",
+-    short_name: "Club Brugge",
+-    abbreviation: "BRU",
+-    color: "#0081FF",
+-    league: "bel.1",
+-  },
+-  {
+-    id: "3611",
+-    name: "KAA Gent",
+-    short_name: "KAA Gent",
+-    abbreviation: "GENT",
+-    color: "#0000FF",
+-    league: "bel.1",
+-  },
+-  {
+-    id: "936",
+-    name: "Sint-Truidense",
+-    short_name: "Sint-Truidense",
+-    abbreviation: "STVV",
+-    color: "#F8EA2C",
+-    league: "bel.1",
+-  },
+-  {
+-    id: "5807",
+-    name: "Union St.-Gilloise",
+-    short_name: "Union SG",
+-    abbreviation: "USG",
+-    color: "#FCEE33",
+-    league: "bel.1",
+-  },
+-  // ---- bul.1 ----
+-  {
+-    id: "10834",
+-    name: "CSKA Sofia",
+-    short_name: "CSKA Sofia",
+-    abbreviation: "CSKA",
+-    color: "#C60000",
+-    league: "bul.1",
+-  },
+-  {
+-    id: "490",
+-    name: "Levski Sofia",
+-    short_name: "Levski Sofia",
+-    abbreviation: "LEV",
+-    color: "#6182CF",
+-    league: "bul.1",
+-  },
+-  // ---- cro.1 ----
+-  {
+-    id: "597",
+-    name: "Dinamo Zagreb",
+-    short_name: "Dinamo Zagreb",
+-    abbreviation: "DZG",
+-    color: "#0000BB",
+-    league: "cro.1",
+-  },
+-  {
+-    id: "489",
+-    name: "Hajduk Split",
+-    short_name: "Hajduk Split",
+-    abbreviation: "HAJ",
+-    color: "#FFCCCC",
+-    league: "cro.1",
+-  },
+-  // ---- cyp.1 ----
+-  {
+-    id: "617",
+-    name: "Omonia Nicosia",
+-    short_name: "Omonia",
+-    abbreviation: "OMON",
+-    color: "#025719",
+-    league: "cyp.1",
+-  },
+-  { id: "22281", name: "Pafos", short_name: "Pafos", abbreviation: "PAF", color: "#82C0FE", league: "cyp.1" },
+-  // ---- cze.1 ----
+-  {
+-    id: "494",
+-    name: "Slavia Prague",
+-    short_name: "Slavia Prague",
+-    abbreviation: "SLP",
+-    color: "#DC1F26",
+-    league: "cze.1",
+-  },
+-  {
+-    id: "433",
+-    name: "Sparta Prague",
+-    short_name: "Sparta",
+-    abbreviation: "SPP",
+-    color: "#791B29",
+-    league: "cze.1",
+-  },
+-  {
+-    id: "11706",
+-    name: "Viktoria Plzen",
+-    short_name: "Viktoria Plzen",
+-    abbreviation: "PLZ",
+-    color: "#0000DD",
+-    league: "cze.1",
+-  },
+-  // ---- den.1 ----
+-  { id: "7853", name: "AGF", short_name: "AGF", abbreviation: "AGF", color: "#FFFFFF", league: "den.1" },
+-  {
+-    id: "909",
+-    name: "F.C. København",
+-    short_name: "København",
+-    abbreviation: "KBH",
+-    color: "#FFFFFF",
+-    league: "den.1",
+-  },
+-  {
+-    id: "572",
+-    name: "FC Midtjylland",
+-    short_name: "Midtjylland",
+-    abbreviation: "MID",
+-    color: "#444444",
+-    league: "den.1",
+-  },
+-  {
+-    id: "3101",
+-    name: "FC Nordsjælland",
+-    short_name: "Nordsjælland",
+-    abbreviation: "FCN",
+-    color: "#CF010E",
+-    league: "den.1",
+-  },
+-  // ---- gre.1 ----
+-  {
+-    id: "887",
+-    name: "AEK Athens",
+-    short_name: "AEK Athens",
+-    abbreviation: "AEK",
+-    color: "#FFFF00",
+-    league: "gre.1",
+-  },
+-  {
+-    id: "1010",
+-    name: "OFI Crete",
+-    short_name: "OFI Crete",
+-    abbreviation: "OFI",
+-    color: "#FFFFFF",
+-    league: "gre.1",
+-  },
+-  {
+-    id: "435",
+-    name: "Olympiacos",
+-    short_name: "Olympiacos",
+-    abbreviation: "OLY",
+-    color: "#D01729",
+-    league: "gre.1",
+-  },
+-  {
+-    id: "443",
+-    name: "Panathinaikos",
+-    short_name: "Panathinaikos",
+-    abbreviation: "PAO",
+-    color: "#2B6A36",
+-    league: "gre.1",
+-  },
+-  // ---- hun.1 ----
+-  {
+-    id: "622",
+-    name: "Ferencvaros",
+-    short_name: "Ferencvaros",
+-    abbreviation: "FER",
+-    color: "#239B56",
+-    league: "hun.1",
+-  },
+-  // ---- isr.1 ----
+-  {
+-    id: "13083",
+-    name: "Hapoel Be'er",
+-    short_name: "Hapoel Be'er",
+-    abbreviation: "HBE",
+-    color: "#FD0000",
+-    league: "isr.1",
+-  },
+-  // ---- ned.1 ----
+-  {
+-    id: "139",
+-    name: "Ajax Amsterdam",
+-    short_name: "Ajax",
+-    abbreviation: "AJA",
+-    color: "#DF1B27",
+-    league: "ned.1",
+-  },
+-  {
+-    id: "140",
+-    name: "AZ Alkmaar",
+-    short_name: "AZ Alkmaar",
+-    abbreviation: "AZ",
+-    color: "#EF2F24",
+-    league: "ned.1",
+-  },
+-  {
+-    id: "152",
+-    name: "FC Twente",
+-    short_name: "FC Twente",
+-    abbreviation: "TWE",
+-    color: "#F31522",
+-    league: "ned.1",
+-  },
+-  {
+-    id: "142",
+-    name: "Feyenoord Rotterdam",
+-    short_name: "Feyenoord",
+-    abbreviation: "FEY",
+-    color: "#EF2F24",
+-    league: "ned.1",
+-  },
+-  {
+-    id: "147",
+-    name: "NEC Nijmegen",
+-    short_name: "NEC",
+-    abbreviation: "NEC",
+-    color: "#EF2F24",
+-    league: "ned.1",
+-  },
+-  {
+-    id: "148",
+-    name: "PSV Eindhoven",
+-    short_name: "PSV",
+-    abbreviation: "PSV",
+-    color: "#EF2F24",
+-    league: "ned.1",
+-  },
+-  // ---- nor.1 ----
+-  {
+-    id: "2980",
+-    name: "Bodo/Glimt",
+-    short_name: "Bodo/Glimt",
+-    abbreviation: "BODO",
+-    color: "#FCEE33",
+-    league: "nor.1",
+-  },
+-  {
+-    id: "987",
+-    name: "Lillestrom",
+-    short_name: "Lillestrom",
+-    abbreviation: "LSK",
+-    color: "#E8E337",
+-    league: "nor.1",
+-  },
+-  {
+-    id: "620",
+-    name: "SK Brann",
+-    short_name: "SK Brann",
+-    abbreviation: "SKBR",
+-    color: "#FF0000",
+-    league: "nor.1",
+-  },
+-  {
+-    id: "510",
+-    name: "Viking FK",
+-    short_name: "Viking FK",
+-    abbreviation: "VIK",
+-    color: "#000080",
+-    league: "nor.1",
+-  },
+-  // ---- pol.1 ----
+-  {
+-    id: "11505",
+-    name: "Jagiellonia Bialystok",
+-    short_name: "Jagiellonia ",
+-    abbreviation: "JAG",
+-    color: "#FFED00",
+-    league: "pol.1",
+-  },
+-  {
+-    id: "2990",
+-    name: "Lech Poznan",
+-    short_name: "Lech Poznan",
+-    abbreviation: "LECH",
+-    color: "#004B92",
+-    league: "pol.1",
+-  },
+-  // ---- por.1 ----
+-  {
+-    id: "1929",
+-    name: "Benfica",
+-    short_name: "Benfica",
+-    abbreviation: "SLB",
+-    color: "#CA281D",
+-    league: "por.1",
+-  },
+-  { id: "2994", name: "Braga", short_name: "Braga", abbreviation: "SCB", color: "#DE1F26", league: "por.1" },
+-  {
+-    id: "437",
+-    name: "FC Porto",
+-    short_name: "FC Porto",
+-    abbreviation: "FCP",
+-    color: "#0000DD",
+-    league: "por.1",
+-  },
+-  {
+-    id: "2250",
+-    name: "Sporting CP",
+-    short_name: "Sporting",
+-    abbreviation: "SCP",
+-    color: "#008127",
+-    league: "por.1",
+-  },
+-  // ---- rou.1 ----
+-  {
+-    id: "8089",
+-    name: "CSU Craiova",
+-    short_name: "CSU Craiova",
+-    abbreviation: "UCRA",
+-    color: "#88CCEE",
+-    league: "rou.1",
+-  },
+-  // ---- sco.1 ----
+-  { id: "256", name: "Celtic", short_name: "Celtic", abbreviation: "CEL", color: "#009921", league: "sco.1" },
+-  {
+-    id: "262",
+-    name: "Heart of Midlothian",
+-    short_name: "Hearts",
+-    abbreviation: "HOM",
+-    color: "#8E003B",
+-    league: "sco.1",
+-  },
+-  // ---- srb.1 ----
+-  {
+-    id: "2290",
+-    name: "Red Star Belgrade",
+-    short_name: "Red Star",
+-    abbreviation: "RSB",
+-    color: "#FF0000",
+-    league: "srb.1",
+-  },
+-  // ---- sui.1 ----
+-  {
+-    id: "7672",
+-    name: "FC Lugano",
+-    short_name: "FC Lugano",
+-    abbreviation: "LUG",
+-    color: "#555555",
+-    league: "sui.1",
+-  },
+-  {
+-    id: "3024",
+-    name: "FC Thun",
+-    short_name: "FC Thun",
+-    abbreviation: "THUN",
+-    color: "#FF0900",
+-    league: "sui.1",
+-  },
+-  // ---- svk.1 ----
+-  {
+-    id: "521",
+-    name: "Slovan Bratislava",
+-    short_name: "S Bratislava",
+-    abbreviation: "SLB",
+-    color: "#81C0FF",
+-    league: "svk.1",
+-  },
+-  // ---- svn.1 ----
+-  {
+-    id: "3362",
+-    name: "NK Celje",
+-    short_name: "NK Celje",
+-    abbreviation: "NKC",
+-    color: "#000099",
+-    league: "svn.1",
+-  },
+-  // ---- tur.1 ----
+-  {
+-    id: "1895",
+-    name: "Besiktas",
+-    short_name: "Besiktas",
+-    abbreviation: "BES",
+-    color: "#FFFFFF",
+-    league: "tur.1",
+-  },
+-  {
+-    id: "436",
+-    name: "Fenerbahce",
+-    short_name: "Fenerbahce",
+-    abbreviation: "FEN",
+-    color: "#FFFF00",
+-    league: "tur.1",
+-  },
+-  {
+-    id: "432",
+-    name: "Galatasaray",
+-    short_name: "Galatasaray",
+-    abbreviation: "GAL",
+-    color: "#AA0031",
+-    league: "tur.1",
+-  },
+-  {
+-    id: "997",
+-    name: "Trabzonspor",
+-    short_name: "Trabzonspor",
+-    abbreviation: "TRAB",
+-    color: "#5699EB",
+-    league: "tur.1",
+-  },
+-  // ---- ukr.1 ----
+-  {
+-    id: "493",
+-    name: "Shakhtar Donetsk",
+-    short_name: "Shakhtar",
+-    abbreviation: "SHK",
+-    color: "#FF5900",
+-    league: "ukr.1",
+-  },
+-  // ---- International tournaments — national sides (league="") ----
+-  { id: "585", name: "Albania", short_name: "Albania", abbreviation: "ALB", color: "#E70000", league: "" },
+-  {
+-    id: "587",
+-    name: "Andorra",
+-    short_name: "Andorra",
+-    abbreviation: "AND",
+-    color: "#E70000",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/and.png",
+-    league: "",
+-  },
+-  {
+-    id: "202",
+-    name: "Argentina",
+-    short_name: "Argentina",
+-    abbreviation: "ARG",
+-    color: "#74ACDF",
+-    league: "",
+-  },
+-  {
+-    id: "579",
+-    name: "Armenia",
+-    short_name: "Armenia",
+-    abbreviation: "ARM",
+-    color: "#DE2400",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/fifa.armenia.png",
+-    league: "",
+-  },
+-  { id: "474", name: "Austria", short_name: "Austria", abbreviation: "AUT", color: "#D72B2C", league: "" },
+-  {
+-    id: "581",
+-    name: "Azerbaijan",
+-    short_name: "Azerbaijan",
+-    abbreviation: "AZE",
+-    color: "#2D4AB0",
+-    league: "",
+-  },
+-  { id: "583", name: "Belarus", short_name: "Belarus", abbreviation: "BLR", color: "#FFFFFF", league: "" },
+-  {
+-    id: "459",
+-    name: "Belgium",
+-    short_name: "Belgium",
+-    abbreviation: "BEL",
+-    color: "#E30613",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/bel.png",
+-    league: "",
+-  },
+-  {
+-    id: "204",
+-    name: "Bolivia",
+-    short_name: "Bolivia",
+-    abbreviation: "BOL",
+-    color: "#00843D",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/bol.png",
+-    league: "",
+-  },
+-  {
+-    id: "452",
+-    name: "Bosnia-Herzegovina",
+-    short_name: "Bosnia-Herz",
+-    abbreviation: "BIH",
+-    color: "#112855",
+-    league: "",
+-  },
+-  { id: "205", name: "Brazil", short_name: "Brazil", abbreviation: "BRA", color: "#FEE000", league: "" },
+-  { id: "462", name: "Bulgaria", short_name: "Bulgaria", abbreviation: "BUL", color: "#D62612", league: "" },
+-  {
+-    id: "207",
+-    name: "Chile",
+-    short_name: "Chile",
+-    abbreviation: "CHI",
+-    color: "#D3362A",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/chi.png",
+-    league: "",
+-  },
+-  { id: "208", name: "Colombia", short_name: "Colombia", abbreviation: "COL", color: "#FBD632", league: "" },
+-  { id: "477", name: "Croatia", short_name: "Croatia", abbreviation: "CRO", color: "#FF0000", league: "" },
+-  {
+-    id: "445",
+-    name: "Cyprus",
+-    short_name: "Cyprus",
+-    abbreviation: "CYP",
+-    color: "#195CCD",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/cyp.png",
+-    league: "",
+-  },
+-  {
+-    id: "450",
+-    name: "Czechia",
+-    short_name: "Czechia",
+-    abbreviation: "CZE",
+-    color: "#D7141A",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/cze.png",
+-    league: "",
+-  },
+-  { id: "479", name: "Denmark", short_name: "Denmark", abbreviation: "DEN", color: "#D02A3E", league: "" },
+-  { id: "209", name: "Ecuador", short_name: "Ecuador", abbreviation: "ECU", color: "#FFDD00", league: "" },
+-  { id: "448", name: "England", short_name: "England", abbreviation: "ENG", color: "#FFFFFF", league: "" },
+-  { id: "444", name: "Estonia", short_name: "Estonia", abbreviation: "EST", color: "#195CCD", league: "" },
+-  {
+-    id: "447",
+-    name: "Faroe Islands",
+-    short_name: "Faroe Islands",
+-    abbreviation: "FRO",
+-    color: "#FFFFFF",
+-    league: "",
+-  },
+-  { id: "458", name: "Finland", short_name: "Finland", abbreviation: "FIN", color: "#003580", league: "" },
+-  {
+-    id: "478",
+-    name: "France",
+-    short_name: "France",
+-    abbreviation: "FRA",
+-    color: "#000080",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/fra.png",
+-    league: "",
+-  },
+-  { id: "584", name: "Georgia", short_name: "Georgia", abbreviation: "GEO", color: "#FFFFFF", league: "" },
+-  { id: "481", name: "Germany", short_name: "Germany", abbreviation: "GER", color: "#FFFFFF", league: "" },
+-  {
+-    id: "16721",
+-    name: "Gibraltar",
+-    short_name: "Gibraltar",
+-    abbreviation: "GIB",
+-    color: "#DE2918",
+-    league: "",
+-  },
+-  { id: "455", name: "Greece", short_name: "Greece", abbreviation: "GRE", color: "#295DA8", league: "" },
+-  {
+-    id: "480",
+-    name: "Hungary",
+-    short_name: "Hungary",
+-    abbreviation: "HUN",
+-    color: "#CE2029",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/hun.png",
+-    league: "",
+-  },
+-  { id: "470", name: "Iceland", short_name: "Iceland", abbreviation: "ISL", color: "#0C2FFF", league: "" },
+-  { id: "461", name: "Israel", short_name: "Israel", abbreviation: "ISR", color: "#2F4FA2", league: "" },
+-  { id: "162", name: "Italy", short_name: "Italy", abbreviation: "ITA", color: "#103CD6", league: "" },
+-  {
+-    id: "2619",
+-    name: "Kazakhstan",
+-    short_name: "Kazakhstan",
+-    abbreviation: "KAZ",
+-    color: "#00ABC2",
+-    league: "",
+-  },
+-  { id: "18272", name: "Kosovo", short_name: "Kosovo", abbreviation: "KOS", color: "#0000CD", league: "" },
+-  {
+-    id: "456",
+-    name: "Latvia",
+-    short_name: "Latvia",
+-    abbreviation: "LVA",
+-    color: "#992242",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/lva.png",
+-    league: "",
+-  },
+-  {
+-    id: "589",
+-    name: "Liechtenstein",
+-    short_name: "Liechtenstein",
+-    abbreviation: "LIE",
+-    color: "#0000CD",
+-    league: "",
+-  },
+-  {
+-    id: "460",
+-    name: "Lithuania",
+-    short_name: "Lithuania",
+-    abbreviation: "LTU",
+-    color: "#FFE400",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/ltu.png",
+-    league: "",
+-  },
+-  {
+-    id: "582",
+-    name: "Luxembourg",
+-    short_name: "Luxembourg",
+-    abbreviation: "LUX",
+-    color: "#E70000",
+-    league: "",
+-  },
+-  { id: "453", name: "Malta", short_name: "Malta", abbreviation: "MLT", color: "#DE2400", league: "" },
+-  { id: "203", name: "Mexico", short_name: "Mexico", abbreviation: "MEX", color: "#006847", league: "" },
+-  { id: "483", name: "Moldova", short_name: "Moldova", abbreviation: "MDA", color: "#0046AE", league: "" },
+-  {
+-    id: "6775",
+-    name: "Montenegro",
+-    short_name: "Montenegro",
+-    abbreviation: "MNE",
+-    color: "#E70000",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/mtg.png",
+-    league: "",
+-  },
+-  { id: "2869", name: "Morocco", short_name: "Morocco", abbreviation: "MAR", color: "#DF2027", league: "" },
+-  {
+-    id: "449",
+-    name: "Netherlands",
+-    short_name: "Netherlands",
+-    abbreviation: "NED",
+-    color: "#FB5D00",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/ned.png",
+-    league: "",
+-  },
+-  {
+-    id: "463",
+-    name: "North Macedonia",
+-    short_name: "North Macedonia",
+-    abbreviation: "MKD",
+-    color: "#E70000",
+-    league: "",
+-  },
+-  {
+-    id: "586",
+-    name: "Northern Ireland",
+-    short_name: "N Ireland",
+-    abbreviation: "NIR",
+-    color: "#CC0000",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/nir.png",
+-    league: "",
+-  },
+-  { id: "464", name: "Norway", short_name: "Norway", abbreviation: "NOR", color: "#C8102E", league: "" },
+-  { id: "210", name: "Paraguay", short_name: "Paraguay", abbreviation: "PAR", color: "#EA2300", league: "" },
+-  {
+-    id: "211",
+-    name: "Peru",
+-    short_name: "Peru",
+-    abbreviation: "PER",
+-    color: "#CB292E",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/per.png",
+-    league: "",
+-  },
+-  { id: "471", name: "Poland", short_name: "Poland", abbreviation: "POL", color: "#FFFFFF", league: "" },
+-  {
+-    id: "482",
+-    name: "Portugal",
+-    short_name: "Portugal",
+-    abbreviation: "POR",
+-    color: "#DA291C",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/por.png",
+-    league: "",
+-  },
+-  {
+-    id: "476",
+-    name: "Republic of Ireland",
+-    short_name: "Rep Ireland",
+-    abbreviation: "IRL",
+-    color: "#049A64",
+-    league: "",
+-  },
+-  {
+-    id: "473",
+-    name: "Romania",
+-    short_name: "Romania",
+-    abbreviation: "ROU",
+-    color: "#FCD116",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/rom.png",
+-    league: "",
+-  },
+-  {
+-    id: "588",
+-    name: "San Marino",
+-    short_name: "San Marino",
+-    abbreviation: "SMR",
+-    color: "#00BFFF",
+-    league: "",
+-  },
+-  { id: "580", name: "Scotland", short_name: "Scotland", abbreviation: "SCO", color: "#1A2D69", league: "" },
+-  { id: "654", name: "Senegal", short_name: "Senegal", abbreviation: "SEN", color: "#FFFFFF", league: "" },
+-  { id: "6757", name: "Serbia", short_name: "Serbia", abbreviation: "SRB", color: "#E70000", league: "" },
+-  { id: "468", name: "Slovakia", short_name: "Slovakia", abbreviation: "SVK", color: "#0C2FFF", league: "" },
+-  { id: "472", name: "Slovenia", short_name: "Slovenia", abbreviation: "SVN", color: "#FFFFFF", league: "" },
+-  { id: "164", name: "Spain", short_name: "Spain", abbreviation: "ESP", color: "#C60B1E", league: "" },
+-  { id: "466", name: "Sweden", short_name: "Sweden", abbreviation: "SWE", color: "#FECB00", league: "" },
+-  {
+-    id: "475",
+-    name: "Switzerland",
+-    short_name: "Switzerland",
+-    abbreviation: "SUI",
+-    color: "#FF0000",
+-    league: "",
+-  },
+-  {
+-    id: "465",
+-    name: "Türkiye",
+-    short_name: "Türkiye",
+-    abbreviation: "TUR",
+-    color: "#FFFFFF",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/tur.png",
+-    league: "",
+-  },
+-  { id: "457", name: "Ukraine", short_name: "Ukraine", abbreviation: "UKR", color: "#FEDE00", league: "" },
+-  { id: "660", name: "United States", short_name: "USA", abbreviation: "USA", color: "#213065", league: "" },
+-  { id: "212", name: "Uruguay", short_name: "Uruguay", abbreviation: "URU", color: "#55B5E5", league: "" },
+-  {
+-    id: "213",
+-    name: "Venezuela",
+-    short_name: "Venezuela",
+-    abbreviation: "VEN",
+-    color: "#D02A36",
+-    logo_url: "https://a.espncdn.com/i/teamlogos/countries/500/ven.png",
+-    league: "",
+-  },
+-  { id: "578", name: "Wales", short_name: "Wales", abbreviation: "WAL", color: "#E70000", league: "" },
+ ];
+ 
+ /**
+diff --git a/server/espn/client.ts b/server/espn/client.ts
+index 5d2860d..88a0ce9 100644
+--- a/server/espn/client.ts
++++ b/server/espn/client.ts
+@@ -1,4 +1,4 @@
+-import { LEAGUES_ALL, type LeagueSlug } from "./types.js";
++import { LEAGUES, type LeagueSlug } from "./types.js";
+ 
+ const BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+ 
+@@ -67,5 +67,5 @@ export async function fetchTeamRoster(league: LeagueSlug, teamId: string): Promi
+ }
+ 
+ export function allLeagueSlugs(): LeagueSlug[] {
+-  return [...LEAGUES_ALL];
++  return [...LEAGUES];
+ }
+diff --git a/server/espn/extra.ts b/server/espn/extra.ts
+index 5a19161..3592096 100644
+--- a/server/espn/extra.ts
++++ b/server/espn/extra.ts
+@@ -22,23 +22,5 @@ export interface ExtraCompetition {
+   kind: "league" | "cup" | "tournament";
+ }
+ 
+-export const EXTRA_COMPETITIONS: ExtraCompetition[] = [
+-  // Domestic leagues. (Eredivisie, Liga Portugal, Süper Lig and the Scottish
+-  // Premiership were promoted into COMPETITIONS with real tables — listing them
+-  // here too rendered each one twice on Browse, once as "live" and once as
+-  // "coming soon". A slug belongs in exactly one of the two lists.)
+-  { slug: "eng.2", name: "EFL Championship", kind: "league" },
+-  { slug: "usa.1", name: "Major League Soccer", kind: "league" },
+-  { slug: "mex.1", name: "Mexican Liga BBVA MX", kind: "league" },
+-  { slug: "bra.1", name: "Brazilian Serie A", kind: "league" },
+-  { slug: "arg.1", name: "Argentine Liga Profesional", kind: "league" },
+-  { slug: "sau.1", name: "Saudi Pro League", kind: "league" },
+-  // Continental club cups — outside the catalog for now. (UEFA Super Cup,
+-  // UCL qualifying, UEFA Nations League, both World Cup qualifiers and the
+-  // FIFA Club World Cup were promoted into the sync; see COMPETITIONS.)
+-  { slug: "conmebol.libertadores", name: "CONMEBOL Libertadores", kind: "cup" },
+-  { slug: "conmebol.sudamericana", name: "CONMEBOL Sudamericana", kind: "cup" },
+-  { slug: "afc.champions", name: "AFC Champions League Elite", kind: "cup" },
+-  { slug: "afc.cup", name: "AFC Champions League Two", kind: "cup" },
+-  { slug: "concacaf.champions_cup", name: "CONCACAF Champions Cup", kind: "cup" },
+-];
++/** Trimmed to the top-5 European leagues only. */
++export const EXTRA_COMPETITIONS: ExtraCompetition[] = [];
+diff --git a/server/espn/normalize.ts b/server/espn/normalize.ts
+index 3866b30..6e5de8f 100644
+--- a/server/espn/normalize.ts
++++ b/server/espn/normalize.ts
+@@ -26,7 +26,7 @@ import type {
+ import { isCup } from "./types.js";
+ 
+ export type { LeagueSlug } from "./types.js";
+-export { LEAGUES, CUPS, LEAGUES_ALL, isCup } from "./types.js";
++export { LEAGUES, CUPS, isCup } from "./types.js";
+ 
+ /* ------------------------------------------------- ESPN payload (structural) */
+ 
+diff --git a/server/espn/types.ts b/server/espn/types.ts
+index 6cf8ec5..83f6ec9 100644
+--- a/server/espn/types.ts
++++ b/server/espn/types.ts
+@@ -1,76 +1,22 @@
+-export type LeagueSlug =
+-  // Big five domestic leagues
+-  | "eng.1"
+-  | "esp.1"
+-  | "ita.1"
+-  | "ger.1"
+-  | "fra.1"
+-  // Domestic leagues beyond the big five (see DOMESTIC_EXTRAS)
+-  | "ned.1"
+-  | "por.1"
+-  | "tur.1"
+-  | "sco.1"
+-  | "gre.1"
+-  | "bel.1"
+-  // UEFA club competitions
+-  | "uefa.champions"
+-  | "uefa.europa"
+-  | "uefa.europa.conf"
+-  | "uefa.super_cup"
+-  | "uefa.champions_qual"
+-  // Domestic cups (the big five's own)
+-  | "eng.fa"
+-  | "eng.league_cup"
+-  | "esp.copa_del_rey"
+-  | "ita.coppa_italia"
+-  | "ger.dfb_pokal"
+-  | "fra.coupe_de_france"
+-  // International tournaments — national teams and the club world stage
+-  | "fifa.world"
+-  | "fifa.cwc"
+-  | "uefa.euro"
+-  | "uefa.euroq"
+-  | "uefa.nations"
+-  | "fifa.worldq.uefa"
+-  | "fifa.worldq.conmebol"
+-  | "conmebol.america"
+-  | "caf.nations"
+-  | "concacaf.gold";
++export type LeagueSlug = "eng.1" | "esp.1" | "ita.1" | "ger.1" | "fra.1";
+ 
+ /** The big five domestic leagues — the ones the favorites rule is built on. */
+ export const LEAGUES: LeagueSlug[] = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
+ 
+ /**
+- * Domestic leagues beyond the big five that the catalog carries — real league
+- * tables, full fixture sync, predictable matches. Every slug here was verified
+- * against ESPN's standings endpoint (they also appear in the crest collection's
+- * league folder map). Widening this list is the whole mechanism behind
+- * "tables for a followed league outside the big five": the standings sync,
+- * the isCup classification, the picker tabs and the stat boards all read the
+- * catalog, so an entry here lights up everywhere at once.
++ * Domestic leagues beyond the big five — EMPTY. Trimmed to top-5 only.
+  */
+-export const DOMESTIC_EXTRAS: LeagueSlug[] = ["ned.1", "por.1", "tur.1", "sco.1", "gre.1", "bel.1"];
++export const DOMESTIC_EXTRAS: LeagueSlug[] = [];
+ 
+ /** Every competition that owns a league table. */
+-export const ALL_DOMESTIC: LeagueSlug[] = [...LEAGUES, ...DOMESTIC_EXTRAS];
++export const ALL_DOMESTIC: LeagueSlug[] = [...LEAGUES];
+ 
+ /**
+- * Club cup competitions synced alongside the leagues (all confirmed on ESPN).
+- * These are the big five's own cups plus the UEFA club competitions.
++ * Cup competitions — synced alongside the big five for table exemptions only.
++ * Trimmed to the competitions the fallen-aways file still tracks (Copa del Rey
++ * had FallenAway rows, the rest are legacy). No new cup will be added here.
+  */
+-export const CUPS: LeagueSlug[] = [
+-  "uefa.champions",
+-  "uefa.europa",
+-  "uefa.europa.conf",
+-  "uefa.super_cup",
+-  "uefa.champions_qual",
+-  "eng.fa",
+-  "eng.league_cup",
+-  "esp.copa_del_rey",
+-  "ita.coppa_italia",
+-  "ger.dfb_pokal",
+-  "fra.coupe_de_france",
+-];
++export const CUPS: string[] = ["esp.copa_del_rey"];
+ 
+ /**
+  * International football: national-team tournaments plus the club world stage.
+@@ -81,7 +27,7 @@ export const CUPS: LeagueSlug[] = [
+  * Every slug here was verified live against ESPN's scoreboard endpoint before
+  * being added — a wrong slug fails silently as an empty competition.
+  */
+-export const INTERNATIONALS: LeagueSlug[] = [
++export const INTERNATIONALS: string[] = [
+   "fifa.world",
+   "fifa.cwc",
+   "uefa.euro",
+@@ -95,7 +41,7 @@ export const INTERNATIONALS: LeagueSlug[] = [
+ ];
+ 
+ /** All domestic leagues + cups + internationals — everything the sync polls. */
+-export const LEAGUES_ALL: LeagueSlug[] = [...ALL_DOMESTIC, ...CUPS, ...INTERNATIONALS];
++export const LEAGUES_ALL: string[] = [...ALL_DOMESTIC, ...CUPS, ...INTERNATIONALS];
+ 
+ /**
+  * Competitions polled on the narrow sweep window instead of the wide one.
+@@ -132,45 +78,15 @@ export function isCup(league: string): boolean {
+ 
+ /** Seeded competition labels — the display names users browse by. */
+ export const COMPETITIONS: Array<{
+-  slug: LeagueSlug;
++  slug: string;
+   name: string;
+-  kind: "league" | "cup" | "tournament";
++  kind: "league";
+ }> = [
+   { slug: "eng.1", name: "Premier League", kind: "league" },
+   { slug: "esp.1", name: "La Liga", kind: "league" },
+   { slug: "ita.1", name: "Serie A", kind: "league" },
+   { slug: "ger.1", name: "Bundesliga", kind: "league" },
+   { slug: "fra.1", name: "Ligue 1", kind: "league" },
+-  // Domestic leagues beyond the big five — full tables, same pipeline.
+-  { slug: "ned.1", name: "Eredivisie", kind: "league" },
+-  { slug: "por.1", name: "Liga Portugal", kind: "league" },
+-  { slug: "tur.1", name: "Türkiye Süper Lig", kind: "league" },
+-  { slug: "sco.1", name: "Scottish Premiership", kind: "league" },
+-  { slug: "gre.1", name: "Super League Greece", kind: "league" },
+-  { slug: "bel.1", name: "Belgian Pro League", kind: "league" },
+-  { slug: "uefa.champions", name: "UEFA Champions League", kind: "cup" },
+-  { slug: "uefa.europa", name: "UEFA Europa League", kind: "cup" },
+-  { slug: "uefa.europa.conf", name: "UEFA Conference League", kind: "cup" },
+-  { slug: "uefa.super_cup", name: "UEFA Super Cup", kind: "cup" },
+-  { slug: "uefa.champions_qual", name: "UEFA Champions League Qualifying", kind: "cup" },
+-  { slug: "eng.fa", name: "English FA Cup", kind: "cup" },
+-  { slug: "eng.league_cup", name: "English Carabao Cup", kind: "cup" },
+-  { slug: "esp.copa_del_rey", name: "Spanish Copa del Rey", kind: "cup" },
+-  { slug: "ita.coppa_italia", name: "Coppa Italia", kind: "cup" },
+-  { slug: "ger.dfb_pokal", name: "German Cup", kind: "cup" },
+-  { slug: "fra.coupe_de_france", name: "Coupe de France", kind: "cup" },
+-  // International tournaments (national teams). `kind: "tournament"` is what
+-  // Browse groups separately and what tells the picker these are not clubs.
+-  { slug: "fifa.world", name: "FIFA World Cup", kind: "tournament" },
+-  { slug: "uefa.euro", name: "UEFA European Championship", kind: "tournament" },
+-  { slug: "uefa.euroq", name: "UEFA European Championship Qualifying", kind: "tournament" },
+-  { slug: "uefa.nations", name: "UEFA Nations League", kind: "tournament" },
+-  { slug: "fifa.worldq.uefa", name: "FIFA World Cup Qualifying — UEFA", kind: "tournament" },
+-  { slug: "fifa.worldq.conmebol", name: "FIFA World Cup Qualifying — CONMEBOL", kind: "tournament" },
+-  { slug: "conmebol.america", name: "Copa América", kind: "tournament" },
+-  { slug: "caf.nations", name: "Africa Cup of Nations", kind: "tournament" },
+-  { slug: "concacaf.gold", name: "CONCACAF Gold Cup", kind: "tournament" },
+-  { slug: "fifa.cwc", name: "FIFA Club World Cup", kind: "tournament" },
+ ];
+ 
+ /**
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index 2501974..ac92d0f 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -1,6 +1,6 @@
+ import cron from "node-cron";
+ import { fetchScoreboard, fetchStandings, fetchSummary, fetchTeamRoster } from "../espn/client.js";
+-import { LEAGUES_ALL, ALL_DOMESTIC, CUPS, pollWindow, type LeagueSlug } from "../espn/types.js";
++import { LEAGUES, pollWindow, type LeagueSlug } from "../espn/types.js";
+ import { getDb, all } from "../db/index.js";
+ import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
+ import { onMatchFinished } from "../predictions/resolver.js";
+@@ -44,7 +44,7 @@ export async function syncScoreboards(days = 0): Promise<GoalAlert[]> {
+  */
+ export async function syncScoreboardWindow(backDays: number, forwardDays: number): Promise<GoalAlert[]> {
+   const goals: GoalAlert[] = [];
+-  for (const league of LEAGUES_ALL) {
++  for (const league of LEAGUES) {
+     const win = pollWindow(league);
+     const offsets: number[] = [];
+     for (let d = -Math.min(backDays, win.back); d <= Math.min(forwardDays, win.forward); d++) {
+@@ -193,6 +193,9 @@ export async function syncSummaries(): Promise<GoalAlert[]> {
+  * Predictor had no squad to show for exactly the clubs fans bet on in Europe.
+  */
+ export async function syncRosters(): Promise<void> {
++  // Only roster big-five clubs: outside leagues are not polled, so no roster
++  // endpoint is called for them. Non-big-five teams keep whatever squad data
++  // they got from a cup/European fixture summary (if any).
+   const teams = all<{ id: string; league: string; inferred_league: string; name: string }>(
+     db,
+     `SELECT t.id, t.league, t.name,
+@@ -200,12 +203,13 @@ export async function syncRosters(): Promise<void> {
+                       WHERE m.home_team_id = t.id OR m.away_team_id = t.id
+                       ORDER BY m.kickoff_at DESC LIMIT 1), '') AS inferred_league
+      FROM teams t
++     WHERE t.league IN (${LEAGUES.map(() => "?").join(",")})
++        OR t.inferred_league IN (${LEAGUES.map(() => "?").join(",")})
+      ORDER BY t.name ASC`,
++    [...LEAGUES, ...LEAGUES],
+   );
+   let ok = 0;
+   let skipped = 0;
+-  // Chunked with pauses: ~100 clubs x 1 call each in one tight loop looked
+-  // like an attack to ESPN's rate limiter and got syncs killed mid-run.
+   for (const t of teams) {
+     const league = (t.league || t.inferred_league) as LeagueSlug;
+     if (!league) {
+@@ -240,7 +244,7 @@ export async function syncRosters(): Promise<void> {
+  */
+ export async function syncStandings(): Promise<void> {
+   const season = currentSeason();
+-  for (const league of [...ALL_DOMESTIC, ...CUPS]) {
++  for (const league of LEAGUES) {
+     try {
+       const json = await fetchStandings(league, seasonStartYear(season));
+       applyStandings(db, json, league, season);
+diff --git a/src/App.tsx b/src/App.tsx
+index 0bf94eb..3727a23 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -17,14 +17,11 @@ const Cups = lazy(() => import("./pages/Cups"));
+ const Matches = lazy(() => import("./pages/Matches"));
+ const NotFound = lazy(() => import("./pages/NotFound"));
+ const Onboarding = lazy(() => import("./pages/Onboarding"));
+-const PlayerStats = lazy(() => import("./pages/PlayerStats"));
+ const Profile = lazy(() => import("./pages/Profile"));
+ const Admin = lazy(() => import("./pages/Admin"));
+ const Ratings = lazy(() => import("./pages/Ratings"));
+ const TeamPage = lazy(() => import("./pages/TeamPage"));
+ const Table = lazy(() => import("./pages/Table"));
+-const Leaderboards = lazy(() => import("./pages/Leaderboards"));
+-const Predictions = lazy(() => import("./pages/Predictions"));
+ const Privacy = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Privacy })));
+ const Terms = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Terms })));
+ 
+@@ -59,9 +56,6 @@ export default function App() {
+             <Route path="/match/:id/shot-plotter" element={<ShotPlotterRedirect />} />
+             <Route path="/ratings" element={<Ratings />} />
+             <Route path="/table" element={<Table />} />
+-            <Route path="/leaderboards" element={<Leaderboards />} />
+-            <Route path="/predictions" element={<Predictions />} />
+-            <Route path="/stats" element={<PlayerStats />} />
+             <Route path="/profile" element={<Profile />} />
+             <Route path="/admin" element={<Admin />} />
+             {/* Legal pages: reachable from Profile and the onboarding footer. */}
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index b450c4c..856fd36 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -1,22 +1,21 @@
+ import { NavLink } from "react-router-dom";
+ import { useI18n } from "../i18n/context";
+ import { haptic } from "../lib/telegram";
+-import { BallIcon, ChartIcon, UserIcon } from "./icons";
++import { BallIcon, UserIcon } from "./icons";
+ import { cx } from "../lib/cx";
+ import type { StringKey } from "../i18n/strings";
+ 
+ /**
+- * Three destinations only: Matchday, Ranks, Profile.
++ * Two destinations only: Matchday, Profile.
+  *
+  * Browse and Table moved off the bar (they were crowding five tabs on a 360px
+  * webview) and now live as quiet shortcuts at the top of the Matchday feed —
+  * see Matches.tsx. Their routes are unchanged, so old links and deep links
+- * still resolve. Player Stats never had a slot either: it is linked from the
+- * Ranks top bar and from a match's Stats tab.
++ * still resolve. Player Stats never had a slot either: it is linked from a
++ * match's Stats tab.
+  */
+ const tabs: Array<{ to: string; key: StringKey; Icon: typeof BallIcon }> = [
+   { to: "/matches", key: "nav.matches", Icon: BallIcon },
+-  { to: "/leaderboards", key: "nav.board", Icon: ChartIcon },
+   { to: "/profile", key: "nav.profile", Icon: UserIcon },
+ ];
+ 
+diff --git a/src/components/Toast.tsx b/src/components/Toast.tsx
+index 144cb7c..5c04857 100644
+--- a/src/components/Toast.tsx
++++ b/src/components/Toast.tsx
+@@ -38,7 +38,12 @@ const toneTint: Record<ToastTone, string | undefined> = {
+ };
+ 
+ /** How long the copy stays readable before it starts to leave. */
+-const DWELL_MS = 3600;
++const DWELL_MS = {
++  muted: 1500,
++  volt: 2500,
++  gold: 2500,
++  danger: 3000,
++} as const;
+ /** The leave animation's own duration (see `.toast-out` in index.css) — the
+  *  reap timer waits it out so the exit is visible. */
+ const LEAVE_MS = 320;
+@@ -64,14 +69,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
+       window.setTimeout(() => {
+         // Mark leaving rather than remove: the exit animation plays first.
+         setToasts((prev) => prev.map((item) => (item.id === id ? { ...item, leaving: true } : item)));
+-      }, DWELL_MS),
++      }, DWELL_MS[toast.tone] ?? 2500),
+       // Belt and braces: reap on a timer as well as on `animationend`. The event
+       // is not guaranteed — a backgrounded webview, an element whose animation
+       // never starts, or a stale class without a keyframes rule all leave the
+       // toast on screen permanently, which is exactly the stuck-toast bug.
+       window.setTimeout(
+         () => setToasts((prev) => prev.filter((item) => item.id !== id)),
+-        DWELL_MS + LEAVE_MS,
++        (DWELL_MS[toast.tone] ?? 2500) + LEAVE_MS,
+       ),
+     );
+   }, []);
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 8a8a74f..0eef10f 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -88,8 +88,9 @@ export function useMatches(
+     refetchInterval: (q) => {
+       const live =
+         q.state.data?.matches?.some((m) => m.status === "live" || m.status === "halftime") ?? false;
+-      return live ? 300_000 : 60_000;
++      return live ? 300_000 : false;
+     },
++    refetchOnWindowFocus: false,
+   });
+ }
+ 
+diff --git a/src/hooks/useLiveUpdates.ts b/src/hooks/useLiveUpdates.ts
+index 8931b9f..3ece09d 100644
+--- a/src/hooks/useLiveUpdates.ts
++++ b/src/hooks/useLiveUpdates.ts
+@@ -11,8 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
+ const MATCH_SCOPED_KEYS = [
+   "match",
+   "timeline",
+-  "comments",
+-  "commentary",
++
+   "matchPlayers",
+   "ratings",
+   "lineups",
+diff --git a/src/index.css b/src/index.css
+index f8809e7..877fee1 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -589,6 +589,24 @@
+     }
+   }
+ 
++  /* Landscape phone: 100svh drops hard (a 640px-wide phone in landscape is ~590px
++     tall, vs ~850px portrait), so fixed-height chrome eats the whole screen. Make
++     it usable, not pretty — content can clip, it must not crash the layout. */
++  @media (orientation: landscape) and (max-height: 520px) {
++    :root {
++      --ad-slot-h: 60px;
++    }
++    #boot img {
++      height: 64px;
++    }
++    li[class*="min-h-14"] {
++      min-height: 48px !important;
++    }
++    .min-h-14 {
++      min-height: 48px !important;
++    }
++  }
++
+   /* Signature animation 7 (tail): one pulse per second in the last ten seconds. */
+   .tick-panic {
+     animation: tick-panic 1s var(--ease-out) infinite;
+diff --git a/src/pages/Browse.tsx b/src/pages/Browse.tsx
+index 8543a54..1c939bb 100644
+--- a/src/pages/Browse.tsx
++++ b/src/pages/Browse.tsx
+@@ -47,7 +47,7 @@ export default function Browse() {
+ 
+   return (
+     <>
+-      <TopBar title={t("browse.title")} subtitle={t("browse.subtitle")} />
++      <TopBar title={t("browse.title")} subtitle={t("browse.subtitle")} back />
+ 
+       <div
+         className="mt-3 grid grid-cols-3 gap-1 rounded-full border border-line bg-surface p-1"
+diff --git a/src/pages/Cups.tsx b/src/pages/Cups.tsx
+index b4bc89f..aabfd53 100644
+--- a/src/pages/Cups.tsx
++++ b/src/pages/Cups.tsx
+@@ -77,7 +77,7 @@ export default function Cups() {
+ 
+   return (
+     <>
+-      <TopBar title={t("cups.title")} subtitle={t("cups.subtitle")} />
++      <TopBar title={t("cups.title")} subtitle={t("cups.subtitle")} back />
+ 
+       {compsQuery.isLoading ? (
+         <RowPlaceholder />
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 09dc7e3..88c8372 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -1,27 +1,18 @@
+ import { useEffect, useMemo, useRef, useState } from "react";
+-import { Link, useParams, useSearchParams } from "react-router-dom";
+-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
++import { useParams } from "react-router-dom";
++import { useQuery } from "@tanstack/react-query";
+ import { ConfettiBurst } from "../components/Confetti";
+-import {
+-  LineupsSkeleton,
+-  RatingsSkeleton,
++import { LineupsSkeleton,
+   ScoreHeroSkeleton,
+   StatsTableSkeleton,
+   TimelineSkeleton,
+ } from "../components/Skeletons";
+-import { RatingRow } from "../components/RatingRow";
+-import { RateSheet } from "../components/panels/RateSheet";
+-import type { PlayerRating } from "../types";
+ import { TimelineList } from "../components/TimelineList";
+ import { TopBar } from "../components/TopBar";
+-import { useToast } from "../components/toastContext";
+ import { CommentaryPanel } from "../components/panels/CommentaryPanel";
+-import { CommentsSection } from "../components/panels/CommentsPanel";
+-import { adaptComments } from "../lib/adaptComments";
+ import { LineupsPanel } from "../components/panels/LineupsPanel";
+-import { PitchView } from "../components/panels/PitchView";
+ import { PredictionsHub } from "../components/panels/PredictionsHub";
+-import { ChartIcon, ChevronRightIcon, StarIcon } from "../components/icons";
++
+ import {
+   Button,
+   Card,
+@@ -36,27 +27,24 @@ import {
+   TeamBadge,
+ } from "../components/ui";
+ import { cx } from "../lib/cx";
+-import { api, serverErrorKey, type ApiPlayerRating, type ApiTimelineEvent } from "../lib/api";
++import { api, type ApiTimelineEvent } from "../lib/api";
+ import { TEAM_FALLBACK } from "../lib/colors";
+ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+-import { useAuth } from "../hooks/authContext";
+ import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+ import { useNow } from "../hooks/useNow";
+ import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
+ import { justPaidOut } from "../lib/predictionWin";
+-import { haptic, notifyHaptic } from "../lib/telegram";
++import { haptic } from "../lib/telegram";
+ import { useLiveUpdates } from "../hooks/useLiveUpdates";
+ import type { Team } from "../types";
+-import type { StringKey } from "../i18n/strings";
+ 
+-type Tab = "timeline" | "predict" | "stats" | "lineups" | "ratings";
+-const TABS: Tab[] = ["timeline", "predict", "stats", "lineups", "ratings"];
++type Tab = "timeline" | "predict" | "stats" | "lineups";
++const TABS: Tab[] = ["timeline", "predict", "stats", "lineups"];
+ 
+ export default function MatchDetail() {
+   const { id = "" } = useParams();
+   const { t, lang, localize } = useI18n();
+-  const { user } = useAuth();
+   const locale = lang === "fa" ? "fa-IR" : undefined;
+   useLiveUpdates();
+ 
+@@ -90,10 +78,13 @@ export default function MatchDetail() {
+   const leagueLabel = useCompetitionLabel(match?.league ?? "");
+ 
+   // Tabs live in the URL so a panel is shareable and deep-linkable.
+-  const [params, setParams] = useSearchParams();
+-  const requested = params.get("tab") as Tab | null;
++  const requested = new URLSearchParams(window.location.search).get("tab") as Tab | null;
+   const tab: Tab = requested && TABS.includes(requested) ? requested : "timeline";
+-  const setTab = (next: Tab) => setParams({ tab: next }, { replace: true });
++  const setTab = (next: Tab) => {
++    const nextParams = new URLSearchParams(window.location.search);
++    nextParams.set("tab", next);
++    window.history.replaceState(null, "", `${window.location.pathname}?${nextParams.toString()}`);
++  };
+ 
+   // Goal flash when polling reveals a new score.
+   const [burst, setBurst] = useState(0);
+@@ -104,9 +95,7 @@ export default function MatchDetail() {
+     const score = `${match.home_score}-${match.away_score}`;
+     if (scoreRef.current && scoreRef.current !== score && match.home_score !== null) {
+       setBurst((v) => v + 1);
+-      setFlashScore(true);
+-      notifyHaptic("success");
+-      window.setTimeout(() => setFlashScore(false), 1400);
++      setFlashScore(true);            window.setTimeout(() => setFlashScore(false), 1400);
+     }
+     scoreRef.current = score;
+   }, [match?.home_score, match?.away_score, match]);
+@@ -155,7 +144,7 @@ export default function MatchDetail() {
+     statusRef.current = new Map(rows.map((row) => [row.mechanic, row.status]));
+     if (!justPaidOut(previous, rows)) return;
+     setBurst((value) => value + 1);
+-    notifyHaptic("success");
++
+   }, [predictionsQuery.data]);
+ 
+   if (matchQuery.isLoading) {
+@@ -291,8 +280,7 @@ export default function MatchDetail() {
+         </div>
+       </div>
+ 
+-      <div className="mt-4">
+-        <Segmented
++      <div className="mt-4">          <Segmented
+           value={tab}
+           onChange={setTab}
+           options={[
+@@ -302,7 +290,6 @@ export default function MatchDetail() {
+             { value: "predict", label: t("predict.hub") },
+             { value: "stats", label: t("match.tabStats") },
+             { value: "lineups", label: t("match.tabLineups") },
+-            { value: "ratings", label: t("match.tabRatings") },
+           ]}
+         />
+       </div>
+@@ -313,38 +300,15 @@ export default function MatchDetail() {
+             matchId={id}
+             live={inPlay}
+             minute={currentMinute}
+-            myUserId={user?.id}
+             teams={[home, away]}
+           />
+         ) : null}
+-        {tab === "stats" ? <StatsTab matchId={id} live={inPlay} home={home} away={away} /> : null}
++        {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
+         {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
+         {tab === "predict" ? <PredictionsHub matchId={id} /> : null}
+-        {tab === "ratings" ? <RatingsTab matchId={id} live={live} league={match.league} /> : null}
+       </section>
+ 
+-      {/* The full eye-test view (crowd vs stat, divergence sort) for finished games. */}
+-      {match.status === "finished" ? (
+-        <div className="mt-4">
+-          <Link
+-            to={`/ratings?match=${match.id}`}
+-            className="flex items-center gap-2 rounded-card border border-gold/50 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+-          >
+-            <span
+-              className="grid h-8 w-8 flex-none place-items-center rounded-full border border-gold text-gold"
+-              style={{ backgroundColor: "color-mix(in srgb, var(--gold) 12%, transparent)" }}
+-              aria-hidden="true"
+-            >
+-              <StarIcon className="h-4 w-4" />
+-            </span>
+-            <span className="min-w-0 flex-1">
+-              <span className="block truncate text-xs font-bold text-ink">{t("ratings.title")}</span>
+-              <span className="block text-[11px] text-ink-3">{t("ratings.subtitle")}</span>
+-            </span>
+-            <ChevronRightIcon className="flex-none text-ink-3" />
+-          </Link>
+-        </div>
+-      ) : null}
++
+ 
+       {/* Thumb-zone action for the only thing on this page with a deadline.
+           It floats above the tab bar instead of living at the end of a long
+@@ -388,13 +352,11 @@ function TimelineTab({
+   matchId,
+   live,
+   minute,
+-  myUserId,
+   teams,
+ }: {
+   matchId: string;
+   live: boolean;
+   minute: number;
+-  myUserId?: number;
+   /** Both sides, for the timeline markers' club tint. */
+   teams: Array<{ id: string; color: string }>;
+ }) {
+@@ -402,25 +364,12 @@ function TimelineTab({
+   const query = useQuery({
+     queryKey: ["timeline", matchId],
+     queryFn: () => api.getTimeline(matchId),
+-    // 20s in play, and the SSE goal event invalidates this key outright, so a
+-    // goal lands within a second of the server seeing it. The poll is the
+-    // backstop for everything ESPN doesn't shout about (a corrected minute, a
+-    // sub, a card).
+     refetchInterval: live ? 20_000 : false,
+   });
+   const events = query.data?.events ?? [];
+   const adapted = events.map(adaptTimelineEvent);
+   const teamColor = Object.fromEntries(teams.map((team) => [team.id, team.color]));
+ 
+-  // The pinned crowd thread. Loaded alongside the timeline; total count is
+-  // surfaced in the section header, individual pins render under their event.
+-  const commentsQuery = useQuery({
+-    queryKey: ["comments", matchId],
+-    queryFn: () => api.getComments(matchId),
+-  });
+-  const comments = adaptComments(commentsQuery.data?.comments ?? [], myUserId);
+-  const totalComments = comments.length;
+-
+   if (query.isLoading) return <TimelineSkeleton rows={4} />;
+   if (query.isError) {
+     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+@@ -431,38 +380,15 @@ function TimelineTab({
+ 
+   return (
+     <>
+-      <SectionHeading
+-        title={t("comments.liveThread")}
+-        action={
+-          totalComments > 0 ? (
+-            <span className="text-[11px] font-bold text-gold">
+-              {t("timeline.comments", { count: totalComments })}
+-            </span>
+-          ) : null
+-        }
+-      />
+       <TimelineList
+         events={adapted}
+-        comments={comments}
++        comments={[]}
+         liveMinute={live ? minute : undefined}
+         teamColor={teamColor}
+         homeTeamId={teams[0]?.id}
+         awayTeamId={teams[1]?.id}
+       />
+ 
+-      <div className="mt-4">
+-        <SectionHeading title={t("comments.add")} />
+-        <CommentsSection
+-          matchId={matchId}
+-          events={adapted.map((e) => ({
+-            id: e.id,
+-            minuteDisplay: e.minuteDisplay,
+-            label: `${e.type === "goal" ? "⚽ " : ""}${e.description}`.slice(0, 60),
+-          }))}
+-          myUserId={myUserId}
+-        />
+-      </div>
+-
+       <div className="mt-4">
+         <SectionHeading title={t("commentary.title")} />
+         <CommentaryPanel
+@@ -480,13 +406,10 @@ function TimelineTab({
+ 
+ function StatsTab({
+   matchId,
+-  live,
+   home,
+   away,
+ }: {
+   matchId: string;
+-  /** Refresh the shot plot while the match is in play. */
+-  live: boolean;
+   home: {
+     id: string;
+     name: string;
+@@ -497,7 +420,8 @@ function StatsTab({
+   };
+   away: typeof home;
+ }) {
+-  const { t } = useI18n();
++  const { t, localize } = useI18n();
++  const [team, setTeam] = useState<"home" | "away">("home");
+   const query = useQuery({
+     queryKey: ["matchPlayers", matchId],
+     queryFn: () => api.getMatchPlayers(matchId),
+@@ -512,34 +436,21 @@ function StatsTab({
+     return <EmptyState title={t("ratings.noneYet")} hint={t("stats.noneHint")} />;
+   }
+ 
+-  const homeRows = rows.filter((r) => r.team_id === home.id);
+-  const awayRows = rows.filter((r) => r.team_id === away.id);
++  const selected = team === "home" ? home : away;
++  const teamRows = rows.filter((r) => r.team_id === selected.id);
+ 
+   return (
+     <div className="space-y-3">
+-      <PitchView matchId={matchId} live={live} home={home} away={away} />
+-
+-      <MatchPlayerTable title={home.shortName} color={home.color} rows={homeRows} />
+-      <MatchPlayerTable title={away.shortName} color={away.color} rows={awayRows} />
+-      {/* Match stats → season stats: the same cross-link pattern as the
+-          crowd-rating card below the tabs, so a stat-curious reader has
+-          somewhere to go instead of a table that just ends. */}
+-      <Link
+-        to="/stats"
+-        className="mt-4 flex items-center gap-2 rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+-      >
+-        <span
+-          className="grid h-8 w-8 flex-none place-items-center rounded-full bg-volt text-black"
+-          aria-hidden="true"
+-        >
+-          <ChartIcon className="h-4 w-4" />
+-        </span>
+-        <span className="min-w-0 flex-1">
+-          <span className="block truncate text-xs font-bold text-ink">{t("statsPage.title")}</span>
+-          <span className="block text-[11px] text-ink-3">{t("statsPage.subtitle")}</span>
+-        </span>
+-        <ChevronRightIcon className="flex-none text-ink-3" />
+-      </Link>
++      <Segmented
++        value={team}
++        onChange={(v) => setTeam(v as "home" | "away")}
++        options={[
++          { value: "home", label: localize(home.shortName) },
++          { value: "away", label: localize(away.shortName) },
++        ]}
++      />
++
++      <MatchPlayerTable title={selected.shortName} color={selected.color} rows={teamRows} />
+     </div>
+   );
+ }
+@@ -677,128 +588,7 @@ function LineupsTab({
+   };
+ 
+   return <LineupsPanel home={homeTeam} away={awayTeam} lineups={{ home: homeLineup, away: awayLineup }} />;
+-}
+-
+-function RatingsTab({ matchId, live, league }: { matchId: string; live: boolean; league: string }) {
+-  const { t } = useI18n();
+-  const query = useQuery({
+-    queryKey: ["ratings", matchId],
+-    queryFn: () => api.getRatings(matchId),
+-    refetchInterval: live ? 30_000 : false,
+-  });
+-  const players = query.data?.players ?? [];
+-  const adapted = players.map((p) => adaptPlayerRating(p, league));
+-  if (query.isLoading) return <RatingsSkeleton rows={6} />;
+-  if (query.isError) {
+-    return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+-  }
+-  if (adapted.length === 0) return <EmptyState title={t("ratings.noneYet")} hint={t("ratings.noneHint")} />;
+-
+-  return (
+-    <>
+-      <p className="mb-2 text-xs text-ink-3">
+-        {live
+-          ? t("ratings.locked")
+-          : t("ratings.pickThree") +
+-            ` · ${t("ratings.cards", { used: query.data?.cardsUsed ?? 0, max: query.data?.cardsMax ?? 3 })}`}
+-      </p>
+-      <RatingsList
+-        matchId={matchId}
+-        players={adapted}
+-        distributions={query.data?.distributions ?? null}
+-        cardsUsed={query.data?.cardsUsed ?? 0}
+-        cardsMax={query.data?.cardsMax ?? 3}
+-      />
+-    </>
+-  );
+-}
+-
+-function RatingsList({
+-  matchId,
+-  players,
+-  distributions,
+-  cardsUsed,
+-  cardsMax,
+-}: {
+-  matchId: string;
+-  players: PlayerRating[];
+-  /** Server-built per-player histograms; null = response predates the field. */
+-  distributions: Record<string, number[]> | null;
+-  cardsUsed: number;
+-  cardsMax: number;
+-}) {
+-  const { t, localize } = useI18n();
+-  const { push } = useToast();
+-  const queryClient = useQueryClient();
+-  const [params, setParams] = useSearchParams();
+-  const sheetFor = players.find((row) => row.playerId === params.get("rate")) ?? null;
+-  const setSheetFor = (player: PlayerRating | null) =>
+-    setParams(
+-      (prev) => {
+-        if (player) prev.set("rate", player.playerId);
+-        else prev.delete("rate");
+-        return prev;
+-      },
+-      { replace: true },
+-    );
+-
+-  const rate = useMutation({
+-    mutationFn: (input: { playerId: string; value: number; comment?: string }) =>
+-      api.ratePlayer(matchId, input.playerId, input.value, input.comment),
+-    onSuccess: (_data, input) => {
+-      notifyHaptic("success");
+-      push({
+-        text: t("toast.ratingSaved", {
+-          player: localize(players.find((p) => p.playerId === input.playerId)?.name ?? ""),
+-        }),
+-        tone: "gold",
+-        icon: "★",
+-      });
+-      void queryClient.invalidateQueries({ queryKey: ["ratings", matchId] });
+-    },
+-    onError: (err) => {
+-      // e.g. "player did not feature" — localized instead of a raw code.
+-      notifyHaptic("error");
+-      push({ text: t(serverErrorKey(err) as StringKey), tone: "danger", icon: "✕" });
+-    },
+-  });
+-
+-  return (
+-    <>
+-      <ul className="space-y-2">
+-        {players.map((rating, index) => (
+-          <RatingRow
+-            key={rating.playerId}
+-            index={index}
+-            rating={rating}
+-            team={(rating as PlayerRating & { _team: Team })._team}
+-            onTap={(player) => {
+-              // The 3-card cap: block a brand-new card when full, edits stay open.
+-              if (cardsUsed >= cardsMax && player.myRating === null) return;
+-              setSheetFor(player);
+-            }}
+-          />
+-        ))}
+-      </ul>
+-      {sheetFor ? (
+-        <RateSheet
+-          rating={sheetFor}
+-          open
+-          onClose={() => setSheetFor(null)}
+-          distribution={distributionFor(sheetFor, distributions)}
+-          cardsUsed={cardsUsed ?? undefined}
+-          cardsMax={cardsMax ?? undefined}
+-          onSave={(playerId, value, comment) => {
+-            haptic("medium");
+-            rate.mutate({ playerId, value, comment });
+-          }}
+-        />
+-      ) : null}
+-    </>
+-  );
+-}
+-
+-/* ------------------------------------------------------------ adapters */
++}/* ------------------------------------------------------------ adapters */
+ 
+ function adaptTimelineEvent(e: ApiTimelineEvent) {
+   return {
+@@ -814,36 +604,3 @@ function adaptTimelineEvent(e: ApiTimelineEvent) {
+     commentCount: e.comment_count,
+   };
+ }
+-
+-function adaptPlayerRating(p: ApiPlayerRating, league: string): PlayerRating {
+-  return {
+-    playerId: p.player_id,
+-    name: p.name,
+-    teamId: p.team_id,
+-    position: (p.position ?? "MID") as PlayerRating["position"],
+-    fantasyPoints: p.stat_score ?? 0,
+-    crowdRating: p.crowd_rating,
+-    votes: p.votes ?? 0,
+-    myRating: p.my_rating ?? null,
+-    myComment: p.my_comment ?? null,
+-    latestComment: p.latest_comment ?? null,
+-    _team: {
+-      id: p.team_id,
+-      name: p.team_name ?? "",
+-      shortName: p.team_short ?? p.team_name ?? "",
+-      abbreviation: (p.team_short ?? "").slice(0, 3) || "—",
+-      color: p.team_color ?? TEAM_FALLBACK,
+-      // The match's real competition; cup matches no longer read as PL sides.
+-      league: league as import("../types").LeagueId,
+-    },
+-  } as PlayerRating & { _team: import("../types").Team };
+-}
+-
+-/**
+- * Build the RateSheet histogram from the server's real per-rating GROUP BY.
+- * Pre-distribution responses (or a player with zero votes) get the flat empty
+- * array — an honest "no votes yet", never a synthesized bar.
+- */
+-function distributionFor(rating: PlayerRating, distributions: Record<string, number[]> | null): number[] {
+-  return distributions?.[rating.playerId] ?? Array.from({ length: 10 }, () => 0);
+-}
+diff --git a/src/pages/PlayerStats.tsx b/src/pages/PlayerStats.tsx
+index 0125cc8..dbeefde 100644
+--- a/src/pages/PlayerStats.tsx
++++ b/src/pages/PlayerStats.tsx
+@@ -52,7 +52,7 @@ export default function PlayerStats() {
+ 
+   return (
+     <>
+-      <TopBar title={t("statsPage.title")} subtitle={t("statsPage.subtitle")} />
++      <TopBar title={t("statsPage.title")} subtitle={t("statsPage.subtitle")} back />
+ 
+       <div className="mt-3">
+         <Segmented
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 92ec22c..7f8ce3d 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -183,7 +183,7 @@ export default function Profile() {
+           <ListRow
+             label={t("profile.notifications")}
+             hint={
+-              serverPrefs.goals || serverPrefs.deadline || serverPrefs.ratings
++              serverPrefs.goals || serverPrefs.deadline
+                 ? t("profile.notificationsOn")
+                 : t("profile.notificationsOff")
+             }
+@@ -206,15 +206,7 @@ export default function Profile() {
+           />
+           {/* The "why did I get X" panel: every pick with the resolver's own
+               line items, reachable from where users check their account. */}
+-          <ListRow
+-            label={t("predictions.title")}
+-            hint={t("predictions.subtitle")}
+-            onClick={() => {
+-              haptic("light");
+-              navigate("/predictions");
+-            }}
+-            right={<ChevronRightIcon className="text-ink-3" />}
+-          />
++
+         </div>
+       </section>
+ 
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index 45cf8d1..7929082 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -55,7 +55,7 @@ export default function Table() {
+ 
+   return (
+     <>
+-      <TopBar title={t("table.title")} subtitle={t("table.subtitle")} />
++      <TopBar title={t("table.title")} subtitle={t("table.subtitle")} back />
+ 
+       <div className="mt-3">
+         <Segmented
+-- 
+2.54.0.windows.1
+

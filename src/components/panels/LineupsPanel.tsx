@@ -36,7 +36,7 @@ const asCandidate = (player: LineupPlayer): SlotCandidate => ({
  * where they are: every one is horizontally centred, so a mirrored row of
  * players still lines up with the penalty areas and the halfway line.
  */
-function LineupPitch({
+export function LineupPitch({
   lineup,
   playerEvents,
 }: {
@@ -194,7 +194,7 @@ function PitchSlot({
   return (
     <span className="flex min-w-0 flex-1 flex-col items-center">
       <span className="relative">
-        <PlayerAvatar name={name} src={player.headshot} size="md" className="border-pitch/60" />
+        <PlayerAvatar name={name} src={player.avatarUrl} size="md" className="border-pitch/60" />
         <Num className="absolute -end-1 -bottom-1 grid h-4 min-w-4 place-items-center rounded-full bg-volt px-0.5 text-xs leading-none text-black">
           {player.number > 0 ? player.number : "–"}
         </Num>

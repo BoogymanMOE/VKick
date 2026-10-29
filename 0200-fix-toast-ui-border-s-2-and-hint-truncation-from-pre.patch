@@ -1,0 +1,55 @@
+From 3fda6213dc7ef439eed59eac5106104c275a8c74 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 19:53:27 +0330
+Subject: [PATCH 200/230] fix(toast+ui): border-s-2 and hint truncation from
+ previous round
+
+---
+ src/components/Toast.tsx | 10 +++++-----
+ src/components/ui.tsx    |  2 +-
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/src/components/Toast.tsx b/src/components/Toast.tsx
+index 5ea7513..6b3b775 100644
+--- a/src/components/Toast.tsx
++++ b/src/components/Toast.tsx
+@@ -20,18 +20,18 @@ const GLYPHS: Record<string, ReactNode> = {
+ };
+ 
+ /*
+- * The tone owns a 4px accent bar on the card's leading edge (`border-s-4`, so
++ * The tone owns a 4px accent bar on the card's leading edge (`border-s-2`, so
+  * it moves to the right in Persian like everything else) over the 1px tone
+  * border: success volt, error danger, evaluative gold. It is colour + width
+  * only — the toast keeps one tint, one icon and one line of copy.
+  */
+ const toneClass: Record<ToastTone, string> = {
+-  volt: "border-volt border-s-4 text-volt",
+-  gold: "border-gold border-s-4 text-gold",
+-  danger: "border-danger border-s-4 text-danger",
++  volt: "border-volt border-s-2 text-volt",
++  gold: "border-gold border-s-2 text-gold",
++  danger: "border-danger border-s-2 text-danger",
+   // "Last sync" / "Updated" reads as a successful sync, so it borrows the
+   // success tint: a volt border + wash rather than a grey disabled-looking one.
+-  muted: "border-volt border-s-4 text-volt",
++  muted: "border-volt border-s-2 text-volt",
+ };
+ 
+ const toneTint: Record<ToastTone, string | undefined> = {
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index a21802e..b72a6cf 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -789,7 +789,7 @@ export function ListRow({
+         >
+           {label}
+         </span>
+-        {hint ? <span className="block truncate text-xs text-ink-3">{hint}</span> : null}
++        {hint ? <span className="text-xs text-ink-3">{hint}</span> : null}
+       </span>
+       {right}
+     </Tag>
+-- 
+2.54.0.windows.1
+

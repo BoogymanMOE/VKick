@@ -1,0 +1,927 @@
+From 2ce36b1135bb0c2cd8e5162b82e108308abcf945 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 02:08:22 +0330
+Subject: [PATCH 003/230] UX truth pass: real rating histograms, out-of-page
+ rank, player-name summaries, localized errors
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Rating distribution comes from the server (GROUP BY over crowd_ratings,
+  10 integer buckets per player) instead of the client's single-bucket
+  approximation — RateSheet now renders the real histogram
+- Leaderboards: server-computed viewer rank with the board's own tiebreak
+  surfaces as a 'you' row when it sits below the top-100 page
+- Prediction summaries show localized player names (cache-hit on the
+  lineups query), not raw ESPN ids
+- ErrorBoundary copy localized EN/FA; bot /start and /myteams reply in the
+  recipient's stored app language via server/messages.ts
+- Ratings rows carry the match's real competition instead of defaulting to
+  PL (MatchDetail + Ratings page)
+- eslint ignores dist-server (stale build output was polluting lint)
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ eslint.config.js                         |   2 +-
+ server/bot/index.ts                      |  33 +++++---
+ server/index.ts                          |  47 +++++++----
+ server/messages.ts                       |  31 +++++++
+ server/scoring/ledger.ts                 |  34 ++++++++
+ src/components/ErrorBoundary.tsx         |  49 ++++++-----
+ src/components/panels/PredictionsHub.tsx |  46 +++++++++--
+ src/hooks/useApi.ts                      |   4 +-
+ src/i18n/strings.ts                      |   8 ++
+ src/lib/api.ts                           |  20 ++++-
+ src/pages/Leaderboards.tsx               | 101 ++++++++++++++++-------
+ src/pages/MatchDetail.tsx                |  36 ++++----
+ src/pages/Ratings.tsx                    |  33 +++++---
+ 13 files changed, 323 insertions(+), 121 deletions(-)
+
+diff --git a/eslint.config.js b/eslint.config.js
+index f3cb67f..c942ef4 100644
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -14,7 +14,7 @@ import prettier from "eslint-config-prettier";
+  * as a lint error.
+  */
+ export default tseslint.config(
+-  { ignores: ["dist", "node_modules", "**/*.tsbuildinfo", "scripts/**", ".tmp/**"] },
++  { ignores: ["dist", "dist-server", "node_modules", "**/*.tsbuildinfo", "scripts/**", ".tmp/**"] },
+   js.configs.recommended,
+   ...tseslint.configs.recommended,
+   {
+diff --git a/server/bot/index.ts b/server/bot/index.ts
+index ae5f381..a712acb 100644
+--- a/server/bot/index.ts
++++ b/server/bot/index.ts
+@@ -4,14 +4,12 @@ import { fileURLToPath } from "node:url";
+ import { Bot, InlineKeyboard, InputFile } from "grammy";
+ import { getDb, all, run, get } from "../db/index.js";
+ import { asPushKind, isOptedOut } from "../notifications.js";
++import { asPushLang, botNoAccountText, botNoTeamsText, botStartText, botTeamsHeader } from "../messages.js";
+ import type { GoalAlert } from "../sync/upserts.js";
+ 
+ let bot: Bot | null = null;
+ let drainTimer: NodeJS.Timeout | null = null;
+ 
+-const WELCOME_TEXT =
+-  "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, predict lineups, subs, shots and standout players, climb the season leaderboards, and rate the players who mattered most.\n\nTap below to get started.";
+-
+ // Brand icon sent as the /start photo — Telegram inline buttons can't carry
+ // images, so the button rides on the photo's reply markup instead.
+ const TELEGRAM_ICON = path.join(
+@@ -28,9 +26,14 @@ export function startBot(token: string): Bot | null {
+ 
+   bot.command("start", async (ctx) => {
+     const from = ctx.from;
++    let lang: "en" | "fa" = "en";
+     if (from) {
+       const db = getDb();
+-      const existing = get(db, "SELECT id FROM users WHERE telegram_id = ?", [String(from.id)]);
++      const existing = get<{ id: number; language: string | null }>(
++        db,
++        "SELECT id, language FROM users WHERE telegram_id = ?",
++        [String(from.id)],
++      );
+       if (!existing) {
+         const name =
+           [from.first_name, from.last_name].filter(Boolean).join(" ") || from.username || `User ${from.id}`;
+@@ -39,6 +42,9 @@ export function startBot(token: string): Bot | null {
+           name,
+           new Date().toISOString(),
+         ]);
++      } else {
++        // A returning user gets the language they chose in the app.
++        lang = asPushLang(existing.language);
+       }
+     }
+     const keyboard = new InlineKeyboard().webApp("⚽ Open Vkick", webAppUrl());
+@@ -48,35 +54,42 @@ export function startBot(token: string): Bot | null {
+     } catch {
+       // Icon not shipped/found: the text-only welcome still works.
+     }
++    const text = botStartText(lang);
+     if (icon) {
+       await ctx.replyWithPhoto(new InputFile(icon, "telegram-icon.png"), {
+-        caption: WELCOME_TEXT,
++        caption: text,
+         reply_markup: keyboard,
+       });
+     } else {
+-      await ctx.reply(WELCOME_TEXT, { reply_markup: keyboard });
++      await ctx.reply(text, { reply_markup: keyboard });
+     }
+   });
+ 
+   bot.command("myteams", async (ctx) => {
+     if (!ctx.from) return;
+     const db = getDb();
+-    const user = get<{ id: number }>(db, "SELECT id FROM users WHERE telegram_id = ?", [String(ctx.from.id)]);
++    const user = get<{ id: number; language: string | null }>(
++      db,
++      "SELECT id, language FROM users WHERE telegram_id = ?",
++      [String(ctx.from.id)],
++    );
+     if (!user) {
+-      await ctx.reply("Open the app first — tap the button below /start.");
++      await ctx.reply(botNoAccountText(asPushLang(null)));
+       return;
+     }
++    const lang = asPushLang(user.language);
+     const rows = all<{ name: string; short_name: string | null; league: string }>(
+       db,
+       `SELECT t.name, t.short_name, t.league FROM favorite_teams f JOIN teams t ON t.id = f.team_id WHERE f.user_id = ?`,
+       [user.id],
+     );
+     if (rows.length === 0) {
+-      await ctx.reply("You haven't picked any clubs yet. Open the app and choose up to five!");
++      await ctx.reply(botNoTeamsText(lang));
+       return;
+     }
+     await ctx.reply(
+-      "Your clubs:\n" + rows.map((r) => `• ${r.short_name ?? r.name} (${r.league})`).join("\n"),
++      botTeamsHeader(lang, rows.length) +
++        rows.map((r) => `• ${r.short_name ?? r.name} (${r.league})`).join("\n"),
+     );
+   });
+ 
+diff --git a/server/index.ts b/server/index.ts
+index 6deec07..17c775e 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -25,7 +25,7 @@ import { hashPassword, passwordValid, verifyPassword } from "./auth/password.js"
+ import { authLimiter, credentialLimiter, writeLimiter } from "./auth/rateLimit.js";
+ import { validatePayload, type Mechanic } from "./predictions/validate.js";
+ // Canonical season label (scoring-rules.md season boundary) + board reads.
+-import { readLeaderboard, currentSeasonLabel, award } from "./scoring/ledger.js";
++import { readLeaderboard, readViewerRank, currentSeasonLabel, award } from "./scoring/ledger.js";
+ import { foldForm, type FormMatchRow } from "./standings/form.js";
+ import { evaluateStreakForUser } from "./scoring/streak.js";
+ import { POINTS as SCORING_POINTS } from "./scoring/predictionScore.js";
+@@ -1303,11 +1303,25 @@ app.get("/api/matches/:id/ratings", requireUser, (req, res) => {
+     "SELECT COUNT(*) AS n FROM crowd_ratings WHERE user_id = ? AND match_id = ?",
+     [userId, matchId],
+   );
++  // Real per-player histogram (10 integer buckets, index 0 = rating 1) for the
++  // RateSheet chart. One GROUP BY, no N+1; absent key = no votes yet.
++  const distRows = all<{ player_id: string; rating: number; n: number }>(
++    db,
++    "SELECT player_id, rating, COUNT(*) AS n FROM crowd_ratings WHERE match_id = ? GROUP BY player_id, rating",
++    [matchId],
++  );
++  const distributions: Record<string, number[]> = {};
++  for (const d of distRows) {
++    const buckets = distributions[d.player_id] ?? Array.from({ length: 10 }, () => 0);
++    if (Number.isInteger(d.rating) && d.rating >= 1 && d.rating <= 10) buckets[d.rating - 1] = d.n;
++    distributions[d.player_id] = buckets;
++  }
+   res.json({
+     players: withRatings,
+     minVotes: MIN_VOTES_TO_SHOW,
+     cardsUsed: used?.n ?? 0,
+     cardsMax: MAX_RATINGS_PER_MATCH,
++    distributions,
+   });
+ });
+ 
+@@ -1701,8 +1715,9 @@ function optionalViewerId(req: Request): number | undefined {
+ 
+ app.get("/api/leaderboards/global", (req, res) => {
+   const viewerId = optionalViewerId(req);
++  const season = currentSeasonLabel();
+   res.json({
+-    board: readLeaderboard(db, "global", currentSeasonLabel(), LEADERBOARD_LIMIT, viewerId).map((r) => ({
++    board: readLeaderboard(db, "global", season, LEADERBOARD_LIMIT, viewerId).map((r) => ({
+       rank: r.rank,
+       display_name: r.display_name,
+       username: r.username,
+@@ -1710,19 +1725,21 @@ app.get("/api/leaderboards/global", (req, res) => {
+       total: r.total,
+       last_award: r.reached_total_at,
+     })),
++    // The viewer's own rank when it sits below the page limit (null when they
++    // haven't scored, or are already visible on the board).
++    you:
++      viewerId !== undefined
++        ? readViewerRank(db, "global", season, viewerId)
++        : null,
+   });
+ });
+ 
+ app.get("/api/leaderboards/league/:league", (req, res) => {
+   const viewerId = optionalViewerId(req);
++  const scope = `league:${String(req.params.league)}`;
++  const season = currentSeasonLabel();
+   res.json({
+-    board: readLeaderboard(
+-      db,
+-      `league:${String(req.params.league)}`,
+-      currentSeasonLabel(),
+-      LEADERBOARD_LIMIT,
+-      viewerId,
+-    ).map((r) => ({
++    board: readLeaderboard(db, scope, season, LEADERBOARD_LIMIT, viewerId).map((r) => ({
+       rank: r.rank,
+       display_name: r.display_name,
+       username: r.username,
+@@ -1730,19 +1747,16 @@ app.get("/api/leaderboards/league/:league", (req, res) => {
+       total: r.total,
+       last_award: r.reached_total_at,
+     })),
++    you: viewerId !== undefined ? readViewerRank(db, scope, season, viewerId) : null,
+   });
+ });
+ 
+ app.get("/api/leaderboards/club/:teamId", (req, res) => {
+   const viewerId = optionalViewerId(req);
++  const scope = `club:${String(req.params.teamId)}`;
++  const season = currentSeasonLabel();
+   res.json({
+-    board: readLeaderboard(
+-      db,
+-      `club:${String(req.params.teamId)}`,
+-      currentSeasonLabel(),
+-      LEADERBOARD_LIMIT,
+-      viewerId,
+-    ).map((r) => ({
++    board: readLeaderboard(db, scope, season, LEADERBOARD_LIMIT, viewerId).map((r) => ({
+       rank: r.rank,
+       display_name: r.display_name,
+       username: r.username,
+@@ -1750,6 +1764,7 @@ app.get("/api/leaderboards/club/:teamId", (req, res) => {
+       total: r.total,
+       last_award: r.reached_total_at,
+     })),
++    you: viewerId !== undefined ? readViewerRank(db, scope, season, viewerId) : null,
+   });
+ });
+ 
+diff --git a/server/messages.ts b/server/messages.ts
+index 906eca2..e3c410b 100644
+--- a/server/messages.ts
++++ b/server/messages.ts
+@@ -84,3 +84,34 @@ export function ratingsPush(lang: PushLang, v: MatchPushVars): string {
+     ? `⭐ پایان بازی — ${v.home} ${v.score} ${v.away}\nبه بازیکنانی که تأثیرگذار بودند امتیاز بده (۳ کارت).`
+     : `⭐ Full time — ${v.home} ${v.score} ${v.away}\nRate the players who mattered (3 cards).`;
+ }
++
++/* ------------------------------------------------------------ bot commands */
++
++/*
++ * The bot's command replies, EN/FA. Copy is chosen per RECIPIENT from
++ * users.language — the same rule the pushes follow — so a user who set the
++ * app to Persian never gets English back from /start or /myteams.
++ * Names (clubs, the app) stay as-is, matching the push convention above.
++ */
++
++export function botStartText(lang: PushLang): string {
++  return lang === "fa"
++    ? "به Vkick خوش آمدی! ⚽\n\nباشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، ترکیب و تعویض و شوت و بازیکن برتر هر بازی را پیش‌بینی کن، در جدول امتیازهای فصل بالا برو و به بازیکنان تأثیرگذار امتیاز بده.\n\nبرای شروع دکمه زیر را بزن."
++    : "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, predict lineups, subs, shots and standout players, climb the season leaderboards, and rate the players who mattered most.\n\nTap below to get started.";
++}
++
++export function botNoAccountText(lang: PushLang): string {
++  return lang === "fa"
++    ? "اول برنامه را باز کن — دکمه زیر، پایین /start."
++    : "Open the app first — tap the button below /start.";
++}
++
++export function botTeamsHeader(lang: PushLang, count: number): string {
++  return lang === "fa" ? `باشگاه‌های تو:\n` : `Your clubs (${count}):\n`;
++}
++
++export function botNoTeamsText(lang: PushLang): string {
++  return lang === "fa"
++    ? "هنوز باشگاهی انتخاب نکرده‌ای. برنامه را باز کن و تا پنج باشگاه انتخاب کن!"
++    : "You haven't picked any clubs yet. Open the app and choose up to five!";
++}
+diff --git a/server/scoring/ledger.ts b/server/scoring/ledger.ts
+index 82a0513..78f382d 100644
+--- a/server/scoring/ledger.ts
++++ b/server/scoring/ledger.ts
+@@ -223,3 +223,37 @@ export function readLeaderboard(
+     rank: i + 1,
+   }));
+ }
++
++export interface ViewerRank {
++  rank: number;
++  total: number;
++}
++
++/**
++ * The viewer's rank on one board even when it sits below the page limit.
++ * Uses the SAME tiebreak as readLeaderboard (total DESC, then the earlier
++ * reached_total_at first), so the rank shown out-of-page matches what the
++ * board itself would print. Returns null when the user has no points in the
++ * scope — "you haven't scored yet", not "you are rank N".
++ */
++export function readViewerRank(
++  db: DatabaseSync,
++  scope: string,
++  season: string,
++  viewerId: number,
++): ViewerRank | null {
++  const mine = get<{ total: number; reached_total_at: string }>(
++    db,
++    "SELECT total, reached_total_at FROM user_point_totals WHERE user_id = ? AND scope = ? AND scope_season = ?",
++    [viewerId, scope, season],
++  );
++  if (!mine || mine.total <= 0) return null;
++  const ahead = get<{ n: number }>(
++    db,
++    `SELECT COUNT(*) AS n FROM user_point_totals
++     WHERE scope = ? AND scope_season = ? AND total > 0
++       AND (total > ? OR (total = ? AND reached_total_at < ?))`,
++    [scope, season, mine.total, mine.total, mine.reached_total_at],
++  );
++  return { rank: (ahead?.n ?? 0) + 1, total: mine.total };
++}
+diff --git a/src/components/ErrorBoundary.tsx b/src/components/ErrorBoundary.tsx
+index e6b0495..6df24fa 100644
+--- a/src/components/ErrorBoundary.tsx
++++ b/src/components/ErrorBoundary.tsx
+@@ -1,9 +1,15 @@
+ import { Component, type ErrorInfo, type ReactNode } from "react";
++import { useI18n } from "../i18n/I18nProvider";
+ 
+ /**
+  * Render-crash insurance. Without this, one throwing component white-screens
+  * the whole Mini App; with it, the user gets an honest "something broke" card
+  * and a one-tap retry instead of a dead webview.
++ *
++ * Copy comes from i18n so a Persian user never meets an English error card —
++ * a class component can't call useI18n, so the strings are read by an inner
++ * function component (the boundary itself stays a class: error boundaries
++ * must be classes).
+  */
+ interface Props {
+   children: ReactNode;
+@@ -30,25 +36,28 @@ export class ErrorBoundary extends Component<Props, State> {
+ 
+   render() {
+     if (!this.state.error) return this.props.children;
+-    return (
+-      <div role="alert" className="grid min-h-[100svh] place-items-center px-6">
+-        <div className="w-full max-w-[380px] rounded-card border border-line bg-surface p-5 text-center">
+-          <p className="text-3xl" aria-hidden="true">
+-            ⚽
+-          </p>
+-          <p className="mt-2 text-base font-bold text-ink">Something went wrong</p>
+-          <p className="mt-1 text-xs leading-relaxed text-ink-2">
+-            The screen hit an unexpected error. Retrying usually fixes it.
+-          </p>
+-          <button
+-            type="button"
+-            onClick={this.reset}
+-            className="mt-4 min-h-11 w-full rounded-full bg-volt px-4 text-sm font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
+-          >
+-            Try again
+-          </button>
+-        </div>
+-      </div>
+-    );
++    return <FallbackCard onRetry={this.reset} />;
+   }
+ }
++
++function FallbackCard({ onRetry }: { onRetry: () => void }) {
++  const { t } = useI18n();
++  return (
++    <div role="alert" className="grid min-h-[100svh] place-items-center px-6">
++      <div className="w-full max-w-[380px] rounded-card border border-line bg-surface p-5 text-center">
++        <p className="text-3xl" aria-hidden="true">
++          ⚽
++        </p>
++        <p className="mt-2 text-base font-bold text-ink">{t("errorBoundary.title")}</p>
++        <p className="mt-1 text-xs leading-relaxed text-ink-2">{t("errorBoundary.body")}</p>
++        <button
++          type="button"
++          onClick={onRetry}
++          className="mt-4 min-h-11 w-full rounded-full bg-volt px-4 text-sm font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
++        >
++          {t("errorBoundary.retry")}
++        </button>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/components/panels/PredictionsHub.tsx b/src/components/panels/PredictionsHub.tsx
+index 9f7c728..d483e7d 100644
+--- a/src/components/panels/PredictionsHub.tsx
++++ b/src/components/panels/PredictionsHub.tsx
+@@ -73,7 +73,7 @@ const MECHANIC_META: Record<
+  * season leaderboards; nothing here touches ratings.
+  */
+ export function PredictionsHub({ matchId }: { matchId: string }) {
+-  const { t } = useI18n();
++  const { t, localize } = useI18n();
+   const { push } = useToast();
+   const queryClient = useQueryClient();
+ 
+@@ -130,6 +130,20 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+ 
+   const byMechanic = (m: Mechanic) => rows.find((r) => r.mechanic === m) ?? null;
+ 
++  // Player names for the saved-pick summaries ("Saka v Vinicius", not "#123 v
++  // #456"). Same query key as the lineups tab and the pick editors, so once
++  // any of them loaded, this is a cache hit — no extra request on the page.
++  const lineups = useQuery({
++    queryKey: ["lineups", matchId],
++    queryFn: () => api.getLineups(matchId),
++    staleTime: 60_000,
++    enabled: rows.some((r) => r.mechanic === "player_watch" || r.mechanic === "shot_predict" || r.mechanic === "versus"),
++  });
++  const nameOf = (id: string): string => {
++    const p = lineups.data?.players.find((x) => x.player_id === id);
++    return p ? localize(p.full_name) : `#${id}`;
++  };
++
+   const statusChip = (row: ApiPrediction | null) => {
+     if (!row) return null;
+     if (row.status === "pending") return <Chip tone="muted">{t("predict.pending")}</Chip>;
+@@ -233,7 +247,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+                     ? t("predict.lockHT")
+                     : `${t(meta.lockKey as never)}${!notOpenYet && !live && !finished ? ` · ${windowInfo(m) ?? ""}` : ""}`}
+                 </span>
+-                {row?.payload ? <MechanicSummary mechanic={m} payload={row.payload} /> : null}
++                {row?.payload ? <MechanicSummary mechanic={m} payload={row.payload} nameOf={nameOf} /> : null}
+                 {!finished && !halftime ? (
+                   <Button
+                     variant={row ? "ghost" : "primary"}
+@@ -586,22 +600,36 @@ function safeParse(json: string): unknown {
+   }
+ }
+ 
+-function MechanicSummary({ mechanic, payload }: { mechanic: Mechanic; payload: string }) {
++function MechanicSummary({
++  mechanic,
++  payload,
++  nameOf,
++}: {
++  mechanic: Mechanic;
++  payload: string;
++  /** Player id → localized name (falls back to #id when lineups aren't in yet). */
++  nameOf: (id: string) => string;
++}) {
++  const { t } = useI18n();
+   const parsed = safeParse(payload) as Record<string, unknown> | null;
+   if (!parsed) return null;
+ 
+   if (mechanic === "player_watch" || mechanic === "shot_predict") {
+     const pid = String(parsed.playerId ?? "");
+-    return pid ? <Num className="text-[10px] text-ink-3">#{pid}</Num> : null;
++    return pid ? (
++      <span className="max-w-[40%] truncate text-[10px] text-ink-3" dir="auto">
++        {nameOf(pid)}
++      </span>
++    ) : null;
+   }
+   if (mechanic === "versus") {
+     const a = String(parsed.playerAId ?? "");
+     const b = String(parsed.playerBId ?? "");
+-    return (
+-      <Num className="text-[10px] text-ink-3">
+-        #{a} v #{b}
+-      </Num>
+-    );
++    return a && b ? (
++      <span className="max-w-[50%] truncate text-[10px] text-ink-3" dir="auto">
++        {nameOf(a)} {t("common.versus")} {nameOf(b)}
++      </span>
++    ) : null;
+   }
+   if (mechanic === "sub") {
+     const subs = Array.isArray(parsed.subs) ? parsed.subs.length : 0;
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 20fa171..7c82704 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -424,7 +424,9 @@ export function useLeaderboard(scope: LeaderboardScope) {
+   return useQuery({
+     queryKey: ["leaderboard", path],
+     queryFn: () => api.getLeaderboard(path as "global"),
+-    select: (data) => data.board,
++    // Full payload, not just rows: `you` carries the viewer's own rank when it
++    // sits below the board's page limit and no row is flagged is_you.
++    select: (data) => data,
+     staleTime: 60_000,
+   });
+ }
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 63f2020..a3ffb15 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -28,6 +28,9 @@ export const strings = {
+     "stats.emptyTitle": "No stat leaders yet",
+     "stats.emptyAction": "Browse live matches",
+     "common.error": "Something went wrong. Try again.",
++    "errorBoundary.title": "Something went wrong",
++    "errorBoundary.body": "The screen hit an unexpected error. Retrying usually fixes it.",
++    "errorBoundary.retry": "Try again",
+     "timeline.empty": "No key events yet.",
+     "ratings.noneYet": "No players have featured yet.",
+     "ratings.emptyTitle": "No match to rate yet",
+@@ -502,6 +505,7 @@ export const strings = {
+     "matches.emptyFilterAction": "Show all matches",
+     "stats.noneHint": "Stats land here after the first whistle.",
+     "board.emptyHint": "Predict any match — correct picks pay season points.",
++    "board.belowPage": "Below the top 100",
+     "ratings.noneHint": "Player stats appear after the match kicks off.",
+ 
+     "tactical.live": "Following live",
+@@ -1120,6 +1124,9 @@ export const strings = {
+     "profile.notificationsSub": "ارسال از طریق ربات تلگرام",
+     "common.done": "تمام",
+     "common.versus": "در برابر",
++    "errorBoundary.title": "مشکلی پیش آمد",
++    "errorBoundary.body": "این صفحه به خطای غیرمنتظره‌ای خورد. دوباره تلاش کن — معمولاً درست می‌شود.",
++    "errorBoundary.retry": "تلاش دوباره",
+     "ratings.rateLabel": "امتیاز ۱ تا ۱۰",
+     "profile.guest": "میهمان",
+     "profile.player": "بازیکن",
+@@ -1254,6 +1261,7 @@ export const strings = {
+     "board.pickLeague": "لیگ",
+     "board.pickClub": "باشگاه‌های تو",
+     "board.pickClubHint": "یکی از باشگاه‌هایت را انتخاب کن تا جدول خصوصی‌اش را ببینی.",
++    "board.belowPage": "پایین‌تر از ۱۰۰ نفر اول",
+ 
+     "ratings.capReached": "هر ۳ کارت امتیاز این بازی استفاده شده",
+     "ratings.cards": "{used} از {max} کارت امتیاز استفاده شده",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index a2d6eac..d07ae0b 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -173,6 +173,12 @@ export interface ApiLeaderRow {
+   last_award: string | null;
+ }
+ 
++/** The viewer's own rank when it sits below the board's page limit. */
++export interface ApiViewerRank {
++  rank: number;
++  total: number;
++}
++
+ export interface ApiCompetition {
+   slug: string;
+   name: string;
+@@ -522,7 +528,7 @@ export const api = {
+     }),
+ 
+   getLeaderboard: (board: "global" | `league/${string}` | `club/${string}`) =>
+-    request<{ board: ApiLeaderRow[] }>(`/leaderboards/${board}`),
++    request<{ board: ApiLeaderRow[]; you: ApiViewerRank | null }>(`/leaderboards/${board}`),
+ 
+   getMatches: (query: { league?: string; date?: string } = {}) => {
+     const qs = new URLSearchParams();
+@@ -583,9 +589,15 @@ export const api = {
+     request<{ season: string; standings: ApiStanding[] }>(`/standings/${encodeURIComponent(league)}`),
+ 
+   getRatings: (matchId: string) =>
+-    request<{ players: ApiPlayerRating[]; minVotes: number; cardsUsed: number; cardsMax: number }>(
+-      `/matches/${matchId}/ratings`,
+-    ),
++    request<{
++      players: ApiPlayerRating[];
++      minVotes: number;
++      cardsUsed: number;
++      cardsMax: number;
++      /** Per-player histogram over crowd_ratings: 10 buckets, index 0 = rating 1.
++       *  Absent key = that player has no votes yet. */
++      distributions: Record<string, number[]>;
++    }>(`/matches/${matchId}/ratings`),
+ 
+   ratePlayer: (matchId: string, playerId: string, rating: number, comment?: string) =>
+     request<{ ok: boolean; cardsUsed: number }>(`/matches/${matchId}/ratings`, {
+diff --git a/src/pages/Leaderboards.tsx b/src/pages/Leaderboards.tsx
+index 3de3fe6..32c7159 100644
+--- a/src/pages/Leaderboards.tsx
++++ b/src/pages/Leaderboards.tsx
+@@ -11,6 +11,10 @@ type BoardTab = "global" | "league" | "club";
+  * The stakes layer, made visible: season prediction points across the three
+  * boards from the concept — global, per-league, per-club. Public by design;
+  * ties resolved by first-to-reach (the server ranks, we render).
++ *
++ * A viewer ranked below the board's page limit gets an honest "you" row
++ * appended under a divider (server-computed with the board's own tiebreak),
++ * so rank 137 is a fact on screen instead of an absence.
+  */
+ export default function Leaderboards() {
+   const { t, localize } = useI18n();
+@@ -24,9 +28,9 @@ export default function Leaderboards() {
+ 
+   const board = useLeaderboard(scope);
+ 
+-  // The signed-in user's display name comes from the board row; there is no
+-  // separate identity chip, so we just render rows.
+-  const rows = board.data ?? [];
++  const rows = board.data?.board ?? [];
++  const you = board.data?.you ?? null;
++  const youOnBoard = rows.some((row) => row.is_you);
+ 
+   return (
+     <>
+@@ -115,37 +119,27 @@ export default function Leaderboards() {
+             </div>
+             <ul className="space-y-1.5">
+               {rows.map((row) => (
+-                <li
++                <BoardRow
+                   key={row.username ?? row.display_name}
+-                  className={cx(
+-                    "grid grid-cols-[2rem_1fr_3.5rem] items-center gap-2 rounded-card border p-2.5",
+-                    row.is_you ? "border-volt bg-elevated" : "border-line bg-surface",
+-                  )}
+-                >
+-                  <Num
+-                    className={cx(
+-                      "text-sm font-bold",
+-                      row.rank === 1 ? "text-gold" : row.rank <= 3 ? "text-ink" : "text-ink-3",
+-                    )}
+-                  >
+-                    {row.rank}
+-                  </Num>
+-                  <span className="flex min-w-0 items-center gap-2">
+-                    <Avatar name={row.display_name} size="sm" />
+-                    <span
+-                      className={cx(
+-                        "min-w-0 flex-1 truncate text-sm font-bold",
+-                        row.is_you ? "text-volt" : "text-ink",
+-                      )}
+-                      dir="ltr"
+-                    >
+-                      {row.display_name}
+-                    </span>
+-                    {row.is_you ? <Chip tone="volt">{t("board.you")}</Chip> : null}
+-                  </span>
+-                  <Num className="text-end text-base text-gold">{row.total}</Num>
+-                </li>
++                  rank={row.rank}
++                  name={row.display_name}
++                  total={row.total}
++                  highlight={row.is_you}
++                  youLabel={t("board.you")}
++                />
+               ))}
++              {/* Your row, computed server-side, when it lives below the page. */}
++              {you && !youOnBoard ? (
++                <>
++                  <li
++                    aria-hidden="true"
++                    className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wide text-ink-3"
++                  >
++                    {t("board.belowPage")}
++                  </li>
++                  <BoardRow rank={you.rank} name={t("board.you")} total={you.total} highlight />
++                </>
++              ) : null}
+             </ul>
+           </>
+         )}
+@@ -154,6 +148,49 @@ export default function Leaderboards() {
+   );
+ }
+ 
++function BoardRow({
++  rank,
++  name,
++  total,
++  highlight,
++  youLabel,
++}: {
++  rank: number;
++  name: string;
++  total: number;
++  highlight: boolean;
++  youLabel?: string;
++}) {
++  return (
++    <li
++      className={cx(
++        "grid grid-cols-[2rem_1fr_3.5rem] items-center gap-2 rounded-card border p-2.5",
++        highlight ? "border-volt bg-elevated" : "border-line bg-surface",
++      )}
++    >
++      <Num
++        className={cx(
++          "text-sm font-bold",
++          rank === 1 ? "text-gold" : rank <= 3 ? "text-ink" : "text-ink-3",
++        )}
++      >
++        {rank}
++      </Num>
++      <span className="flex min-w-0 items-center gap-2">
++        <Avatar name={name} size="sm" />
++        <span
++          className={cx("min-w-0 flex-1 truncate text-sm font-bold", highlight ? "text-volt" : "text-ink")}
++          dir="ltr"
++        >
++          {name}
++        </span>
++        {youLabel ? <Chip tone="volt">{youLabel}</Chip> : null}
++      </span>
++      <Num className="text-end text-base text-gold">{total}</Num>
++    </li>
++  );
++}
++
+ /* ------------------------------------------------------------ league picker */
+ 
+ function LeaguePicker({ value, onChange }: { value: string; onChange: (slug: string) => void }) {
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 70b19c6..08f32fd 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -247,7 +247,7 @@ export default function MatchDetail() {
+         {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
+         {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
+         {tab === "predict" ? <PredictionsHub matchId={id} /> : null}
+-        {tab === "ratings" ? <RatingsTab matchId={id} live={live} /> : null}
++        {tab === "ratings" ? <RatingsTab matchId={id} live={live} league={match.league} /> : null}
+       </section>
+ 
+       {/* Replay entry — the whole match on a 2D pitch, once it's finished. */}
+@@ -559,7 +559,7 @@ function LineupsTab({
+   return <LineupsPanel home={homeTeam} away={awayTeam} lineups={{ home: homeLineup, away: awayLineup }} />;
+ }
+ 
+-function RatingsTab({ matchId, live }: { matchId: string; live: boolean }) {
++function RatingsTab({ matchId, live, league }: { matchId: string; live: boolean; league: string }) {
+   const { t } = useI18n();
+   const query = useQuery({
+     queryKey: ["ratings", matchId],
+@@ -567,7 +567,7 @@ function RatingsTab({ matchId, live }: { matchId: string; live: boolean }) {
+     refetchInterval: live ? 30_000 : false,
+   });
+   const players = query.data?.players ?? [];
+-  const adapted = players.map(adaptPlayerRating);
++  const adapted = players.map((p) => adaptPlayerRating(p, league));
+   if (query.isLoading) return <RatingsSkeleton rows={6} />;
+   if (query.isError) {
+     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+@@ -585,6 +585,7 @@ function RatingsTab({ matchId, live }: { matchId: string; live: boolean }) {
+       <RatingsList
+         matchId={matchId}
+         players={adapted}
++        distributions={query.data?.distributions ?? null}
+         cardsUsed={query.data?.cardsUsed ?? 0}
+         cardsMax={query.data?.cardsMax ?? 3}
+       />
+@@ -595,11 +596,14 @@ function RatingsTab({ matchId, live }: { matchId: string; live: boolean }) {
+ function RatingsList({
+   matchId,
+   players,
++  distributions,
+   cardsUsed,
+   cardsMax,
+ }: {
+   matchId: string;
+   players: PlayerRating[];
++  /** Server-built per-player histograms; null = response predates the field. */
++  distributions: Record<string, number[]> | null;
+   cardsUsed: number;
+   cardsMax: number;
+ }) {
+@@ -660,7 +664,7 @@ function RatingsList({
+           rating={sheetFor}
+           open
+           onClose={() => setSheetFor(null)}
+-          distribution={distributionFromVotes(sheetFor)}
++          distribution={distributionFor(sheetFor, distributions)}
+           cardsUsed={cardsUsed ?? undefined}
+           cardsMax={cardsMax ?? undefined}
+           onSave={(playerId, value, comment) => {
+@@ -690,7 +694,7 @@ function adaptTimelineEvent(e: ApiTimelineEvent) {
+   };
+ }
+ 
+-function adaptPlayerRating(p: ApiPlayerRating): PlayerRating {
++function adaptPlayerRating(p: ApiPlayerRating, league: string): PlayerRating {
+   return {
+     playerId: p.player_id,
+     name: p.name,
+@@ -708,18 +712,20 @@ function adaptPlayerRating(p: ApiPlayerRating): PlayerRating {
+       shortName: p.team_short ?? p.team_name ?? "",
+       abbreviation: (p.team_short ?? "").slice(0, 3) || "—",
+       color: p.team_color ?? TEAM_FALLBACK,
+-      league: "PL",
++      // The match's real competition; cup matches no longer read as PL sides.
++      league: league as import("../types").LeagueId,
+     },
+   } as PlayerRating & { _team: import("../types").Team };
+ }
+ 
+-/** Real histogram when votes exist; flat placeholder when a rating is new. */
+-function distributionFromVotes(rating: PlayerRating): number[] {
+-  // The API returns the aggregate; until a histogram endpoint exists, derive a
+-  // single-bucket truth: all votes at the rounded average. Honest, not fake.
+-  const counts = Array.from({ length: 10 }, () => 0);
+-  if (rating.crowdRating !== null && rating.votes > 0) {
+-    counts[Math.min(9, Math.max(0, Math.round(rating.crowdRating) - 1))] = rating.votes;
+-  }
+-  return counts;
++/**
++ * Build the RateSheet histogram from the server's real per-rating GROUP BY.
++ * Pre-distribution responses (or a player with zero votes) get the flat empty
++ * array — an honest "no votes yet", never a synthesized bar.
++ */
++function distributionFor(
++  rating: PlayerRating,
++  distributions: Record<string, number[]> | null,
++): number[] {
++  return distributions?.[rating.playerId] ?? Array.from({ length: 10 }, () => 0);
+ }
+diff --git a/src/pages/Ratings.tsx b/src/pages/Ratings.tsx
+index f99d877..17d9158 100644
+--- a/src/pages/Ratings.tsx
++++ b/src/pages/Ratings.tsx
+@@ -7,7 +7,7 @@ import { TopBar } from "../components/TopBar";
+ import { Card, Chip, EmptyState, ErrorState, SectionHeading, Segmented } from "../components/ui";
+ import { api, serverErrorKey } from "../lib/api";
+ import { TEAM_FALLBACK } from "../lib/colors";
+-import { leagueIdOf, useMatches } from "../hooks/useApi";
++import { useMatches } from "../hooks/useApi";
+ import { useI18n } from "../i18n/I18nProvider";
+ import type { PlayerRating } from "../types";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+@@ -79,7 +79,11 @@ export default function Ratings() {
+           />
+         </div>
+       ) : (
+-        <MatchRatings matchId={openMatch.id} match={toRawMatch(openMatch)} />
++        <MatchRatings
++          matchId={openMatch.id}
++          match={toRawMatch(openMatch)}
++          league={openMatch.home.league}
++        />
+       )}
+     </>
+   );
+@@ -92,9 +96,12 @@ function toRawMatch(m: NonNullable<ReturnType<typeof useMatches>["data"]>[number
+ function MatchRatings({
+   matchId,
+   match,
++  league,
+ }: {
+   matchId: string;
+   match: { status: string; home: { shortName: string }; away: { shortName: string } } | undefined;
++  /** The match's competition (LeagueId or cup slug) for the row's team chip. */
++  league: string;
+ }) {
+   const { t, localize } = useI18n();
+   const { push } = useToast();
+@@ -105,7 +112,10 @@ function MatchRatings({
+     queryFn: () => api.getRatings(matchId),
+     refetchInterval: match?.status === "live" ? 30_000 : false,
+   });
+-  const players = (query.data?.players ?? []).map(adapt);
++  const players = (query.data?.players ?? []).map((p) => adapt(p, league));
++  // Real histograms straight from crowd_ratings (server GROUP BY); the zero
++  // array is only a brand-new player's honest "no votes yet".
++  const distributions = query.data?.distributions ?? {};
+   const cardsUsed = query.data?.cardsUsed ?? 0;
+   const cardsMax = query.data?.cardsMax ?? 3;
+   const [sort, setSort] = useState<"crowd" | "points" | "divergence">("crowd");
+@@ -232,7 +242,7 @@ function MatchRatings({
+           rating={sheetFor}
+           open
+           onClose={() => setSheetFor(null)}
+-          distribution={distributionFromVotes(sheetFor)}
++          distribution={distributions[sheetFor.playerId] ?? ZERO_DISTRIBUTION}
+           cardsUsed={cardsUsed}
+           cardsMax={cardsMax}
+           onSave={(playerId, value, comment) => {
+@@ -247,7 +257,7 @@ function MatchRatings({
+ 
+ type Team = import("../types").Team;
+ 
+-function adapt(p: import("../lib/api").ApiPlayerRating): PlayerRating & { _team: Team } {
++function adapt(p: import("../lib/api").ApiPlayerRating, league: string): PlayerRating & { _team: Team } {
+   return {
+     playerId: p.player_id,
+     name: p.name,
+@@ -265,15 +275,12 @@ function adapt(p: import("../lib/api").ApiPlayerRating): PlayerRating & { _team:
+       shortName: p.team_short ?? p.team_name ?? "",
+       abbreviation: (p.team_short ?? "").slice(0, 3) || "—",
+       color: p.team_color ?? TEAM_FALLBACK,
+-      league: leagueIdOf("") ?? "PL",
++      // The match's own competition, not a hardcoded default: a cup match's
++      // rating rows no longer masquerade as Premier League sides.
++      league: (league || "PL") as Team["league"],
+     },
+   };
+ }
+ 
+-function distributionFromVotes(rating: PlayerRating): number[] {
+-  const counts = Array.from({ length: 10 }, () => 0);
+-  if (rating.crowdRating !== null && rating.votes > 0) {
+-    counts[Math.min(9, Math.max(0, Math.round(rating.crowdRating) - 1))] = rating.votes;
+-  }
+-  return counts;
+-}
++/** Shared "no votes yet" histogram — a stable empty reference, not a render allocation. */
++const ZERO_DISTRIBUTION: number[] = Array.from({ length: 10 }, () => 0);
+-- 
+2.54.0.windows.1
+

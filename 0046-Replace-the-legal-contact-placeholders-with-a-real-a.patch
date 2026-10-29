@@ -1,0 +1,53 @@
+From fdd3953bed858b2e632486a59222e2ab19bd7bc3 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 10 Oct 2026 01:11:58 +0330
+Subject: [PATCH 046/230] Replace the legal contact placeholders with a real
+ address
+
+---
+ src/i18n/strings.ts | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 80fd2e1..8bb7449 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -330,7 +330,7 @@ export const strings = {
+     "legal.privacy.delete.body":
+       "Profile → Delete account removes your account and everything in it — favorites, picks, ratings, comments and points — immediately and permanently.",
+     "legal.privacy.contact.title": "Contact",
+-    "legal.privacy.contact.body": "Questions or data requests: add your contact address here.",
++    "legal.privacy.contact.body": "Questions or data requests: loslocrian@gmail.com",
+     "legal.terms.use.title": "Using the app",
+     "legal.terms.use.body":
+       "Vkick is a football companion for following clubs, predicting matches and rating players. Use it as a fan — don't abuse, scrape or automate it.",
+@@ -347,7 +347,7 @@ export const strings = {
+     "legal.terms.delete.body":
+       "You can delete your account at any time from Profile. Deletion takes effect immediately and cannot be undone.",
+     "legal.terms.contact.title": "Contact",
+-    "legal.terms.contact.body": "Questions or corrections: add your contact address here.",
++    "legal.terms.contact.body": "Questions or corrections: loslocrian@gmail.com",
+     "profile.editName": "Edit display name",
+     "profile.nameEmpty": "Display name can't be empty",
+     "profile.recipientOptedOut": "That person turned off these notifications",
+@@ -862,7 +862,7 @@ export const strings = {
+     "legal.privacy.delete.body":
+       "پروفایل ← حذف حساب، حسابت و همه‌چیز درونش — باشگاه‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها و امتیازها — را فوراً و برای همیشه پاک می‌کند.",
+     "legal.privacy.contact.title": "تماس",
+-    "legal.privacy.contact.body": "پرسش یا درخواست داده: نشانی تماس‌تان را اینجا اضافه کنید.",
++    "legal.privacy.contact.body": "پرسش یا درخواست داده: loslocrian@gmail.com",
+     "legal.terms.use.title": "استفاده از برنامه",
+     "legal.terms.use.body":
+       "وی‌کیک یک همراه فوتبالی برای دنبال‌کردن باشگاه‌ها، پیش‌بینی بازی‌ها و امتیازدادن به بازیکنان است. مثل یک هوادار از آن استفاده کن — سوءاستفاده، استخراج داده یا خودکارسازی نکن.",
+@@ -879,7 +879,7 @@ export const strings = {
+     "legal.terms.delete.body":
+       "هر وقت بخواهی می‌توانی از پروفایل حسابت را حذف کنی. حذف فوراً اعمال می‌شود و قابل بازگشت نیست.",
+     "legal.terms.contact.title": "تماس",
+-    "legal.terms.contact.body": "پرسش یا اصلاح: نشانی تماس‌تان را اینجا اضافه کنید.",
++    "legal.terms.contact.body": "پرسش یا اصلاح: loslocrian@gmail.com",
+     "profile.editName": "ویرایش نام نمایشی",
+     "profile.nameEmpty": "نام نمایشی نمی‌تواند خالی باشد",
+     "profile.recipientOptedOut": "این شخص اعلان‌هایش را خاموش کرده",
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,105 @@
+From cc90f3a5858285b8b7eeb6ed757a7ecc40fd1ac8 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 13:44:07 +0330
+Subject: [PATCH 128/230] Polish date strip: today marker dot + day-swap
+ micro-animation
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- DateStrip: add a 4×4px dot under today's chip that stays visible whether
+  today is selected or not — dark (bg-base) on the volt-filled selected chip,
+  volt-colored on the transparent non-selected chip — so the user always
+  knows where they are in the week.
+- index.css: add .day-swap keyframe (opacity 0→1 + translateY 4px→0 over
+  --t-std/250ms) with a prefers-reduced-motion: reduce → 1ms shortcut.
+- Matches.tsx: wrap the match feed (My teams + Other matches groups) in a
+  key={selectedKey} className="day-swap" div so React re-mounts the content
+  on every day change and the fade-in replays.
+
+Skipped FIX 3 (sliding selection bar): it requires chip position measurement
+and translateX animation, which is not a 5-minute change.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/DateStrip.tsx |  6 ++++++
+ src/index.css                | 22 ++++++++++++++++++++++
+ src/pages/Matches.tsx        |  4 ++--
+ 3 files changed, 30 insertions(+), 2 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index f0bae4a..60cc55e 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -89,6 +89,12 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
+             <span className="text-[15px] font-bold leading-none">
+               {digits.format(day.getDate())}
+             </span>
++            {isToday ? (
++              <span
++                aria-hidden="true"
++                className={`mt-0.5 h-1 w-1 rounded-full ${isSelected ? "bg-[color:var(--bg-base)]" : "bg-volt"}`}
++              />
++            ) : null}
+           </button>
+         );
+       })}
+diff --git a/src/index.css b/src/index.css
+index add20bf..20fc46e 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -278,6 +278,28 @@
+     }
+   }
+ 
++  /* Day-swap: fade + slight rise when the selected day changes. Re-mounted via
++     a key on the feed wrapper in Matches.tsx, so the animation replays on every
++     day change without resetting scroll position. */
++  .day-swap {
++    animation: day-swap var(--t-std) var(--ease-out) both;
++  }
++  @keyframes day-swap {
++    from {
++      opacity: 0;
++      transform: translateY(4px);
++    }
++    to {
++      opacity: 1;
++      transform: none;
++    }
++  }
++  @media (prefers-reduced-motion: reduce) {
++    .day-swap {
++      animation-duration: 1ms;
++    }
++  }
++
+   /* Signature animation 3: timeline entrance, staggered 40ms. */
+   .timeline-in {
+     animation: timeline-in var(--t-std) var(--ease-out) both;
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 3bda9e5..7380739 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -357,7 +357,7 @@ export default function Matches() {
+         ) : null}
+ 
+         {!matchesQuery.isLoading && !hasFeedError ? (
+-          <>
++          <div key={selectedKey} className="day-swap">
+             {/* My teams group: matches where a favorite team is playing. */}
+             {favCount > 0 && myTeamsMatches.length > 0 && (
+               <section className="mt-4">
+@@ -391,7 +391,7 @@ export default function Matches() {
+                 </ul>
+               </section>
+             )}
+-          </>
++          </div>
+         ) : null}
+ 
+         {/* Sync note, not a second refresh button: pull-to-refresh and the
+-- 
+2.54.0.windows.1
+

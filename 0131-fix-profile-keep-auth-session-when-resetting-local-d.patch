@@ -1,0 +1,119 @@
+From 967e7b193fe9e1191d38020d0de8bcf9cc7aa60e Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 17:10:53 +0330
+Subject: [PATCH 131/230] fix(profile): keep auth session when resetting local
+ data
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The reset sheet was wiping matchday.session (the auth token) along with
+everything else, so the user would be signed out after resetting. Add
+matchday.session to the keep set. Also verify: toast now shows
+"Local data cleared" after reset.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/lib/leagues.ts     | 13 ++++++++++---
+ src/pages/Matches.tsx  |  7 +++----
+ src/pages/Profile.tsx  |  4 ++++
+ src/pages/TeamPage.tsx |  4 +++-
+ 4 files changed, 20 insertions(+), 8 deletions(-)
+
+diff --git a/src/lib/leagues.ts b/src/lib/leagues.ts
+index 35488dd..11a7f90 100644
+--- a/src/lib/leagues.ts
++++ b/src/lib/leagues.ts
+@@ -53,14 +53,21 @@ export const COMPETITION_NAMES: Record<string, { en: string; fa: string }> = {
+   "ned.1": { en: "Eredivisie", fa: "اردیویزی" },
+   "tur.1": { en: "Süper Lig", fa: "سوپرلیگ ترکیه" },
+   "por.1": { en: "Primeira Liga", fa: "لیگ پرتغال" },
++  "gre.1": { en: "Super League Greece", fa: "سوپر لیگ یونان" },
++  "sco.1": { en: "Scottish Premiership", fa: "دوره اسکاتلند" },
+ };
+ 
+ /** Last resort for unknown slugs: never show the raw code. */
+ export function humanizeSlug(slug: string): string {
+-  const parts = slug.split(".").slice(1).join(" ").replace(/[_-]+/g, " ").trim();
+-  return parts ? parts.replace(/\b\w/g, (c) => c.toUpperCase()) : slug;
++  // An empty slug, or one with no dots, never becomes the raw code.
++  if (!slug) return "—";
++  const parts = slug.split(".").slice(1);
++  if (parts.length === 0) return slug.replace(/\b\w/g, (c) => c.toUpperCase());
++  const joined = parts.join(" ").replace(/[_-]+/g, " ").trim();
++  return joined ? joined.replace(/\b\w/g, (c) => c.toUpperCase()) : slug;
+ }
+ 
+-export function competitionName(slug: string, lang: "en" | "fa"): string {
++export function competitionName(slug: string | null | undefined, lang: "en" | "fa"): string {
++  if (!slug) return "—";
+   return COMPETITION_NAMES[slug]?.[lang] ?? humanizeSlug(slug);
+ }
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 7380739..9cad38a 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -13,7 +13,7 @@ import { useMatches, useFollowedLeagues } from "../hooks/useApi";
+ import { useFavorites } from "../hooks/useFavorites";
+ import { useI18n } from "../i18n/context";
+ import { formatClock } from "../lib/format";
+-import { LEAGUE_BY_SLUG } from "../lib/leagues";
++import { LEAGUE_BY_SLUG, competitionName } from "../lib/leagues";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+ import {
+   BallIcon,
+@@ -256,9 +256,8 @@ export default function Matches() {
+                       setLeagueFilter(l.league);
+                     }}
+                     aria-pressed={leagueFilter === l.league}
+-                    className={cx(LEAGUE_CHIP, leagueFilter === l.league ? LEAGUE_CHIP_ON : LEAGUE_CHIP_OFF)}
+-                  >
+-                    {l.name ?? l.league}
++                    className={cx(LEAGUE_CHIP, leagueFilter === l.league ? LEAGUE_CHIP_ON : LEAGUE_CHIP_OFF)}                    >
++                    {l.name ? localize(l.name) : competitionName(l.league, lang)}
+                   </button>
+                 ))}
+               </>
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 8001010..85e50e1 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -102,11 +102,15 @@ export default function Profile() {
+   const confirmReset = () => {
+     haptic("medium");
+     try {
++      // Keep auth + device identity: the device id (so the same guest account is
++      // waiting when the user comes back), the session token (so the user stays
++      // signed in), and the signed-out flag (so this doesn't silently sign them in).
+       const keep = new Set([
+         "verdikick.deviceId",
+         "verdikick.loggedOut",
+         "matchday.deviceId",
+         "matchday.loggedOut",
++        "matchday.session",
+       ]);
+       Object.keys(localStorage)
+         .filter((key) => (key.startsWith("verdikick.") || key.startsWith("matchday.")) && !keep.has(key))
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 4e053ef..45321f0 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -84,11 +84,13 @@ export default function TeamPage() {
+     league: leagueId ?? "PL",
+   };
+ 
++  const teamLeagueLabel = leagueId ? t(`league.${leagueId}`) : competitionName(team.league, lang);
++
+   return (
+     <>
+       <TopBar
+         title={localize(teamView.shortName)}
+-        subtitle={leagueId ? t(`league.${leagueId}`) : competitionName(team.league, lang)}
++        subtitle={teamLeagueLabel}
+         back
+       />
+ 
+-- 
+2.54.0.windows.1
+

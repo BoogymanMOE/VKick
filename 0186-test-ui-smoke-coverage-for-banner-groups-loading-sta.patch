@@ -1,0 +1,548 @@
+From 3af87a8ebc5feeff8a1a71ba9bd293c4c0a70495 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 00:37:57 +0330
+Subject: [PATCH 186/230] test(ui): smoke coverage for banner, groups, loading
+ states and timeline
+
+---
+ scripts/browser-smoke.mjs       | 408 +++++++++++++++++++++++++++++++-
+ tests/useLocalState.harness.tsx |  34 +--
+ tests/useLocalState.probe.tsx   |  39 +++
+ 3 files changed, 446 insertions(+), 35 deletions(-)
+ create mode 100644 tests/useLocalState.probe.tsx
+
+diff --git a/scripts/browser-smoke.mjs b/scripts/browser-smoke.mjs
+index b09dca0..1b5a408 100644
+--- a/scripts/browser-smoke.mjs
++++ b/scripts/browser-smoke.mjs
+@@ -15,6 +15,7 @@
+  * Exit 1 with one line per finding; anything green prints "SMOKE OK".
+  */
+ import { chromium } from "playwright";
++import { mkdirSync } from "node:fs";
+ 
+ const BASE = process.env.SMOKE_BASE_URL ?? "http://localhost:5173";
+ const API = process.env.SMOKE_API_URL ?? "http://localhost:8787";
+@@ -27,8 +28,8 @@ function fail(where, detail) {
+   failures.push(`${where}: ${detail}`);
+   console.error(`  ✗ ${where}: ${detail}`);
+ }
+-function pass(where) {
+-  console.log(`  ✓ ${where}`);
++function pass(where, detail) {
++  console.log(detail ? `  ✓ ${where}: ${detail}` : `  ✓ ${where}`);
+ }
+ 
+ /**
+@@ -278,6 +279,386 @@ async function checkOnboarding(browser, lang) {
+   await page2.context().close();
+ }
+ 
++// ------------------------------------------------------- round-4 visual work
++// Tasks 1b/2/3/4 acceptance, ported from the untracked .tmp verify scripts:
++// pick-banner persistence, state groups with a collapsed Finished, the 4s
++// loading skeleton, the empty-day state, and the compact timeline rows. All
++// new seeding goes through storageState — addInitScript re-runs on every
++// reload and would wipe whichever persisted key the check is testing.
++
++const PICK_BANNER_KEY = "verdikick.pickBannerDismissed";
++const FINISHED_KEY = "section.open.feed-finished";
++
++function round4Storage(lang, seed = {}) {
++  return {
++    cookies: [],
++    origins: [
++      {
++        origin: BASE,
++        localStorage: [
++          { name: "matchday.lang", value: lang },
++          ...Object.entries(seed).map(([name, value]) => ({ name, value: JSON.stringify(value) })),
++        ],
++      },
++    ],
++  };
++}
++
++function t4Payload({ live = 0, halftime = 0, upcoming = 0, finished = 0 }) {
++  const kick = new Date();
++  kick.setHours(14, 0, 0, 0);
++  const kickoff = kick.toISOString();
++  const mk = (i, patch) => ({
++    id: `sm${i}`,
++    gameweek_id: null,
++    league: "eng.1",
++    home_team_id: patch.ht ?? `h${i}`,
++    away_team_id: `a${i}`,
++    kickoff_at: kickoff,
++    last_synced_at: null,
++    home_formation: null,
++    away_formation: null,
++    home_name: `Home ${i}`,
++    home_short: `Home${i}`,
++    home_abbr: `H${i}`,
++    home_color: "#1fbfa0",
++    home_logo: null,
++    away_name: `Away ${i}`,
++    away_short: `Away${i}`,
++    away_abbr: `A${i}`,
++    away_color: "#ff5a4d",
++    away_logo: null,
++    ...patch,
++  });
++  const list = [];
++  let n = 0;
++  for (let k = 0; k < live; k++, n++)
++    list.push(mk(n, { status: "live", minute_display: `${12 + k}'`, home_score: k % 2, away_score: 0, ht: k === 0 ? "fH" : undefined }));
++  for (let k = 0; k < halftime; k++, n++)
++    list.push(mk(n, { status: "halftime", minute_display: "HT", home_score: 1, away_score: 0 }));
++  for (let k = 0; k < upcoming; k++, n++)
++    list.push(mk(n, { status: "scheduled", minute_display: null, home_score: null, away_score: null }));
++  for (let k = 0; k < finished; k++, n++)
++    list.push(mk(n, { status: "finished", minute_display: "FT", home_score: k % 5, away_score: (k + 1) % 4 }));
++  return list;
++}
++
++function mockFeed(page, matches, { delayMs = 0 } = {}) {
++  return page.route("**/api/matches*", async (r) => {
++    if (r.request().method() !== "GET") return r.fallback();
++    if (delayMs) await new Promise((res) => setTimeout(res, delayMs));
++    return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ matches, count: matches.length }) });
++  });
++}
++
++const REVIEW4 = ".ui-shots/review4";
++try {
++  mkdirSync(REVIEW4, { recursive: true });
++} catch {
++  /* the screenshots are a bonus, never a gating dependency */
++}
++
++async function captureSplash(browser, lang) {
++  const label = `splash ${lang} 390x844`;
++  const ctx = await browser.newContext({
++    viewport: { width: 390, height: 844 },
++    reducedMotion: "no-preference",
++    storageState: round4Storage(lang),
++  });
++  const page = await ctx.newPage();
++  // Hold the entry chunk so the 150ms-delayed splash has its moment; the shot
++  // lands inside that window, before anything mounts.
++  await page.route("**/src/main.tsx", async (r) => {
++    await new Promise((res) => setTimeout(res, 900));
++    r.continue();
++  });
++  await page.goto(appUrl(devUserId(`splash_${lang}`), "/matches"), { waitUntil: "domcontentloaded", timeout: 30000 });
++  await page.waitForTimeout(350);
++  const boot = await page.evaluate(() => {
++    const el = document.getElementById("boot");
++    if (!el) return null;
++    return { opacity: getComputedStyle(el).opacity, img: Boolean(el.querySelector("img")), ring: Boolean(el.querySelector(".boot-ring")) };
++  });
++  if (!boot || boot.opacity !== "1" || !boot.img || !boot.ring) fail(label, `splash not on screen at 350ms: ${JSON.stringify(boot)}`);
++  else pass(label, "mark + ring visible mid-boot");
++  try {
++    await page.screenshot({ path: `${REVIEW4}/splash-${lang}-390.png` });
++  } catch {
++    /* screenshots never gate */
++  }
++  await page.waitForTimeout(3500);
++  const gone = await page.evaluate(() => !document.getElementById("boot"));
++  if (!gone) fail(label, "splash still in DOM after the app mounts");
++  await ctx.close();
++}
++
++async function checkPickBanner(browser, lang) {
++  for (const [width, height] of [
++    [390, 844],
++    [360, 640],
++  ]) {
++    const label = `pickBanner ${lang} ${width}x${height}`;
++    const ctx = await browser.newContext({ viewport: { width, height }, storageState: round4Storage(lang) });
++    const page = await ctx.newPage();
++    await settle(page, appUrl(devUserId(`banner_${lang}_${width}`), "/matches"), 4000);
++    const shown = await page.evaluate(() => {
++      const region = [...document.querySelectorAll('[role="region"]')].find(
++        (r) => (r.getAttribute("aria-label") ?? "").length > 0 && r.querySelector("a"),
++      );
++      if (!region) return null;
++      const link = region.querySelector("a");
++      const btn = region.querySelector("button");
++      const rect = region.getBoundingClientRect();
++      return {
++        h: Math.round(rect.height),
++        bottom: Math.round(rect.bottom),
++        vh: window.innerHeight,
++        cta: Math.round(link?.getBoundingClientRect().height ?? -1),
++        dismiss: Math.round(btn?.getBoundingClientRect().height ?? -1),
++      };
++    });
++    if (!shown) {
++      fail(label, "banner absent for a zero-favourite fresh user");
++    } else {
++      pass(label, `banner h=${shown.h}px bottom=${shown.bottom}/${shown.vh} cta=${shown.cta}px dismiss=${shown.dismiss}px`);
++      if (shown.bottom > shown.vh) fail(label, "banner clipped");
++      if (shown.cta < 44 || shown.dismiss < 44) fail(label, `targets <44px (${shown.cta}/${shown.dismiss})`);
++      const bodyText = await page.evaluate(() => document.body.innerText);
++      if (/No club picked yet|هنوز باشگاهی/.test(bodyText)) fail(label, 'old "No club picked yet" card still in the feed');
++      await page.evaluate(() => {
++        const region = [...document.querySelectorAll('[role="region"]')].find((r) => r.querySelector("a"));
++        region?.querySelector("button")?.click();
++      });
++      await page.waitForTimeout(600);
++      const stored = await page.evaluate((k) => localStorage.getItem(k), PICK_BANNER_KEY);
++      await page.reload({ waitUntil: "domcontentloaded" });
++      await page.waitForTimeout(3500);
++      const after = await page.evaluate(
++        (k) => ({
++          gone: ![...document.querySelectorAll('[role="region"]')].some((r) => r.querySelector("a")),
++          stored: localStorage.getItem(k),
++        }),
++        PICK_BANNER_KEY,
++      );
++      if (stored !== "true" || !after.gone || after.stored !== "true")
++        fail(label, `dismiss not persisted (stored=${stored} after=${after.stored} gone=${after.gone})`);
++      else pass(label, "dismiss hides instantly and survives reload");
++      try {
++        await page.screenshot({ path: `${REVIEW4}/banner-${lang}-${width}.png` });
++      } catch {
++        /* screenshots never gate */
++      }
++    }
++    await ctx.close();
++  }
++}
++
++async function checkGroups(browser, lang, width) {
++  const label = `groups ${lang} ${width}x844`;
++  const want = {
++    en: ["Live now", "Half-time", "Later today", "Finished"],
++    fa: ["زنده", "نیمه‌وقت", "بعداً امروز", "تمام‌شده"],
++  }[lang];
++  const ctx = await browser.newContext({ viewport: { width, height: 844 }, storageState: round4Storage(lang) });
++  const page = await ctx.newPage();
++  await mockFeed(page, t4Payload({ live: 4, halftime: 8, upcoming: 2, finished: 13 }));
++  await page.route("**/team/**/logo", (r) => r.fulfill({ body: "" }));
++  await settle(page, appUrl(devUserId(`groups_${lang}_${width}`), "/matches"), 4000);
++  const headers = await page.evaluate(() =>
++    [...document.querySelectorAll("h2")]
++      .filter((h) => /feed-group-|feed-finished-heading/.test(h.id))
++      .map((h) => {
++        const raw = h.textContent ?? "";
++        const row = h.closest("button") ?? h.parentElement;
++        const inH = [...h.querySelectorAll(".num-display")];
++        const inRow = [...(row?.querySelectorAll(".num-display") ?? [])];
++        const nums = [...inH, ...inRow].map((s) => s.textContent ?? "");
++        const count = Number(nums.find((x) => /^\d+$/.test(x.trim())) ?? raw.match(/\d+/)?.[0] ?? -1);
++        return { id: h.id, label: raw.replace(/\d+/g, "").trim(), count, top: Math.round(h.getBoundingClientRect().top) };
++      }),
++  );
++  const counts = [4, 8, 2, 13];
++  const okOrder =
++    headers.length === 4 &&
++    want.every((w, i) => headers[i]?.label === w) &&
++    headers.every((h, i) => h.count === counts[i] && (i === 0 || headers[i].top > headers[i - 1].top));
++  if (!okOrder) fail(label, `headers ${JSON.stringify(headers)}`);
++  else pass(label, `${headers.map((h) => `${h.label}=${h.count}`).join(" · ")} (t=${headers.map((h) => h.top).join("<")})`);
++  const state = await page.getAttribute('[aria-controls="feed-finished-panel"]', "aria-expanded");
++  if (state !== "false") fail(label, `Finished not collapsed by default (aria-expanded=${state})`);
++  else pass(label, "Finished collapsed by default");
++  await page.click('[aria-controls="feed-finished-panel"]');
++  await page.waitForTimeout(500);
++  try {
++    await page.screenshot({ path: `${REVIEW4}/groups-${lang}-${width}.png` });
++  } catch {
++    /* screenshots never gate */
++  }
++  await page.reload({ waitUntil: "domcontentloaded" });
++  await page.waitForTimeout(3500);
++  const persisted = await page.evaluate(
++    (k) => ({
++      open: Boolean(document.getElementById("feed-finished-panel")),
++      stored: localStorage.getItem(k),
++    }),
++    FINISHED_KEY,
++  );
++  if (!persisted.open || persisted.stored !== "true") fail(label, `expanded choice lost after reload (stored=${persisted.stored})`);
++  else pass(label, `expanded choice survives reload (stored=${persisted.stored})`);
++  const overflow = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
++  if (overflow.sw > overflow.iw + 1) fail(label, `horizontal overflow ${overflow.sw}>${overflow.iw}`);
++  await ctx.close();
++}
++
++async function checkSavedChoiceBeatsDefault(browser, lang) {
++  const label = `savedChoice ${lang} 390x844`;
++  const ctx = await browser.newContext({
++    viewport: { width: 390, height: 844 },
++    storageState: round4Storage(lang, { [FINISHED_KEY]: false }),
++  });
++  const page = await ctx.newPage();
++  await mockFeed(page, t4Payload({ finished: 2 }));
++  await page.route("**/team/**/logo", (r) => r.fulfill({ body: "" }));
++  await settle(page, appUrl(devUserId(`saved_${lang}`), "/matches"), 4000);
++  const r = await page.evaluate(
++    (k) => ({
++      open: Boolean(document.getElementById("feed-finished-panel")),
++      stored: localStorage.getItem(k),
++    }),
++    FINISHED_KEY,
++  );
++  if (r.open) fail(label, `saved collapsed choice lost on a finished-only day (stored=${r.stored})`);
++  else pass(label, 'saved "false" wins over the computed expand default');
++  await ctx.close();
++}
++
++async function checkLoadingSkeleton(browser, lang, width) {
++  const label = `skeleton ${lang} ${width}x844`;
++  const ctx = await browser.newContext({ viewport: { width, height: 844 }, storageState: round4Storage(lang) });
++  const page = await ctx.newPage();
++  await mockFeed(page, [], { delayMs: 4000 });
++  await page.goto(appUrl(devUserId(`skel_${lang}_${width}`), "/matches"), { waitUntil: "domcontentloaded", timeout: 30000 });
++  // The route holds the response for 4s; the app needs ~1.5s to paint (cold
++  // module graph). Catch the skeleton window in between.
++  await page.waitForTimeout(1600);
++  const s = await page.evaluate(() => {
++    // The loading list is the one the feed marks aria-busy — its <li> children
++    // ARE the skeletons, whatever the shimmer's DOM depth is.
++    const skels = [...document.querySelectorAll('ul[aria-busy="true"] > li')];
++    return {
++      n: skels.length,
++      h: Math.round(skels[0]?.getBoundingClientRect().height ?? -1),
++      banner: [...document.querySelectorAll('[role="region"]')].some((x) => x.querySelector("a")),
++      h2: document.querySelectorAll("h2").length,
++    };
++  });
++  if (s.n !== 4) fail(label, `want 4 skeletons while loading, saw ${s.n}`);
++  else if (!(s.h >= 100 && s.h <= 120)) fail(label, `skeleton height ${s.h}px (want ≈108)`);
++  else pass(label, `4 skeletons, h=${s.h}px, banner=${s.banner} h2=${s.h2}`);
++  try {
++    await page.screenshot({ path: `${REVIEW4}/skeleton-${lang}-${width}.png` });
++  } catch {
++    /* screenshots never gate */
++  }
++  await ctx.close();
++}
++
++async function checkEmptyDay(browser, lang, width, later) {
++  const label = `emptyDay ${lang} ${width}x844 later=${later}`;
++  const ctx = await browser.newContext({ viewport: { width, height: 844 }, storageState: round4Storage(lang) });
++  const page = await ctx.newPage();
++  const matches = later
++    ? t4Payload({ upcoming: 1 }).map((m) => ({
++        ...m,
++        kickoff_at: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString(),
++      }))
++    : [];
++  await mockFeed(page, matches);
++  await page.route("**/team/**/logo", (r) => r.fulfill({ body: "" }));
++  await settle(page, appUrl(devUserId(`empty_${lang}_${width}_${later}`), "/matches"), 4000);
++  const s = await page.evaluate(() => {
++    const empty = document.querySelector(".pitch-watermark");
++    const btn = [...document.querySelectorAll("button")].find((b) => /Go to |برو به /.test(b.textContent ?? ""));
++    return {
++      title: empty?.querySelector("p")?.textContent ?? "",
++      btn: btn ? { h: Math.round(btn.getBoundingClientRect().height), text: (btn.textContent ?? "").trim() } : null,
++    };
++  });
++  const wantTitle = lang === "en" ? /No matches on/ : /بازی‌ای نیست/;
++  if (!wantTitle.test(s.title)) fail(label, `title "${s.title}" does not name the day`);
++  else if (later && s.btn && s.btn.h >= 44) pass(label, `"${s.title}" + "${s.btn.text}" (${s.btn.h}px)`);
++  else if (later) fail(label, "go-to-day button missing or <44px");
++  else if (s.btn) fail(label, "button must not exist when no later day");
++  else pass(label, `"${s.title}", no jump button (no later day)`);
++  try {
++    await page.screenshot({ path: `${REVIEW4}/empty-day-${lang}-${width}-${later ? "later" : "none"}.png` });
++  } catch {
++    /* screenshots never gate */
++  }
++  await ctx.close();
++}
++
++async function checkTimelineRows(browser, lang, width) {
++  const label = `timeline ${lang} ${width}x844`;
++  const ctx = await browser.newContext({ viewport: { width, height: 844 }, storageState: round4Storage(lang) });
++  const page = await ctx.newPage();
++  const match = t4Payload({ upcoming: 1 })[0];
++  match.status = "finished";
++  match.home_score = 1;
++  match.away_score = 1;
++  match.minute_display = "FT";
++  const HOME = match.home_team_id;
++  const AWAY = match.away_team_id;
++  await mockFeed(page, [match]);
++  await page.route(`**/api/matches/${match.id}**`, (r) => {
++    const p = new URL(r.request().url()).pathname;
++    if (p.endsWith("/timeline"))
++      return r.fulfill({
++        status: 200,
++        contentType: "application/json",
++        body: JSON.stringify({ events: [
++          { id: 1, match_id: match.id, minute_display: "12'", minute_seconds: 720, type: "card", team_id: AWAY, description: "Yellow Card", participants: [{ id: "p1", name: "Enzo Perspective" }], comment_count: 2, field_x: null, field_y: null },
++          { id: 2, match_id: match.id, minute_display: "26'", minute_seconds: 1560, type: "substitution", team_id: HOME, description: "Substitution", participants: [{ id: "p2", name: "Out Player" }, { id: "p3", name: "In Player" }], comment_count: 0, field_x: null, field_y: null },
++          { id: 4, match_id: match.id, minute_display: "32'", minute_seconds: 1920, type: "goal", team_id: AWAY, description: "Normal Goal", participants: [{ id: "p4", name: "Away Scorer" }], comment_count: 1, field_x: null, field_y: null },
++          { id: 5, match_id: match.id, minute_display: "38'", minute_seconds: 2280, type: "goal", team_id: HOME, description: "Normal Goal", participants: [{ id: "p5", name: "Home Scorer" }], comment_count: 0, field_x: null, field_y: null },
++          { id: 6, match_id: match.id, minute_display: "HT", minute_seconds: 2700, type: "halftime", team_id: null, description: "First Half Ends", participants: [], comment_count: 0, field_x: null, field_y: null },
++        ] }),
++      });
++    if (p.includes("/comments"))
++      return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ comments: [] }) });
++    return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ match, lineups: [], players: [], teams: [], stats: [] }) });
++  });
++  await page.route("**/team/**/logo", (r) => r.fulfill({ body: "" }));
++  await settle(page, appUrl(devUserId(`tl_${lang}_${width}`), `/match/${match.id}`), 4500);
++  const rows = await page.evaluate(() =>
++    [...document.querySelectorAll("ol li")].map((li) => {
++      const rct = li.getBoundingClientRect();
++      return {
++        role: li.getAttribute("role"),
++        h: Math.round(rct.height),
++        tint: /rounded-card/.test(li.className || "") && /bg-elevated/.test(li.className || ""),
++        score: [...li.querySelectorAll('span[dir="ltr"] .num-display')].map((s) => s.textContent ?? "").find((x) => /[0-9]+–[0-9]+/.test(x)) ?? null,
++      };
++    }),
++  );
++  const plain = rows.filter((r) => !r.role);
++  const sep = rows.find((r) => r.role === "separator");
++  const goalRows = rows.filter((r) => r.tint);
++  if (plain.length === 0 || plain.some((r) => r.h > 56 || r.h < 40)) fail(label, `plain rows ${JSON.stringify(plain.map((r) => r.h))}`);
++  else pass(label, `plain rows ${plain.map((r) => r.h).join("/")}px (40-56 band)`);
++  if (goalRows.length < 2 || !goalRows.every((r) => /[0-9]+–[0-9]+/.test(r.score ?? "")))
++    fail(label, `goal rows tinted+score: ${JSON.stringify(goalRows)}`);
++  else pass(label, `goal rows tinted, LTR scores ${goalRows.map((r) => r.score).join(",")}`);
++  if (!sep || !/[0-9]+–[0-9]+/.test(sep.score ?? "")) fail(label, `half-time divider missing/no score: ${JSON.stringify(sep)}`);
++  else pass(label, `half-time divider with score ${sep.score}`);
++  try {
++    await page.screenshot({ path: `${REVIEW4}/timeline-${lang}-${width}.png` });
++  } catch {
++    /* screenshots never gate */
++  }
++  await ctx.close();
++}
++
+ // -------------------------------------------------------------------- main
+ // Wait for both servers (no extra wait-on dependency): the API's liveness
+ // probe is /health on its own port, the app answers any request.
+@@ -317,6 +698,29 @@ try {
+   await checkResetSheet(browserHandle, "fa");
+   await checkOnboarding(browserHandle, "en");
+   await checkOnboarding(browserHandle, "fa");
++  // Round-4 visual work (Tasks 1b/2/3/4 acceptance).
++  await captureSplash(browserHandle, "en");
++  await captureSplash(browserHandle, "fa");
++  await checkPickBanner(browserHandle, "en");
++  await checkPickBanner(browserHandle, "fa");
++  await checkGroups(browserHandle, "en", 390);
++  await checkGroups(browserHandle, "fa", 390);
++  await checkGroups(browserHandle, "en", 360);
++  await checkGroups(browserHandle, "fa", 360);
++  await checkSavedChoiceBeatsDefault(browserHandle, "en");
++  await checkSavedChoiceBeatsDefault(browserHandle, "fa");
++  await checkLoadingSkeleton(browserHandle, "en", 390);
++  await checkLoadingSkeleton(browserHandle, "fa", 390);
++  await checkLoadingSkeleton(browserHandle, "en", 360);
++  await checkLoadingSkeleton(browserHandle, "fa", 360);
++  await checkEmptyDay(browserHandle, "en", 390, true);
++  await checkEmptyDay(browserHandle, "en", 360, false);
++  await checkEmptyDay(browserHandle, "fa", 390, true);
++  await checkEmptyDay(browserHandle, "fa", 360, false);
++  await checkTimelineRows(browserHandle, "en", 390);
++  await checkTimelineRows(browserHandle, "fa", 390);
++  await checkTimelineRows(browserHandle, "en", 360);
++  await checkTimelineRows(browserHandle, "fa", 360);
+ } finally {
+   await browserHandle.close();
+ }
+diff --git a/tests/useLocalState.harness.tsx b/tests/useLocalState.harness.tsx
+index 56fee7e..f9d9100 100644
+--- a/tests/useLocalState.harness.tsx
++++ b/tests/useLocalState.harness.tsx
+@@ -9,41 +9,9 @@
+  *   3. storedWins       — an existing stored value beats the default AND the
+  *                         mount effect never rewrites it
+  */
+-import { useEffect } from "react";
+ import { createElement } from "react";
+ import { createRoot } from "react-dom/client";
+-import { useLocalState } from "../src/lib/useLocalState";
+-
+-function Probe({
+-  keyId,
+-  initial,
+-  onValue,
+-  runAfterMount,
+-  runDelay,
+-}: {
+-  keyId: string;
+-  initial: boolean;
+-  onValue: (value: boolean) => void;
+-  runAfterMount: boolean;
+-  runDelay: number;
+-}) {
+-  const [value, setValue] = useLocalState<boolean>(keyId, initial);
+-  useEffect(() => {
+-    onValue(value);
+-  }, [value, onValue]);
+-  useEffect(() => {
+-    if (!runAfterMount) return;
+-    const id = setTimeout(() => setValue(true), runDelay);
+-    return () => clearTimeout(id);
+-    // runAfterMount fires once per mount by design ("targets a key once").
+-    // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, []);
+-  return createElement(
+-    "div",
+-    { "data-testid": `probe-${keyId}`, "data-value": String(value) },
+-    String(value),
+-  );
+-}
++import { Probe } from "./useLocalState.probe";
+ 
+ function mount(keyId: string, initial: boolean, onValue: (value: boolean) => void, runAfterMount = false, runDelay = 30) {
+   const host = document.createElement("div");
+diff --git a/tests/useLocalState.probe.tsx b/tests/useLocalState.probe.tsx
+new file mode 100644
+index 0000000..c20641f
+--- /dev/null
++++ b/tests/useLocalState.probe.tsx
+@@ -0,0 +1,39 @@
++/**
++ * The component under test for tests/useLocalState.harness.tsx, in its own
++ * file so the harness module exports only functions (React Fast Refresh
++ * requires a module to export components and nothing else).
++ */
++import { useEffect } from "react";
++import { createElement } from "react";
++import { useLocalState } from "../src/lib/useLocalState";
++
++export function Probe({
++  keyId,
++  initial,
++  onValue,
++  runAfterMount,
++  runDelay,
++}: {
++  keyId: string;
++  initial: boolean;
++  onValue: (value: boolean) => void;
++  runAfterMount: boolean;
++  runDelay: number;
++}) {
++  const [value, setValue] = useLocalState<boolean>(keyId, initial);
++  useEffect(() => {
++    onValue(value);
++  }, [value, onValue]);
++  useEffect(() => {
++    if (!runAfterMount) return;
++    const id = setTimeout(() => setValue(true), runDelay);
++    return () => clearTimeout(id);
++    // runAfterMount fires once per mount by design ("targets a key once").
++    // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++  return createElement(
++    "div",
++    { "data-testid": `probe-${keyId}`, "data-value": String(value) },
++    String(value),
++  );
++}
+-- 
+2.54.0.windows.1
+

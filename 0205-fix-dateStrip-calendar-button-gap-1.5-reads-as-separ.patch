@@ -1,0 +1,39 @@
+From 2f1a98bec759abec6fc860d7952e3b77fd92428c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 01:47:19 +0330
+Subject: [PATCH 205/230] =?UTF-8?q?fix(dateStrip):=20calendar=20button=20g?=
+ =?UTF-8?q?ap=201.5=20=E2=80=94=20reads=20as=20separate=20action,=20not=20?=
+ =?UTF-8?q?another=20chip?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/DateStrip.tsx | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index d5eb500..ba7c48f 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -99,7 +99,7 @@ export function DateStrip({
+     // A group of pressable day buttons, not a tablist: they are toggles with an
+     // explicit pressed state, and role=tab would promise arrow-key semantics
+     // this row does not implement.
+-    <div className="flex items-center gap-1">
++    <div className="flex items-center gap-1.5">
+       {/* Scrollable day chips */}
+       <div
+         ref={containerRef}
+@@ -160,7 +160,7 @@ export function DateStrip({
+             onOpenCalendar();
+           }}
+           aria-label={t("calendar.open")}
+-          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96] ms-1 me-[var(--space-page-x,16px)]"
++          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96] me-[var(--space-page-x,16px)]"
+         >
+           <CalendarIcon className="h-5 w-5" />
+         </button>
+-- 
+2.54.0.windows.1
+

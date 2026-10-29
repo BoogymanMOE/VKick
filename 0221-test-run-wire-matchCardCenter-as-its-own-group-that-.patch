@@ -1,0 +1,46 @@
+From ff6ae2e165521f3840703f09ce0ee6b357e0ea55 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 23 Oct 2026 19:44:52 +0330
+Subject: [PATCH 221/230] test(run): wire matchCardCenter as its own group that
+ skips without a browser
+
+Single new group entry using the dynamic import('./matchCardCenter.test.js')
+pattern, matching the useLocalState group. Skips cleanly with one console.log
+line when no browser is available; does not throw, does not fail the runner.
+
+Note: tests/run.ts already had a second matchCardCenter entry lower down
+(next to the useLocalState block). The new entry replaces that as the sole
+clean reference so the group is loaded once and only once.
+---
+ tests/run.ts | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/tests/run.ts b/tests/run.ts
+index 7e2e6b8..1496a3d 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -102,6 +102,21 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["timelineScore", runTimelineScoreTests],
+   ["kickoffParts", runKickoffPartsTests],
+   ["sentinel", runSentinelTests],
++
++  // Dead-centre proof for MatchCard: its own browser group — skips cleanly
++  // (no failure) when Chrome or the dev app on :5173 is missing, asserts the
++  // 1px centre tolerance when both are up. Dynamic import uses the built .js
++  // name (the runner is plain compiled JS), same pattern as useLocalState.
++  [
++    "matchCardCenter",
++    async () => {
++      const mod = (await import("./matchCardCenter.test.js")) as {
++        runMatchCardCenterTests(opts?: { standalone?: boolean; log?: (...args: any[]) => void }): Promise<void>;
++      };
++      await mod.runMatchCardCenterTests({ log: console.log });
++    },
++  ],
++
+   ["faStrings", runFaStringsTests],
+   ["matchReconcile", runMatchReconcileTests],
+   // Browser group: needs playwright (skips itself cleanly without it).
+-- 
+2.54.0.windows.1
+

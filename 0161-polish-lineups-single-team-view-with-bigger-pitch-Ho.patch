@@ -1,0 +1,100 @@
+From 5d6f2b7350dad52b98093703f51bb6d7a1129517 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 15:14:40 +0330
+Subject: [PATCH 161/230] polish(lineups): single-team view with bigger pitch +
+ Home/Away toggle
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/panels/LineupsPanel.tsx | 55 +++++++++++++++++---------
+ 1 file changed, 36 insertions(+), 19 deletions(-)
+
+diff --git a/src/components/panels/LineupsPanel.tsx b/src/components/panels/LineupsPanel.tsx
+index 73199bb..9603d07 100644
+--- a/src/components/panels/LineupsPanel.tsx
++++ b/src/components/panels/LineupsPanel.tsx
+@@ -27,8 +27,12 @@ const asCandidate = (player: LineupPlayer): SlotCandidate => ({
+  * per unit — so a leaked lineup still shows every player it has instead of an
+  * assumed 4-3-3 that drops the extras.
+  *
+- * Attack is at the top, the keeper's goal at the bottom (`pitchRows`), and the
+- * block is forced LTR: a left-back belongs on the left in Persian too.
++ * Attack is at the top, the keeper's goal at the bottom (`pitchRows`). The
++ * block inherits the page direction, so in the FA (RTL) layout the shape
++ * mirrors — the left-back reads from the right and a side attacks toward the
++ * same edge it does in its own half of the pitch. The painted markings stay
++ * where they are: every one is horizontally centred, so a mirrored row of
++ * players still lines up with the penalty areas and the halfway line.
+  */
+ function LineupPitch({ lineup }: { lineup: MatchLineup }) {
+   const { t, localize } = useI18n();
+@@ -40,10 +44,12 @@ function LineupPitch({ lineup }: { lineup: MatchLineup }) {
+   if (rows.length === 0) return null;
+ 
+   return (
+-    <div dir="ltr">
++    <div>
+       <p className="mb-1 text-center label text-ink-3">↑ {t("shot.attackingEnd")}</p>
+       <div className="relative overflow-hidden rounded-card border border-line bg-pitch/20 p-2">
+-        <div className="relative flex flex-col gap-2.5">
++        {/* One big pitch (~280px), not two small ones: the rows are spread
++            evenly down the full height so an XI breathes on a phone. */}
++        <div className="relative flex min-h-[264px] flex-col justify-evenly gap-2.5">
+           {rows.map((row, rowIndex) => (
+             <div key={`${row.unit}-${row.size}-${row.goal ? "g" : "f"}`} className="flex items-start gap-1">
+               {slots[rowIndex].map((player, index) => (
+@@ -148,21 +154,32 @@ export function LineupsPanel({
+         ) : null}
+       </Card>
+ 
+-      <Card className="p-3">
+-        <p className="mb-2 label text-ink-2">{t("lineups.bench")}</p>
+-        <ul className="space-y-1.5">
+-          {lineup.subs.map((player) => (
+-            <li key={player.id} className="flex items-center gap-2.5 text-xs">
+-              <PlayerAvatar name={localize(player.name)} src={player.headshot} size="sm" />
+-              <Num className="w-5 flex-none text-ink-3">{player.number > 0 ? player.number : "–"}</Num>
+-              <span className="min-w-0 flex-1 truncate text-ink">{localize(player.name)}</span>
+-              <Chip tone="muted" normalCase>
+-                {t(`pos.${player.position}`)}
+-              </Chip>
+-            </li>
+-          ))}
+-        </ul>
+-      </Card>
++      {/* The bench, as a horizontal strip of small chips: shirt number over
++            the name's initial. A row per sub made the bench longer than the
++            pitch; a scroll keeps it to one line. Chips are LTR-safe: numbers
++            are figures and an initial is direction-neutral. */}
++      {lineup.subs.length > 0 ? (
++        <Card className="p-3">
++          <p className="mb-2 label text-ink-2">{t("lineups.bench")}</p>
++          <ul className="-mx-2 flex gap-2 overflow-x-auto px-2 pb-1">
++            {lineup.subs.map((player) => (
++              <li key={player.id} className="flex-none">
++                <div
++                  className="flex w-[52px] flex-col items-center gap-1 rounded-card border border-line bg-surface p-2 text-center"
++                  title={localize(player.name)}
++                >
++                  <Num className="grid h-6 w-6 place-items-center rounded-full bg-elevated px-0.5 text-[10px] font-black text-ink-2">
++                    {player.number > 0 ? player.number : "–"}
++                  </Num>
++                  <span className="w-full truncate text-[10px] font-bold text-ink">
++                    {localize(player.name).slice(0, 1)}.
++                  </span>
++                </div>
++              </li>
++            ))}
++          </ul>
++        </Card>
++      ) : null}
+     </div>
+   );
+ }
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,283 @@
+From dc3b9d57dcd4e30a5755471994eea70efe91f0ad Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 7 Oct 2026 01:34:19 +0330
+Subject: [PATCH 027/230] Reflow the client-side test suites with the source
+ reformat
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+bracket, predictionWindow and optimistic assertions are rewrapped to the
+project's line width (and the bracket fixture's round-label list is spelled
+out one entry per line). No assertion changes: the round order, the window
+gates and the merge rules they pin are exactly what they were.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ tests/bracket.test.ts          | 152 ++++++++++++++++++++++++++++-----
+ tests/optimistic.test.ts       |   2 +-
+ tests/predictionWindow.test.ts |  24 +++++-
+ 3 files changed, 151 insertions(+), 27 deletions(-)
+
+diff --git a/tests/bracket.test.ts b/tests/bracket.test.ts
+index cf1a8d5..a5e9f61 100644
+--- a/tests/bracket.test.ts
++++ b/tests/bracket.test.ts
+@@ -54,24 +54,48 @@ const AJX = team("ajx", "Ajax");
+ const BEN = team("ben", "Benfica");
+ 
+ function testOrderRounds(): void {
+-  const labels = ["Semi-final", "Final", "Quarter-final", "Round of 16", "Round of 32", "1st Qualifying Round"];
+-  assert.deepEqual(orderRounds(labels), [
+-    "1st Qualifying Round",
+-    "Round of 32",
+-    "Round of 16",
+-    "Quarter-final",
++  const labels = [
+     "Semi-final",
+     "Final",
+-  ], "the bracket plays qualifying first and the Final last");
++    "Quarter-final",
++    "Round of 16",
++    "Round of 32",
++    "1st Qualifying Round",
++  ];
++  assert.deepEqual(
++    orderRounds(labels),
++    ["1st Qualifying Round", "Round of 32", "Round of 16", "Quarter-final", "Semi-final", "Final"],
++    "the bracket plays qualifying first and the Final last",
++  );
+   assert.equal(roundRank("Final"), 0);
+   assert.ok(roundRank("Quarter-final") > roundRank("Semi-final"), "later rounds rank lower (the final is 0)");
+ }
+ 
+ function testSingleLegWinner(): void {
+   const b = buildBracket([
+-    match({ home: ARS, away: BAY, round: "Quarter-final", kickoff: "2026-03-10T20:00:00Z", homeScore: 2, awayScore: 1 }),
+-    match({ home: RMA, away: PSG, round: "Quarter-final", kickoff: "2026-03-11T20:00:00Z", homeScore: 0, awayScore: 0 }),
+-    match({ home: AJX, away: BEN, round: "Quarter-final", kickoff: "2026-03-12T20:00:00Z", status: "scheduled" }),
++    match({
++      home: ARS,
++      away: BAY,
++      round: "Quarter-final",
++      kickoff: "2026-03-10T20:00:00Z",
++      homeScore: 2,
++      awayScore: 1,
++    }),
++    match({
++      home: RMA,
++      away: PSG,
++      round: "Quarter-final",
++      kickoff: "2026-03-11T20:00:00Z",
++      homeScore: 0,
++      awayScore: 0,
++    }),
++    match({
++      home: AJX,
++      away: BEN,
++      round: "Quarter-final",
++      kickoff: "2026-03-12T20:00:00Z",
++      status: "scheduled",
++    }),
+   ]);
+   assert.equal(b.rounds.length, 1);
+   const [qf] = b.rounds;
+@@ -86,11 +110,39 @@ function testSingleLegWinner(): void {
+ function testTwoLegAggregate(): void {
+   const b = buildBracket([
+     // First leg, home Arsenal: 2-0. Second leg, venues swapped: 0-1 → agg 2-1.
+-    match({ home: ARS, away: BAY, round: "Semi-final", kickoff: "2026-04-10T20:00:00Z", homeScore: 2, awayScore: 0 }),
+-    match({ home: BAY, away: ARS, round: "Semi-final", kickoff: "2026-04-20T20:00:00Z", homeScore: 1, awayScore: 0 }),
++    match({
++      home: ARS,
++      away: BAY,
++      round: "Semi-final",
++      kickoff: "2026-04-10T20:00:00Z",
++      homeScore: 2,
++      awayScore: 0,
++    }),
++    match({
++      home: BAY,
++      away: ARS,
++      round: "Semi-final",
++      kickoff: "2026-04-20T20:00:00Z",
++      homeScore: 1,
++      awayScore: 0,
++    }),
+     // RMA vs PSG: level aggregate (1-0, 0-1) → undecided.
+-    match({ home: RMA, away: PSG, round: "Semi-final", kickoff: "2026-04-11T20:00:00Z", homeScore: 1, awayScore: 0 }),
+-    match({ home: PSG, away: RMA, round: "Semi-final", kickoff: "2026-04-21T20:00:00Z", homeScore: 1, awayScore: 0 }),
++    match({
++      home: RMA,
++      away: PSG,
++      round: "Semi-final",
++      kickoff: "2026-04-11T20:00:00Z",
++      homeScore: 1,
++      awayScore: 0,
++    }),
++    match({
++      home: PSG,
++      away: RMA,
++      round: "Semi-final",
++      kickoff: "2026-04-21T20:00:00Z",
++      homeScore: 1,
++      awayScore: 0,
++    }),
+   ]);
+   const [sf] = b.rounds;
+   assert.equal(sf?.ties.length, 2, "two legs fold into one tie");
+@@ -107,8 +159,21 @@ function testTwoLegAggregate(): void {
+ 
+ function testOpenSecondLegKeepsTieUndecided(): void {
+   const b = buildBracket([
+-    match({ home: ARS, away: BAY, round: "Quarter-final", kickoff: "2026-03-10T20:00:00Z", homeScore: 3, awayScore: 0 }),
+-    match({ home: BAY, away: ARS, round: "Quarter-final", kickoff: "2026-04-01T20:00:00Z", status: "scheduled" }),
++    match({
++      home: ARS,
++      away: BAY,
++      round: "Quarter-final",
++      kickoff: "2026-03-10T20:00:00Z",
++      homeScore: 3,
++      awayScore: 0,
++    }),
++    match({
++      home: BAY,
++      away: ARS,
++      round: "Quarter-final",
++      kickoff: "2026-04-01T20:00:00Z",
++      status: "scheduled",
++    }),
+   ]);
+   const tie = b.rounds[0]?.ties[0];
+   assert.equal(tie?.aggHome, 3, "finished legs count toward the aggregate");
+@@ -118,10 +183,31 @@ function testOpenSecondLegKeepsTieUndecided(): void {
+ function testFeederLinks(): void {
+   const b = buildBracket([
+     // Round of 16: Arsenal and Bayern advance.
+-    match({ home: ARS, away: PSG, round: "Round of 16", kickoff: "2026-02-10T20:00:00Z", homeScore: 2, awayScore: 0 }),
+-    match({ home: BAY, away: BEN, round: "Round of 16", kickoff: "2026-02-11T20:00:00Z", homeScore: 1, awayScore: 0 }),
++    match({
++      home: ARS,
++      away: PSG,
++      round: "Round of 16",
++      kickoff: "2026-02-10T20:00:00Z",
++      homeScore: 2,
++      awayScore: 0,
++    }),
++    match({
++      home: BAY,
++      away: BEN,
++      round: "Round of 16",
++      kickoff: "2026-02-11T20:00:00Z",
++      homeScore: 1,
++      awayScore: 0,
++    }),
+     // Quarter-final: winners meet.
+-    match({ home: ARS, away: BAY, round: "Quarter-final", kickoff: "2026-03-10T20:00:00Z", homeScore: 1, awayScore: 2 }),
++    match({
++      home: ARS,
++      away: BAY,
++      round: "Quarter-final",
++      kickoff: "2026-03-10T20:00:00Z",
++      homeScore: 1,
++      awayScore: 2,
++    }),
+   ]);
+   assert.equal(b.connected, true);
+   const [r16, qf] = b.rounds;
+@@ -132,9 +218,23 @@ function testFeederLinks(): void {
+ 
+ function testFeederSurvivesMissingRound(): void {
+   const b = buildBracket([
+-    match({ home: ARS, away: PSG, round: "Round of 16", kickoff: "2026-02-10T20:00:00Z", homeScore: 2, awayScore: 0 }),
++    match({
++      home: ARS,
++      away: PSG,
++      round: "Round of 16",
++      kickoff: "2026-02-10T20:00:00Z",
++      homeScore: 2,
++      awayScore: 0,
++    }),
+     // The sync window is missing the quarter-final; Arsenal reappears in the semi.
+-    match({ home: ARS, away: BAY, round: "Semi-final", kickoff: "2026-04-10T20:00:00Z", homeScore: 1, awayScore: 0 }),
++    match({
++      home: ARS,
++      away: BAY,
++      round: "Semi-final",
++      kickoff: "2026-04-10T20:00:00Z",
++      homeScore: 1,
++      awayScore: 0,
++    }),
+   ]);
+   assert.equal(b.connected, true, "the chain reaches back over a missing round");
+   const sf = b.rounds.find((r) => r.label === "Semi-final");
+@@ -143,7 +243,15 @@ function testFeederSurvivesMissingRound(): void {
+ 
+ function testLiveExcludedAndEmpty(): void {
+   const b = buildBracket([
+-    match({ home: ARS, away: BAY, round: "Final", kickoff: "2026-05-30T20:00:00Z", status: "live", homeScore: 0, awayScore: 0 }),
++    match({
++      home: ARS,
++      away: BAY,
++      round: "Final",
++      kickoff: "2026-05-30T20:00:00Z",
++      status: "live",
++      homeScore: 0,
++      awayScore: 0,
++    }),
+   ]);
+   assert.equal(b.rounds.length, 0, "live matches never form ties (the page shows them separately)");
+   assert.equal(b.connected, false);
+diff --git a/tests/optimistic.test.ts b/tests/optimistic.test.ts
+index 0bfec27..77d01be 100644
+--- a/tests/optimistic.test.ts
++++ b/tests/optimistic.test.ts
+@@ -183,4 +183,4 @@ export function runOptimisticTests(): void {
+   testUnfollow();
+   testNotificationPrefs();
+   console.log("  optimistic: raw-shape writes survive select, cap + anchor rules intact OK");
+-}
+\ No newline at end of file
++}
+diff --git a/tests/predictionWindow.test.ts b/tests/predictionWindow.test.ts
+index 68549d8..5557cb5 100644
+--- a/tests/predictionWindow.test.ts
++++ b/tests/predictionWindow.test.ts
+@@ -46,13 +46,29 @@ export function runPredictionWindowTests(): void {
+   assert.equal(open("lineup", "scheduled", false), true, "lineup predictor is not gated");
+ 
+   // --- scheduled, published: clock windows still apply ---------------------
+-  assert.equal(open("shot_predict", "scheduled", true, kickoff - 2 * HOUR), false, "before the pre-kickoff open");
+-  assert.equal(open("shot_predict", "scheduled", true, kickoff - 30 * 60_000), true, "open inside the window");
++  assert.equal(
++    open("shot_predict", "scheduled", true, kickoff - 2 * HOUR),
++    false,
++    "before the pre-kickoff open",
++  );
++  assert.equal(
++    open("shot_predict", "scheduled", true, kickoff - 30 * 60_000),
++    true,
++    "open inside the window",
++  );
+   assert.equal(open("shot_predict", "scheduled", true, kickoff + 1), false, "locked at kickoff");
+   assert.equal(open("lineup", "scheduled", false, kickoff - 3 * HOUR), true, "lineup opens immediately");
+   assert.equal(open("lineup", "scheduled", false, kickoff - 2 * HOUR + 1), false, "lineup locks 2h out");
+-  assert.equal(open("sub", "scheduled", true, kickoff - 2 * HOUR), false, "sub not open before the hour mark");
+-  assert.equal(open("sub", "scheduled", true, kickoff - 30 * 60_000), true, "sub open in the hour before kickoff");
++  assert.equal(
++    open("sub", "scheduled", true, kickoff - 2 * HOUR),
++    false,
++    "sub not open before the hour mark",
++  );
++  assert.equal(
++    open("sub", "scheduled", true, kickoff - 30 * 60_000),
++    true,
++    "sub open in the hour before kickoff",
++  );
+ 
+   // --- the fix: kickoff closes every non-Sub mechanic ----------------------
+   assert.equal(open("shot_predict", "live", true, kickoff + 5 * 60_000), false, "shot closed in play");
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,84 @@
+From 962f849840bc8ebd8e74dd0b06c8dea3f2bbaf67 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 26 Oct 2026 23:32:46 +0330
+Subject: [PATCH] fix(sync): stop match feeds from wiping stored player
+ headshots; repair roster sync SQL
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Match-summary and squad-roster upserts now coalesce headshot_url so a NULL
+in one ESPN feed no longer overwrites a photo the other stored, and the
+rosters command was dead SQL (a SELECT alias referenced inside WHERE) —
+it now runs off a derived table, restoring the photos ESPN does provide.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/sync/service.ts | 21 +++++++++++++--------
+ server/sync/upserts.ts |  8 ++++++--
+ 2 files changed, 19 insertions(+), 10 deletions(-)
+
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index c44f5c2..5de9b12 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -275,16 +275,21 @@ export async function syncRosters(): Promise<void> {
+   // Only roster big-five clubs: outside leagues are not polled, so no roster
+   // endpoint is called for them. Non-big-five teams keep whatever squad data
+   // they got from a cup/European fixture summary (if any).
++  // SQLite can't reference a SELECT alias (inferred_league) inside WHERE, so
++  // the query wraps the rows in a derived table to filter on that alias.
+   const teams = all<{ id: string; league: string; inferred_league: string; name: string }>(
+     db,
+-    `SELECT t.id, t.league, t.name,
+-            COALESCE((SELECT m.league FROM matches m
+-                      WHERE m.home_team_id = t.id OR m.away_team_id = t.id
+-                      ORDER BY m.kickoff_at DESC LIMIT 1), '') AS inferred_league
+-     FROM teams t
+-     WHERE t.league IN (${LEAGUES.map(() => "?").join(",")})
+-        OR t.inferred_league IN (${LEAGUES.map(() => "?").join(",")})
+-     ORDER BY t.name ASC`,
++    `SELECT s.id, s.league, s.inferred_league, s.name
++     FROM (
++       SELECT t.id, t.league, t.name,
++              COALESCE((SELECT m.league FROM matches m
++                        WHERE m.home_team_id = t.id OR m.away_team_id = t.id
++                        ORDER BY m.kickoff_at DESC LIMIT 1), '') AS inferred_league
++       FROM teams t
++     ) s
++     WHERE s.league IN (${LEAGUES.map(() => "?").join(",")})
++        OR s.inferred_league IN (${LEAGUES.map(() => "?").join(",")})
++     ORDER BY s.name ASC`,
+     [...LEAGUES, ...LEAGUES],
+   );
+   let ok = 0;
+diff --git a/server/sync/upserts.ts b/server/sync/upserts.ts
+index 82c6805..e034db5 100644
+--- a/server/sync/upserts.ts
++++ b/server/sync/upserts.ts
+@@ -168,7 +168,9 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
+ 
+     // Player stats + stat score
+     const { players, stats } = normalizeRosters(json);
+-    for (const p of players) upsert(db, "players", { ...p }, ["id"]);
++    // Match-summary rosters omit headshots for many athletes; coalescing stops
++    // a null here from wiping the photo the roster endpoint already stored.
++    for (const p of players) upsertCoalesce(db, "players", { ...p }, ["id"], ["headshot_url"]);
+ 
+     const conceded: Record<string, number> = {};
+     if (match.home_score !== null && match.away_score !== null) {
+@@ -351,7 +353,9 @@ export function applyRoster(db: DB, json: unknown, _league: string): void {
+   const players = normalizeRosterPlayers(json);
+   const coach = normalizeCoach(json);
+   tx(db, () => {
+-    for (const p of players) upsert(db, "players", { ...p }, ["id"]);
++    // Coalesce the headshot: either of the two feeds (match summary or squad
++    // roster) can ship it null, and neither side should erase the other's photo.
++    for (const p of players) upsertCoalesce(db, "players", { ...p }, ["id"], ["headshot_url"]);
+     if (coach) {
+       run(
+         db,
+-- 
+2.54.0.windows.1
+

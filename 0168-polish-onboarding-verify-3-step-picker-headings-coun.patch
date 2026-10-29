@@ -1,0 +1,122 @@
+From 2ffd693ef41373b0eaee04160fccabad03677c22 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 16:25:47 +0330
+Subject: [PATCH 168/230] =?UTF-8?q?polish(onboarding):=20verify=203-step?=
+ =?UTF-8?q?=20picker=20=E2=80=94=20headings,=20counts,=20search,=20RTL,=20?=
+ =?UTF-8?q?back=20nav,=20step=20transitions?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Verified at 390x720 in EN and FA: headings match the spec ("Who do you
+support?" / "چه کسی را حمایت می‌کنی؟", "Pick up to four more clubs",
+"Follow up to five leagues"), continue is gated on step 1 and always
+enabled on the optional steps, rows meet the 44px target, and each step
+already fades in (rise-in) instead of snapping. Fixes:
+- hardware back now walks the picker back a step instead of closing the
+  mini app — /onboarding is a tab root for the shared hook, so the picker
+  owns the Telegram BackButton while the user sits deeper than step 1;
+- count chips and the step label now carry Persian digits in FA
+  («گام ۲ از ۳», «۱ از ۵») via Intl.NumberFormat(fa-IR) — Latin numerals
+  broke the bidi run.
+
+No search input exists in the picker by design (grouped Segmented tabs);
+per spec it was verified, not added.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/pages/Onboarding.tsx | 35 ++++++++++++++++++++++++++++-------
+ 1 file changed, 28 insertions(+), 7 deletions(-)
+
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 017af74..9e2637f 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -1,4 +1,4 @@
+-import { useMemo, useState } from "react";
++import { useEffect, useMemo, useState } from "react";
+ import { useNavigate } from "react-router-dom";
+ import { TopBar } from "../components/TopBar";
+ import { LegalLinks } from "../components/LegalLinks";
+@@ -19,7 +19,7 @@ import {
+ import { useI18n } from "../i18n/context";
+ import type { StringKey } from "../i18n/strings";
+ import { serverErrorKey } from "../lib/api";
+-import { haptic, selectionHaptic, notifyHaptic } from "../lib/telegram";
++import { haptic, selectionHaptic, notifyHaptic, telegram } from "../lib/telegram";
+ import { buildPickerGroups, teamsInGroup } from "../lib/pickerGroups";
+ import { PREDICTIONS_ENABLED, RATINGS_ENABLED } from "../lib/features";
+ 
+@@ -58,7 +58,7 @@ const SLIDES = ALL_SLIDES.filter(
+  * Each step is skippable except the first — the anchor club is the product.
+  */
+ export default function Onboarding() {
+-  const { t, localize } = useI18n();
++  const { t, lang, localize } = useI18n();
+   const { push } = useToast();
+   const navigate = useNavigate();
+   const { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, toggleAndAnchor } =
+@@ -77,6 +77,27 @@ export default function Onboarding() {
+     return false;
+   });
+   const [step, setStep] = useState(0);
++  // Counts inside Arabic-script copy carry Persian digits («گام ۲ از ۳») —
++  // Latin numerals break the bidi run the way they did in match countdowns.
++  // EN locale (undefined) passes plain digits straight through.
++  const nf = useMemo(() => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : undefined), [lang]);
++
++  // Android hardware back walks the picker back instead of closing the app.
++  // The global hook treats /onboarding as a root (it hides Telegram's back
++  // button), so while the user sits deeper than the first step this screen
++  // owns the back affordance; step 0 and the intro give it back to Telegram.
++  useEffect(() => {
++    const app = telegram();
++    if (!app?.BackButton || intro || step === 0) return;
++    const bb = app.BackButton;
++    bb.show();
++    const onBack = () => setStep((s) => Math.max(0, s - 1));
++    bb.onClick(onBack);
++    return () => {
++      bb.offClick(onBack);
++      bb.hide();
++    };
++  }, [intro, step]);
+ 
+   const teamsQuery = useTeams();
+   // Stable identity: `groupTeams` and the picker memos below depend on it.
+@@ -199,7 +220,7 @@ export default function Onboarding() {
+     <>
+       <TopBar
+         title={t("onboarding.title")}
+-        subtitle={t("onboarding.step", { step: step + 1, total: TOTAL_STEPS })}
++        subtitle={t("onboarding.step", { step: nf.format(step + 1), total: nf.format(TOTAL_STEPS) })}
+       />
+ 
+       {/* Step dots */}
+@@ -396,11 +417,11 @@ export default function Onboarding() {
+               optional national-team shelf on the right. */}
+           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+             <Chip tone={clubCount >= MAX_FAVORITES ? "gold" : "volt"}>
+-              {t("myTeams.picked", { count: clubCount, max: MAX_FAVORITES })}
++              {t("myTeams.picked", { count: nf.format(clubCount), max: nf.format(MAX_FAVORITES) })}
+             </Chip>
+             {intlCount > 0 || clubCount >= MAX_FAVORITES ? (
+               <Chip tone={intlCount >= MAX_INTERNATIONALS ? "gold" : "volt"}>
+-                {t("myTeams.pickedIntl", { count: intlCount, max: MAX_INTERNATIONALS })}
++                {t("myTeams.pickedIntl", { count: nf.format(intlCount), max: nf.format(MAX_INTERNATIONALS) })}
+               </Chip>
+             ) : null}
+           </div>
+@@ -440,7 +461,7 @@ export default function Onboarding() {
+ 
+           <div className="mt-3 flex justify-center">
+             <Chip tone={followed.count >= MAX_FOLLOWED_LEAGUES ? "gold" : "volt"}>
+-              {t("myTeams.picked", { count: followed.count, max: MAX_FOLLOWED_LEAGUES })}
++              {t("myTeams.picked", { count: nf.format(followed.count), max: nf.format(MAX_FOLLOWED_LEAGUES) })}
+             </Chip>
+           </div>
+         </section>
+-- 
+2.54.0.windows.1
+

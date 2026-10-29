@@ -1,0 +1,228 @@
+From 169395fefd093f952ab6830962d8427012649678 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 00:50:13 +0330
+Subject: [PATCH 150/230] polish(team): remove redundant name, fix grammar, fix
+ nav state, bump inactive tab contrast
+
+---
+ server/routes/football.ts | 12 +++++++-
+ src/components/TabBar.tsx | 61 +++++++++++++++++++++++----------------
+ src/i18n/strings.ts       |  8 +++--
+ src/lib/api.ts            |  1 +
+ src/pages/TeamPage.tsx    | 30 ++++++++++++++++---
+ 5 files changed, 80 insertions(+), 32 deletions(-)
+
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index f400bcb..2ba39a4 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -248,6 +248,16 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
+     `SELECT * FROM team_season_stats WHERE team_id = ? ORDER BY season DESC LIMIT 1`,
+     [teamId],
+   );
++  // The info card's one-line summary needs the league-table position and points;
++  // team_season_stats carries the record but no rank, so the row comes from
++  // standings (latest season the club has a row in).
++  const standing = get<{ rank: number | null; points: number | null }>(
++    db,
++    `SELECT rank, points FROM standings
++     WHERE team_id = ? AND season = (SELECT MAX(season) FROM standings WHERE team_id = ?)
++     LIMIT 1`,
++    [teamId, teamId],
++  );
+   // Results (latest 7) then upcoming fixtures (soonest 7). One DESC query
+   // filled the list with the whole rest-of-season backlog instead of the
+   // games nearest the club's next kickoff.
+@@ -270,7 +280,7 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
+   // Same flat shape the client already consumes; newest results first,
+   // then upcoming in chronological order.
+   const fixtures = [...played.slice().reverse(), ...upcoming];
+-  res.json({ team, seasonStats: seasonStats ?? null, fixtures });
++  res.json({ team, seasonStats: seasonStats ?? null, standing: standing ?? null, fixtures });
+ });
+ 
+ /** Full squad for one club, position-grouped and shirt-number ordered. */
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index 658ec75..c97127e 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -1,4 +1,4 @@
+-import { NavLink } from "react-router-dom";
++import { NavLink, useLocation } from "react-router-dom";
+ import { useI18n } from "../i18n/context";
+ import { haptic } from "../lib/telegram";
+ import { BallIcon, ListIcon, UserIcon } from "./icons";
+@@ -16,6 +16,10 @@ const tabs: Array<{ to: string; key: StringKey; Icon: typeof BallIcon }> = [
+ 
+ export function TabBar() {
+   const { t } = useI18n();
++  const { pathname } = useLocation();
++  // A team sub-page belongs to no top-level tab: highlighting one would claim a
++  // section the user has drilled out of.
++  const isTeamSubPage = pathname.startsWith("/team/");
+ 
+   return (      // 95% opaque, so no backdrop blur — same reasoning as TopBar: the blur was
+     // imperceptible but ran on every scroll frame.
+@@ -32,33 +36,40 @@ export function TabBar() {
+               className={({ isActive }) =>
+                 cx(
+                   "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-bold transition-[color,background-color] duration-[var(--t-fast)]",
+-                  isActive ? "bg-elevated/70 text-volt" : "text-ink-3 hover:text-ink-2",
++                  // Inactive tabs sit at secondary, not muted: "available but
++                  // not selected", never "disabled".
++                  isActive && !isTeamSubPage
++                    ? "bg-elevated/70 text-volt"
++                    : "text-ink-2 hover:text-ink",
+                 )
+               }
+             >
+-              {({ isActive }) => (
+-                <>
+-                  {/* Shape cue, not just colour: a colour-blind user (or one
+-                      in grayscale) reads "you are here" from this bar even
+-                      when the volt text is indistinguishable. aria-current on
+-                      the link already carries it for screen readers. */}
+-                  <span
+-                    aria-hidden="true"
+-                    className={cx(
+-                      "absolute top-0.5 h-[3px] w-6 rounded-full bg-volt transition-opacity duration-[var(--t-fast)]",
+-                      isActive ? "opacity-100" : "opacity-0",
+-                    )}
+-                  />
+-                  <Icon
+-                    strokeWidth={isActive ? 2.2 : 1.8}
+-                    className={cx(
+-                      "transition-transform duration-[var(--t-fast)]",
+-                      isActive && "tab-pop scale-105",
+-                    )}
+-                  />
+-                  <span className="truncate">{t(key)}</span>
+-                </>
+-              )}
++              {({ isActive }) => {
++                const active = isActive && !isTeamSubPage;
++                return (
++                  <>
++                    {/* Shape cue, not just colour: a colour-blind user (or one
++                        in grayscale) reads "you are here" from this bar even
++                        when the volt text is indistinguishable. aria-current on
++                        the link already carries it for screen readers. */}
++                    <span
++                      aria-hidden="true"
++                      className={cx(
++                        "absolute top-0.5 h-[3px] w-6 rounded-full bg-volt transition-opacity duration-[var(--t-fast)]",
++                        active ? "opacity-100" : "opacity-0",
++                      )}
++                    />
++                    <Icon
++                      strokeWidth={active ? 2.2 : 1.8}
++                      className={cx(
++                        "transition-transform duration-[var(--t-fast)]",
++                        active && "tab-pop scale-105",
++                      )}
++                    />
++                    <span className="truncate">{t(key)}</span>
++                  </>
++                );
++              }}
+             </NavLink>
+           </li>
+         ))}
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 0e364cc..2590ce6 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -231,7 +231,9 @@ export const strings = {
+     "team.tab.xg": "xG",
+     "team.stats.goals": "Goals",
+     "team.stats.assists": "Assists",
+-    "team.played": "{played} matches played",
++    "team.matchesPlayedOne": "1 match played",
++    "team.matchesPlayedMany": "{played} matches played",
++    "team.points": "{points} pts",
+     "team.appearances": "{count} apps",
+     "team.squadEmpty": "Squad not synced yet",
+     "team.squadEmptyHint": "Squads refresh weekly from the data feed.",
+@@ -846,7 +848,9 @@ export const strings = {
+     "team.tab.xg": "xG",
+     "team.stats.goals": "گل",
+     "team.stats.assists": "پاس گل",
+-    "team.played": "{played} بازی انجام داده",
++    "team.matchesPlayedOne": "۱ بازی",
++    "team.matchesPlayedMany": "{played} بازی انجام داده",
++    "team.points": "{points} امتیاز",
+     "team.appearances": "{count} بازی",
+     "team.squadEmpty": "ترکیب تیم هنوز همگام‌سازی نشده",
+     "team.squadEmptyHint": "ترکیب تیم‌ها هر هفته به‌روزرسانی می‌شود.",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 9dd5693..6442228 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -571,6 +571,7 @@ export const api = {
+     request<{
+       team: ApiTeam;
+       seasonStats: ApiTeamSeasonStats | null;
++      standing: { rank: number | null; points: number | null } | null;
+       fixtures: ApiMatch[];
+     }>(`/teams/${encodeURIComponent(id)}`),
+ 
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index e06a21b..592706a 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -30,6 +30,13 @@ type Tab = "squad" | "fixtures" | "season" | "xg";
+ 
+ const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
+ 
++/** English ordinal suffix: 1st, 2nd, 3rd, 4th … 11th/12th/13th … 21st. */
++function ordinal(rank: number): string {
++  const mod100 = rank % 100;
++  const suffix = mod100 >= 11 && mod100 <= 13 ? "th" : (["th", "st", "nd", "rd"][rank % 10] ?? "th");
++  return `${rank}${suffix}`;
++}
++
+ /**
+  * A club's page: full squad (from the weekly roster sync), season stat line and
+  * recent fixtures. Reached by tapping any team in the table or a match card.
+@@ -74,7 +81,10 @@ export default function TeamPage() {
+     );
+   }
+ 
+-  const { team, seasonStats, fixtures } = detailQuery.data;
++  const { team, seasonStats, standing, fixtures } = detailQuery.data;
++  // Persian reads every number in the Persian script; English keeps the ordinal.
++  const num = (value: number | string) => (lang === "fa" ? toFaDigits(value) : String(value));
++  const positionLabel = (rank: number) => (lang === "fa" ? `${toFaDigits(rank)}م` : ordinal(rank));
+   const leagueId =
+     team.league && ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"].includes(team.league)
+       ? (
+@@ -116,11 +126,23 @@ export default function TeamPage() {
+       >
+         <div className="flex items-center gap-3.5">
+           <TeamBadge team={teamView} size="xl" />
++          {/* The club's name stays in the top bar; this card is the league line —
++              competition, matches played, position and points. */}
+           <div className="min-w-0">
+-            <p className="truncate text-lg font-bold text-ink">{localize(team.name)}</p>
+             <p className="text-xs text-ink-3">
+-              {squadQuery.data?.coach ? `${t("lineups.coach")}: ${localize(squadQuery.data.coach)} · ` : ""}
+-              {seasonStats ? t("team.played", { played: seasonStats.played }) : null}
++              <span className="font-bold text-ink">{teamLeagueLabel}</span>
++              {seasonStats
++                ? ` · ${t(
++                    seasonStats.played === 1
++                      ? "team.matchesPlayedOne"
++                      : "team.matchesPlayedMany",
++                    { played: num(seasonStats.played) },
++                  )}`
++                : ""}
++              {standing?.rank ? ` · ${positionLabel(standing.rank)}` : ""}
++              {standing?.points != null
++                ? ` · ${t("team.points", { points: num(standing.points) })}`
++                : ""}
+             </p>
+           </div>
+         </div>
+-- 
+2.54.0.windows.1
+

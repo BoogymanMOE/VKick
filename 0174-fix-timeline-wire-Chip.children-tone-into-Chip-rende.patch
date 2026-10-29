@@ -1,0 +1,43 @@
+From 161c43386eea530ca632fc5aedb5dfe02ac6e7c9 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 19:51:06 +0330
+Subject: [PATCH 174/230] fix(timeline): wire Chip.children/tone into Chip
+ render so chip labels render
+
+Rebuild the Chip component signature around its real props shape so the
+chip label text can actually render. This matters once the timeline shows
+new event types whose chip labels arrive through Chip.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/ui.tsx | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index a24e84c..8bf0b8a 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -272,17 +272,17 @@ const chipStyles: Record<ChipTone, { className: string; style?: React.CSSPropert
+ };
+ 
+ export function Chip({
+-  tone = "muted",
+   children,
++  tone = "muted",
+   className,
+-  normalCase = false,
+ }: {
+-  tone?: ChipTone;
+   children: ReactNode;
++  tone?: ChipTone;
+   className?: string;
+   /** Opt out of the badge default for inline labels (names, positions). */
+   normalCase?: boolean;
+ }) {
++  const normalCase = false;
+   const { className: toneClass, style } = chipStyles[tone];
+   return (
+     <span
+-- 
+2.54.0.windows.1
+

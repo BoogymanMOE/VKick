@@ -243,6 +243,9 @@ export interface LeaguePlayerStatRow {
   team_short: string | null;
   team_color: string | null;
   headshot_url: string | null;
+  /** Local-first face URL: /headshots/<id>.webp when the file exists, else the
+      remote headshot_url, else null (avatar falls back to initials). */
+  avatar_url: string | null;
   jersey_number: number | null;
   appearances?: number | null;
   goals?: number | null;
@@ -341,14 +344,24 @@ export interface ApiTimelineEvent {
   goal_y: number | null;
 }
 
+export interface ApiTeamAvailability {
+  player_id: string;
+  player_name: string;
+  status: "injured" | "suspended" | "doubtful";
+  reason: string | null;
+  expected_return: string | null;
+}
+
 export interface ApiSquadPlayer {
   id: string;
   full_name: string;
   short_name: string | null;
   position: string;
+  availability?: ApiTeamAvailability | null;
   espn_position: string | null;
   jersey_number: number | null;
   headshot_url: string | null;
+  avatar_url: string | null;
   appearances: number | null;
   season_goals: number | null;
   season_assists: number | null;
@@ -365,6 +378,7 @@ export interface ApiUnderstatPlayer {
   position: string;
   jersey: number | null;
   headshot: string | null;
+  avatarUrl: string | null;
   xg: number | null;
   xa: number | null;
   xg90: number | null;
@@ -586,7 +600,7 @@ export const api = {
     request<{
       team: ApiTeam;
       seasonStats: ApiTeamSeasonStats | null;
-      standing: { rank: number | null; points: number | null } | null;
+      standing: { rank: number | null; played: number | null; points: number | null } | null;
       fixtures: ApiMatch[];
     }>(`/teams/${encodeURIComponent(id)}`),
 
@@ -595,7 +609,13 @@ export const api = {
       match: { id: string; kickoffAt: string; formation: string | null } | null;
       starters: LineupPlayer[];
       subs: LineupPlayer[];
+      bench: LineupPlayer[];
     }>(`/teams/${encodeURIComponent(teamId)}/recent-lineup`),
+
+  getTeamAvailability: (teamId: string) =>
+    request<{ players: ApiTeamAvailability[]; stale?: boolean }>(
+      `/teams/${encodeURIComponent(teamId)}/availability`,
+    ),
 
   getLeaguePlayers: (league: string, sort: string, limit = 50) =>
     request<{

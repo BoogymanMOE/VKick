@@ -1,0 +1,175 @@
+From 6c8b4051cb06b20dbba1d2d3addd4df1cd945eeb Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 9 Oct 2026 21:08:10 +0330
+Subject: [PATCH 041/230] Answer malformed and oversized bodies with their own
+ status, not 500
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+apiErrorHandler flattened every failure to 500, so an oversized request body
+(body-parser 413) and malformed JSON (express.json SyntaxError, 400) both read
+as "internal error" — a JSON client then chases a non-existent server bug.
+Honour a 4xx the error already declares while keeping anything without a status
+(and every 5xx) as a 500, and still log it. The errors suite now pins 400, 413
+and 500 over real HTTP.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/http/middleware.ts | 45 ++++++++++++++++++++++++---
+ tests/errors.test.ts      | 65 ++++++++++++++++++++++++++++++++++++++-
+ 2 files changed, 105 insertions(+), 5 deletions(-)
+
+diff --git a/server/http/middleware.ts b/server/http/middleware.ts
+index 0a6e42c..5c7e9a8 100644
+--- a/server/http/middleware.ts
++++ b/server/http/middleware.ts
+@@ -19,13 +19,50 @@ export function apiNotFound(req: Request, res: Response, next: NextFunction): vo
+   next();
+ }
+ 
++/** Errors that declare their own HTTP status (body-parser and friends). */
++interface HttpError extends Error {
++  status?: number;
++  statusCode?: number;
++}
++
++/**
++ * The 4xx an error already declared, or null to treat it as a server fault.
++ * Only 400-499 are honoured: a missing/NaN status (the unexpected case) and any
++ * 5xx stay a plain 500, so a bug still reads as a server error rather than
++ * echoing an attacker- or library-chosen code.
++ */
++function clientErrorStatus(err: HttpError): number | null {
++  const status = Number(err.status ?? err.statusCode);
++  if (!Number.isInteger(status) || status < 400 || status > 499) return null;
++  return status;
++}
++
++/** Stable, non-leaky body label for a client error. */
++function clientErrorLabel(status: number): string {
++  if (status === 400) return "bad request";
++  if (status === 413) return "payload too large";
++  return "request error";
++}
++
+ /**
+  * Terminal error handler. Logs to the console AND to the rotating error log so
+- * an unhandled failure survives a restart, then answers 500 unless the response
+- * has already started.
++ * an unhandled failure survives a restart, then answers in JSON unless the
++ * response has already started.
++ *
++ * Client-shaped failures keep their own status instead of being flattened to
++ * 500: a body-parser overflow is a 413 (PayloadTooLargeError) and malformed
++ * JSON is a 400 (SyntaxError from express.json), both of which used to read as
++ * "internal error" and send a JSON client chasing a server bug. Anything else
++ * — including a bare `throw new Error()` with no status — is still a 500.
+  */
+-export function apiErrorHandler(err: Error, req: Request, res: Response, _next: NextFunction): void {
++export function apiErrorHandler(err: HttpError, req: Request, res: Response, _next: NextFunction): void {
+   console.error("[api] unhandled:", err);
+   logServerError(err, `${req.method} ${req.path}`);
+-  if (!res.headersSent) res.status(500).json({ error: "internal error" });
++  if (res.headersSent) return;
++  const status = clientErrorStatus(err);
++  if (status !== null) {
++    res.status(status).json({ error: clientErrorLabel(status) });
++    return;
++  }
++  res.status(500).json({ error: "internal error" });
+ }
+diff --git a/tests/errors.test.ts b/tests/errors.test.ts
+index 7ae8098..97b77ee 100644
+--- a/tests/errors.test.ts
++++ b/tests/errors.test.ts
+@@ -27,7 +27,7 @@ import { clientErrorLogFile, serverErrorLogFile } from "../server/http/errorLog.
+ 
+ const CHILD_FLAG = "VKICK_ERRORS_CHILD";
+ const SUMMARY =
+-  "  errors: unhandled error persisted to logs/, client-errors 200+cap+rate-limit+identity, non-GET /api/* JSON 404 OK";
++  "  errors: unhandled error persisted to logs/, client errors keep 400/413 while real faults stay 500, client-errors 200+cap+rate-limit+identity, non-GET /api/* JSON 404 OK";
+ 
+ interface Res {
+   status: number;
+@@ -93,6 +93,41 @@ function call(
+   });
+ }
+ 
++/** POST a raw (possibly invalid) body with an explicit content-type. */
++function callRaw(
++  port: number,
++  method: string,
++  url: string,
++  headers: Record<string, string>,
++  raw: string,
++): Promise<Res> {
++  return new Promise((resolve, reject) => {
++    const req = http.request(
++      {
++        host: "127.0.0.1",
++        port,
++        path: url,
++        method,
++        headers: { "content-type": "application/json", "content-length": Buffer.byteLength(raw), ...headers },
++      },
++      (res) => {
++        let buf = "";
++        res.on("data", (c) => (buf += c));
++        res.on("end", () =>
++          resolve({
++            status: res.statusCode ?? 0,
++            contentType: String(res.headers["content-type"] ?? ""),
++            body: parseBody(buf),
++            retryAfter: (res.headers["retry-after"] as string) ?? null,
++          }),
++        );
++      },
++    );
++    req.on("error", reject);
++    req.end(raw);
++  });
++}
++
+ function readLog(file: string): string {
+   try {
+     return fs.readFileSync(file, "utf8");
+@@ -149,6 +184,34 @@ async function suite(): Promise<void> {
+       assert.ok(serverAfter.includes(boomMarker), "the log carries the error message");
+       assert.ok(serverAfter.includes("GET /api/boom"), "and the request context");
+ 
++      /* ------------------------------------ client errors keep their own status */
++      // Malformed JSON: express.json throws a SyntaxError carrying status 400.
++      // It must come back as 400 JSON — not the old flat 500 "internal error".
++      const malformed = await callRaw(port, "POST", "/api/client-errors", {}, "{not valid json");
++      assert.equal(malformed.status, 400, `malformed JSON answers 400, not 500 (got ${malformed.status})`);
++      assert.ok(malformed.contentType.includes("application/json"), "and as JSON");
++      assert.equal(malformed.body?.error, "bad request");
++
++      // Oversized body: express.json's 100kb cap throws PayloadTooLargeError
++      // (status 413) before any route runs.
++      const oversized = await callRaw(
++        port,
++        "POST",
++        "/api/client-errors",
++        {},
++        JSON.stringify({ message: "A".repeat(200 * 1024) }),
++      );
++      assert.equal(oversized.status, 413, `an oversized body answers 413, not 500 (got ${oversized.status})`);
++      assert.ok(oversized.contentType.includes("application/json"), "and as JSON");
++      assert.equal(oversized.body?.error, "payload too large");
++
++      // Both are still persisted — status handling must not skip the log.
++      const logAfterClientErrors = readLog(serverErrorLogFile);
++      assert.ok(
++        logAfterClientErrors.includes("POST /api/client-errors"),
++        "malformed and oversized requests are persisted too",
++      );
++
+       /* ------------------------------------------------ client-errors: signed in */
+       const signed = await call(port, "POST", "/api/client-errors", auth, {
+         message: "signed-in marker",
+-- 
+2.54.0.windows.1
+

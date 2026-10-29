@@ -1,0 +1,126 @@
+From 9614788253f84e0e36c981aa7b3ea218f4266b02 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 28 Oct 2026 14:38:55 +0330
+Subject: [PATCH 1/2] fix(sync): add Understat fetch timeout, stop retrying
+ permanent errors
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The Understat HTTP client had no timeout — a stalled request
+hung the sync loop indefinitely. The ESPN client already uses
+AbortSignal.timeout(15_000); Understat now matches.
+
+Also stop retrying permanent 4xx errors (400/401/403) — they'll
+never succeed no matter how many times we try. 429 now honors
+the Retry-After header (capped at 30s) before backing off. 5xx
+and network/timeout errors still retry with exponential backoff.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/understat/client.ts | 36 +++++++++++++++++++++++++++++++++++-
+ 1 file changed, 35 insertions(+), 1 deletion(-)
+
+diff --git a/server/understat/client.ts b/server/understat/client.ts
+index 8c5cdd7..1cea3b2 100644
+--- a/server/understat/client.ts
++++ b/server/understat/client.ts
+@@ -25,9 +25,43 @@ async function fetchJsonWithRetry(url: string, options: RequestInit = {}, attemp
+       Referer: BASE + "/",
+       ...options.headers,
+     };
+-    const res = await fetch(url, { ...options, headers });
++
++    let res: Response;
++    try {
++      res = await fetch(url, { ...options, headers, signal: AbortSignal.timeout(15_000) });
++    } catch (err) {
++      // Network failures and timeouts are transient; retry with backoff.
++      if (i === attempts - 1) throw err;
++      await new Promise((r) => setTimeout(r, 5000 * (i + 1)));
++      continue;
++    }
++
+     if (res.ok) return res.json();
++    // Understat doesn't cover this team/season — not an error, just empty.
+     if (res.status === 404) return null;
++
++    if (res.status === 429) {
++      // Honor Retry-After (seconds or HTTP date), capped to avoid a long stall.
++      const retryAfter = res.headers.get("retry-after");
++      const retryAt = retryAfter === null ? Number.NaN : Date.parse(retryAfter);
++      const retrySeconds = retryAfter === null ? Number.NaN : Number(retryAfter);
++      const waitMs = Number.isFinite(retrySeconds)
++        ? retrySeconds * 1000
++        : Number.isFinite(retryAt)
++          ? Math.max(0, retryAt - Date.now())
++          : 5000 * (i + 1);
++      if (i === attempts - 1) throw new Error(`Understat 429 after ${attempts} attempts: ${url}`);
++      await new Promise((r) => setTimeout(r, Math.min(Math.max(waitMs, 0), 30_000)));
++      continue;
++    }
++
++    // Other 4xx responses are permanent — retrying will not help.
++    if (res.status >= 400 && res.status < 500) {
++      throw new Error(`Understat ${res.status} (permanent): ${url}`);
++    }
++
++    // Server errors are transient; back off before trying again.
++    if (i === attempts - 1) throw new Error(`Understat HTTP ${res.status} after ${attempts} attempts: ${url}`);
+     await new Promise((r) => setTimeout(r, 5000 * (i + 1)));
+   }
+   throw new Error(`Understat failed after ${attempts} attempts: ${url}`);
+-- 
+2.54.0.windows.1
+
+
+From 2274dcfb1eeae5a96d7d1f2264f4a6541ee2af4a Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 28 Oct 2026 14:39:06 +0330
+Subject: [PATCH 2/2] fix(api): add 15-second timeout to client-side fetch
+ requests
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The shared request() function in src/lib/api.ts called fetch()
+with no timeout — a stalled server response left the user staring
+at a spinner indefinitely. Add AbortSignal.timeout(15_000) so
+after 15 seconds the fetch aborts and React Query shows the
+existing retryable error state (ErrorState with a "retry" button).
+
+Matches the 15-second timeout the server's ESPN client already
+uses (server/espn/client.ts line 29). No other files change —
+the timeout is a one-line addition to the shared request path.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/lib/api.ts | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 4e5fa2a..94f1d02 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -13,6 +13,8 @@ import { currentAuthToken, getDeviceId } from "./auth";
+ import type { LineupPlayer, MatchForm, MatchH2H, NewsArticle } from "../types";
+ 
+ const BASE = "/api";
++/** A stalled API request must not leave a screen loading indefinitely. */
++const REQUEST_TIMEOUT_MS = 15_000;
+ 
+ /**
+  * Every non-2xx response is thrown as one of these, so callers can branch on
+@@ -27,6 +29,7 @@ export interface ApiRequestError extends Error {
+ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
+   const res = await fetch(`${BASE}${path}`, {
+     ...opts,
++    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+     headers: {
+       "content-type": "application/json",
+       authorization: `Bearer ${currentAuthToken()}`,
+-- 
+2.54.0.windows.1
+

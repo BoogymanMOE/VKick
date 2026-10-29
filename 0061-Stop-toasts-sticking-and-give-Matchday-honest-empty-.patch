@@ -1,0 +1,545 @@
+From 41cf75d8f6de32f280c34530b3e22b777725226b Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 11 Oct 2026 03:00:35 +0330
+Subject: [PATCH 061/230] Stop toasts sticking, and give Matchday honest empty
+ states
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The stuck notification users hit on the Task card was not an ad bug: the toast
+leave class `.toast-out` had no CSS rule at all, so the exit animation never
+ran and its `animationend` — the only thing that removed a toast — never fired.
+Every toast stayed on screen until a reload, three of them at a time. The leave
+animation now exists, and the provider also reaps each toast on a timer so a
+missing or undelivered event cannot strand one.
+
+The Task card itself now has a failure policy: it collapses on the SDK's own
+error events and on an error thrown out of the SDK script or a rejected promise
+from it, and remembers for the session, so a route change cannot retry a block
+Adsgram has already rejected. An unrelated page error leaves it alone and a
+reload retries, so a fixed block id comes back on its own.
+
+Matchday's own empty state was three empty sections on a fresh database. The
+feed now renders one state at a time — a labelled skeleton list while the first
+fetch is in flight, one error card if it failed with nothing cached, and one
+centered empty state with a Sync now action when the sync has not filled the
+feed yet. Previous results are always offered and name "No results yet" when
+opened instead of vanishing. New copy ships in English and Persian.
+
+POST /api/admin/sync already existed and was verified over HTTP (401 without a
+token, 403 for a non-admin, { ok: true } when the sweep ran); the README now
+shows how to call it.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ CHANGELOG.md                  |  22 +++++
+ README.md                     |   2 +-
+ src/components/TaskAdCard.tsx |  72 ++++++++++++--
+ src/components/Toast.tsx      |  37 +++++--
+ src/i18n/strings.ts           |  12 +++
+ src/index.css                 |  17 ++++
+ src/pages/Matches.tsx         | 181 +++++++++++++++++++++++-----------
+ 7 files changed, 271 insertions(+), 72 deletions(-)
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 97c42e0..0cd9050 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -205,6 +205,28 @@
+   always treated as username attempts and shape-checked: bad shapes return
+   `BAD_USERNAME` instead of falling through into the Telegram/dev path
+   (`missing hash` / `no bot token`) or misreporting `NO_ACCOUNT`.
++- **Toasts dismiss themselves again.** The leave class (`toast-out`) had no CSS
++  rule at all, so the exit animation never ran and its `animationend` — the only
++  thing that removed a toast — never fired either: every toast stayed on screen
++  until a reload, and the Adsgram "Block is not active" error was just the most
++  visible one (three stuck copies was the cap). The animation exists now
++  (`src/index.css`), and the provider also reaps each toast on a timer, so a
++  missing or undelivered animation event can never strand one.
++- **A rejected Adsgram Task block takes itself off the screen.** The card now
++  collapses (returns null) on the SDK's own error events and on an error thrown
++  out of the SDK script or a rejected promise from it, and remembers for the
++  session so a tab switch or route change cannot retry the same rejected block
++  and raise it again. An unrelated page error leaves the placement alone, and a
++  reload retries it, so a fixed block id comes back on its own.
++- **Matchday never shows a wall of empty sections.** A fresh database (before
++  the ESPN sync has filed a fixture) used to render Live, Upcoming and Previous
++  as three empty boxes. The feed now renders one state at a time: a single
++  labelled skeleton list while the first fetch is in flight, one error card if it
++  failed with nothing cached, and one centered empty state — "No matches
++  available right now. Syncing live scores — check back shortly!" with a Sync now
++  action — when the sync has not filled the feed yet. Previous results are always
++  offered and name "No results yet" when opened rather than vanishing, and an
++  empty Upcoming keeps its action too. New copy ships in English and Persian.
+ 
+ ### Added
+ 
+diff --git a/README.md b/README.md
+index 5978b29..fa6f789 100644
+--- a/README.md
++++ b/README.md
+@@ -97,7 +97,7 @@ Auth (Bearer = Telegram initData, or an `mg_` session token from the username pa
+ 
+ Public leaderboards: `GET /api/leaderboards/global`, `/league/:league`, `/club/:teamId`
+ 
+-Admin (`ADMIN_TELEGRAM_IDS`): `POST /api/admin/sync`, `POST /api/admin/sync-window`, `POST /api/admin/notify`
++Admin (`ADMIN_TELEGRAM_IDS` — the caller's own Telegram id must be in the list, and the call needs a Bearer token): `POST /api/admin/sync` (one scoreboard sweep now — `curl -X POST -H "Authorization: Bearer dev:<your-id>" https://<host>/api/admin/sync` answers `401` without a token, `403` for a non-admin and `{ ok: true }` when the sweep ran), `POST /api/admin/sync-window` (same for an explicit `back`/`forward` day window), `POST /api/admin/notify`
+ 
+ Adsgram webhook (no auth — Adsgram calls it server-to-server): `GET /api/adsgram/reward?userId=…` answers `200 { status: "ok" }` so Adsgram accepts the callback, and logs the userId; no points are credited yet
+ 
+diff --git a/src/components/TaskAdCard.tsx b/src/components/TaskAdCard.tsx
+index 5e5b2ad..b6f6381 100644
+--- a/src/components/TaskAdCard.tsx
++++ b/src/components/TaskAdCard.tsx
+@@ -7,27 +7,58 @@
+  * "nothing to show" or a load error — an empty sponsored slot is worse than
+  * none. On a completed task the user gets the success haptic; the component's
+  * own claim/done slots handle the visual state.
++ *
++ * Failure policy, because an ad is never allowed to nag: the moment the
++ * placement reports a problem — its own error events, or an error escaping the
++ * SDK script/unhandled rejections — the card unmounts (returns null) AND
++ * remembers for the rest of the session, so a remount (tab switch, route
++ * change, poll) cannot retry the same rejected block and re-fire the same
++ * failure on top of the user's screen.
+  */
+-import { useEffect, useRef, useState } from "react";
++import { useCallback, useEffect, useRef, useState } from "react";
+ import { loadAdsgramScript, taskAdsAvailable, taskBlockId } from "../lib/ads";
+ import { notifyHaptic } from "../lib/telegram";
+ import { useI18n } from "../i18n/context";
+ 
++/**
++ * Session-lifetime "this placement is broken" flag. Module scope on purpose:
++ * navigation remounts the component, and retrying a block Adsgram has already
++ * rejected is how one bad fill turns into a stream of error popups. A reload
++ * clears it, so a fixed block id comes back on its own.
++ */
++let placementFailed = false;
++
++/**
++ * The SDK's own failure wording (it throws things like "Block is not active"
++ * out of its script rather than only emitting an element event). Kept loose —
++ * the exact string is not part of any contract we control.
++ */
++const ADSGRAM_ERROR_RE = /adsgram|block is not active|block is inactive|block not found/i;
++
+ export function TaskAdCard() {
+   const { t } = useI18n();
+   const [ready, setReady] = useState(false);
+-  const [hidden, setHidden] = useState(false);
++  const [hidden, setHidden] = useState(placementFailed);
+   const ref = useRef<HTMLElement | null>(null);
+ 
++  /** Give up for the rest of the session: nothing may render this slot again. */
++  const giveUp = useCallback(() => {
++    placementFailed = true;
++    setReady(false);
++    setHidden(true);
++  }, []);
++
+   useEffect(() => {
+-    if (!taskAdsAvailable()) return;
++    if (placementFailed || !taskAdsAvailable()) return;
+     let cancelled = false;
+     loadAdsgramScript()
+       .then(() => {
+         if (!cancelled) setReady(true);
+       })
+       .catch(() => {
+-        /* no SDK, no card — the placement stays silent */
++        // No SDK, no card. This mount stays silent but a later one may retry
++        // (loadAdsgramScript resets its promise), so the flag is not set here.
++        if (!cancelled) setHidden(true);
+       });
+     return () => {
+       cancelled = true;
+@@ -35,22 +66,49 @@ export function TaskAdCard() {
+   }, []);
+ 
+   // Custom events live on the element itself (docs.adsgram.ai/publisher/task-integration-example).
++  // `onError` is a hard failure (the retained-flag path); the other two mean
++  // "nothing to show right now", which only collapses this mount so a later one
++  // can still fill.
+   useEffect(() => {
+     const el = ref.current;
+     if (!el) return;
+     const hide = () => setHidden(true);
+     const reward = () => notifyHaptic("success");
+     el.addEventListener("reward", reward);
+-    el.addEventListener("onError", hide);
++    el.addEventListener("onError", giveUp);
+     el.addEventListener("onBannerNotFound", hide);
+     el.addEventListener("onTooLongSession", hide);
+     return () => {
+       el.removeEventListener("reward", reward);
+-      el.removeEventListener("onError", hide);
++      el.removeEventListener("onError", giveUp);
+       el.removeEventListener("onBannerNotFound", hide);
+       el.removeEventListener("onTooLongSession", hide);
+     };
+-  }, [ready]);
++  }, [ready, giveUp]);
++
++  // The SDK also throws out of its own script — an uncaught error, or a rejected
++  // promise — and that never reaches the element listeners above. Catch those at
++  // the window and collapse the slot; otherwise the card stays mounted with a
++  // toast the user cannot dismiss.
++  useEffect(() => {
++    if (!taskAdsAvailable()) return;
++    const fromAdsgram = (event: ErrorEvent) =>
++      ADSGRAM_ERROR_RE.test(`${event.message ?? ""} ${event.filename ?? ""}`);
++    const onError = (event: ErrorEvent) => {
++      if (fromAdsgram(event)) giveUp();
++    };
++    const onRejection = (event: PromiseRejectionEvent) => {
++      const reason = event.reason as { message?: string } | string | undefined;
++      const message = typeof reason === "string" ? reason : (reason?.message ?? "");
++      if (ADSGRAM_ERROR_RE.test(message)) giveUp();
++    };
++    window.addEventListener("error", onError);
++    window.addEventListener("unhandledrejection", onRejection);
++    return () => {
++      window.removeEventListener("error", onError);
++      window.removeEventListener("unhandledrejection", onRejection);
++    };
++  }, [giveUp]);
+ 
+   if (!taskAdsAvailable() || hidden) return null;
+ 
+diff --git a/src/components/Toast.tsx b/src/components/Toast.tsx
+index 7648502..9f40b0a 100644
+--- a/src/components/Toast.tsx
++++ b/src/components/Toast.tsx
+@@ -1,4 +1,4 @@
+-import { useCallback, useMemo, useState } from "react";
++import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import type { ReactNode } from "react";
+ import { cx } from "../lib/cx";
+ import { AlertIcon, BallIcon, CloseIcon, RefreshIcon, StarFilledIcon } from "./icons";
+@@ -31,18 +31,43 @@ const toneTint: Record<ToastTone, string | undefined> = {
+   muted: undefined,
+ };
+ 
++/** How long the copy stays readable before it starts to leave. */
++const DWELL_MS = 3600;
++/** The leave animation's own duration (see `.toast-out` in index.css) — the
++ *  reap timer waits it out so the exit is visible. */
++const LEAVE_MS = 320;
++
+ /** App-wide transient alerts: goals, deadline warnings, saved confirmations. */
+ export function ToastProvider({ children }: { children: ReactNode }) {
+   const [toasts, setToasts] = useState<ToastItem[]>([]);
++  // Every toast owns two timers; they are cleared on unmount so a hot reload
++  // never sets state on a dead provider.
++  const timers = useRef<number[]>([]);
++  useEffect(
++    () => () => {
++      for (const timer of timers.current) window.clearTimeout(timer);
++      timers.current = [];
++    },
++    [],
++  );
+ 
+   const push = useCallback((toast: Omit<ToastItem, "id">) => {
+     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+     setToasts((prev) => [...prev.slice(-2), { ...toast, id }]);
+-    window.setTimeout(() => {
+-      // Mark leaving rather than remove: the exit animation tells the
+-      // animationend handler below when it is actually safe to drop it.
+-      setToasts((prev) => prev.map((item) => (item.id === id ? { ...item, leaving: true } : item)));
+-    }, 3600);
++    timers.current.push(
++      window.setTimeout(() => {
++        // Mark leaving rather than remove: the exit animation plays first.
++        setToasts((prev) => prev.map((item) => (item.id === id ? { ...item, leaving: true } : item)));
++      }, DWELL_MS),
++      // Belt and braces: reap on a timer as well as on `animationend`. The event
++      // is not guaranteed — a backgrounded webview, an element whose animation
++      // never starts, or a stale class without a keyframes rule all leave the
++      // toast on screen permanently, which is exactly the stuck-toast bug.
++      window.setTimeout(
++        () => setToasts((prev) => prev.filter((item) => item.id !== id)),
++        DWELL_MS + LEAVE_MS,
++      ),
++    );
+   }, []);
+ 
+   const value = useMemo(() => ({ push }), [push]);
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 77e95d0..dc0363e 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -48,6 +48,12 @@ export const strings = {
+     "matches.upcoming": "Upcoming",
+     "matches.previous": "Previous matches",
+     "matches.empty": "No matches in this gameweek yet.",
++    "matches.emptyTitle": "No matches available right now",
++    "matches.emptyFeedHint": "Syncing live scores — check back shortly!",
++    "matches.emptyAction": "Sync now",
++    "matches.loading": "Loading matches",
++    "matches.previousEmpty": "No results yet",
++    "matches.previousEmptyHint": "Final scores land here after the whistle.",
+     "matches.cardMeta": "{league} · GW{gw}",
+     "matches.myTeams": "My teams",
+     "matches.pickTeams": "Pick your teams",
+@@ -596,6 +602,12 @@ export const strings = {
+     "matches.upcoming": "پیش رو",
+     "matches.previous": "بازی‌های قبلی",
+     "matches.empty": "هنوز بازی‌ای برای این هفته نیست.",
++    "matches.emptyTitle": "الان بازی‌ای در دسترس نیست",
++    "matches.emptyFeedHint": "نتایج زنده در حال همگام‌سازی است — کمی بعد سر بزن!",
++    "matches.emptyAction": "همگام‌سازی",
++    "matches.loading": "در حال بارگذاری بازی‌ها",
++    "matches.previousEmpty": "هنوز نتیجه‌ای نیست",
++    "matches.previousEmptyHint": "نتیجه نهایی بعد از سوت پایان همین‌جا می‌آید.",
+     "matches.cardMeta": "{league} · هفته {gw}",
+     "matches.myTeams": "تیم‌های من",
+     "matches.pickTeams": "تیم‌هایت را انتخاب کن",
+diff --git a/src/index.css b/src/index.css
+index 1fc56e0..12a7ab2 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -519,6 +519,23 @@
+     }
+   }
+ 
++  /* The leave half of the pair. Without it the exit class had no animation at
++     all, so no `animationend` ever reached the toast's reaper and every toast
++     stayed on screen forever (the stuck-toast bug). */
++  .toast-out {
++    animation: toast-out 260ms var(--ease-out) both;
++  }
++  @keyframes toast-out {
++    from {
++      opacity: 1;
++      transform: none;
++    }
++    to {
++      opacity: 0;
++      transform: translateY(-10px) scale(0.98);
++    }
++  }
++
+   /* Signature animation 7 (tail): one pulse per second in the last ten seconds. */
+   .tick-panic {
+     animation: tick-panic 1s var(--ease-out) infinite;
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 5dbff87..3e24394 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -102,6 +102,13 @@ export default function Matches() {
+   // Recent results, newest kickoff first — the sections above sort favorites up.
+   const finished = organize(finished0).sort(newestFirst).slice(0, 12);
+ 
++  // The feed's own states, kept explicit so the screen never renders three
++  // empty sections at once. `feedEmpty` is a fresh deploy before the ESPN sync
++  // has filed a single fixture: the case that made Matchday look broken.
++  const loading = matchesQuery.isLoading;
++  const failed = matchesQuery.isError && matches.length === 0;
++  const feedEmpty = !loading && !failed && matches.length === 0;
++
+   // One context per favorite club: live now, else next kickoff, else last
+   // result. The anchor club leads the rows.
+   const teamRows = useMemo(() => {
+@@ -206,6 +213,14 @@ export default function Matches() {
+     </CollapsibleSection>
+   );
+ 
++  /* Inline sponsored card (Adsgram Task), below the Upcoming feed and above
++     Previous results: after today's games have had their say, so it can never
++     push the fixtures out of view. Renders nothing unless ADGRAM_ENABLED is
++     "true" and a Task block id is configured — Telegram only, and hidden when
++     nothing fills; see src/lib/ads.ts. One placement per screen, so the same
++     node is reused by the two feed states that show it. */
++  const adSlot = <TaskAdCard />;
++
+   return (
+     <>
+       <ConfettiBurst trigger={burst} />
+@@ -374,72 +389,122 @@ export default function Matches() {
+         ) : null}
+ 
+         {/* General upcoming feed, capped with picks saved so the page stays a
+-          glance, not a scroll. Results live in the team rows above. */}
+-        <CollapsibleSection
+-          id="matches-upcoming"
+-          level={2}
+-          title={t("matches.upcoming")}
+-          count={upcoming0.length}
+-          defaultOpen
+-        >
+-          {matchesQuery.isLoading ? (
++          glance, not a scroll. Results live in the team rows above.
++
++          One state at a time: a single skeleton list while the first fetch is
++          in flight (three sections of "nothing here" during the wait read as
++          "no football today"), a single error card when the fetch failed with
++          nothing cached, a single centered empty state when the sync has not
++          filled the feed yet, and the three sections only once there is data.
++          The sponsored slot rides along in the two states that have an actual
++          feed around it — never under a skeleton or an error. */}
++        {loading ? (
++          <section className="mt-6" aria-busy="true" aria-label={t("matches.loading")}>
++            <SectionHeading title={t("matches.upcoming")} />
+             <ul className="space-y-2">
+               <MatchCardSkeleton />
++              <MatchCardSkeleton />
++              <MatchCardSkeleton />
+             </ul>
+-          ) : matchesQuery.isError ? (
++          </section>
++        ) : null}
++
++        {failed ? (
++          <div className="mt-6">
+             <ErrorState
+               title={t("error.title")}
+               hint={t("error.hint")}
+               onRetry={() => matchesQuery.refetch()}
+             />
+-          ) : upcomingShown.length > 0 ? (
+-            <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
+-              {upcomingShown.map((match, index) => (
+-                <MatchCard key={match.id} match={match} index={index} />
+-              ))}
+-            </ul>
+-          ) : (
+-            <EmptyState title={t("matches.empty")} hint={t("matches.emptyHint")} />
+-          )}
+-        </CollapsibleSection>
+-
+-        {/* Inline sponsored card (Adsgram Task), below the Upcoming feed and
+-          above Previous results: after today's games have had their say, so it
+-          can never push the fixtures out of view. Renders nothing unless
+-          ADGRAM_ENABLED is "true" and a Task block id is configured — Telegram
+-          only, and hidden when nothing fills; see src/lib/ads.ts. */}
+-        <TaskAdCard />
+-
+-        {/* Previous results beneath the feed: folded away by default so the
+-          matchday page leads with what's next; open when the score is wanted.
+-          Hidden entirely until there is a result — an always-empty disclosure
+-          is noise, not navigation. */}
+-        {finished.length > 0 || matchesQuery.isLoading || matchesQuery.isError ? (
+-          <CollapsibleSection
+-            id="matches-previous"
+-            level={2}
+-            title={t("matches.previous")}
+-            count={finished0.length}
+-            defaultOpen={false}
+-          >
+-            {matchesQuery.isLoading ? (
+-              <ul className="space-y-2">
+-                <MatchCardSkeleton />
+-              </ul>
+-            ) : matchesQuery.isError ? (
+-              <ErrorState
+-                title={t("error.title")}
+-                hint={t("error.hint")}
+-                onRetry={() => matchesQuery.refetch()}
+-              />
+-            ) : (
+-              <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
+-                {finished.map((match, index) => (
+-                  <MatchCard key={match.id} match={match} index={index} />
+-                ))}
+-              </ul>
+-            )}
+-          </CollapsibleSection>
++          </div>
++        ) : null}
++
++        {feedEmpty ? (
++          <div className="mt-6">
++            <EmptyState
++              title={t("matches.emptyTitle")}
++              hint={t("matches.emptyFeedHint")}
++              action={
++                <button
++                  type="button"
++                  onClick={() => {
++                    haptic("light");
++                    matchesQuery.refetch();
++                  }}
++                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++                >
++                  <RefreshIcon className="h-4 w-4" aria-hidden="true" />
++                  {t("matches.emptyAction")}
++                </button>
++              }
++            />
++          </div>
++        ) : null}
++
++        {/* The sponsored slot has to sit between Upcoming and Previous in the
++          ready state, and after the empty state when there is no feed at all. */}
++        {feedEmpty ? adSlot : null}
++
++        {!loading && !failed && !feedEmpty ? (
++          <>
++            <CollapsibleSection
++              id="matches-upcoming"
++              level={2}
++              title={t("matches.upcoming")}
++              count={upcoming0.length}
++              defaultOpen
++            >
++              {upcomingShown.length > 0 ? (
++                <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
++                  {upcomingShown.map((match, index) => (
++                    <MatchCard key={match.id} match={match} index={index} />
++                  ))}
++                </ul>
++              ) : (
++                <EmptyState
++                  title={t("matches.empty")}
++                  hint={t("matches.emptyHint")}
++                  action={
++                    <button
++                      type="button"
++                      onClick={() => {
++                        haptic("light");
++                        matchesQuery.refetch();
++                      }}
++                      className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++                    >
++                      <RefreshIcon className="h-4 w-4" aria-hidden="true" />
++                      {t("matches.emptyAction")}
++                    </button>
++                  }
++                />
++              )}
++            </CollapsibleSection>
++
++            {adSlot}
++
++            {/* Previous results beneath the feed: folded away by default so the
++              matchday page leads with what's next; open when the score is
++              wanted. Rendered whenever the feed has data so a quiet history is
++              named honestly instead of the section vanishing. */}
++            <CollapsibleSection
++              id="matches-previous"
++              level={2}
++              title={t("matches.previous")}
++              count={finished0.length}
++              defaultOpen={false}
++            >
++              {finished.length > 0 ? (
++                <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
++                  {finished.map((match, index) => (
++                    <MatchCard key={match.id} match={match} index={index} />
++                  ))}
++                </ul>
++              ) : (
++                <EmptyState title={t("matches.previousEmpty")} hint={t("matches.previousEmptyHint")} />
++              )}
++            </CollapsibleSection>
++          </>
+         ) : null}
+ 
+         {/* Sync note, not a second refresh button: pull-to-refresh and the
+-- 
+2.54.0.windows.1
+

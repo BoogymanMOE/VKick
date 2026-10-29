@@ -1,0 +1,481 @@
+From 1816a5d3ffa726f196ef09d605b4c28e1986297c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 9 Oct 2026 03:17:32 +0330
+Subject: [PATCH 039/230] Keep SQLite on a persistent disk and snapshot it
+ nightly
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Render wipes the filesystem without a disk, so every deploy was resetting
+the database; the blueprint now mounts /var/data and pins one instance.
+A nightly in-process job reuses the backup script (a cron job cannot mount
+the service's disk), and the backup CLI now loads .env.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ README.md                    |  28 +++++++++-
+ render.yaml                  |  31 ++++++++++-
+ server/backupCli.ts          |   6 +++
+ server/backupSchedule.ts     | 101 +++++++++++++++++++++++++++++++++++
+ server/db/index.ts           |  37 ++-----------
+ server/env.ts                |  46 ++++++++++++++++
+ server/index.ts              |   5 ++
+ tests/backupSchedule.test.ts |  75 ++++++++++++++++++++++++++
+ tests/run.ts                 |   2 +
+ 9 files changed, 293 insertions(+), 38 deletions(-)
+ create mode 100644 server/backupSchedule.ts
+ create mode 100644 server/env.ts
+ create mode 100644 tests/backupSchedule.test.ts
+
+diff --git a/README.md b/README.md
+index 46ff3e3..de355b1 100644
+--- a/README.md
++++ b/README.md
+@@ -194,15 +194,39 @@ build either way, only distribution differs.
+ 
+ ## Deploy
+ 
+-`render.yaml` is a working Render blueprint for the zero-cost shape this app was built around: one Node service, `npm install && npm run build` to produce `dist/` (frontend) + `dist-server/` (server), then `node dist-server/server/index.js`.
++`render.yaml` is a working Render blueprint: one Node service, `npm install && npm run build` to produce `dist/` (frontend) + `dist-server/` (server), then `node dist-server/server/index.js`.
+ 
+ - **One process serves everything.** The API mounts the built `dist/` with an SPA fallback, so there is no separate static host to configure.
+-- **Exactly one instance.** File-based SQLite plus in-process cron loops (sync, resolver, retention) mean scaling horizontally would fight itself — scale the box, never the count. The blueprint's comment says the same thing.
++- **Exactly one instance** (`numInstances: 1`). File-based SQLite plus in-process cron loops (sync, resolver, retention, backup) mean scaling horizontally would fight itself — scale the box, never the count.
++- **Persistent disk** (`disk:` block, mounted at `/var/data`). Without it `/var/data` is ephemeral and **every deploy/restart resets the database** — this is the single most important line in the blueprint. A disk pins the service to one instance (Render's own constraint, which matches the design) and disables zero-downtime deploys: the old instance stops before the new one starts, a few seconds of downtime per deploy. Disks need a paid instance type, so the blueprint is no longer on the completely free tier.
+ - **Health check** is `GET /health` (503 if the DB stops answering, so the check can actually fail).
+ - **Secrets live in the dashboard**, not in `render.yaml`: `TELEGRAM_BOT_TOKEN`, `MINI_APP_URL`, optionally `ADMIN_TELEGRAM_IDS`.
+ - **`NODE_ENV=production` refuses to boot while `DEV_AUTH_SECRET` is set** — that key turns `dev:<id>` tokens into any user's identity. Unset it before deploying.
+ - After the first deploy, point BotFather's Mini App URL (and `MINI_APP_URL`) at the service's `https://` URL.
+ 
++## Backups
++
++The database is a single file on the persistent disk, so the backup story has three layers:
++
++1. **Render's automatic disk snapshots** — once every 24h, kept for at least seven days. Free with the disk. Restore a whole disk from the service's Disks page (restores the entire disk, not one file). This is the outer safety net for the case where the app itself is down.
++2. **A nightly app-level snapshot** — `server/backupSchedule.ts` runs one `VACUUM INTO` snapshot (the same code path as `npm run backup`) at `BACKUP_HOUR` (UTC, default `3`) into `BACKUP_DIR` (default `/var/data/backups` on Render), keeping the newest `BACKUP_KEEP` (default 7). It lives **inside the server process** on purpose: a Render cron job is a separate container and **cannot mount this service's disk** (Render: "You can't add a disk to a cron job service", "you can't access a service's disk from any other service"), so it could never see `/var/data/matchday.db`. These files give a fast, granular, point-in-time restore.
++3. **Off-site copies** — *not implemented; options only.* A backup on the same disk dies with the disk, so a real disaster-recovery copy belongs somewhere else:
++   - After each nightly run, upload `BACKUP_DIR` to any S3-compatible bucket (`rclone`, `aws s3 cp`) — cheapest, one small file per night.
++   - `restic`/`borg` to object storage for encrypted, deduplicated, retained history.
++   - A managed Postgres (Render Postgres, Neon, Supabase) if you ever outgrow a file-based SQLite — it brings its own point-in-time recovery.
++   Whichever you pick, keep the write-only credential in the dashboard, never in `render.yaml`, and store copies **outside** the Render account/region.
++
++**Restore (stop the server first):**
++
++```bash
++npm run backup:restore -- /var/data/backups/matchday-YYYYMMDD-HHMMSS.db /var/data/matchday.restored.db
++# then point SQLITE_PATH at the restored file and check /health before trusting it
++```
++
++The CLI refuses to overwrite an existing file, and materialising through `VACUUM INTO` validates the snapshot — a corrupt backup fails the restore instead of being copied into place.
++
++`npm run backup` and `npm run backup:restore` load `.env` (via `server/env.ts`), so they use the same `SQLITE_PATH`/`BACKUP_*` configuration as the server.
++
+ ## Animations
+ 
+ The signature animations from `design-system.md` are implemented:
+diff --git a/render.yaml b/render.yaml
+index 9af14fc..f953a75 100644
+--- a/render.yaml
++++ b/render.yaml
+@@ -12,19 +12,46 @@ services:
+     buildCommand: npm install && npm run build
+     # One process serves both the API and the built frontend (server/index.ts
+     # mounts dist/ + SPA fallback). File-based SQLite + in-process cron sync
+-    # loops mean exactly one instance; do not scale horizontally.
++    # loops mean exactly one instance; do not scale horizontally. Explicit here
++    # so nobody "fixes" a slow deploy by adding instances.
+     startCommand: node dist-server/server/index.js
+     healthCheckPath: /health
+     autoDeploy: true
++    numInstances: 1
++    # Persistent disk: SQLite lives at /var/data, which is ephemeral WITHOUT
++    # this block — every deploy and restart silently reset the database. The
++    # disk preserves it across deploys. Two consequences, both accepted:
++    #   - the disk is bound to this ONE service (Render: "accessible by only a
++    #     single service instance", "you can't scale a service to multiple
++    #     instances if it has a disk attached") — which matches the single-
++    #     process design anyway;
++    #   - disks disable zero-downtime deploys: Render stops the old instance
++    #     before starting the new one, a few seconds of downtime per deploy.
++    # Render snapshots the disk every 24h (kept >= 7 days); the nightly job in
++    # server/backupSchedule.ts writes finer-grained snapshots into
++    # BACKUP_DIR on the same disk. Off-site copies are a separate step — see
++    # the "Backups" section of README.md.
++    disk:
++      name: vkick-data
++      mountPath: /var/data
++      sizeGB: 1
+     envVars:
+       - key: NODE_ENV
+         value: production
+       - key: NODE_VERSION
+         value: 22.20.0
+-      # Render injects PORT; SQLITE_PATH defaults to ./data/matchday.db.
++      # Render injects PORT; SQLITE_PATH points at the persistent disk above.
+       # Set TELEGRAM_BOT_TOKEN (and optionally ADMIN_TELEGRAM_IDS) in the
+       # dashboard — secrets never live in this file.
+       - key: SQLITE_PATH
+         value: /var/data/matchday.db
+       - key: RETENTION_DAYS
+         value: "120"
++      # Nightly in-process backup (see server/backupSchedule.ts): one snapshot
++      # at 03:00 UTC into /var/data/backups, newest 7 kept.
++      - key: BACKUP_DIR
++        value: /var/data/backups
++      - key: BACKUP_KEEP
++        value: "7"
++      - key: BACKUP_HOUR
++        value: "3"
+diff --git a/server/backupCli.ts b/server/backupCli.ts
+index b23bbd3..a3f9dca 100644
+--- a/server/backupCli.ts
++++ b/server/backupCli.ts
+@@ -23,6 +23,12 @@
+ import fs from "node:fs";
+ import path from "node:path";
+ import { backupFileName, backupTo, listBackups, pruneBackups, restoreBackup } from "./backup.js";
++import { loadEnv } from "./env.js";
++
++// Apply `.env` before reading any config below: `npm run backup` invoked from a
++// shell that never exported SQLITE_PATH/BACKUP_DIR must still find the same
++// database and destination the server uses.
++loadEnv();
+ 
+ const SQLITE_PATH = process.env.SQLITE_PATH ?? "./data/matchday.db";
+ const BACKUP_DIR = process.env.BACKUP_DIR ?? "./backups";
+diff --git a/server/backupSchedule.ts b/server/backupSchedule.ts
+new file mode 100644
+index 0000000..909122a
+--- /dev/null
++++ b/server/backupSchedule.ts
+@@ -0,0 +1,101 @@
++/**
++ * Nightly database backup, run from inside the web service.
++ *
++ * WHY THIS LIVES IN THE SERVER, NOT A RENDER CRON JOB: a Render persistent disk
++ * is bound to the single service that owns it — the docs are explicit that "You
++ * can't add a disk to a cron job service" and "You can't access a service's disk
++ * from any other service". A separate cron container therefore can never see
++ * /var/data/matchday.db, so the schedule has to run in the one process that can.
++ * It reuses exactly the server/backup.ts functions the CLI does, and produces the
++ * same `matchday-<stamp>.db` snapshots, so a restore is identical either way.
++ *
++ * This is local durability, not off-site: Render also snapshots the disk itself
++ * once every 24h (kept >= 7 days), which covers the case where this process is
++ * down. Only an off-site copy survives losing the disk (see README "Backups").
++ *
++ * Env: BACKUP_DIR (default ./backups), BACKUP_KEEP (default 7), BACKUP_HOUR
++ * (UTC hour 0-23, default 3), SQLITE_PATH (default ./data/matchday.db).
++ */
++import path from "node:path";
++import { backupFileName, backupTo, listBackups, pruneBackups } from "./backup.js";
++
++export interface BackupRunResult {
++  file: string;
++  bytes: number;
++  pruned: string[];
++  kept: number;
++}
++
++/** Take one snapshot and prune old ones. Throws on failure. */
++export function runNightlyBackup(
++  dbPath: string,
++  dir: string,
++  keep: number,
++  now: Date = new Date(),
++): BackupRunResult {
++  const dest = path.join(dir, backupFileName(now));
++  const { bytes } = backupTo(dbPath, dest);
++  const pruned = pruneBackups(dir, keep);
++  return { file: dest, bytes, pruned, kept: listBackups(dir).length };
++}
++
++/**
++ * True when the nightly job should run now: the UTC hour matches and it has not
++ * already run today. `lastRunDay` is the UTC `YYYY-MM-DD` of the previous run
++ * ("" when none), so a redeploy inside the backup hour never fires a second
++ * snapshot on the same day.
++ */
++export function backupDue(now: Date, hour: number, lastRunDay: string): boolean {
++  if (now.getUTCHours() !== hour) return false;
++  return now.toISOString().slice(0, 10) !== lastRunDay;
++}
++
++/**
++ * Start the hourly check that performs the nightly backup once the configured
++ * UTC hour arrives. Returns a stop function (tests). Unref'd, so it never keeps
++ * the process alive on its own.
++ */
++export function startBackupLoop(): () => void {
++  const dbPath = process.env.SQLITE_PATH ?? "./data/matchday.db";
++  const dir = process.env.BACKUP_DIR ?? "./backups";
++  const keepRaw = process.env.BACKUP_KEEP ?? "7";
++  const hourRaw = process.env.BACKUP_HOUR ?? "3";
++  const keep = Number(keepRaw);
++  const hour = Number(hourRaw);
++
++  if (!Number.isInteger(keep) || keep < 1) {
++    console.error(
++      `[backup] BACKUP_KEEP must be a positive integer, got "${keepRaw}" — nightly backup disabled`,
++    );
++    return () => {};
++  }
++  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
++    console.error(`[backup] BACKUP_HOUR must be an integer 0-23, got "${hourRaw}" — nightly backup disabled`);
++    return () => {};
++  }
++
++  let lastRunDay = "";
++  const tick = (): void => {
++    const now = new Date();
++    if (!backupDue(now, hour, lastRunDay)) return;
++    lastRunDay = now.toISOString().slice(0, 10);
++    try {
++      const r = runNightlyBackup(dbPath, dir, keep, now);
++      console.log(
++        `[backup] nightly: ${dbPath} → ${r.file} (${r.bytes} bytes); kept ${r.kept}, pruned ${r.pruned.length}`,
++      );
++    } catch (err) {
++      // A failed snapshot must never take the API down; Render's own disk
++      // snapshots are the safety net for the day this one misses.
++      console.error("[backup] nightly failed:", String(err).slice(0, 200));
++    }
++  };
++
++  tick(); // a boot landing inside the backup hour still gets one in
++  const timer = setInterval(tick, 60 * 60_000);
++  timer.unref?.();
++  console.log(
++    `[backup] nightly backup scheduled for ${String(hour).padStart(2, "0")}:00 UTC → ${dir} (keep ${keep})`,
++  );
++  return () => clearInterval(timer);
++}
+diff --git a/server/db/index.ts b/server/db/index.ts
+index bccfa13..f704eb7 100644
+--- a/server/db/index.ts
++++ b/server/db/index.ts
+@@ -9,40 +9,9 @@ export type DB = DatabaseSync;
+ export type BindValue = null | number | bigint | string | Uint8Array;
+ export type Bindings = BindValue[] | Record<string, BindValue>;
+ 
+-/**
+- * Project root, for locating `.env`. The same two layouts reach this file —
+- * source (server/db/) and build (dist-server/server/db/) — and they are NOT the
+- * same depth below the root, so the depth can't be hardcoded: `../..` was right
+- * for source and pointed at `dist-server/` in the build, where no .env lives.
+- * Walk up to the nearest package.json. Mirrors server/index.ts.
+- */
+-function findProjectRoot(start: string): string {
+-  let dir = start;
+-  for (;;) {
+-    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
+-    const parent = path.dirname(dir);
+-    if (parent === dir) return start; // filesystem root — nothing better to offer
+-    dir = parent;
+-  }
+-}
+-
+-const ROOT = findProjectRoot(import.meta.dirname);
+-
+-/** Minimal .env loader (no dotenv dependency needed). */
+-function loadEnv(): void {
+-  const envPath = path.join(ROOT, ".env");
+-  if (!fs.existsSync(envPath)) return;
+-  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
+-    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+-    if (!m) continue;
+-    const key = m[1] as string;
+-    let value = m[2] as string;
+-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+-      value = value.slice(1, -1);
+-    }
+-    if (process.env[key] === undefined) process.env[key] = value;
+-  }
+-}
++// `.env` is applied here (shared with the CLIs via server/env.ts) so a direct
++// `npm run server` or a test run sees the same configuration the deploy does.
++import { loadEnv } from "../env.js";
+ loadEnv();
+ 
+ let _db: DB | null = null;
+diff --git a/server/env.ts b/server/env.ts
+new file mode 100644
+index 0000000..9bd1d2c
+--- /dev/null
++++ b/server/env.ts
+@@ -0,0 +1,46 @@
++/**
++ * Environment bootstrap shared by every entry point.
++ *
++ * The API, the CLIs and the backup tool all need the same two things: the
++ * project root, and a `.env` file applied to `process.env`.
++ *
++ * The root is found by walking up to the nearest package.json because source
++ * and the emitted build sit at different depths (server/ vs
++ * dist-server/server/), so a hardcoded `../..` is wrong for one of them.
++ *
++ * Real environment variables always win: `loadEnv` only fills keys that are
++ * still undefined, so a value set by the shell or the hosting platform is never
++ * shadowed by a stale line in the file.
++ */
++import fs from "node:fs";
++import path from "node:path";
++
++/** Nearest ancestor directory containing a package.json (or `start` at the root). */
++export function findProjectRoot(start: string): string {
++  let dir = start;
++  for (;;) {
++    if (fs.existsSync(path.join(dir, "package.json"))) return dir;
++    const parent = path.dirname(dir);
++    if (parent === dir) return start; // hit the filesystem root — nothing better to offer
++    dir = parent;
++  }
++}
++
++/** Root of the checkout/build that contains this file. */
++export const PROJECT_ROOT = findProjectRoot(import.meta.dirname);
++
++/** Minimal `.env` loader (no dotenv dependency needed). Existing vars win. */
++export function loadEnv(): void {
++  const envPath = path.join(PROJECT_ROOT, ".env");
++  if (!fs.existsSync(envPath)) return;
++  for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
++    const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
++    if (!m) continue;
++    const key = m[1] as string;
++    let value = m[2] as string;
++    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
++      value = value.slice(1, -1);
++    }
++    if (process.env[key] === undefined) process.env[key] = value;
++  }
++}
+diff --git a/server/index.ts b/server/index.ts
+index 40f7b15..272bcd6 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -32,6 +32,7 @@ import { pruneFootballDetail, pruneSessions, logCapKb, RotatingLogger } from "./
+ import { startSyncLoop } from "./sync/service.js";
+ import { startBot } from "./bot/index.js";
+ import { startResolverLoop } from "./predictions/resolver.js";
++import { startBackupLoop } from "./backupSchedule.js";
+ import { gzip } from "./http/gzip.js";
+ 
+ // Route modules — one per domain, mounted below. Endpoint paths and behavior
+@@ -187,6 +188,10 @@ const server = app.listen(PORT, () => {
+     startSyncLoop();
+     startResolverLoop();
+     startBot(process.env.TELEGRAM_BOT_TOKEN ?? "");
++    // Nightly DB snapshot. Runs here rather than as a Render cron job because a
++    // persistent disk can only be mounted by its owning service (see
++    // backupSchedule.ts). Skipped under SKIP_CRON=1, like the other loops.
++    startBackupLoop();
+   }
+ });
+ 
+diff --git a/tests/backupSchedule.test.ts b/tests/backupSchedule.test.ts
+new file mode 100644
+index 0000000..3fd9ec0
+--- /dev/null
++++ b/tests/backupSchedule.test.ts
+@@ -0,0 +1,75 @@
++/**
++ * The nightly backup scheduler's two pieces of real logic: WHEN it fires and
++ * WHAT it produces.
++ *
++ * The `due` gate is the subtle part — a naive `setInterval(tick, 24h)` drifts,
++ * and a plain "is it the backup hour?" check fires again on every hourly tick
++ * (and on every redeploy inside the hour). The gate must run at most once per
++ * UTC day at the configured hour. The run itself must reuse the backup module's
++ * snapshot + prune, so this pins the naming/keep behaviour the CLI shares.
++ */
++import { strict as assert } from "node:assert";
++import { DatabaseSync } from "node:sqlite";
++import fs from "node:fs";
++import os from "node:os";
++import path from "node:path";
++import { migrate } from "../server/db/schema.js";
++import { backupDue, runNightlyBackup } from "../server/backupSchedule.js";
++import { listBackups } from "../server/backup.js";
++
++export async function runBackupScheduleTests(): Promise<void> {
++  /* ------------------------------------------------ the due gate */
++  const at03 = new Date("2026-10-07T03:00:00Z");
++  assert.equal(backupDue(at03, 3, ""), true, "the backup hour with nothing run yet is due");
++  assert.equal(backupDue(at03, 3, "2026-10-07"), false, "a second tick in the same day is not due");
++  assert.equal(backupDue(at03, 4, ""), false, "a non-matching hour is not due");
++  assert.equal(backupDue(new Date("2026-10-07T15:59:00Z"), 3, ""), false, "the gate is hour-specific");
++  assert.equal(
++    backupDue(new Date("2026-10-08T03:00:00Z"), 3, "2026-10-07"),
++    true,
++    "the next UTC day runs again",
++  );
++  // The hour is read in UTC so a server's local timezone cannot shift it.
++  assert.equal(backupDue(new Date("2026-10-07T03:00:00Z"), 3, ""), true);
++  assert.equal(backupDue(new Date("2026-10-07T03:30:00Z"), 3, ""), true, "any minute inside the hour counts");
++
++  /* ------------------------------------------------ the run */
++  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-bksched-"));
++  try {
++    const dbPath = path.join(dir, "matchday.db");
++    const db = new DatabaseSync(dbPath);
++    migrate(db);
++    db.prepare("INSERT INTO users (telegram_id, display_name, created_at) VALUES (?, ?, ?)").run(
++      "sched1",
++      "Sched",
++      "2026-10-07T00:00:00.000Z",
++    );
++    db.close();
++
++    const backupDir = path.join(dir, "backups");
++    let last: ReturnType<typeof runNightlyBackup> | null = null;
++    for (let i = 0; i < 3; i += 1) {
++      last = runNightlyBackup(dbPath, backupDir, 2, new Date(Date.UTC(2026, 0, 1 + i, 3, 0, 0)));
++    }
++
++    assert.ok(last, "three runs happened");
++    assert.match(path.basename(last!.file), /^matchday-\d{8}-\d{6}\.db$/, "snapshot uses the managed name");
++    assert.ok(last!.bytes > 0, "the snapshot has content");
++    assert.equal(last!.kept, 2, "keep=2 leaves exactly two snapshots");
++    assert.equal(listBackups(backupDir).length, 2);
++    assert.equal(last!.pruned.length, 1, "the oldest of three is pruned on the last run");
++
++    // The newest snapshot is a real, readable database carrying the row.
++    const snap = new DatabaseSync(last!.file, { readOnly: true });
++    const n = (snap.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
++    snap.close();
++    assert.equal(n, 1, "the snapshot holds the data written before it");
++
++    // A missing source is a hard error, not an empty "successful" backup.
++    assert.throws(() => runNightlyBackup(path.join(dir, "nope.db"), backupDir, 2), /not found/);
++
++    console.log("  backupSchedule: once-per-UTC-day gate + snapshot naming/keep OK");
++  } finally {
++    fs.rmSync(dir, { recursive: true, force: true });
++  }
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 1668361..7d888ba 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -32,6 +32,7 @@ import { runCompetitionsTests } from "./competitions.test.js";
+ import { runAnchorRaceTests } from "./anchorRace.test.js";
+ import { runLeaderboardTests } from "./leaderboard.test.js";
+ import { runBackupTests } from "./backup.test.js";
++import { runBackupScheduleTests } from "./backupSchedule.test.js";
+ import { runAccountDeletionTests } from "./accountDeletion.test.js";
+ import { runLegalTests } from "./legal.test.js";
+ import { runModerationTests } from "./moderation.test.js";
+@@ -70,6 +71,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["anchorRace", runAnchorRaceTests],
+   ["leaderboard", runLeaderboardTests],
+   ["backup", runBackupTests],
++  ["backupSchedule", runBackupScheduleTests],
+   ["accountDeletion", runAccountDeletionTests],
+   ["legal", runLegalTests],
+   ["moderation", runModerationTests],
+-- 
+2.54.0.windows.1
+

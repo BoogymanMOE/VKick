@@ -1,0 +1,214 @@
+From 4ec427da07234ffe25236e645f6110a3b5f8ae77 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 02:51:50 +0330
+Subject: [PATCH 192/230] =?UTF-8?q?feat(matchDetail):=20FLIP=20score=20tra?=
+ =?UTF-8?q?nsition=20from=20feed=20card=20to=20hero=20=E2=80=94=20the=20si?=
+ =?UTF-8?q?gnature=20motion?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Tapping a live/finished card records the score block's First rect (lib/flip.ts,
+Web Animations API, no dependency); the detail hero's score row — the Last
+frame — plays the 300ms inversion (translate + scale + fade) out of that rect
+once it mounts. One tap = one play: the rect is consumed on read and a ref
+guards replays across refetches. Runs after two frames so the page-in wrapper
+has committed its layout, and prefers-reduced-motion skips the animation
+entirely. Cards with no score yet (scheduled) simply navigate without it.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/MatchCard.tsx | 23 ++++++++++--
+ src/lib/flip.ts              | 68 ++++++++++++++++++++++++++++++++++++
+ src/pages/MatchDetail.tsx    | 37 +++++++++++++++++++-
+ 3 files changed, 125 insertions(+), 3 deletions(-)
+ create mode 100644 src/lib/flip.ts
+
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index 517713d..b968b86 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -7,6 +7,7 @@ import { useCompetitionLabel } from "../hooks/useApi";
+ import { formatKickoff } from "../lib/format";
+ import { kickoffParts } from "../lib/format";
+ import { LiveDot, Num, TeamBadge } from "./ui";
++import { recordFlipFirst } from "../lib/flip";
+ 
+ /**
+  * Memoized: the live feed re-renders its page every tick, and neither prop
+@@ -83,7 +84,18 @@ export const MatchCard = memo(function MatchCard({
+     >
+       <Link
+         to={`/match/${match.id}`}
+-        onPointerDown={() => prefetchMatch(match.id)}
++        onPointerDown={() => {
++          // Record the score block's position BEFORE the route change — this
++          // is the FLIP's First frame (matches with no score yet have no key
++          // here, and the detail hero simply renders without the transition).
++          const scoreEl = document.querySelector(
++            `[data-flip-key="match-${match.id}-score"]`,
++          );
++          if (scoreEl instanceof HTMLElement) {
++            recordFlipFirst("match-score", scoreEl);
++          }
++          prefetchMatch(match.id);
++        }}
+         aria-label={label}
+         // The 3-column grid flips with `dir`, so home sits on the right and away
+         // on the left in Persian; explicit so the card reads correctly even if
+@@ -140,7 +152,14 @@ export const MatchCard = memo(function MatchCard({
+                   centred between the two rows that will always be there for a
+                   live/halftime/finished card. */}
+               <span className="min-h-[23px]" />
+-              <span data-testid="match-center" className="text-lg font-extrabold leading-7 text-ink">
++              {/* The score carries a flip key: MatchDetail finds its First
++                  rect under the SAME key to play the feed→hero handoff. A key
++                  on every card is fine — only the tapped one is recorded. */}
++              <span
++                data-testid="match-center"
++                data-flip-key={`match-${match.id}-score`}
++                className="text-lg font-extrabold leading-7 text-ink"
++              >
+                 {homeScore}–{awayScore}
+               </span>
+               <span className="flex min-h-[23px] items-center">
+diff --git a/src/lib/flip.ts b/src/lib/flip.ts
+new file mode 100644
+index 0000000..9b29651
+--- /dev/null
++++ b/src/lib/flip.ts
+@@ -0,0 +1,68 @@
++/**
++ * FLIP animation plumbing for the feed→detail score handoff
++ * (First-Last-Invert-Play, Web Animations API — no library).
++ *
++ * MatchCard records the First rect of its score block on the tap; MatchDetail
++ * finds the Last rect once the hero has rendered, then plays the inversion so
++ * the score visually grows out of the card the user just tapped.
++ *
++ * The store is a module-level Map keyed by intent ("match-score"): one
++ * navigation in flight at a time, and `getFlipFirst` consumes the rect so a
++ * re-render can never replay it.
++ */
++
++const flipStore = new Map<string, DOMRect>();
++
++/** Call before navigation: remembers where the element was on the OLD page. */
++export function recordFlipFirst(key: string, el: HTMLElement): void {
++  flipStore.set(key, el.getBoundingClientRect());
++}
++
++/** Reads and clears the recorded First rect — one read is one play. */
++export function getFlipFirst(key: string): DOMRect | undefined {
++  const rect = flipStore.get(key);
++  flipStore.delete(key);
++  return rect;
++}
++
++/**
++ * The Web Animations API does NOT resolve CSS custom properties — an `easing:
++ * "var(--ease-out)"` throws "not a valid value for easing". So the design
++ * system's curve is read concretely from :root, with the same value inline as
++ * the fallback for contexts without stylesheets.
++ */
++function easeOut(): string {
++  const token = getComputedStyle(document.documentElement).getPropertyValue("--ease-out").trim();
++  return token || "cubic-bezier(0.22, 1, 0.36, 1)";
++}
++
++/**
++ * Plays the inversion on the destination element: it starts at the First
++ * rect's position/scale and settles into its own natural place.
++ * Callers gate on prefers-reduced-motion before invoking.
++ */
++export function flipIntoPlace(
++  el: HTMLElement,
++  first: DOMRect,
++  { duration = 300 } = {},
++): void {
++  const last = el.getBoundingClientRect();
++  const dx = first.left - last.left;
++  const dy = first.top - last.top;
++  const sx = first.width / Math.max(1, last.width);
++  const sy = first.height / Math.max(1, last.height);
++  el.animate(
++    [
++      {
++        transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})`,
++        opacity: 0.5,
++      },
++      { transform: "none", opacity: 1 },
++    ],
++    {
++      duration,
++      easing: easeOut(),
++      fill: "both",
++    },
++  );
++}
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 49c826a..6e028b5 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -29,6 +29,7 @@ import { TEAM_FALLBACK } from "../lib/colors";
+ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+ import { useI18n } from "../i18n/context";
+ import { RATINGS_ENABLED } from "../lib/features";
++import { flipIntoPlace, getFlipFirst } from "../lib/flip";
+ import { formatClock, formatKickoff, formatKickoffDate } from "../lib/format";
+ import { useNow } from "../hooks/useNow";
+ import { useLiveUpdates } from "../hooks/useLiveUpdates";
+@@ -106,6 +107,38 @@ export default function MatchDetail() {
+     scoreRef.current = score;
+   }, [match?.home_score, match?.away_score, match]);
+ 
++  // FLIP: the tapped feed card recorded its score block's First rect; the
++  // hero's score plays the inversion once it exists. Ran off a ref + the
++  // hero's presence (the hero mounts after the match query resolves, so the
++  // plain mount effect would fire before it), and each rect is consumed on
++  // read — one tap, one play, never on re-renders or background refetches.
++  // Reduced-motion users get the hero immediately, no transition.
++  const flipPlayed = useRef(false);
++  useEffect(() => {
++    if (!match || flipPlayed.current) return;
++    const heroScore = document.querySelector('[data-flip-key="match-score"]');
++    if (!(heroScore instanceof HTMLElement)) return;
++    const first = getFlipFirst("match-score");
++    if (!first) return;
++    flipPlayed.current = true;
++    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
++    // Two frames: the page-in wrapper is still settling its transform on
++    // frame one, so the Last rect is measured after layout has committed.
++    //
++    // The frames are deliberately NOT cancelled on cleanup. `prefetchMatch`
++    // warms the query cache, so the hero usually exists on the FIRST render
++    // — and React StrictMode's dev double-invoke then runs this effect twice,
++    // with the cleanup firing in between. Cancelling there killed the
++    // transition before it could play. One play per navigation is guaranteed
++    // by the store instead: the First rect is consumed on read, so the second
++    // pass finds nothing to play.
++    requestAnimationFrame(() => {
++      requestAnimationFrame(() => {
++        if (heroScore.isConnected) flipIntoPlace(heroScore, first);
++      });
++    });
++  }, [match]);
++
+   const currentMinute = useMemo(() => {
+     const m = /\d+/.exec(match?.minute_display ?? "");
+     return m ? Number(m[0]) : 0;
+@@ -224,7 +257,9 @@ export default function MatchDetail() {
+                 {formatClock(new Date(match.kickoff_at), locale)}
+               </Num>
+             ) : (
+-              <span className="flex items-baseline gap-1">
++              /* This row is the FLIP's Last frame: same key the tapped card
++                 recorded its First rect under (see MatchCard onPointerDown). */
++              <span data-flip-key="match-score" className="flex items-baseline gap-1">
+                 {match.home_score === null ? (
+                   <Num className="text-display leading-none text-ink">–</Num>
+                 ) : (
+-- 
+2.54.0.windows.1
+

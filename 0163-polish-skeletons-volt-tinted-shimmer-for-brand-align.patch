@@ -1,0 +1,42 @@
+From a88243e06bb30ab442a63ee3b94d2a7863da3b71 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 15:15:40 +0330
+Subject: [PATCH 163/230] polish(skeletons): volt-tinted shimmer for
+ brand-aligned loading states
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/index.css | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/src/index.css b/src/index.css
+index 1c5fb95..b7f4ca7 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -228,9 +228,17 @@
+     }
+   }
+ 
+-  /* Signature animation 8: skeleton shimmer — 1.4s gradient sweep. */
++  /* Signature animation 8: skeleton shimmer — 1.4s gradient sweep. The
++     gradient carries a faint volt tint (4%/8%) so a loading state feels
++     branded instead of grey, without competing with the real content it
++     stands in for. */
+   .shimmer {
+-    background: linear-gradient(90deg, var(--bg-surface) 0%, var(--bg-elevated) 50%, var(--bg-surface) 100%);
++    background: linear-gradient(
++      90deg,
++      color-mix(in srgb, var(--volt) 4%, var(--bg-surface)) 0%,
++      color-mix(in srgb, var(--volt) 8%, var(--bg-elevated)) 50%,
++      color-mix(in srgb, var(--volt) 4%, var(--bg-surface)) 100%
++    );
+     background-size: 200% 100%;
+     animation: shimmer 1.4s linear infinite;
+   }
+-- 
+2.54.0.windows.1
+

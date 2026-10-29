@@ -1,0 +1,55 @@
+From 5d8f42cb7ec09a2b7811cdfcf2e0e32cb83a44b3 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 16 Oct 2026 00:59:12 +0330
+Subject: [PATCH 098/230] Restore the season W/D/L record atop the TeamPage
+ stats tab
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The grouped Attack / Defense & control cards dropped the one line that says
+how the season actually went. It returns as a compact summary card above
+them, so the record leads the tab instead of sitting as row one of a list.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/pages/TeamPage.tsx | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index b60b515..19c7af5 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -289,8 +289,28 @@ function StatsTab({ stats }: { stats: SeasonStats }) {
+     { label: t("stats.fouls"), value: `${stats.total_fouls}` },
+   ];
+ 
++  // The season in one line. The grouped cards below say what the side does;
++  // only the record says how it went, so it leads the tab rather than hiding
++  // as row one of a list nobody scanned to the bottom of.
++  const record: Array<{ letter: string; value: number }> = [
++    { letter: "W", value: stats.wins },
++    { letter: "D", value: stats.draws },
++    { letter: "L", value: stats.losses },
++  ];
++
+   return (
+     <div className="space-y-4">
++      <Card className="flex items-center justify-between gap-3 p-4">
++        <span className="label text-ink-3">{t("statsPage.teams")}</span>
++        <span className="flex items-baseline gap-2">
++          {record.map(({ letter, value }) => (
++            <span key={letter} className="flex items-baseline gap-0.5">
++              <Num className="text-lg font-black text-ink">{value}</Num>
++              <span className="label text-ink-3">{letter}</span>
++            </span>
++          ))}
++        </span>
++      </Card>
+       <StatCard title={t("team.statsAttack")} rows={attackRows} />
+       <StatCard title={t("team.statsDefense")} rows={controlRows} />
+     </div>
+-- 
+2.54.0.windows.1
+

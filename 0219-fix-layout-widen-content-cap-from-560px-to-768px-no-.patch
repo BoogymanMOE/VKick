@@ -1,0 +1,93 @@
+From ac65bd7e42471e3c27fd7f9b93cabdb2ed00c04d Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 22:10:06 +0330
+Subject: [PATCH 219/230] =?UTF-8?q?fix(layout):=20widen=20content=20cap=20?=
+ =?UTF-8?q?from=20560px=20to=20768px=20=E2=80=94=20no=20more=20empty=20sid?=
+ =?UTF-8?q?e=20bands?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/AppShell.tsx | 2 +-
+ src/components/TabBar.tsx   | 2 +-
+ src/components/TopBar.tsx   | 2 +-
+ src/pages/Login.tsx         | 4 ++--
+ tokens.css                  | 2 ++
+ 5 files changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/src/components/AppShell.tsx b/src/components/AppShell.tsx
+index 03f0519..5daf4d7 100644
+--- a/src/components/AppShell.tsx
++++ b/src/components/AppShell.tsx
+@@ -56,7 +56,7 @@ export function AppShell() {
+         id="main-content"
+         tabIndex={-1}
+         key={pathname}
+-        className="page-in mx-auto w-full max-w-[560px] flex-1 px-[var(--space-page-x,16px)] outline-none"
++        className="page-in mx-auto w-full max-w-[var(--app-max-width,768px)] flex-1 px-[var(--space-page-x,16px)] outline-none"
+         // The sticky tab bar is 4px (its own pt-1) + 56px (min-h-14) + the
+         // safe-area inset — reserving only 56px left the last card tucked under
+         // it. The extra 4px is the difference.
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index 6379e02..78dbd40 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -27,7 +27,7 @@ export function TabBar() {
+     <nav
+       className="pad-safe-bottom fixed bottom-0 left-0 right-0 z-20 border-t border-line bg-base/95"
+     >
+-      <ul className="mx-auto flex w-full max-w-[560px] items-stretch justify-between px-2 pt-1">
++      <ul className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] items-stretch justify-between px-2 pt-1">
+         {tabs.map(({ to, key, Icon }) => (
+           <li key={to} className="flex-1">
+             <NavLink
+diff --git a/src/components/TopBar.tsx b/src/components/TopBar.tsx
+index 068bb80..61ce29a 100644
+--- a/src/components/TopBar.tsx
++++ b/src/components/TopBar.tsx
+@@ -34,7 +34,7 @@ export function TopBar({
+     <header className="pad-safe-top sticky top-0 z-20 border-b border-line bg-base/95">
+       {/* px-[var(--space-page-x)] aligns the header's gutters with the page below
+           and pb-4 gives more breathing room from the content underneath. */}
+-      <div className="mx-auto flex w-full max-w-[560px] items-center gap-3 px-[var(--space-page-x,16px)] pb-4 pt-2">
++      <div className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] items-center gap-3 px-[var(--space-page-x,16px)] pb-4 pt-2">
+         {back ? (
+           <button
+             type="button"
+diff --git a/src/pages/Login.tsx b/src/pages/Login.tsx
+index 351f8a7..fd50527 100644
+--- a/src/pages/Login.tsx
++++ b/src/pages/Login.tsx
+@@ -89,13 +89,13 @@ export default function Login() {
+   return (
+     <div className="floodlight flex min-h-[100svh] flex-col">
+       <header className="pad-safe-top">
+-        <div className="mx-auto flex w-full max-w-[560px] justify-end px-[var(--space-page-x,16px)] py-3">
++        <div className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] justify-end px-[var(--space-page-x,16px)] py-3">
+           <LanguageToggle />
+         </div>
+       </header>
+ 
+       <main
+-        className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-5"
++        className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] flex-1 flex-col justify-center px-5"
+         style={{ paddingBottom: "calc(40px + max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 8px))" }}
+       >
+         {/* Hero: the mark over the wordmark, over the floodlit wash. */}
+diff --git a/tokens.css b/tokens.css
+index 771ed42..45499cc 100644
+--- a/tokens.css
++++ b/tokens.css
+@@ -56,6 +56,8 @@
+      16px from each edge on a 360px webview is the modern mobile norm; the
+      previous 12px (px-3) read as cramped. */
+   --space-page-x: 16px;
++  /* App content max-width — caps how wide the centered content column can grow on tablets, desktop Telegram, and Android's expanded Mini-App view. 560px left 20–40px empty bands on each side of those wider viewports. 768px fills any reasonable phone or tablet-portrait while still capping cards on truly wide displays. The header bar, body, and tab bar all read this so they align as one column. */
++  --app-max-width: 768px;
+ 
+   /* Vertical spacing scale — section breaks, card stacks, group gaps.
+      Page gutter is --space-page-x (16px, horizontal). These are vertical. */
+-- 
+2.54.0.windows.1
+

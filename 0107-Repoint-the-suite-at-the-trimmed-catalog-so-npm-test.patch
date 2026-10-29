@@ -1,0 +1,294 @@
+From bd97b91868d421abfd97e9b115b85c9fe2e31478 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 17 Oct 2026 20:01:03 +0330
+Subject: [PATCH 107/230] Repoint the suite at the trimmed catalog so npm test
+ runs again
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+npm test aborted on import: seedTeams.test.ts and competitions.test.ts still
+imported REST_OF_WORLD_LEAGUES and LEAGUES_ALL, both deleted when the catalog
+was trimmed to the top 5, so no group ever executed. teamGroups.test.ts then
+failed on the old SQL semantics, expecting league-less and international-fixture
+sides to classify as "international".
+
+Updates the three suites to assert the new boundary — top-five-only seed scope,
+a catalog that is exactly the five leagues, and a classification with no
+international branch — instead of deleting the coverage. Verified the updated
+assertions still fire by reintroducing the removed export and a stray
+rest-of-world row: both made the groups fail as intended.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ tests/competitions.test.ts | 45 ++++++++++++++++++++++++++++++++----
+ tests/seedTeams.test.ts    | 47 ++++++++++++++++++++++----------------
+ tests/teamGroups.test.ts   | 38 ++++++++++++++++++++++++------
+ 3 files changed, 98 insertions(+), 32 deletions(-)
+
+diff --git a/tests/competitions.test.ts b/tests/competitions.test.ts
+index a43240d..b156dfa 100644
+--- a/tests/competitions.test.ts
++++ b/tests/competitions.test.ts
+@@ -1,18 +1,25 @@
+ /**
+  * The Browse competitions catalog. Bootstrap data with one hard rule: a slug
+  * the sync has promoted must appear exactly once, and anything marked
+- * `comingSoon: false` must actually be polled (`LEAGUES_ALL`).
++ * `comingSoon: false` must actually be polled (`LEAGUES`).
+  *
+  * This is the regression test for a real bug — `ned.1`, `por.1`, `tur.1` and
+  * `sco.1` sat in both COMPETITIONS and EXTRA_COMPETITIONS, so Browse rendered
+  * each one twice under a duplicate React key, once as "live scores" and once as
+  * "not in your feed yet".
++ *
++ * The catalog was then trimmed to the top-5 European leagues: `LEAGUES_ALL`
++ * (the union of synced + incoming) is gone, `EXTRA_COMPETITIONS`, `CUPS` and
++ * `INTERNATIONALS` are empty, and `isCup` is false everywhere. The assertions
++ * below pin that boundary so the trim cannot drift back one slug at a time.
+  */
+ import { strict as assert } from "node:assert";
+ import { competitionCatalog } from "../server/espn/catalog.js";
+-import { COMPETITIONS, LEAGUES_ALL } from "../server/espn/types.js";
++import { COMPETITIONS, CUPS, INTERNATIONALS, LEAGUES, isCup } from "../server/espn/types.js";
+ import { EXTRA_COMPETITIONS } from "../server/espn/extra.js";
+ 
++const BIG_FIVE = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
++
+ function testCatalogHasNoDuplicates(): void {
+   const catalog = competitionCatalog();
+   const slugs = catalog.map((c) => c.slug);
+@@ -20,6 +27,21 @@ function testCatalogHasNoDuplicates(): void {
+   assert.equal(unique.size, slugs.length, "no slug is listed twice");
+ }
+ 
++/** The catalog is exactly the big five, all of them live and all with a table. */
++function testCatalogIsExactlyTheBigFive(): void {
++  const catalog = competitionCatalog();
++  assert.deepEqual(
++    [...catalog.map((c) => c.slug)].sort(),
++    [...BIG_FIVE].sort(),
++    "the catalog holds the big five and nothing else",
++  );
++  for (const entry of catalog) {
++    assert.equal(entry.comingSoon, false, `${entry.slug} is polled, so it is not coming-soon`);
++    assert.equal(entry.hasTable, true, `${entry.slug} is a league, so it owns a table`);
++    assert.equal(entry.kind, "league", `${entry.slug} is a league`);
++  }
++}
++
+ /** The source lists themselves are disjoint — the rule that prevents the bug. */
+ function testSourceListsAreDisjoint(): void {
+   const synced = new Set<string>(COMPETITIONS.map((c) => c.slug));
+@@ -33,9 +55,10 @@ function testSourceListsAreDisjoint(): void {
+ 
+ /** Everything the catalog advertises as synced is really in the polled set. */
+ function testSyncedEntriesArePolled(): void {
+-  const polled = new Set<string>(LEAGUES_ALL);
++  const polled = new Set<string>(LEAGUES);
+   const missing = COMPETITIONS.filter((c) => !polled.has(c.slug)).map((c) => c.slug);
+-  assert.deepEqual(missing, [], `live competitions not in LEAGUES_ALL: ${missing.join(", ")}`);
++  assert.deepEqual(missing, [], `live competitions not in LEAGUES: ${missing.join(", ")}`);
++  assert.equal(new Set(LEAGUES).size, LEAGUES.length, "the polled set lists no league twice");
+ }
+ 
+ /** Extras are browse-only: never advertised as synced, never with a table. */
+@@ -49,10 +72,22 @@ function testExtrasAreComingSoon(): void {
+   }
+ }
+ 
++/** The trimmed-away scope stays trimmed: no extras, no cups, no internationals. */
++function testTrimmedScopeStaysRemoved(): void {
++  assert.deepEqual(EXTRA_COMPETITIONS, [], "the browse-only extras shelf is empty");
++  assert.deepEqual(CUPS, [], "cups are out of the catalog");
++  assert.deepEqual(INTERNATIONALS, [], "internationals are out of the catalog");
++  for (const slug of [...BIG_FIVE, "uefa.champions", "eng.fa", "fifa.world"]) {
++    assert.equal(isCup(slug), false, `${slug} must not be treated as a cup`);
++  }
++}
++
+ export function runCompetitionsTests(): void {
+   testCatalogHasNoDuplicates();
++  testCatalogIsExactlyTheBigFive();
+   testSourceListsAreDisjoint();
+   testSyncedEntriesArePolled();
+   testExtrasAreComingSoon();
+-  console.log("  competitions: no duplicate slugs, candidates polled, extras browse-only OK");
++  testTrimmedScopeStaysRemoved();
++  console.log("  competitions: big-five-only catalog, no duplicate slugs, nothing polled missing OK");
+ }
+diff --git a/tests/seedTeams.test.ts b/tests/seedTeams.test.ts
+index 07663ff..be7fbd5 100644
+--- a/tests/seedTeams.test.ts
++++ b/tests/seedTeams.test.ts
+@@ -2,9 +2,10 @@
+  * The static team seed is the favorites picker's floor, so two things must
+  * stay true or the picker silently shows the wrong crest/name:
+  *
+- *  1. Scope: every row is either a big-five club or a national side
+- *     (league=""). A stray Eredivisie/Primeira row would reappear in the
+- *     picker even though its league no longer gets a tab.
++ *  1. Scope: every row is a big-five club (eng.1, esp.1, ger.1, ita.1, fra.1).
++ *     The catalog was trimmed to the top 5, so a rest-of-world club or a
++ *     national side (league="") reappearing here would put a team in the
++ *     picker that no league tab can hold.
+  *  2. Assets: every id has a bundled crest (src/data/logos.json) or an explicit
+  *     remote logo_url, and its colour matches src/data/team-colors.json — the
+  *     reference data the seed was cross-checked against.
+@@ -18,12 +19,14 @@ import fs from "node:fs";
+ import os from "node:os";
+ import path from "node:path";
+ import { migrate } from "../server/db/schema.js";
+-import { REST_OF_WORLD_LEAGUES, SEED_TEAMS } from "../server/db/seedTeams.js";
++import * as seedModule from "../server/db/seedTeams.js";
++import { SEED_TEAMS } from "../server/db/seedTeams.js";
+ import logos from "../src/data/logos.json";
+ import colors from "../src/data/team-colors.json";
+ 
+-const BIG_FIVE = new Set(["eng.1", "esp.1", "ger.1", "ita.1", "fra.1"]);
+-const ALLOWED_LEAGUES = new Set<string>([...BIG_FIVE, ...REST_OF_WORLD_LEAGUES, ""]);
++/** The catalog's whole scope now: the top 5 European leagues, and nothing else. */
++const BIG_FIVE_LEAGUES = ["eng.1", "esp.1", "ger.1", "ita.1", "fra.1"] as const;
++const BIG_FIVE = new Set<string>(BIG_FIVE_LEAGUES);
+ const logosById = logos as Record<string, string>;
+ const colorsById = colors as Record<string, string>;
+ 
+@@ -35,8 +38,8 @@ function testSeedAgainstManifests(): void {
+     seen.add(t.id);
+ 
+     assert.ok(
+-      ALLOWED_LEAGUES.has(t.league),
+-      `${t.id} ${t.name}: league ${JSON.stringify(t.league)} is not a seeded league slug or ""`,
++      BIG_FIVE.has(t.league),
++      `${t.id} ${t.name}: league ${JSON.stringify(t.league)} is outside the big five (the trimmed catalog is top-5 clubs only)`,
+     );
+     assert.ok(t.name.length > 0, `${t.id} has no name`);
+     assert.ok(t.abbreviation, `${t.id} ${t.name} has no abbreviation`);
+@@ -55,26 +58,30 @@ function testSeedAgainstManifests(): void {
+     );
+   }
+ 
+-  for (const slug of BIG_FIVE) {
++  for (const slug of BIG_FIVE_LEAGUES) {
+     assert.ok(
+       SEED_TEAMS.some((t) => t.league === slug),
+       `${slug} has no seeded clubs`,
+     );
+   }
+-  assert.ok(
+-    SEED_TEAMS.some((t) => t.league === "" && t.name === "England"),
+-    'national sides are seeded with league=""',
++
++  // The trimmed catalog's own boundary, not just its contents: no national
++  // sides (league="") and no rest-of-world shelf are seeded any more, and the
++  // `REST_OF_WORLD_LEAGUES` export that used to describe that shelf is gone.
++  // A reintroduced export would silently widen the scope again, so this is the
++  // assertion that keeps the trim from drifting back.
++  assert.equal(
++    SEED_TEAMS.filter((t) => t.league === "").length,
++    0,
++    'national sides (league="") are out of the trimmed catalog',
+   );
+-  // Famous rest-of-world clubs fill the Other tab, each under a real slug.
+-  const rest = SEED_TEAMS.filter((t) => REST_OF_WORLD_LEAGUES.includes(t.league as never));
+-  assert.ok(rest.length >= 45, `expected ~50 rest-of-world clubs, found ${rest.length}`);
+   assert.ok(
+-    rest.some((t) => t.name === "Ajax Amsterdam"),
+-    "a named rest-of-world club (Ajax) is seeded",
++    !("REST_OF_WORLD_LEAGUES" in seedModule),
++    "REST_OF_WORLD_LEAGUES must stay removed — the catalog is top-5 only",
+   );
+   assert.ok(
+-    !SEED_TEAMS.some((t) => t.league !== "" && !ALLOWED_LEAGUES.has(t.league)),
+-    "no seed row carries an undeclared league slug",
++    SEED_TEAMS.every((t) => BIG_FIVE.has(t.league)),
++    "no seed row carries a league slug outside the big five",
+   );
+ }
+ 
+@@ -101,5 +108,5 @@ function testSeedBootsAndIsIdempotent(): void {
+ export function runSeedTeamsTests(): void {
+   testSeedAgainstManifests();
+   testSeedBootsAndIsIdempotent();
+-  console.log("  seedTeams: scope, manifest colour/crest lockstep, rest-of-world clubs, idempotent boot OK");
++  console.log("  seedTeams: top-5 scope, manifest colour/crest lockstep, idempotent boot OK");
+ }
+diff --git a/tests/teamGroups.test.ts b/tests/teamGroups.test.ts
+index a1efc13..a17991a 100644
+--- a/tests/teamGroups.test.ts
++++ b/tests/teamGroups.test.ts
+@@ -2,9 +2,17 @@
+  * Favorites caps per picker group — the rule that lets users follow up to
+  * five national teams ON TOP of their five clubs ("only if they want").
+  * The pure rule function is checked against mixed/unknown groups, and the
+- * SQL that classifies a team (club / international / cup-only) runs against
++ * SQL that classifies a team (big-five slug / club shelf) runs against
+  * real temp-file SQLite so the cap bucket and the picker tab stay the same
+  * thing (server/db/teamGroups.ts is the single source of both).
++ *
++ * The catalog was trimmed to the top-5 leagues, so the SQL no longer has an
++ * `international` branch: no national sides are seeded and nothing polls an
++ * international competition, so every non-big-five side — league-less,
++ * cup-only, or seen in a `fifa.world` fixture — is a club-shelf row. The
++ * cap rule still supports the international bucket (favoritesCap /
++ * favoriteCapError stay exercised below); it just cannot be reached from the
++ * classification any more, and the assertion at the end pins that.
+  */
+ import { strict as assert } from "node:assert";
+ import { DatabaseSync } from "node:sqlite";
+@@ -88,8 +96,8 @@ function favoriteGroups(db: DatabaseSync, userId: number): Array<{ team_id: stri
+ function testTeamGroupSql(): void {
+   const { db } = tempDb();
+ 
+-  // A big-five club, a lower-league club, a cup-only club, a seeded national
+-  // side with no match yet, and two national sides with an international match.
++  // A big-five club, a lower-league club, a cup-only club, a league-less side
++  // with no match yet, and two league-less sides in an international fixture.
+   seedTeam(db, "arsenal", "eng.1");
+   seedTeam(db, "twente", "ned.1");
+   seedTeam(db, "ajax", "");
+@@ -123,11 +131,25 @@ function testTeamGroupSql(): void {
+   assert.equal(byTeam.arsenal, "eng.1", "a big-five club groups under its league slug");
+   assert.equal(byTeam.twente, OTHER_GROUP, "a club outside the big five lands in 'other'");
+   assert.equal(byTeam.ajax, OTHER_GROUP, "a cup-only club lands in the 'other' shelf");
+-  assert.equal(byTeam.novak, INTL_GROUP, "a league-less side with no match yet is a national team");
+-  assert.equal(byTeam.brazil, INTL_GROUP, "a side seen in an international match is a national team");
++  assert.equal(byTeam.novak, OTHER_GROUP, "a league-less side with no match yet is a club-shelf row");
++  assert.equal(
++    byTeam.brazil,
++    OTHER_GROUP,
++    "even a side seen in a `fifa.world` fixture is a club-shelf row — the SQL has no international branch",
++  );
++  assert.equal(byTeam.scotland, OTHER_GROUP, "and so is its opponent");
++  // The trimmed boundary: nothing can be classified into the international
++  // bucket any more, so a picker tab backed only by that bucket would be empty.
++  assert.ok(
++    !Object.values(byTeam).includes(INTL_GROUP),
++    "no side classifies as international after the top-5 trim",
++  );
+ 
+-  // The cap rule fed by the favorites query: 2 club slots + 4 intl slots free.
++  // The cap rule fed by the favorites query: three club-shelf rows, so two
++  // club slots stay free (and the whole international shelf is free — the query
++  // cannot fill it any more, which is the point of the assertion above).
+   const groups = favoriteGroups(db, user.id).map((r) => r.group_key);
++  assert.equal(groups.length, 3, "the query returns one group per followed side");
+   assert.equal(favoriteCapError(groups, "esp.1"), null);
+   assert.equal(favoriteCapError(groups, INTL_GROUP), null);
+   assert.equal(
+@@ -135,8 +157,10 @@ function testTeamGroupSql(): void {
+     "MAX_CLUBS",
+     "the fifth club fills the club shelf",
+   );
++  // The intl shelf is unreachable from the classification now, but the rule that
++  // guards it still has to hold: the client keeps the bucket vocabulary.
+   assert.equal(
+-    favoriteCapError([...groups, INTL_GROUP, INTL_GROUP, INTL_GROUP, INTL_GROUP], INTL_GROUP),
++    favoriteCapError([INTL_GROUP, INTL_GROUP, INTL_GROUP, INTL_GROUP, INTL_GROUP], INTL_GROUP),
+     "MAX_INTERNATIONALS",
+     "the fifth national team fills the intl shelf",
+   );
+-- 
+2.54.0.windows.1
+

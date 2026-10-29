@@ -10,6 +10,7 @@ import { LineupsSkeleton,
 import { TimelineList } from "../components/TimelineList";
 import { adaptComments } from "../lib/adaptComments";
 import { buildPlayerEvents } from "../lib/lineupEvents";
+import { buildMatchLineups } from "../lib/lineups";
 import { TopBar } from "../components/TopBar";
 import { LineupsPanel } from "../components/panels/LineupsPanel";
 import { NewsCard } from "../components/panels/NewsCard";
@@ -801,19 +802,8 @@ function LineupsTab({
     // must not say "stats land here after the first whistle".
     return <EmptyState icon="📋" title={t("lineups.noneYet")} hint={t("lineups.noneHint")} />;
   }
+  const { homeLineup, awayLineup } = buildMatchLineups(data, home.id, away.id);
 
-  const toPlayer = (r: Record<string, unknown>) => ({
-    id: String(r.player_id),
-    name: String(r.full_name),
-    position: String(r.position ?? "MID") as "GK" | "DEF" | "MID" | "FWD",
-    number: typeof r.jersey_number === "number" ? r.jersey_number : 0,
-    // The pitch is only as good as these three: the face, the granular role
-    // that decides which side of a line a player stands on, and ESPN's slot for
-    // the leaked XIs that carry no role.
-    headshot: typeof r.headshot_url === "string" ? r.headshot_url : null,
-    espnPosition: typeof r.espn_position === "string" ? r.espn_position : null,
-    formationPlace: typeof r.formation_place === "string" ? r.formation_place : null,
-  });
   const homeTeam: Team = {
     id: home.id,
     name: home.shortName,
@@ -829,29 +819,6 @@ function LineupsTab({
     abbreviation: away.shortName.slice(0, 3),
     color: away.color,
     league: "PL",
-  };
-  const sidePlayers = (teamId: string) =>
-    data.players
-      .filter((p) => p.team_id === teamId)
-      .map((p) => ({
-        ...toPlayer(p as unknown as Record<string, unknown>),
-        starter: p.started === 1,
-        minutes: p.minutes_played ?? 0,
-      }));
-
-  const homeAll = sidePlayers(home.id);
-  const awayAll = sidePlayers(away.id);
-  const homeLineup = {
-    formation: data.home.formation ?? "—",
-    coach: "",
-    starters: homeAll.filter((p) => p.starter),
-    subs: homeAll.filter((p) => !p.starter && p.minutes > 0),
-  };
-  const awayLineup = {
-    formation: data.away.formation ?? "—",
-    coach: "",
-    starters: awayAll.filter((p) => p.starter),
-    subs: awayAll.filter((p) => !p.starter && p.minutes > 0),
   };
 
   return (

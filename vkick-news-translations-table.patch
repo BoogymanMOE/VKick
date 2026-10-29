@@ -1,0 +1,637 @@
+From 0e558b86f3ef306b95dfbe8472aa93f3648d0b5c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 23:52:25 +0330
+Subject: [PATCH 1/3] feat(news): open articles in Telegram Instant View when
+ available
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+News cards on TeamPage and MatchDetail used <a target="_blank">, which
+bounces the user out to a browser. Inside Telegram's WebView that means
+leaving the mini app entirely — a hard exit from the shell.
+
+Extract a shared NewsCard component and open articles via
+WebApp.openLink(url, { try_instant_view: true }) when the Telegram SDK
+is present (typed bridge: lib/telegram.ts grows openInTelegram, the
+same fallback-shaped helper shareToTelegram already is). Telegram's
+Instant View renders the article in an in-app reader when ESPN's page
+supports it; otherwise it falls back to Telegram's in-app webview.
+Outside Telegram the fallback is
+window.open(url, "_blank", "noopener,noreferrer").
+
+The card markup is now shared between TeamPage and MatchDetail, so the
+two stay in sync and any future polish (share button, placeholders)
+lands in one place.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/panels/NewsCard.tsx | 72 ++++++++++++++++++++++++++++++
+ src/lib/telegram.ts                | 17 +++++++
+ src/pages/MatchDetail.tsx          | 63 ++++----------------------
+ src/pages/TeamPage.tsx             | 65 ++++-----------------------
+ 4 files changed, 106 insertions(+), 111 deletions(-)
+ create mode 100644 src/components/panels/NewsCard.tsx
+
+diff --git a/src/components/panels/NewsCard.tsx b/src/components/panels/NewsCard.tsx
+new file mode 100644
+index 0000000..4be27b0
+--- /dev/null
++++ b/src/components/panels/NewsCard.tsx
+@@ -0,0 +1,72 @@
++import { cx } from "../../lib/cx";
++import { openInTelegram } from "../../lib/telegram";
++import { useI18n } from "../../i18n/context";
++import type { NewsArticle } from "../../types";
++
++/**
++ * Opens the article. Inside Telegram this goes through WebApp.openLink with
++ * try_instant_view, so the piece opens in Telegram's own reader (Instant View)
++ * when ESPN's page supports it and in Telegram's in-app browser when it
++ * doesn't — the reader never gets ejected to the system browser, which inside
++ * a Mini App means leaving the app entirely. Outside Telegram the SDK is absent
++ * and this falls back to a plain new tab.
++ */
++function openArticle(url: string): void {
++  if (openInTelegram(url)) return;
++  window.open(url, "_blank", "noopener,noreferrer");
++}
++
++/**
++ * The one news card, shared by the club page's News tab and the match page's.
++ * An article with no web URL still renders — it just must not pretend to be a
++ * link, so it stays a plain container with no click handler. A <button>, not an
++ * <a>: the destination is a JS call (openLink), not a navigation, and an anchor
++ * would both navigate and open the link.
++ */
++export function NewsCard({ article, locale }: { article: NewsArticle; locale?: string }) {
++  const { t, dir } = useI18n();
++  const dateFmt = new Intl.DateTimeFormat(locale, {
++    month: "short",
++    day: "numeric",
++    hour: "2-digit",
++    minute: "2-digit",
++  });
++  const body = (
++    <>
++      {article.imageUrl ? (
++        <img
++          src={article.imageUrl}
++          alt=""
++          loading="lazy"
++          className="mb-2 h-32 w-full rounded-lg object-cover"
++        />
++      ) : null}
++      <h3 className="text-sm font-bold leading-snug text-ink">{article.headline}</h3>
++      {article.description ? (
++        <p className="mt-1 line-clamp-2 text-xs text-ink-2">{article.description}</p>
++      ) : null}
++      <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
++        <span>{article.published ? dateFmt.format(new Date(article.published)) : ""}</span>
++        {article.byline ? <span>{t("team.news.byline", { name: article.byline })}</span> : null}
++      </p>
++      {article.webUrl ? (
++        <p className="mt-1 text-[11px] font-bold text-volt">
++          {t("team.news.readMore")} {dir === "rtl" ? "←" : "→"}
++        </p>
++      ) : null}
++    </>
++  );
++  const className =
++    "block rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)]";
++  if (!article.webUrl) return <div className={className}>{body}</div>;
++  const url = article.webUrl;
++  return (
++    <button
++      type="button"
++      onClick={() => openArticle(url)}
++      className={cx(className, "w-full cursor-pointer text-start hover:bg-elevated")}
++    >
++      {body}
++    </button>
++  );
++}
+diff --git a/src/lib/telegram.ts b/src/lib/telegram.ts
+index 53eaec6..79d41cb 100644
+--- a/src/lib/telegram.ts
++++ b/src/lib/telegram.ts
+@@ -29,6 +29,8 @@ interface TelegramWebApp {
+   setBackgroundColor: (color: string) => void;
+   disableVerticalSwipes?: () => void;
+   openTelegramLink?: (url: string) => void;
++  /** Bot API 7.7+: `try_instant_view` asks for Telegram's in-app reader. */
++  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
+   onEvent: (event: string, cb: () => void) => void;
+   offEvent: (event: string, cb: () => void) => void;
+   /** Android hardware back: a showable pill that can pop in-app history
+@@ -160,6 +162,21 @@ export function notifyHaptic(type: "error" | "success" | "warning"): void {
+   telegram()?.HapticFeedback?.notificationOccurred(type);
+ }
+ 
++/**
++ * Open an external page inside the Telegram shell: openLink with
++ * try_instant_view renders Telegram's in-app reader (Instant View) when the
++ * page supports it, and Telegram's in-app browser when it doesn't — instead of
++ * ejecting the user to the system browser, which inside a Mini App means
++ * leaving the app entirely. Returns false when the SDK is unavailable (plain
++ * browser), so the caller can fall back to window.open.
++ */
++export function openInTelegram(url: string): boolean {
++  const app = telegram();
++  if (!app?.openLink) return false;
++  app.openLink(url, { try_instant_view: true });
++  return true;
++}
++
+ /**
+  * Open the Telegram share sheet for a URL + text. Returns false when the SDK
+  * is unavailable (plain browser), so the caller can fall back to clipboard.
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index f05e00c..7a5eff8 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -12,6 +12,7 @@ import { adaptComments } from "../lib/adaptComments";
+ import { buildPlayerEvents } from "../lib/lineupEvents";
+ import { TopBar } from "../components/TopBar";
+ import { LineupsPanel } from "../components/panels/LineupsPanel";
++import { NewsCard } from "../components/panels/NewsCard";
+ 
+ import {
+   Card,
+@@ -1088,11 +1089,11 @@ function FormSide({
+ /* ------------------------------------------------------------ match news */
+ 
+ /**
+- * Articles from this match's summary news block, rendered with the TeamPage
+- * news card's layout — same NewsArticle shape, same arrow flip in RTL.
++ * Articles from this match's summary news block, on the shared NewsCard the
++ * club page's News tab uses — same NewsArticle shape, same open-link path.
+  */
+ function MatchNewsTab({ matchId }: { matchId: string }) {
+-  const { t, lang, dir } = useI18n();
++  const { t, lang } = useI18n();
+   const query = useMatchNews(matchId);
+   if (query.isLoading) return <LineupsSkeleton />;
+   if (query.isError) {
+@@ -1105,59 +1106,13 @@ function MatchNewsTab({ matchId }: { matchId: string }) {
+     return <EmptyState title={t("match.news.empty")} />;
+   }
+   const locale = lang === "fa" ? "fa-IR" : undefined;
+-  const dateFmt = new Intl.DateTimeFormat(locale, {
+-    month: "short",
+-    day: "numeric",
+-    hour: "2-digit",
+-    minute: "2-digit",
+-  });
+   return (
+     <ul className="space-y-2">
+-      {articles.map((article) => {
+-        const body = (
+-          <>
+-            {article.imageUrl ? (
+-              <img
+-                src={article.imageUrl}
+-                alt=""
+-                loading="lazy"
+-                className="mb-2 h-32 w-full rounded-lg object-cover"
+-              />
+-            ) : null}
+-            <h3 className="text-sm font-bold leading-snug text-ink">{article.headline}</h3>
+-            {article.description ? (
+-              <p className="mt-1 line-clamp-2 text-xs text-ink-2">{article.description}</p>
+-            ) : null}
+-            <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
+-              <span>{article.published ? dateFmt.format(new Date(article.published)) : ""}</span>
+-              {article.byline ? <span>{t("team.news.byline", { name: article.byline })}</span> : null}
+-            </p>
+-            {article.webUrl ? (
+-              <p className="mt-1 text-[11px] font-bold text-volt">
+-                {t("team.news.readMore")} {dir === "rtl" ? "←" : "→"}
+-              </p>
+-            ) : null}
+-          </>
+-        );
+-        const className =
+-          "block rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)]";
+-        return (
+-          <li key={article.id}>
+-            {article.webUrl ? (
+-              <a
+-                href={article.webUrl}
+-                target="_blank"
+-                rel="noopener noreferrer"
+-                className={cx(className, "hover:bg-elevated")}
+-              >
+-                {body}
+-              </a>
+-            ) : (
+-              <div className={className}>{body}</div>
+-            )}
+-          </li>
+-        );
+-      })}
++      {articles.map((article) => (
++        <li key={article.id}>
++          <NewsCard article={article} locale={locale} />
++        </li>
++      ))}
+     </ul>
+   );
+ }
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 80a8d36..aac93c2 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -2,6 +2,7 @@ import { useState } from "react";
+ import { Link, useParams } from "react-router-dom";
+ import { TopBar } from "../components/TopBar";
+ import { PanelSkeleton } from "../components/Skeletons";
++import { NewsCard } from "../components/panels/NewsCard";
+ import {
+   Card,
+   Chip,
+@@ -653,7 +654,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+  * links out to the article on ESPN.
+  */
+ function NewsTab({ teamId, league }: { teamId: string; league: string }) {
+-  const { t, lang, dir } = useI18n();
++  const { t, lang } = useI18n();
+   const query = useLeagueNews(league, teamId);
+ 
+   if (query.isLoading) return <PanelSkeleton height={192} />;
+@@ -664,64 +665,14 @@ function NewsTab({ teamId, league }: { teamId: string; league: string }) {
+     return <EmptyState title={t("team.news.empty")} hint={t("team.news.emptyHint")} />;
+   }
+ 
+-  const when = new Intl.DateTimeFormat(lang === "fa" ? "fa-IR" : undefined, {
+-    month: "short",
+-    day: "numeric",
+-    hour: "2-digit",
+-    minute: "2-digit",
+-  });
+-  const cardClass =
+-    "block rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)]";
+-
++  const locale = lang === "fa" ? "fa-IR" : undefined;
+   return (
+     <ul className="space-y-2">
+-      {articles.map((article) => {
+-        const body = (
+-          <>
+-            {article.imageUrl ? (
+-              <img
+-                src={article.imageUrl}
+-                alt=""
+-                loading="lazy"
+-                className="mb-2 h-32 w-full rounded-lg object-cover"
+-              />
+-            ) : null}
+-            <h3 className="text-sm font-bold leading-snug text-ink">{article.headline}</h3>
+-            {article.description ? (
+-              <p className="mt-1 line-clamp-2 text-xs text-ink-2">{article.description}</p>
+-            ) : null}
+-            <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
+-              {article.published ? <span>{when.format(new Date(article.published))}</span> : null}
+-              {article.byline ? (
+-                <span>{t("team.news.byline", { name: article.byline })}</span>
+-              ) : null}
+-            </p>
+-            {article.webUrl ? (
+-              <p className="mt-1 text-[11px] font-bold text-volt">
+-                {t("team.news.readMore")} {dir === "rtl" ? "←" : "→"}
+-              </p>
+-            ) : null}
+-          </>
+-        );
+-        return (
+-          <li key={article.id}>
+-            {/* An article with no web URL is still worth reading on the card —
+-                it just is not a link, so it must not pretend to be one. */}
+-            {article.webUrl ? (
+-              <a
+-                href={article.webUrl}
+-                target="_blank"
+-                rel="noopener noreferrer"
+-                className={cx(cardClass, "hover:bg-elevated")}
+-              >
+-                {body}
+-              </a>
+-            ) : (
+-              <div className={cardClass}>{body}</div>
+-            )}
+-          </li>
+-        );
+-      })}
++      {articles.map((article) => (
++        <li key={article.id}>
++          <NewsCard article={article} locale={locale} />
++        </li>
++      ))}
+     </ul>
+   );
+ }
+-- 
+2.54.0.windows.1
+
+
+From 74514760bd1c12668ae9204b806dc57f1055b029 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 28 Oct 2026 00:15:50 +0330
+Subject: [PATCH 2/3] fix(i18n): close the team-short-name and round-label
+ translation gaps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Audited every team string the data layer can return for the five
+synced leagues against teamNamesFa, straight out of the live DB after
+a sync. Exactly one gap in the big five: ESPN's scoreboard shortName
+for Manchester United is "Man Utd", while the dictionary only held
+"Man United", so the lookup fell through and the English short name
+rendered on the feed, the club header and the standings row. That was
+the one English team name visible in FA — a Playwright pass over every
+league tab confirmed the other four leagues are fully covered.
+
+Round labels: roundFromEvent title-cases what it extracts, so it emits
+"Round Of 16", not the "Round of 16" the dictionary keys on — a silent
+case miss. Add the emitted casing, plus the round labels the Cups
+grouping can show ("Group Stage", "League Phase", "Leg 1/2",
+"Matchday", "Knockout Stage") and the unhyphenated Quarterfinal /
+Semifinal spellings. Unknown rounds still pass through as ESPN's
+English label rather than blanking.
+
+Card meta ("GW N") needed no work: matches.cardMeta and table.gw were
+already "{league} · هفته {gw}" and "{gw} هفته" in FA.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/names.ts | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/src/i18n/names.ts b/src/i18n/names.ts
+index 43340e1..09f62e8 100644
+--- a/src/i18n/names.ts
++++ b/src/i18n/names.ts
+@@ -35,6 +35,10 @@ export const teamNamesFa: Record<string, string> = {
+   "Man City": "منچستر سیتی",
+   "Spurs": "تاتنهام",
+   "Man United": "منچستر یونایتد",
++  // ESPN's scoreboard shortName is "Man Utd", not "Man United" — the feed and
++  // the club header both key on that exact string, so without this alias the
++  // Premier League's most-searched club renders in English in FA.
++  "Man Utd": "منچستر یونایتد",
+   "Newcastle": "نیوکاسل",
+   "Villa": "استون ویلا",
+   "Bournemouth": "بورن‌موت",
+@@ -251,12 +255,24 @@ export const personNamesFa: Record<string, string> = {
+   // grouping headings show them; unknown rounds pass through as the English
+   // ESPN label, never truncated.
+   "Quarter-final": "یک‌چهارم نهایی",
++  "Quarterfinal": "یک‌چهارم نهایی",
+   "Semi-final": "نیمه‌نهایی",
++  "Semifinal": "نیمه‌نهایی",
+   "Final": "فینال",
+   "Round of 16": "مرحله ۱۶ تیمی",
+   "Round of 32": "مرحله ۳۲ تیمی",
++  // roundFromEvent title-cases what it extracts ("round of 16" -> "Round Of 16"),
++  // so the emitted casing has to be a key of its own or it falls through.
++  "Round Of 16": "مرحله ۱۶ تیمی",
++  "Round Of 32": "مرحله ۳۲ تیمی",
+   "Qualifying round": "دور مقدماتی",
+   "Play-off": "پلی‌آف",
++  "Matchday": "هفته",
++  "Group Stage": "مرحله گروهی",
++  "Knockout Stage": "مرحله حذفی",
++  "League Phase": "مرحله لیگ",
++  "Leg 1": "دیدار رفت",
++  "Leg 2": "دیدار برگشت",
+ };
+ 
+ /** English string -> Persian, falling back to the input untouched. */
+-- 
+2.54.0.windows.1
+
+
+From 9293c8fabc301cecb492df4bd5cedd3eafb2155c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 28 Oct 2026 00:48:34 +0330
+Subject: [PATCH 3/3] polish(table): form reads as colored squares with
+ letters, on the club page too
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The form column was five 6px dots — visually weak, and you had to
+decode colours to know a club's run. Each result is now a 14px square
+with a tinted fill, a 1px inset ring for definition on the dark
+surface and the result letter inside: W/D/L in EN, ب/ت/خ in FA (the
+first letter of each Persian word, same convention). The column goes
+3rem → 5rem; the numeric columns and the row gap tighten one step to
+pay for it, so the team-name cell GAINS room instead of losing it
+(96px of text vs 92px before) — measured on a 390px phone, no name
+truncates that didn't already, and neither the row nor the page scrolls
+sideways.
+
+The club page now carries the same strip in its header, folded on the
+client from the same stored finished matches server/standings/form.ts
+folds for the table, scoped to the club's own league so the two strips
+can never disagree. The visible "Form" label is aria-hidden because the
+strip already announces itself as a full sentence. MatchDetail's Form
+tab picks the polish up for free — it renders the shared FormStrip.
+
+Verified in headless Chrome, EN and FA: letters, inset rings, geometry
+(no overflow, no clipped names) and the aria labels.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/strings.ts    |  8 ++++++++
+ src/pages/Table.tsx    | 46 ++++++++++++++++++++++++++++++------------
+ src/pages/TeamPage.tsx | 35 ++++++++++++++++++++++++++++++++
+ 3 files changed, 76 insertions(+), 13 deletions(-)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 110dead..fe7a0b0 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -190,6 +190,11 @@ export const strings = {
+     "table.formW": "Win",
+     "table.formD": "Draw",
+     "table.formL": "Loss",
++    // The single letter inside each form square: W/D/L in EN, and the first
++    // letter of the Persian word (برد/تساوی/باخت) in FA, same convention.
++    "table.formWShort": "W",
++    "table.formDShort": "D",
++    "table.formLShort": "L",
+     "table.view.tables": "Tables",
+     "table.view.browse": "Browse",
+     "table.viewActual": "Table",
+@@ -876,6 +881,9 @@ export const strings = {
+     "table.formW": "برد",
+     "table.formD": "تساوی",
+     "table.formL": "باخت",
++    "table.formWShort": "ب",
++    "table.formDShort": "ت",
++    "table.formLShort": "خ",
+     "table.zoneUcl": "لیگ قهرمانان اروپا",
+     "table.zoneUel": "لیگ اروپا",
+     "table.zoneReleg": "سقوط",
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index 425b553..36ac049 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -320,9 +320,15 @@ export default function Table() {
+  * eleven-column grid carried W/D/L and GF/GA too, needed `min-w-[640px]` and
+  * pushed Pts and Form off-screen behind a sideways scroll; those extra figures
+  * live on the club page's Stats tab. The width string must stay ONE complete
+- * literal so Tailwind can see it: 1.5rem rank, flexible team, then 1.75/2/2.25/3rem.
++ * literal so Tailwind can see it: 1.25rem rank, flexible team, then
++ * 1.5/1.75/2rem, and 5rem for the form strip (5×14px squares + 4×2px gaps
++ * = 78px, inside the 80px column so nothing clips). The numeric columns and
++ * the gap are deliberately one step tighter than the first draft of this grid:
++ * every pixel they give up goes to the team name, which is the only column
++ * that truncates — measured on a 390px phone, the name cell now has MORE room
++ * than before the form column grew (96px of text vs 92px).
+  */
+-const COLS = "grid-cols-[1.5rem_minmax(0,1fr)_1.75rem_2rem_2.25rem_3rem]";
++const COLS = "grid-cols-[1.25rem_minmax(0,1fr)_1.5rem_1.75rem_2rem_5rem]";
+ 
+ function StandingsHeader({ stickyTop }: { stickyTop: number }) {
+   const { t } = useI18n();
+@@ -332,7 +338,7 @@ function StandingsHeader({ stickyTop }: { stickyTop: number }) {
+       className={cx(
+         "grid",
+         COLS,
+-        "sticky z-10 gap-2 border-b border-line bg-elevated px-3 py-2 text-xs font-bold text-ink-3",
++        "sticky z-10 gap-1 border-b border-line bg-elevated px-3 py-2 text-xs font-bold text-ink-3",
+       )}
+       style={{ top: stickyTop }}
+     >
+@@ -373,7 +379,7 @@ function StandingItem({
+       className={cx(
+         "list-in relative grid",
+         COLS,
+-        "items-center gap-2 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
++        "items-center gap-1 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
+         mine ? "bg-elevated" : "hover:bg-elevated/60",
+       )}
+       style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
+@@ -428,12 +434,16 @@ function StandingItem({
+  * from the stored finished matches (server/standings/form.ts), so the strip
+  * always matches the fixtures the club page shows; MatchDetail's Form tab feeds
+  * it the per-match ESPN form instead. Either way a club with fewer than five
+- * finished matches simply carries fewer dots. Dots rather than letters: green
+- * win, grey draw, red loss. One image for screen readers, so the label reads as
+- * a sentence instead of five stray letters; `dir="ltr"` keeps the order
+- * oldest→newest in Farsi too.
++ * finished matches simply carries fewer squares.
+  *
+- * Exported because MatchDetail renders the very same strip.
++ * Squares, not dots: 14px with a tinted fill, a 1px inset ring for definition
++ * on the dark surface and the result letter inside, so the form reads as
++ * W / D / L (ب / ت / خ in Persian) instead of five colours to decode. One image
++ * for screen readers, so the label reads as a sentence instead of five stray
++ * letters; `dir="ltr"` keeps the order oldest→newest in Farsi too.
++ *
++ * Exported because MatchDetail's Form tab and the club page's header render
++ * the very same strip.
+  */
+ export function FormStrip({ form }: { form: string }) {
+   const { t } = useI18n();
+@@ -446,17 +456,27 @@ export function FormStrip({ form }: { form: string }) {
+       role="img"
+       aria-label={`${t("table.form")}: ${label}`}
+       dir="ltr"
+-      className="flex flex-none items-center justify-end gap-1"
++      className="flex flex-none items-center justify-end gap-0.5"
+     >
+       {results.map((result, index) => (
+         <span
+           key={index}
+           aria-hidden="true"
+           className={cx(
+-            "h-1.5 w-1.5 rounded-full",
+-            result === "W" ? "bg-pitch" : result === "L" ? "bg-danger" : "bg-ink-3",
++            "grid h-3.5 w-3.5 place-items-center rounded-md text-[10px] font-bold leading-none",
++            result === "W"
++              ? "bg-pitch/20 text-pitch ring-1 ring-inset ring-pitch/40"
++              : result === "L"
++                ? "bg-danger/20 text-danger ring-1 ring-inset ring-danger/40"
++                : "bg-ink-3/15 text-ink-3 ring-1 ring-inset ring-ink-3/30",
+           )}
+-        />
++        >
++          {result === "W"
++            ? t("table.formWShort")
++            : result === "L"
++              ? t("table.formLShort")
++              : t("table.formDShort")}
++        </span>
+       ))}
+     </span>
+   );
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index aac93c2..5e9d5f9 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
+ import { TopBar } from "../components/TopBar";
+ import { PanelSkeleton } from "../components/Skeletons";
+ import { NewsCard } from "../components/panels/NewsCard";
++import { FormStrip } from "./Table";
+ import {
+   Card,
+   Chip,
+@@ -114,6 +115,28 @@ export default function TeamPage() {
+ 
+   const teamLeagueLabel = leagueId ? t(`league.${leagueId}`) : competitionName(team.league, lang);
+ 
++  // The club's last five results, oldest first, folded here from the same
++  // stored finished matches the standings strip folds on the server
++  // (server/standings/form.ts) — scoped to this club's own league so the two
++  // strips can never disagree about a club's form. Fewer than five finished
++  // matches simply means a shorter strip.
++  const form = fixtures
++    .filter(
++      (m) =>
++        m.status === "finished" &&
++        (!team.league || m.league === team.league) &&
++        m.home_score != null &&
++        m.away_score != null,
++    )
++    .slice(-5)
++    .map((m) => {
++      const forHome = m.home_team_id === team.id;
++      const goalsFor = (forHome ? m.home_score : m.away_score) ?? 0;
++      const goalsAgainst = (forHome ? m.away_score : m.home_score) ?? 0;
++      return goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "D";
++    })
++    .join("");
++
+   return (
+     <>
+       <TopBar
+@@ -154,6 +177,18 @@ export default function TeamPage() {
+             </p>
+           </div>
+         </div>
++
++        {/* Form: the last five, same strip the table and the match page show.
++            The visible label is aria-hidden because the strip already announces
++            itself as "Form: win, win, draw…" — reading both would say it twice. */}
++        {form ? (
++          <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
++            <span aria-hidden="true" className="text-xs font-bold text-ink-3">
++              {t("table.form")}
++            </span>
++            <FormStrip form={form} />
++          </div>
++        ) : null}
+       </div>
+ 
+       <div className="mt-lg">
+-- 
+2.54.0.windows.1
+

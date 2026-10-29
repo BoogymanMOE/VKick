@@ -1,0 +1,958 @@
+From f802f732f4d1f7cdf76a18960593b5285829daa0 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 11 Oct 2026 01:07:07 +0330
+Subject: [PATCH 058/230] Let users pick favorite leagues from the Matchday
+ feed
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The league follow list was only reachable inside first-run onboarding, and
+following a league changed nothing but the feed's scope — the push producers
+only ever read `favorite_teams`, so a followed competition stayed silent.
+The feed now carries its own picker chip opening a BottomSheet over the whole
+`/api/competitions` catalog (leagues, cups and international tournaments,
+followed ones pinned to their section, coming-soon ones inert), and a followed
+league now fans its fixtures and goals out to its followers through
+`leagueFollowers`, deduped against club follows so one user never gets two
+pushes for the same event.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ CHANGELOG.md                                |  28 +++
+ server/notifications.ts                     |  78 +++++++--
+ src/components/panels/LeaguePickerSheet.tsx | 180 ++++++++++++++++++++
+ src/hooks/useFavorites.ts                   |   7 +
+ src/i18n/strings.ts                         |  27 +++
+ src/lib/leaguePicker.ts                     |  60 +++++++
+ src/pages/Matches.tsx                       |  97 +++++++----
+ src/pages/Onboarding.tsx                    |  14 +-
+ tests/client.test.ts                        |  64 ++++++-
+ tests/notifications.test.ts                 | 123 ++++++++++++-
+ 10 files changed, 630 insertions(+), 48 deletions(-)
+ create mode 100644 src/components/panels/LeaguePickerSheet.tsx
+ create mode 100644 src/lib/leaguePicker.ts
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index bd19e97..2c820af 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -18,6 +18,26 @@
+   version line's "Telegram Mini App" / "Web" now read in the user's language
+   instead of English-only.
+ 
++### Leagues & alerts
++
++- **Favorite leagues are pickable from the Matchday feed.** Following a league
++  was only reachable inside first-run onboarding, so a returning user had no way
++  to add the Champions League to their feed. A chip at the top of Matchday —
++  "Pick your leagues", or "Edit" once something is followed — opens a sheet
++  listing every competition in the catalog (leagues, cups and international
++  tournaments, filterable), with the followed ones pinned to the top of their
++  section. The chips behind it re-scope the whole feed, crossfading into the
++  chosen competition.
++- **Following a league now means following its alerts, not just its scores.**
++  The push producers only ever looked at `favorite_teams`, so a followed
++  competition was silent — you had to favorite a club to hear about a goal. The
++  matchday stages (lineup drop, last call before kickoff, half-time, rating
++  window) and goal alerts now also fan out to the competition's followers, cups
++  and international tournaments included, because a followed cup is an ordinary
++  `followed_leagues` row. Following both a club and its league still sends
++  exactly one push, and the Profile switches and the Telegram-deliverability
++  rule apply unchanged.
++
+ ### Boards & Browse
+ 
+ - **Your standing now leads the leaderboard.** The boards opened on a list of
+@@ -157,6 +177,14 @@
+ 
+ ### Tests
+ 
++- `tests/notifications.test.ts` — followed-league delivery: a competition
++  follower with no club favorite is woken for its fixtures and its goals, a
++  different league's fixtures are not, club + league follows dedupe to one
++  push, and the per-kind opt-outs and guest/pwd/dev filter still apply.
++- `tests/client.test.ts` — the Favorite Leagues picker's list algebra
++  (`src/lib/leaguePicker.ts`): the cups tab carries the international
++  tournaments, followed competitions sort to the top of their section, and no
++  competition is dropped or duplicated.
+ - `tests/season.test.ts` — previous-season streak reset, current-season no-op
+   and the no-row path (the untested season boundary the roadmap flagged).
+ - `tests/client.test.ts` — contrast-aware `readableInk`, the "why did I get X"
+diff --git a/server/notifications.ts b/server/notifications.ts
+index 26490dd..8b6ab58 100644
+--- a/server/notifications.ts
++++ b/server/notifications.ts
+@@ -14,6 +14,14 @@
+  * — including queueGoalAlerts, the path that serves the international favorites
+  * shelf as well as the clubs.
+  *
++ * Followers come from two independent sources, unioned per recipient:
++ *  - CLUBS (`favorite_teams`) — one club's fans;
++ *  - LEAGUES (`followed_leagues`) — everyone who wants the whole competition,
++ *    which the matchday producers attach through `matchRecipients` and the goal
++ *    producer through the match's own `league`. A user who follows both a club
++ *    and its competition is deduped by telegram id, so a follow list never
++ *    doubles a push.
++ *
+  * Copy is rendered per RECIPIENT from `users.language`, so a user who reads the
+  * app in Persian gets Persian pushes (see server/messages.ts for the wording).
+  */
+@@ -94,19 +102,50 @@ export function teamFollowers(db: DB, teamId: string, kind: PushKind): PushRecip
+ }
+ 
+ /**
+- * Everyone following EITHER club in a match, deduped — a user who follows both
+- * sides gets one push. Keyed by telegram id because the language travels with
+- * the recipient rather than the fixture.
++ * Followers of one COMPETITION, with the same opt-out + deliverability gates as
++ * teamFollowers. `league` is an ESPN slug (`eng.1`, `uefa.champions`,
++ * `fifa.world`) and cups/tournaments are ordinary rows in `followed_leagues`,
++ * so a followed cup wakes its followers for its fixtures exactly like a league
++ * does — nothing here knows the difference.
++ */
++export function leagueFollowers(db: DB, league: string, kind: PushKind): PushRecipient[] {
++  if (!league) return [];
++  const column = PREF_COLUMN[kind];
++  const rows = all<{ telegram_id: string; language: string }>(
++    db,
++    `SELECT DISTINCT u.telegram_id, u.language
++     FROM users u
++     JOIN followed_leagues f ON f.user_id = u.id
++     LEFT JOIN user_notification_prefs p ON p.user_id = u.id
++     WHERE f.league = ? AND (p.user_id IS NULL OR p.${column} = 1)
++       AND ${DELIVERABLE}`,
++    [league],
++  );
++  return rows.map((r) => ({ telegramId: r.telegram_id, lang: asPushLang(r.language) }));
++}
++
++/**
++ * Everyone with a claim on a match, deduped by telegram id: followers of EITHER
++ * club, plus followers of the COMPETITION the fixture belongs to (any game in a
++ * followed league or cup, even one whose clubs the user does not follow). A user
++ * who follows both sides — or a club and its league — gets one push.
++ *
++ * Keyed by telegram id because the language travels with the recipient rather
++ * than the fixture.
+  */
+ export function matchRecipients(db: DB, matchId: string, kind: PushKind): PushRecipient[] {
+-  const m = get<{ home_team_id: string; away_team_id: string }>(
++  const m = get<{ home_team_id: string; away_team_id: string; league: string }>(
+     db,
+-    "SELECT home_team_id, away_team_id FROM matches WHERE id = ?",
++    "SELECT home_team_id, away_team_id, league FROM matches WHERE id = ?",
+     [matchId],
+   );
+   if (!m) return [];
+   const byId = new Map<string, PushRecipient>();
+-  for (const r of [...teamFollowers(db, m.home_team_id, kind), ...teamFollowers(db, m.away_team_id, kind)]) {
++  for (const r of [
++    ...teamFollowers(db, m.home_team_id, kind),
++    ...teamFollowers(db, m.away_team_id, kind),
++    ...leagueFollowers(db, m.league, kind),
++  ]) {
+     byId.set(r.telegramId, r);
+   }
+   return [...byId.values()];
+@@ -134,10 +173,14 @@ export interface GoalAlertInput {
+ 
+ /**
+  * Fan out goal alerts to every user following the scoring team — club OR
+- * national side. The followers query filters on team ids only, so an
+- * international favorite (a league-less team row favorited from the
+- * international picker shelf) is notified exactly like a Premier League one:
+- * nothing here knows or cares about the club/international split.
++ * national side — plus every follower of the COMPETITION the goal was scored
++ * in. The team side filters on team ids only, so an international favorite (a
++ * league-less team row favorited from the international picker shelf) is
++ * notified exactly like a Premier League one: nothing here knows or cares about
++ * the club/international split. The competition side is the "follow a league,
++ * hear about its games" promise — a follower of `uefa.champions` is woken by a
++ * goal in it even when neither club is theirs, and a user who follows both the
++ * league and the scoring club gets exactly one push.
+  *
+  * The push preferences are enforced at queue time (here) AND at send time
+  * (the bot's drain), both through this module: a user with goals=0 never gets
+@@ -159,11 +202,24 @@ export function queueGoalAlerts(db: DB, goals: GoalAlertInput[]): number {
+       "SELECT name, short_name FROM teams WHERE id = ?",
+       [g.scoringTeamId],
+     );
++    // The competition the goal belongs to comes from the stored match row, so
++    // the producer needs no new field from the sync: a league follower is
++    // reached for every fixture the sync files under that slug, cups included.
++    const match = get<{ league: string }>(db, "SELECT league FROM matches WHERE id = ?", [g.matchId]);
+     // Copy is rendered per recipient so each follower gets their own language,
+     // and the missing-team placeholder lives in messages.ts per language.
+     const club = team?.short_name ?? team?.name ?? null;
+     const score = `${g.homeScore}-${g.awayScore}`;
+-    for (const r of teamFollowers(db, g.scoringTeamId, "goal")) {
++    // Union + dedupe: a user who follows both the scoring club and its league
++    // gets ONE goal alert, not two.
++    const byId = new Map<string, PushRecipient>();
++    for (const r of [
++      ...teamFollowers(db, g.scoringTeamId, "goal"),
++      ...leagueFollowers(db, match?.league ?? "", "goal"),
++    ]) {
++      byId.set(r.telegramId, r);
++    }
++    for (const r of byId.values()) {
+       enqueuePush(
+         db,
+         r.telegramId,
+diff --git a/src/components/panels/LeaguePickerSheet.tsx b/src/components/panels/LeaguePickerSheet.tsx
+new file mode 100644
+index 0000000..6238482
+--- /dev/null
++++ b/src/components/panels/LeaguePickerSheet.tsx
+@@ -0,0 +1,180 @@
++import { useMemo, useState } from "react";
++import { BottomSheet } from "../BottomSheet";
++import { CompRowSkeleton } from "../Skeletons";
++import { Chip, EmptyState, ErrorState, Segmented } from "../ui";
++import { CheckIcon } from "../icons";
++import { cx } from "../../lib/cx";
++import { useCompetitions, useFollowedLeagues } from "../../hooks/useApi";
++import { MAX_FOLLOWED_LEAGUES } from "../../hooks/useFavorites";
++import { useI18n } from "../../i18n/context";
++import { serverErrorKey, type ApiCompetition } from "../../lib/api";
++import {
++  leaguePickerSections,
++  type LeagueKindFilter,
++  type LeaguePickerSectionId,
++} from "../../lib/leaguePicker";
++import { haptic, selectionHaptic } from "../../lib/telegram";
++import { useToast } from "../toastContext";
++import type { StringKey } from "../../i18n/strings";
++
++/** The section heading copy — the same grouping Browse uses. */
++const SECTION_TITLE: Record<LeaguePickerSectionId, StringKey> = {
++  league: "browse.leagues",
++  cup: "browse.cups",
++  tournament: "browse.tournaments",
++};
++
++/**
++ * Favorite Leagues — the Matches feed's league picker.
++ *
++ * Two things it must get right beyond "a list of toggles":
++ *  - it lists the whole `/api/competitions` catalog, cups and international
++ *    tournaments included, because following a competition is how a user
++ *    subscribes to its fixtures, tables and matchday alerts (see
++ *    server/notifications.ts: `leagueFollowers`), not just the big five;
++ *  - the cap answer is immediate and in the user's language — a full list
++ *    toasts `leagues.errCap` instead of a silent no-op, and the server's own
++ *    MAX_LEAGUES stays the rule that holds under a double tap.
++ *
++ * Writes go through `useFollowedLeagues`, whose invalidate refreshes the
++ * Matches chip row behind the sheet, so the feed re-scopes as the sheet closes.
++ */
++export function LeaguePickerSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
++  const { t, localize } = useI18n();
++  const { push } = useToast();
++  const comps = useCompetitions();
++  const followed = useFollowedLeagues();
++  const [filter, setFilter] = useState<LeagueKindFilter>("all");
++
++  const sections = useMemo(
++    () => leaguePickerSections(comps.data?.competitions ?? [], filter, followed.slugs),
++    [comps.data, filter, followed.slugs],
++  );
++
++  const full = followed.count >= MAX_FOLLOWED_LEAGUES;
++
++  function toggle(comp: ApiCompetition) {
++    const onError = (err: unknown) => {
++      haptic("medium");
++      push({ text: t(serverErrorKey(err) as StringKey), tone: "danger", icon: "✕" });
++    };
++    if (followed.isFollowing(comp.slug)) {
++      selectionHaptic();
++      followed.unfollow.mutate(comp.slug, { onError });
++      return;
++    }
++    if (full) {
++      // The cap is a bucket, not an error state: say which rule stopped it.
++      haptic("medium");
++      push({ text: t("leagues.errCap"), tone: "danger", icon: "✕" });
++      return;
++    }
++    selectionHaptic();
++    followed.follow.mutate(comp.slug, { onError });
++  }
++
++  return (
++    <BottomSheet
++      open={open}
++      onClose={onClose}
++      title={t("leagues.title")}
++      subtitle={t("leagues.subtitle")}
++      footer={
++        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pb-1">
++          <Chip tone={full ? "gold" : "volt"}>
++            {t("leagues.count", { count: followed.count, max: MAX_FOLLOWED_LEAGUES })}
++          </Chip>
++          <span className="min-w-0 flex-1 text-end text-[10px] leading-tight text-ink-3">
++            {t(full ? "leagues.capHint" : "leagues.notifyHint", { max: MAX_FOLLOWED_LEAGUES })}
++          </span>
++        </div>
++      }
++    >
++      <Segmented
++        value={filter}
++        onChange={setFilter}
++        options={[
++          { value: "all", label: t("browse.all") },
++          { value: "league", label: t("browse.leagues") },
++          { value: "cup", label: t("browse.cups") },
++        ]}
++      />
++
++      {comps.isLoading ? (
++        <div className="mt-3">
++          <CompRowSkeleton rows={6} />
++        </div>
++      ) : comps.isError ? (
++        <div className="mt-3">
++          <ErrorState title={t("leagues.error")} hint={t("error.hint")} onRetry={() => comps.refetch()} />
++        </div>
++      ) : sections.length === 0 ? (
++        <div className="mt-3">
++          <EmptyState title={t("leagues.empty")} hint={t("leagues.emptyHint")} />
++        </div>
++      ) : (
++        // Keyed on the filter so the list crossfades when the tab changes
++        // instead of swapping rows in place underneath the header.
++        <div key={filter} className="fade-swap">
++          {sections.map((section) => (
++            <section key={section.id} className="mt-4">
++              <h3 className="label mb-2 text-ink-3">{t(SECTION_TITLE[section.id])}</h3>
++              <ul className="space-y-1.5">
++                {section.rows.map((comp) => {
++                  const on = followed.isFollowing(comp.slug);
++                  const pending =
++                    (followed.follow.isPending && followed.follow.variables === comp.slug) ||
++                    (followed.unfollow.isPending && followed.unfollow.variables === comp.slug);
++                  const name = localize(comp.name);
++                  // A coming-soon competition has no synced data behind it, so
++                  // following it would subscribe the user to fixtures that never
++                  // arrive. Rendered — the scope is worth seeing — but inert,
++                  // exactly like Browse's disabled rows.
++                  const soon = Boolean(comp.comingSoon);
++                  const Wrapper = soon ? "div" : "button";
++                  return (
++                    <li key={comp.slug}>
++                      <Wrapper
++                        {...(soon
++                          ? {}
++                          : {
++                              type: "button" as const,
++                              onClick: () => toggle(comp),
++                              "aria-pressed": on,
++                              "aria-label": t(on ? "leagues.unfollow" : "leagues.follow", {
++                                league: name,
++                              }),
++                            })}
++                        className={cx(
++                          "flex min-h-12 w-full items-center gap-3 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
++                          soon
++                            ? "border-dashed border-line bg-transparent opacity-70"
++                            : on
++                              ? "border-volt bg-elevated"
++                              : "border-line bg-surface hover:bg-elevated",
++                          pending && "opacity-60",
++                        )}
++                      >
++                        {/* No monogram tile: a single letter beside the full
++                            name reads as doubled text ("PPremier League"). */}
++                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{name}</span>
++                        {soon ? (
++                          <Chip tone="muted">{t("browse.soon")}</Chip>
++                        ) : on ? (
++                          <span className="flex flex-none items-center gap-1 text-[11px] font-bold text-volt">
++                            <CheckIcon className="marker-pop h-3.5 w-3.5" aria-hidden="true" />
++                            {t("leagues.following")}
++                          </span>
++                        ) : null}
++                      </Wrapper>
++                    </li>
++                  );
++                })}
++              </ul>
++            </section>
++          ))}
++        </div>
++      )}
++    </BottomSheet>
++  );
++}
+diff --git a/src/hooks/useFavorites.ts b/src/hooks/useFavorites.ts
+index e47b591..d621e10 100644
+--- a/src/hooks/useFavorites.ts
++++ b/src/hooks/useFavorites.ts
+@@ -12,6 +12,13 @@ import type { Team } from "../types";
+  */
+ export const MAX_FAVORITES = 5;
+ export const MAX_INTERNATIONALS = 5;
++/**
++ * Followed-competition cap, mirrored from the server's `MAX_LEAGUES`
++ * (server/routes/shared.ts). The client checks it so a full list answers
++ * instantly with the right copy; the server check behind it stays the rule
++ * that actually holds under two rapid taps.
++ */
++export const MAX_FOLLOWED_LEAGUES = 5;
+ 
+ /** The picker tab national teams live under (mirrors the server's group_key). */
+ const INTERNATIONAL_GROUP = "international";
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 6ad8b9b..77e95d0 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -54,6 +54,20 @@ export const strings = {
+     "matches.noMatch": "No match",
+     "matches.leagueScope": "Showing {league} only",
+     "matches.showAll": "Show all",
++    "matches.leagues": "Favorite leagues",
++    "matches.pickLeagues": "Pick your leagues",
++    "leagues.title": "Favorite leagues",
++    "leagues.subtitle": "Follow a league or cup — its matches lead the feed and its alerts reach you.",
++    "leagues.notifyHint":
++      "Goals, line-ups and kick-off alerts for every match in the competitions you follow.",
++    "leagues.edit": "Edit",
++    "leagues.count": "{count} of {max}",
++    "leagues.capHint": "Up to {max} at a time — remove one to add another.",
++    "leagues.follow": "Follow {league}",
++    "leagues.unfollow": "Unfollow {league}",
++    "leagues.empty": "The competition list is still syncing",
++    "leagues.emptyHint": "It should be here in a moment — give the feed a pull to refresh.",
++    "leagues.error": "Couldn't load the competitions",
+     "streak.title": "Favorite-club streak",
+     "streak.activeSubtitle": "{count} match(es) scored in a row on your anchor club",
+     "streak.idleSubtitle": "{count} in a row — a miss resets it, so get a prediction in",
+@@ -588,6 +602,19 @@ export const strings = {
+     "matches.noMatch": "بدون بازی",
+     "matches.leagueScope": "فقط {league} نشان داده می‌شود",
+     "matches.showAll": "نمایش همه",
++    "matches.leagues": "لیگ‌های موردعلاقه",
++    "matches.pickLeagues": "لیگ‌هایت را انتخاب کن",
++    "leagues.title": "لیگ‌های موردعلاقه",
++    "leagues.subtitle": "یک لیگ یا جام را دنبال کن — بازی‌هایش اول فید می‌آید و هشدارهایش به تو می‌رسد.",
++    "leagues.notifyHint": "گل، ترکیب و یادآور شروع بازی برای هر بازی در مسابقاتی که دنبال می‌کنی.",
++    "leagues.edit": "ویرایش",
++    "leagues.count": "{count} از {max}",
++    "leagues.capHint": "حداکثر {max} لیگ — برای اضافه‌کردن یکی، یکی را حذف کن.",
++    "leagues.follow": "دنبال کردن {league}",
++    "leagues.unfollow": "لغو دنبال‌کردن {league}",
++    "leagues.empty": "فهرست مسابقات در حال همگام‌سازی است",
++    "leagues.emptyHint": "لحظه‌ای بعد همین‌جا می‌آید — فید را برای تازه‌سازی بکش.",
++    "leagues.error": "بارگذاری فهرست مسابقات نشد",
+     "streak.title": "زنجیره باشگاه محبوب",
+     "streak.activeSubtitle": "{count} بازی پیاپی روی باشگاه اصلیت امتیاز گرفتی",
+     "streak.idleSubtitle": "{count} بازی پیاپی — یک بازی بدون امتیاز صفرش می‌کند، پیش‌بینی کن",
+diff --git a/src/lib/leaguePicker.ts b/src/lib/leaguePicker.ts
+new file mode 100644
+index 0000000..937da87
+--- /dev/null
++++ b/src/lib/leaguePicker.ts
+@@ -0,0 +1,60 @@
++/**
++ * The Favorite Leagues picker's list algebra, on its own so it is testable
++ * without React (tests/client.test.ts) — the same reason lib/pickerGroups.ts
++ * exists for the club picker.
++ *
++ * Two rules live here, both easy to get subtly wrong in JSX:
++ *  1. the segmented filter's kind mapping — "cups" means cups AND international
++ *     tournaments (both are knockout competitions with no table), which is the
++ *     grouping Browse already uses;
++ *  2. followed competitions bubble to the top of their section, so the sheet
++ *     opens on what the user already has instead of making them scroll the
++ *     catalog to find and un-follow something.
++ *
++ * Catalog order is preserved inside each tier (Array.prototype.sort is stable),
++ * and empty sections are dropped rather than rendered as a stray heading.
++ */
++import type { ApiCompetition } from "./api";
++
++/** The sheet's segmented control values. */
++export type LeagueKindFilter = "all" | "league" | "cup";
++
++/** A section is addressed by the competition `kind` it holds. */
++export type LeaguePickerSectionId = "league" | "cup" | "tournament";
++
++export interface LeaguePickerSection {
++  id: LeaguePickerSectionId;
++  rows: ApiCompetition[];
++}
++
++const SECTION_ORDER: LeaguePickerSectionId[] = ["league", "cup", "tournament"];
++
++/** The kinds a filter shows — "cup" also carries the international tournaments. */
++export function leagueKindsForFilter(filter: LeagueKindFilter): Set<LeaguePickerSectionId> {
++  if (filter === "league") return new Set<LeaguePickerSectionId>(["league"]);
++  if (filter === "cup") return new Set<LeaguePickerSectionId>(["cup", "tournament"]);
++  return new Set(SECTION_ORDER);
++}
++
++/**
++ * The sheet's sections: only the kinds the filter wants, only the ones that
++ * have rows, each with followed competitions first.
++ */
++export function leaguePickerSections(
++  comps: ApiCompetition[],
++  filter: LeagueKindFilter,
++  followedSlugs: string[],
++): LeaguePickerSection[] {
++  const followed = new Set(followedSlugs);
++  const wanted = leagueKindsForFilter(filter);
++  return SECTION_ORDER.filter((id) => wanted.has(id))
++    .map((id) => ({
++      id,
++      rows: comps
++        .filter((comp) => comp.kind === id)
++        // One stable sort: 0 for followed, 1 for not, so followed rows rise
++        // without disturbing the catalog order inside either tier.
++        .sort((a, b) => Number(!followed.has(a.slug)) - Number(!followed.has(b.slug))),
++    }))
++    .filter((section) => section.rows.length > 0);
++}
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 331319c..5da4b78 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -25,12 +25,24 @@ import { useI18n } from "../i18n/context";
+ import { formatClock, formatKickoff } from "../lib/format";
+ import { LEAGUE_BY_SLUG } from "../lib/leagues";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+-import { BallIcon, ChartIcon, ChevronRightIcon, RefreshIcon, StarFilledIcon } from "../components/icons";
++import {
++  BallIcon,
++  ChartIcon,
++  ChevronRightIcon,
++  PlusIcon,
++  RefreshIcon,
++  StarFilledIcon,
++} from "../components/icons";
+ import { TaskAdCard } from "../components/TaskAdCard";
++import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
+ import { usePullToRefresh } from "../hooks/usePullToRefresh";
+ import { PullIndicator } from "../components/PullToRefresh";
+ import type { Match, Team } from "../types";
+ 
++/** One chip in the league scope row: same shape, tone flips with the state. */
++const LEAGUE_CHIP =
++  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]";
++
+ export default function Matches() {
+   const { t, lang, localize } = useI18n();
+   const { push } = useToast();
+@@ -59,6 +71,9 @@ export default function Matches() {
+   const allMatchesQuery = useMatches();
+   const allMatches = useMemo(() => allMatchesQuery.data ?? [], [allMatchesQuery.data]);
+ 
++  // The Favorite Leagues sheet. Local to the feed (not a route) so opening and
++  // closing it never loses the scroll position or the selected league chip.
++  const [leaguesOpen, setLeaguesOpen] = useState(false);
+   const [refreshing, setRefreshing] = useState(false);
+   const [lastSync, setLastSync] = useState<Date | null>(null);
+   const [flashId, setFlashId] = useState<string | null>(null);
+@@ -219,43 +234,65 @@ export default function Matches() {
+       <div className="relative">
+         <PullIndicator pull={pull} />
+ 
+-        {/* Followed leagues: one tap re-scopes the whole feed (concept pillar 1). */}
+-        {!league && followed.count > 0 ? (
+-          <div className="-mx-3 mt-3 flex gap-1.5 overflow-x-auto px-3 pb-1">
++        {/* Favorite leagues — the start page's own way in. One tap re-scopes
++            the whole feed (concept pillar 1); the last chip opens the picker,
++            and the row is here even with nothing followed so leagues are
++            pickable from the feed rather than only during onboarding. */}
++        {!league ? (
++          <div className="-mx-3 mt-3 flex items-center gap-1.5 overflow-x-auto px-3 pb-1">
++            {followed.count > 0 ? (
++              <>
++                <button
++                  type="button"
++                  onClick={() => {
++                    haptic("light");
++                    setLeagueFilter(null);
++                  }}
++                  aria-pressed={leagueFilter === null}
++                  className={cx(
++                    LEAGUE_CHIP,
++                    leagueFilter === null ? "border-volt text-volt" : "border-line text-ink-3",
++                  )}
++                >
++                  {t("browse.all")}
++                </button>
++                {followed.leagues.map((l) => (
++                  <button
++                    key={l.league}
++                    type="button"
++                    onClick={() => {
++                      haptic("light");
++                      setLeagueFilter(l.league);
++                    }}
++                    aria-pressed={leagueFilter === l.league}
++                    className={cx(
++                      LEAGUE_CHIP,
++                      leagueFilter === l.league ? "border-volt text-volt" : "border-line text-ink-3",
++                    )}
++                  >
++                    {l.name ?? l.league}
++                  </button>
++                ))}
++              </>
++            ) : null}
+             <button
+               type="button"
+               onClick={() => {
+                 haptic("light");
+-                setLeagueFilter(null);
++                setLeaguesOpen(true);
+               }}
+-              aria-pressed={leagueFilter === null}
+-              className={cx(
+-                "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+-                leagueFilter === null ? "border-volt text-volt" : "border-line text-ink-3",
+-              )}
++              aria-haspopup="dialog"
++              className={cx(LEAGUE_CHIP, "inline-flex items-center gap-1.5 border-volt text-volt")}
++              style={{ backgroundColor: "color-mix(in srgb, var(--volt) 12%, transparent)" }}
+             >
+-              {t("browse.all")}
++              <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
++              {t(followed.count > 0 ? "leagues.edit" : "matches.pickLeagues")}
+             </button>
+-            {followed.leagues.map((l) => (
+-              <button
+-                key={l.league}
+-                type="button"
+-                onClick={() => {
+-                  haptic("light");
+-                  setLeagueFilter(l.league);
+-                }}
+-                aria-pressed={leagueFilter === l.league}
+-                className={cx(
+-                  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+-                  leagueFilter === l.league ? "border-volt text-volt" : "border-line text-ink-3",
+-                )}
+-              >
+-                {l.name ?? l.league}
+-              </button>
+-            ))}
+           </div>
+         ) : null}
+ 
++        <LeaguePickerSheet open={leaguesOpen} onClose={() => setLeaguesOpen(false)} />
++
+         {/* Single-league deep link: name the scope, let the user leave. Without
+           this the screen looks like a broken feed when the window is quiet. */}
+         {league ? (
+@@ -356,7 +393,7 @@ export default function Matches() {
+               onRetry={() => matchesQuery.refetch()}
+             />
+           ) : upcomingShown.length > 0 ? (
+-            <ul className="space-y-2">
++            <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
+               {upcomingShown.map((match, index) => (
+                 <MatchCard key={match.id} match={match} index={index} />
+               ))}
+@@ -389,7 +426,7 @@ export default function Matches() {
+                 onRetry={() => matchesQuery.refetch()}
+               />
+             ) : (
+-              <ul className="space-y-2">
++              <ul key={activeLeague ?? "all"} className="space-y-2 fade-swap">
+                 {finished.map((match, index) => (
+                   <MatchCard key={match.id} match={match} index={index} />
+                 ))}
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 9f0ea05..9f2bd01 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -9,7 +9,13 @@ import { cx } from "../lib/cx";
+ import { Button, Chip, Num, Segmented, TeamBadge } from "../components/ui";
+ import { ArrowIcon, CheckIcon, CloseIcon, PencilIcon, StarFilledIcon, TargetIcon } from "../components/icons";
+ import { useTeams, useCompetitions } from "../hooks/useApi";
+-import { MAX_FAVORITES, MAX_INTERNATIONALS, useFavorites, useFollowedLeagues } from "../hooks/useFavorites";
++import {
++  MAX_FAVORITES,
++  MAX_FOLLOWED_LEAGUES,
++  MAX_INTERNATIONALS,
++  useFavorites,
++  useFollowedLeagues,
++} from "../hooks/useFavorites";
+ import { useI18n } from "../i18n/context";
+ import type { StringKey } from "../i18n/strings";
+ import { serverErrorKey } from "../lib/api";
+@@ -131,7 +137,7 @@ export default function Onboarding() {
+     selectionHaptic();
+     if (followed.isFollowing(slug)) {
+       followed.unfollow.mutate(slug, { onError });
+-    } else if (followed.count < 5) {
++    } else if (followed.count < MAX_FOLLOWED_LEAGUES) {
+       followed.follow.mutate(slug, { onError });
+     } else {
+       haptic("medium");
+@@ -433,8 +439,8 @@ export default function Onboarding() {
+           </ul>
+ 
+           <div className="mt-3 flex justify-center">
+-            <Chip tone={followed.count >= 5 ? "gold" : "volt"}>
+-              {t("myTeams.picked", { count: followed.count, max: 5 })}
++            <Chip tone={followed.count >= MAX_FOLLOWED_LEAGUES ? "gold" : "volt"}>
++              {t("myTeams.picked", { count: followed.count, max: MAX_FOLLOWED_LEAGUES })}
+             </Chip>
+           </div>
+         </section>
+diff --git a/tests/client.test.ts b/tests/client.test.ts
+index f153fe2..8b345ab 100644
+--- a/tests/client.test.ts
++++ b/tests/client.test.ts
+@@ -15,6 +15,8 @@ import {
+   INTERNATIONAL_GROUP,
+ } from "../src/lib/pickerGroups.js";
+ import { scopeRankDelta, viewerStanding } from "../src/lib/leaderboard.js";
++import { leaguePickerSections } from "../src/lib/leaguePicker.js";
++import type { ApiCompetition } from "../src/lib/api.js";
+ import type { StringKey } from "../src/i18n/strings.js";
+ import type { Team } from "../src/types.js";
+ 
+@@ -115,6 +117,65 @@ function testViewerStanding(): void {
+   );
+ }
+ 
++/**
++ * The Favorite Leagues picker's list. Two rules with real consequences: the
++ * "cups" filter also carries the international tournaments (both are knockout
++ * competitions — leaving them out made them unreachable when that tab was
++ * active), and followed competitions sort to the top of their section so the
++ * sheet opens on the user's own list.
++ */
++function testLeaguePickerSections(): void {
++  const comps: ApiCompetition[] = [
++    { slug: "eng.1", name: "Premier League", kind: "league", hasTable: true },
++    { slug: "ned.1", name: "Eredivisie", kind: "league", hasTable: true },
++    { slug: "uefa.champions", name: "Champions League", kind: "cup", hasTable: false },
++    { slug: "fifa.world", name: "World Cup", kind: "tournament", hasTable: false },
++  ];
++
++  // "all" keeps the catalog's section order (leagues, cups, tournaments).
++  assert.deepEqual(
++    leaguePickerSections(comps, "all", []).map((s) => s.id),
++    ["league", "cup", "tournament"],
++  );
++
++  // "cup" means BOTH knockout kinds — a cup filter that hid the World Cup
++  // would make international tournaments unreachable from the picker.
++  const cupFiltered = leaguePickerSections(comps, "cup", []);
++  assert.deepEqual(
++    cupFiltered.map((s) => s.id),
++    ["cup", "tournament"],
++    "the cups tab carries the international tournaments too",
++  );
++  assert.deepEqual(
++    cupFiltered.flatMap((s) => s.rows.map((r) => r.slug)),
++    ["uefa.champions", "fifa.world"],
++  );
++  assert.equal(
++    leaguePickerSections(comps, "league", []).length,
++    1,
++    "the leagues tab is leagues only, and drops empty sections",
++  );
++
++  // Followed competitions rise to the top of their own section, catalog order
++  // otherwise untouched, and nothing is ever duplicated or dropped.
++  const withFollows = leaguePickerSections(comps, "all", ["ned.1", "fifa.world"]);
++  assert.deepEqual(
++    withFollows[0]?.rows.map((r) => r.slug),
++    ["ned.1", "eng.1"],
++    "followed leagues lead their section",
++  );
++  assert.deepEqual(
++    withFollows[2]?.rows.map((r) => r.slug),
++    ["fifa.world"],
++    "followed tournaments lead theirs",
++  );
++  assert.deepEqual(
++    withFollows.flatMap((s) => s.rows.map((r) => r.slug)).sort(),
++    ["eng.1", "fifa.world", "ned.1", "uefa.champions"],
++    "every competition appears exactly once",
++  );
++}
++
+ /**
+  * Rank movement between two observations of the same board. The delta chip
+  * is client-session honesty only: a scope switch or a repeat observation at
+@@ -151,7 +212,8 @@ export function runClientTests(): void {
+   testTeamsInGroup();
+   testViewerStanding();
+   testScopeRankDelta();
++  testLeaguePickerSections();
+   console.log(
+-    "  client: contrast ink, breakdown rendering, picker grouping, viewer standing and rank deltas OK",
++    "  client: contrast ink, breakdown rendering, picker grouping, viewer standing, league picker OK",
+   );
+ }
+diff --git a/tests/notifications.test.ts b/tests/notifications.test.ts
+index 2771eac..7f253da 100644
+--- a/tests/notifications.test.ts
++++ b/tests/notifications.test.ts
+@@ -56,14 +56,15 @@ function addMatch(
+   id: string,
+   status: string,
+   kickoffAt: string,
+-  extra: { lineup?: boolean; home?: number; away?: number } = {},
++  extra: { lineup?: boolean; home?: number; away?: number; league?: string } = {},
+ ): void {
+   db.prepare(
+     `INSERT INTO matches
+        (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score, home_formation, away_formation)
+-     VALUES (?, 'eng.1', 'H', 'A', ?, ?, ?, ?, ?, ?)`,
++     VALUES (?, ?, 'H', 'A', ?, ?, ?, ?, ?, ?)`,
+   ).run(
+     id,
++    extra.league ?? "eng.1",
+     kickoffAt,
+     status,
+     extra.home ?? null,
+@@ -378,6 +379,121 @@ function testKindColumnBackfill() {
+   db.close();
+ }
+ 
++/**
++ * Following a COMPETITION (not just a club) subscribes to every match in it:
++ * the matchday stages for any fixture the sync files under that slug, cups and
++ * international tournaments included, and goals scored by clubs nobody follows.
++ *
++ * This is the "favorite leagues" promise from the Matches feed's picker. The
++ * rules that matter are (a) a league follower needs no club favorite at all,
++ * (b) a different league's fixtures never wake them, (c) a user who follows
++ * BOTH the club and its league still gets exactly one push, and (d) the same
++ * per-kind opt-out and deliverability gates apply.
++ */
++function testFollowedLeagueAlerts(): void {
++  const db = tempDb();
++  seed(db);
++  db.exec(`
++    -- The cup fixture is between two sides nobody follows, so any recipient
++    -- below can only have come from the competition follow.
++    INSERT INTO teams (id, name, short_name, league) VALUES
++      ('C', 'Cup Home', 'CUP', ''), ('D', 'Cup Away', 'CUPA', '');
++    INSERT INTO users (id, telegram_id, display_name, created_at) VALUES
++      (5, 'u5', 'Five', '2026-01-01T00:00:00.000Z'),
++      (6, 'u6', 'Six', '2026-01-01T00:00:00.000Z'),
++      (7, 'u7', 'Seven', '2026-01-01T00:00:00.000Z'),
++      (8, 'guest:league-guest', 'Guest', '2026-01-01T00:00:00.000Z');
++    -- u5 follows the whole Premier League and no club; u6 follows a cup; u7 a
++    -- different league entirely (the negative control); u8 is a browser guest.
++    INSERT INTO followed_leagues (user_id, league, created_at) VALUES
++      (5, 'eng.1', '2026-01-01T00:00:00.000Z'),
++      (6, 'uefa.champions', '2026-01-01T00:00:00.000Z'),
++      (7, 'esp.1', '2026-01-01T00:00:00.000Z'),
++      (8, 'eng.1', '2026-01-01T00:00:00.000Z');
++    INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
++      VALUES ('m_cup', 'uefa.champions', 'C', 'D', '2026-09-29T17:20:00.000Z', 'halftime', 1, 1);
++  `);
++
++  addMatch(db, "m_pool", "scheduled", minutesFromNow(90), { lineup: true });
++  queueMatchdayAlerts(db, NOW);
++
++  // (a) the league follower is reached for a fixture of the league they follow
++  // on top of the three club followers of the fixture's sides;
++  assert.deepEqual(
++    idsOf(db, "lineup"),
++    ["u1", "u2", "u3", "u5"],
++    "eng.1 followers get the lineup push, with no club favorite in it",
++  );
++  // (b) a followed CUP behaves exactly like a league…
++  const halftime = idsOf(db, "halftime");
++  assert.ok(halftime.includes("u6"), "a followed CUP delivers its fixtures like any league");
++  // …and (c) nobody else's follow leaks into that competition.
++  assert.ok(!halftime.includes("u5"), "a league follower is not woken by another competition");
++  assert.ok(!halftime.includes("u7"), "a different league's follower is left alone");
++  assert.ok(!halftime.includes("u8"), "a browser guest never enters the queue");
++  assert.ok(
++    !halftime.includes("u1"),
++    "club follows do not drag a user into an unfollowed competition's fixture",
++  );
++  db.close();
++}
++
++/** A followed league delivers goals in its matches, deduped against club follows. */
++function testFollowedLeagueGoalAlerts(): void {
++  const db = tempDb();
++  seed(db);
++  db.exec(`
++    INSERT INTO teams (id, name, short_name, league) VALUES ('X', 'Xanthi', 'XAN', 'esp.1');
++    INSERT INTO users (id, telegram_id, display_name, created_at) VALUES
++      (5, 'u5', 'Five', '2026-01-01T00:00:00.000Z'),
++      (6, 'u6', 'Six', '2026-01-01T00:00:00.000Z'),
++      (7, 'u7', 'Seven', '2026-01-01T00:00:00.000Z'),
++      (8, 'guest:league-guest', 'Guest', '2026-01-01T00:00:00.000Z');
++    -- u5 follows esp.1 only; u6 follows esp.1 AND the scoring club X; u7 follows
++    -- eng.1 (negative control); u8 is a browser guest following esp.1.
++    INSERT INTO followed_leagues (user_id, league, created_at) VALUES
++      (5, 'esp.1', '2026-01-01T00:00:00.000Z'),
++      (6, 'esp.1', '2026-01-01T00:00:00.000Z'),
++      (7, 'eng.1', '2026-01-01T00:00:00.000Z'),
++      (8, 'esp.1', '2026-01-01T00:00:00.000Z');
++    INSERT INTO favorite_teams (user_id, team_id, is_favorite, created_at) VALUES
++      (6, 'X', 1, '2026-01-01T00:00:00.000Z');
++    INSERT INTO user_notification_prefs (user_id, goals, deadline, ratings, updated_at) VALUES
++      (7, 0, 1, 1, '2026-01-01T00:00:00.000Z');
++    INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
++      VALUES ('m_esp', 'esp.1', 'X', 'H', '2026-09-29T17:00:00.000Z', 'live', 1, 0);
++  `);
++
++  const queuedCount = queueGoalAlerts(db, [
++    { matchId: "m_esp", scoringTeamId: "X", scorerName: "Pione", minute: "12", homeScore: 1, awayScore: 0 },
++  ]);
++
++  const goals = queued(db).filter((r) => r.kind === "goal");
++  const ids = goals.map((r) => r.telegram_id).sort();
++  assert.equal(queuedCount, goals.length, "the return value counts exactly the queued rows");
++  assert.ok(ids.includes("u5"), "a follower of the competition hears its goals without following a club");
++  assert.ok(ids.includes("u6"), "a follower of the scoring club hears it too");
++  assert.equal(ids.filter((id) => id === "u6").length, 1, "club + league follow is deduped to one push");
++  assert.ok(!ids.includes("u7"), "an unrelated league's follower is left alone");
++  assert.ok(!ids.includes("u8"), "a browser guest never enters the queue");
++  assert.equal(
++    goals.find((r) => r.telegram_id === "u5")?.text.includes("GOAL 12'"),
++    true,
++    "goal copy renders for the league follower",
++  );
++
++  // A goal whose match row is gone (retention edge) still fans out to the
++  // scoring club's followers, and never crashes on the missing league.
++  assert.equal(
++    queueGoalAlerts(db, [
++      { matchId: "gone", scoringTeamId: "X", scorerName: "P", minute: "60", homeScore: 2, awayScore: 0 },
++    ]),
++    1,
++    "no match row means no league lookup — the club follower still hears it",
++  );
++  db.close();
++}
++
+ /**
+  * Accounts with no Telegram chat behind them never enter the queue. Browser
+  * guests (`guest:<device>`), username accounts (`pwd:<name>`) and dev-token
+@@ -421,10 +537,13 @@ export async function runNotificationTests(): Promise<void> {
+   testLineupFallbackSignal();
+   testPerRecipientLanguage();
+   testGoalAlertsCoverInternationalFavorites();
++  testFollowedLeagueAlerts();
++  testFollowedLeagueGoalAlerts();
+   testKindColumnBackfill();
+   testDeliverabilityFilter();
+   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
+   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
+   console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
++  console.log("  notifications: followed leagues deliver stages + goals, deduped against clubs OK");
+   console.log("  notifications: guest/pwd/dev accounts never enter the push queue OK");
+ }
+-- 
+2.54.0.windows.1
+

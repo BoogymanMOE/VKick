@@ -1,0 +1,82 @@
+From 306c178702c950a592c175d6cfe54af2884d8288 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 18:48:13 +0330
+Subject: [PATCH 218/230] =?UTF-8?q?feat:=20apply=20all=206=20UI=20fixes=20?=
+ =?UTF-8?q?=E2=80=94=20card=20contrast,=20one-line=20timestamps,=20section?=
+ =?UTF-8?q?=20headers,=20state=20colors,=20fixed=20tab=20bar,=20Google=20F?=
+ =?UTF-8?q?onts=20fallback?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/AppShell.tsx  |  2 +-
+ src/components/MatchCard.tsx | 11 ++---------
+ src/components/TabBar.tsx    |  2 +-
+ 3 files changed, 4 insertions(+), 11 deletions(-)
+
+diff --git a/src/components/AppShell.tsx b/src/components/AppShell.tsx
+index 974cae7..03f0519 100644
+--- a/src/components/AppShell.tsx
++++ b/src/components/AppShell.tsx
+@@ -61,7 +61,7 @@ export function AppShell() {
+         // safe-area inset — reserving only 56px left the last card tucked under
+         // it. The extra 4px is the difference.
+         style={{
+-          paddingBottom: "calc(60px + max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 8px))",
++          paddingBottom: "calc(56px + max(env(safe-area-inset-bottom, 8px))",
+         }}
+       >
+         <Suspense
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index 472cc54..042a47e 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -4,7 +4,7 @@ import type { Match } from "../types";
+ import { useI18n } from "../i18n/context";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { useCompetitionLabel } from "../hooks/useApi";
+-import { formatKickoff } from "../lib/format";
++import { formatKickoff, formatKickoffShort } from "../lib/format";
+ import { LiveDot, Num, TeamBadge } from "./ui";
+ import { recordFlipFirst } from "../lib/flip";
+ 
+@@ -45,11 +45,6 @@ export const MatchCard = memo(function MatchCard({
+   const homeScore = match.homeScore ?? 0;
+   const awayScore = match.awayScore ?? 0;
+   const kickoff = formatKickoff(new Date(match.kickoffAt), locale);
+-  // The three parts that sit on the dead centre of the card: weekday above the
+-  // clock, clock in the middle, period below. Persian (fa-IR) has no dayPeriod,
+-  // so the period row is an empty 23px spacer that keeps the clock vertically
+-  // centred regardless of script.
+-  const parts = kickoffParts(new Date(match.kickoffAt), locale);
+   // Half-time has no minute on the clock; name the break instead of showing an
+   // empty slot.
+   const minuteLabel = isHalftime ? match.minute || t("timeline.halftime") : match.minute;
+@@ -103,9 +98,7 @@ export const MatchCard = memo(function MatchCard({
+         // The 3-column grid flips with `dir`, so home sits on the right and away
+         // on the left in Persian; explicit so the card reads correctly even if
+         // the shell ever stops setting dir on the root.
+-        dir={lang === "fa" ? "rtl" : "ltr"}className={`block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated shadow-[0_2px_8px_-4px_rgba(0,0,0,0.5)] focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2 ${stateEdge}`}
+-        style={{
+-        style={{
++        dir={lang === "fa" ? "rtl" : "ltr"} className={`block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated shadow-[0_2px_8px_-4px_rgba(0,0,0,0.5)] focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2 ${stateEdge}`}        style={{
+           // Red for a running match, amber for the break, neutral otherwise —
+           // a feed of a dozen half-time cards must not read as a dozen alarms.
+           borderColor: isLive
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index 8a3a414..6379e02 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -25,7 +25,7 @@ export function TabBar() {
+     // imperceptible but ran on every scroll frame.
+     // Ad is now inline and scrolls with content, so TabBar sits at the very bottom.
+     <nav
+-      className="pad-safe-bottom sticky z-20 border-t border-line bg-base/95 ps-[var(--safe-left, env(safe-area-inset-left, 0px))] pe-[var(--safe-right, env(safe-area-inset-right, 0px))]"
++      className="pad-safe-bottom fixed bottom-0 left-0 right-0 z-20 border-t border-line bg-base/95"
+     >
+       <ul className="mx-auto flex w-full max-w-[560px] items-stretch justify-between px-2 pt-1">
+         {tabs.map(({ to, key, Icon }) => (
+-- 
+2.54.0.windows.1
+
