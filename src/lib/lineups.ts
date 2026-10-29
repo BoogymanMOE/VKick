@@ -9,11 +9,11 @@ export interface LineupPlayerFromAPI {
   position: string | null;
   jersey_number: number | null;
   headshot_url: string | null;
-  avatarUrl?: string | null;
   espn_position: string | null;
   formation_place: string | null;
   started: number;
   minutes_played: number | null;
+  avatarUrl?: string | null;
   team_id: string | number;
 }
 
@@ -29,7 +29,7 @@ export interface LineupPlayer {
   name: string;
   position: "GK" | "DEF" | "MID" | "FWD";
   number: number;
-  avatarUrl: string;
+  avatarUrl?: string | null;
   espnPosition: string | null;
   formationPlace: string | null;
   starter: boolean;
@@ -38,22 +38,22 @@ export interface LineupPlayer {
 
 /** Map a single player row from the API to a LineupPlayer shape. */
 const toPlayer = (r: LineupPlayerFromAPI): LineupPlayer => {
-  const avatarUrl = r.avatarUrl ?? r.headshot_url ?? "";
+  const avatarUrl = r.avatarUrl ?? r.headshot_url ?? null;
   return {
     id: String(r.player_id),
     name: String(r.full_name),
     position: (r.position ?? "MID") as "GK" | "DEF" | "MID" | "FWD",
     number: typeof r.jersey_number === "number" ? r.jersey_number : 0,
-    avatarUrl,
     espnPosition: typeof r.espn_position === "string" ? r.espn_position : null,
     formationPlace: typeof r.formation_place === "string" ? r.formation_place : null,
     starter: r.started === 1,
     minutes: r.minutes_played ?? 0,
+    avatarUrl,
   };
 }
 
 export function buildMatchLineups(
-  data: { players: LineupPlayerFromAPI[]; home: { formation?: string }; away: { formation?: string } },
+  data: { players: LineupPlayerFromAPI[]; home: { formation: string | null }; away: { formation: string | null } },
   homeId: string,
   awayId: string
 ) {

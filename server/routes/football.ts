@@ -604,25 +604,21 @@ matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
       headshot: typeof row.headshot_url === "string" ? row.headshot_url : null,
       espnPosition: typeof row.espn_position === "string" ? row.espn_position : null,
       started: Number(row.started) === 1,
-      minutesPlayed: typeof row.minutes_played === "number" ? row.minutes_played : 0,
-      avatarUrl: localHeadshotUrl(row.headshot_url, row.player_id),
       availability: row.availability
         ? { status: row.availability.status as "injured" | "suspended" | "doubtful", reason: row.availability.reason, expected_return: row.availability.expected_return }
         : null,
     }));
   // Split into starters, subs, and bench (all non-starters are on the bench)
   const starters = players.filter((player) => player.started);
-  const subs = players.filter((player) => !player.started && player.minutesPlayed > 0);
-  const bench = players.filter((player) => !player.started && player.minutesPlayed === 0);
+  const subs = players.filter((player) => !player.started);
+  const bench = players.filter((player) => !player.started);
 
   res.json({
     match: { id: match.id, kickoffAt: match.kickoff_at, formation },
     starters,
     subs,
     bench,
-    minutesPlayed: players.map((p) => p.minutesPlayed),
     availability: starters.map((p) => p.availability).filter(Boolean),
-    avatarUrl: localHeadshotUrl(match.home_team_id, match.home_team_id), // placeholder for squad-level use
   });
 });
 
