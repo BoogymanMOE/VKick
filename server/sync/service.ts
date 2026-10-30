@@ -203,6 +203,31 @@ export async function backfillSeasonResults(): Promise<GoalAlert[]> {
         }
         day = new Date(day.getTime() + 86_400_000);
       }
+      // A scoreboard stores only the scoreline. Timeline, player stats and the
+      // per-team box score (possession, shots … — everything the season stat
+      // tables and the match page aggregate) live in the per-match summary, so
+      // summarize each finished row that has never been summarized once. This
+      // doubles as the aggregate repair: every summary apply recomputes the
+      // league's season leaderboards (applySummary's finished branch).
+      const unsynced = all<{ id: string }>(
+        db,
+        `SELECT id FROM matches
+         WHERE league = ? AND status = 'finished' AND last_synced_at IS NULL
+           AND home_score IS NOT NULL AND away_score IS NOT NULL
+           AND substr(kickoff_at, 1, 10) >= ? AND substr(kickoff_at, 1, 10) < ?
+         ORDER BY kickoff_at ASC`,
+        [league, from, to],
+      );
+      if (unsynced.length > 0) log(`${league}: summarizing ${unsynced.length} backfilled finished match(es)`);
+      for (const m of unsynced) {
+        try {
+          goals.push(...(await syncMatchSummary(league as LeagueSlug, m.id)));
+        } catch (err) {
+          // One dead summary must not strand the rest: the row still plays its
+          // scoreline on every screen; only the deep stats lag behind.
+          console.error(`[sync] backfill summary ${league}/${m.id} FAILED:`, String(err));
+        }
+      }
     } catch (err) {
       console.error(`[sync] backfill ${league} FAILED:`, String(err));
     }

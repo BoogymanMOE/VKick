@@ -12,6 +12,7 @@ import { adaptComments } from "../lib/adaptComments";
 import { buildPlayerEvents } from "../lib/lineupEvents";
 import { buildMatchLineups } from "../lib/lineups";
 import { TopBar } from "../components/TopBar";
+import { PinIcon } from "../components/icons";
 import { LineupsPanel } from "../components/panels/LineupsPanel";
 import { NewsCard } from "../components/panels/NewsCard";
 
@@ -194,6 +195,9 @@ export default function MatchDetail() {
     match?.home_pens != null && match.away_pens != null
       ? { home: match.home_pens, away: match.away_pens }
       : null;
+  // ESPN stores "Stadium · City"; split once for the pill's two-tone run.
+  // Whatever has no "·" renders as a single-name pill.
+  const venueParts = match?.venue ? match.venue.split("\u00B7") : [];
 
 
 
@@ -381,8 +385,24 @@ export default function MatchDetail() {
             <span dir="ltr">{kickoffParts(new Date(match.kickoff_at), locale).clock}</span>
           </p>
           {match.venue ? (
-            <p className="truncate">
-              {t("match.venue")}: <bdi>{match.venue}</bdi>
+            // The stadium as a quiet pill: pin glyph, name, then the city in a
+            // softer tone — reading "Stamford Bridge · London" as one run of
+            // plain text made it look like leftover log output, not a fact.
+            <p className="flex justify-center px-4">
+              <bdi
+                aria-label={`${t("match.venue")}: ${match.venue}`}
+                className="inline-flex max-w-full items-center gap-1 rounded-full bg-ink-3/10 px-2.5 py-1 text-[11px]"
+              >
+                <PinIcon className="h-3 w-3 flex-none text-ink-3" />
+                {venueParts.length > 1 ? (
+                  <span className="min-w-0 truncate">
+                    <span className="font-semibold text-ink">{venueParts[0]}</span>
+                    <span className="text-ink-3">{" \u00B7 "}{venueParts[1].trim()}</span>
+                  </span>
+                ) : (
+                  <span className="truncate font-semibold text-ink">{match.venue}</span>
+                )}
+              </bdi>
             </p>
           ) : null}
           {match.referee ? (

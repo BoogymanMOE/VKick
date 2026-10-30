@@ -230,3 +230,11 @@ export const StarFilledIcon = (p: SVGProps<SVGSVGElement>) => (
     <path d="M12 3.5l2.7 5.6 6.1.8-4.4 4.2 1.1 6-5.5-3-5.5 3 1.1-6L3.2 9.9l6.1-.8z" />
   </svg>
 );
+
+/** Venue pin — map-marker glyph for the stadium line on the match page. */
+export const PinIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)} width={14} height={14}>
+    <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1116 0z" />
+    <circle cx="12" cy="10" r="3" />
+  </svg>
+);

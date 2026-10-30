@@ -15,7 +15,22 @@ export interface NormTeamStats {
   pass_accuracy_pct: number | null;
 }
 
-function num(stats: EspnStat[] | undefined, name: string): number | null {
+/** name under which ESPN currently ships the stat for this league. */
+function pickName(stats: EspnStat[] | undefined, names: string[]): string | null {
+  for (const name of names) if ((stats ?? []).some((x) => x.name === name)) return name;
+  return null;
+}
+
+/** The two stats ESPN has renamed mid-season — accept every name they shipped. */
+function namesFor(stats: EspnStat[] | undefined): { shotsOnTarget: string | null; fouls: string | null } {
+  return {
+    shotsOnTarget: pickName(stats, ["shotsOnTarget", "onTargetShots"]),
+    fouls: pickName(stats, ["foulsCommitted", "totalFouls"]),
+  };
+}
+
+function num(stats: EspnStat[] | undefined, name: string | null): number | null {
+  if (!name) return null;
   const s = (stats ?? []).find((x) => x.name === name);
   if (!s) return null;
   const raw = s.value ?? s.displayValue;
@@ -47,20 +62,14 @@ export interface EspnTeamStatsPayload {
 }
 
 /** Team-level stats from `boxscore.teams[].statistics[]` (per-league stat schemas). */
-export function normalizeTeamStats(json: EspnTeamStatsPayload, league: string): NormTeamStats[] {
+export function normalizeTeamStats(json: EspnTeamStatsPayload, _league: string): NormTeamStats[] {
   const out: NormTeamStats[] = [];
   const matchId = String(json.header?.competitions?.[0]?.id ?? "");
   if (!matchId) return out;
-  const names =
-    league === "eng.1"
-      ? {
-          shotsOnTarget: "onTargetShots",
-          fouls: "totalFouls",
-        }
-      : {
-          shotsOnTarget: "shotsOnTarget",
-          fouls: "foulsCommitted",
-        };
+  // ESPN has standardised these names across leagues — eng.1 briefly served
+  // `onTargetShots` / `totalFouls` and now serves the generic `shotsOnTarget` /
+  // `foulsCommitted`, so pick whichever the payload actually carries. The old
+  // hard-coded pick left both stats silently null for every eng.1 match.
   const pct = (stats: EspnStat[] | undefined, name: string): number | null => {
     const v = num(stats, name);
     if (v === null) return null;
@@ -69,6 +78,7 @@ export function normalizeTeamStats(json: EspnTeamStatsPayload, league: string): 
   for (const t of json.boxscore?.teams ?? []) {
     const teamId = String(t.team?.id ?? "");
     if (!teamId) continue;
+    const names = namesFor(t.statistics);
     out.push({
       match_id: matchId,
       team_id: teamId,
