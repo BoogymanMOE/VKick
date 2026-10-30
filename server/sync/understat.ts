@@ -8,7 +8,7 @@ import {
   type UnderstatLeaguePayload,
   type UnderstatTeamPayload,
 } from "../understat/normalize.js";
-import { TEAM_SLUGS, LEAGUE_SLUGS, ABBR_BY_SLUG } from "../understat/ids.js";
+import { understatSlugFor, LEAGUE_SLUGS, ABBR_BY_SLUG } from "../understat/ids.js";
 import { getDb } from "../db/index.js";
 import {
   upsertLeagueUnderstatSummary,
@@ -31,7 +31,9 @@ async function shouldSkipTeam(teamId: string): Promise<boolean> {
 }
 
 export async function syncTeamUnderstat(teamAbbr: string, teamId: string, league: string): Promise<void> {
-  const slug = TEAM_SLUGS[teamAbbr];
+  // Abbreviations collide across leagues ("BRE" is Brentford or Brest), so the
+  // league decides which Understat title the club means.
+  const slug = understatSlugFor(teamAbbr, league);
   if (!slug) {
     console.warn(`[understat] no slug for ${teamAbbr}, skipping`);
     return;

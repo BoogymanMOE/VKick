@@ -16,6 +16,7 @@
  * instance) stays in the caller and the logic here stays testable.
  */
 import { all, get, type DB } from "../db/index.js";
+import { seasonWindow } from "../scoring/season.js";
 
 /** A live match untouched for this long means the summary path is broken. */
 const STALE_LIVE_MS = 15 * 60_000;
@@ -78,6 +79,12 @@ export interface SyncHealthSnapshot {
   perLeague: LeagueSyncRow[];
   /** Followed competitions with no fixture within ±7 days of now. */
   quietFollowedLeagues: string[];
+  /**
+   * Leagues whose standings claim more completed matches than the matches
+   * table holds — the shape of a sync that quietly stopped storing results
+   * (the form-strip bug class). Only meaningful gaps are listed.
+   */
+  resultsDrift: Array<{ league: string; expected: number; stored: number }>;
   lastOkSyncAt: string | null;
   consecutiveFailures: number;
 }
@@ -140,6 +147,37 @@ export function syncHealthSnapshot(db: DB, now: Date = new Date()): SyncHealthSn
     [new Date(nowMs - 7 * 24 * 3_600_000).toISOString(), new Date(nowMs + 7 * 24 * 3_600_000).toISOString()],
   );
 
+  // Results drift: a league's standings claim N completed matches but the
+  // matches table holds fewer scored finished rows. Exactly how the standings
+  // form strip went blind for a whole season while every other page kept
+  // working — the feed had the data, the table the strip folds from did not,
+  // and no loop anywhere checks the fold’s own source.
+  const drift: Array<{ league: string; expected: number; stored: number }> = [];
+  const leagueRows = all<{ league: string; season: string; played: number }>(
+    db,
+    `SELECT s.league, s.season, SUM(s.played) AS played
+     FROM standings s
+     WHERE s.season = (SELECT MAX(s2.season) FROM standings s2 WHERE s2.league = s.league)
+     GROUP BY s.league`,
+  );
+  for (const row of leagueRows) {
+    const expected = Math.floor((row.played ?? 0) / 2);
+    if (expected < 6) continue; // a 3-match-old group says nothing about drift
+    const { from, to } = seasonWindow(row.season);
+    const stored =
+      get<{ n: number }>(
+        db,
+        `SELECT COUNT(*) AS n FROM matches
+         WHERE league = ? AND status = 'finished'
+           AND home_score IS NOT NULL AND away_score IS NOT NULL
+           AND substr(kickoff_at, 1, 10) >= ? AND substr(kickoff_at, 1, 10) < ?`,
+        [row.league, from, to],
+      )?.n ?? 0;
+    // Three missing results is real; scores for postponed fixtures lives in
+    // the standings already, so this is not a postponed-row rounding error.
+    if (stored < expected - 3) drift.push({ league: row.league, expected, stored });
+  }
+
   return {
     latestLastSyncedAt: latest?.t ?? null,
     staleLive: staleLive ?? 0,
@@ -149,6 +187,7 @@ export function syncHealthSnapshot(db: DB, now: Date = new Date()): SyncHealthSn
     finishedCount: counts?.finished ?? 0,
     perLeague: perLeague.map((r) => ({ league: r.league, lastSyncedAt: r.lastSyncedAt })),
     quietFollowedLeagues: quiet.map((r) => r.league),
+    resultsDrift: drift,
     lastOkSyncAt: state.lastOkMs ? new Date(state.lastOkMs).toISOString() : null,
     consecutiveFailures: state.consecutiveFailures,
   };
@@ -197,6 +236,13 @@ export function checkAndAlert(
   }
   if (snap.quietFollowedLeagues.length > 0) {
     problems.push(`followed league(s) with no fixture within ±7d: ${snap.quietFollowedLeagues.join(", ")}`);
+  }
+  if (snap.resultsDrift.length > 0) {
+    problems.push(
+      `stored results behind standings in ${snap.resultsDrift.length} league(s): ` +
+        snap.resultsDrift.map((d) => `${d.league} (${d.stored}/${d.expected})`).join(", ") +
+        " — run `npm run sync -- results`",
+    );
   }
 
   if (problems.length === 0) return { alerted: false, problem: null };

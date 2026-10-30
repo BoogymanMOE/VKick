@@ -5,6 +5,7 @@ import { getDb, all, get } from "../db/index.js";
 import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
 import { onMatchFinished } from "../predictions/resolver.js";
 import { syncAllFavoriteTeamsUnderstat, syncLeagueUnderstatTables } from "./understat.js";
+import { recomputeSeasonStats, recomputeSeasonTeamStats } from "./teamStats.js";
 import { queueGoalAlerts, queueMatchdayAlerts } from "../notifications.js";
 import { broadcast } from "../live/sse.js";
 import { seasonWindow } from "../scoring/season.js";
@@ -227,6 +228,15 @@ export async function backfillSeasonResults(): Promise<GoalAlert[]> {
           // scoreline on every screen; only the deep stats lag behind.
           console.error(`[sync] backfill summary ${league}/${m.id} FAILED:`, String(err));
         }
+      }
+      // Aggregates usually refresh inside every summary apply, but they read
+      // finished matches — not summaries — so the scoreline path fills them
+      // for a box score ESPN will never give back (deleted/payload-lost rows).
+      try {
+        recomputeSeasonStats(db, league, season);
+        recomputeSeasonTeamStats(db, league, season);
+      } catch (err) {
+        console.error(`[sync] backfill aggregates ${league} FAILED:`, String(err));
       }
     } catch (err) {
       console.error(`[sync] backfill ${league} FAILED:`, String(err));
@@ -525,6 +535,8 @@ let scoreboardsRunning = false;
 let windowRunning = false;
 let horizonRunning = false;
 let pulseRunning = false;
+let lookbackRunning = false;
+let understatRunning = false;
 
 /** Start the cron loops. Called once from server/index.ts. */
 export function startSyncLoop(): void {
@@ -544,6 +556,18 @@ export function startSyncLoop(): void {
     .catch((err) => console.error("[sync] initial horizon sweep error:", err))
     .finally(() => {
       horizonRunning = false;
+    });
+
+  // Boot: seed the expected-points tables immediately. The weekly Understat
+  // cron was the only writer, so a fresh render (or any deploy gap over a
+  // weekend) served empty xPts tables for days. Five league fetches, once per
+  // process — cheap, and it repairs the drift the id-mapping fix left behind.
+  understatRunning = true;
+  void syncLeagueUnderstatTables()
+    .then(() => console.log("[sync] boot understat league walk complete"))
+    .catch((err) => console.error("[sync] boot understat league walk error:", err))
+    .finally(() => {
+      understatRunning = false;
     });
 
   // The live loop: summary of live matches every LIVE_SUMMARY_SECONDS.
@@ -690,6 +714,31 @@ export function startSyncLoop(): void {
     void syncRosters().catch((err) => console.error("[sync] roster loop error:", err));
   });
 
+  // Daily: RESULTS lookback. The routine sweeps fetch at most yesterday, so a
+  // box down for two days shipped week-old gameweeks as "scheduled forever"
+  // until the boot backfill noticed the whole-season gap. One wide pass at
+  // noon UTC (between the European matchday evenings) re-reads the last week:
+  // ~26 competitions × 8 days of scoreboard calls, once daily. Results that
+  // already landed cost one HTTP round-trip each and change nothing (the
+  // upserts never regress a finished row), which is the cheap insurance that
+  // keeps the form strip and home/away tables fed without operator action.
+  cron.schedule("0 12 * * *", () => {
+    if (lookbackRunning) {
+      log("results lookback pass still running — skipping this tick");
+      return;
+    }
+    lookbackRunning = true;
+    void syncScoreboardWindow(7, 0)
+      .then(() => recordSyncPassOk())
+      .catch((err) => {
+        recordSyncPassFail();
+        console.error("[sync] results lookback loop error:", err);
+      })
+      .finally(() => {
+        lookbackRunning = false;
+      });
+  });
+
   // Hourly: the staleness heartbeat. A dead loop or live matches far past
   // their sync window is the one failure the app's users FEEL and no error
   // SURFACE shows — this turns it into a message (Telegram when ALERT_CHAT_ID
@@ -720,6 +769,11 @@ export function startSyncLoop(): void {
   // Weekly: Understat xG/xA/shot situations per favorite team.
   // Runs at 5am UTC Tuesday — after weekend matches have settled.
   cron.schedule("0 5 * * 2", async () => {
+    if (understatRunning) {
+      log("understat pass still running — skipping this tick");
+      return;
+    }
+    understatRunning = true;
     console.log("[cron] understat weekly sync starting");
     try {
       // League-wide first: it seeds the season totals for every side in the big
@@ -730,6 +784,8 @@ export function startSyncLoop(): void {
       console.log("[cron] understat weekly sync complete");
     } catch (err) {
       console.error("[cron] understat sync failed:", err);
+    } finally {
+      understatRunning = false;
     }
   });
 

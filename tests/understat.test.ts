@@ -12,7 +12,7 @@ import {
   normalizeTeamHistoryFromApi,
   normalizePlayersFromApi,
 } from "../server/understat/normalize.js";
-import { ABBR_BY_SLUG } from "../server/understat/ids.js";
+import { ABBR_BY_SLUG, understatSlugFor } from "../server/understat/ids.js";
 
 type HistoryInput = Parameters<typeof normalizeTeamHistoryFromApi>[0];
 
@@ -144,9 +144,13 @@ function testPlayerRates(): void {
 function testLeagueTeamMatching(): void {
   assert.equal(
     ABBR_BY_SLUG.Manchester_City,
-    "MCI",
+    "MNC",
     "the abbreviation map is the inverse of the team slugs, not hand-written",
   );
+  // BRE/PAR-style collisions have to resolve correctly in both directions.
+  assert.equal(ABBR_BY_SLUG.Brest, "BRE", "Ligue 1's Brest is mapped");
+  assert.equal(understatSlugFor("BRE", "fra.1"), "Brest", "league-aware slug lookup: the league decides");
+  assert.equal(understatSlugFor("BRE", "eng.1"), "Brentford");
 
   const history = normalizeTeamHistoryFromApi({
     Manchester_City: { id: "1", title: "Manchester City", history: [row({ xG: 2, xGA: 1, xpts: 3 })] },
@@ -154,7 +158,7 @@ function testLeagueTeamMatching(): void {
     Brentford: { id: "3", title: "Brentford", history: [row({ xG: 3, xGA: 3, xpts: 0 })] },
   } as unknown as HistoryInput);
   const teams = [
-    { id: "espn-mci", abbreviation: "MCI" },
+    { id: "espn-mci", abbreviation: "MNC" },
     // ESPN's casing isn't guaranteed; the join must not be case-sensitive.
     { id: "espn-ars", abbreviation: "ars" },
   ];

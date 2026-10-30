@@ -198,6 +198,8 @@ export const strings = {
     "table.emptyTitle": "No standings for this league yet",
     "table.emptyHint": "The table fills in as soon as the season syncs its first round.",
     "table.emptyAction": "Pick your club's league",
+    // Per-row form dash: a bare “–” invited "the form strip is broken" reports.
+    "table.formEmpty": "Form appears after this club's next finished match",
     "table.form": "Form",
     "table.overall": "Overall",
     "table.home": "Home",
@@ -926,6 +928,8 @@ export const strings = {
     "table.emptyTitle": "هنوز جدولی برای این لیگ نیست",
     "table.emptyHint": "جدول به محض اولین هفته سینک‌شده پر می‌شود.",
     "table.emptyAction": "لیگ باشگاهت را انتخاب کن",
+    // Per-row form dash: a bare “–” invited "the form strip is broken" reports.
+    "table.formEmpty": "فرم بعد از اولین مسابقه تمام‌شده این باشگاه نمایش داده می‌شود",
     "table.form": "فرم",
     "table.overall": "کل",
     "table.home": "خانه",

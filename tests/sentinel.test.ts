@@ -95,6 +95,53 @@ export function runSentinelTests(): void {
   assert.deepEqual(snap2.quietFollowedLeagues, ["uefa.champions"], "the empty competition is named");
   db.prepare("DELETE FROM followed_leagues WHERE league = 'uefa.champions'").run();
 
+  // Results drift: standings claim completed matches the matches table has
+  // never heard of (the shape of every silently-decayed results sync). The
+  // sentinel must name the league and the action — this is the check that
+  // would have flagged the blank form-strip season weeks earlier.
+  db.prepare(
+    "INSERT INTO standings (league, season, team_id, rank, played, wins, draws, losses, goals_for, goals_against, points) VALUES ('eng.1', '2026-27', 'H', 1, 20, 6, 2, 2, 20, 10, 20)",
+  ).run();
+  const driftSnap = syncHealthSnapshot(db, NOW);
+  assert.deepEqual(
+    driftSnap.resultsDrift,
+    [{ league: "eng.1", expected: 10, stored: 0 }],
+    "a league with zero stored results is named with both counts",
+  );
+  const driftAlert = checkAndAlert(db, (t) => sent.push(t), NOW);
+  assert.ok(driftAlert.problem?.includes("stored results"), `the problem names the drift: ${driftAlert.problem}`);
+  assert.match(driftAlert.problem ?? "", /eng\.1 \(0\/10\)/, "the alert shows stored/expected");
+  assert.match(driftAlert.problem ?? "", /sync -- results/, "the alert names the repair command");
+
+  // A small league that has played little says nothing — 3 matches of noise
+  // never reaches the drift threshold.
+  db.prepare(
+    `INSERT INTO standings (league, season, team_id, played) VALUES ('ned.1', '2026-27', 'A', 3)`,
+  ).run();
+  const driftSnap2 = syncHealthSnapshot(db, NOW);
+  assert.ok(
+    !driftSnap2.resultsDrift.some((d) => d.league === "ned.1"),
+    "a tiny standings sample is below the drift threshold",
+  );
+
+  // Once the results land inside the season window the drift clears: the
+  // standings' claim and the fold's source agree again.
+  //
+  // The threshold is `stored < expected - 3`, so clearing a 10/0 gap takes
+  // seven stored results — insert exactly that many and watch it go quiet.
+  for (let i = 3; i <= 9; i++) {
+    db.prepare(
+      `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score, last_synced_at)
+       VALUES (?, 'eng.1', 'H', 'A', ?, 'finished', 2, 1, ?)`,
+    ).run(
+      `m${i}`,
+      `2026-09-${String(i).padStart(2, "0")}T14:00:00.000Z`,
+      NOW.toISOString(),
+    );
+  }
+  const settled = syncHealthSnapshot(db, NOW);
+  assert.deepEqual(settled.resultsDrift, [], "results inside the window clear the drift");
+
   // Pass bookkeeping: failures accumulate, one OK clears the streak.
   resetSentinelStateForTest();
   recordSyncPassFail();

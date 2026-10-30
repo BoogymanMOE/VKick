@@ -1,0 +1,37 @@
+# Deploy drift: the check that would have caught a season of missing results
+# shipping for days after the fix landed on main.
+#
+# Render's autoDeploy redeploys on push, but a removed service connection, a
+# failed build or a disabled pipeline leaves production silently running old
+# code: bugs get "fixed" in the repo and keep reproducing in the app. This job
+# reads the API's own /health (it reports its commit), compares it to latest
+# main, and fails loudly on any gap — no ancestor slack, because the failure
+# mode is "prod is BEHIND", and maybe-day deploy latency is covered by the
+# schedule, not a per-push trigger.
+#
+# Scheduled only (not on push): right after a push, a still-queued deploy looks
+# identical to drift, and CI on every push is the wrong place to learn that a
+# deploy takes 4 minutes. Every 6 hours, any multi-day gap trips it.
+name: deploy-drift
+
+on:
+  schedule:
+    - cron: "37 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Compare production commit to main
+        run: node scripts/check-deploy-drift.mjs
+        env:
+          PROD_HEALTH_URL: https://vkick.onrender.com/health
+          EXPECTED_COMMIT: ${{ github.sha }}
+          PROD_WAKE_RETRIES: "3"

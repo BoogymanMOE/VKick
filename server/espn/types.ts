@@ -35,9 +35,15 @@ export function isCup(_league: string): boolean {
 
 /**
  * Sweep window: 21 days forward for all big-five leagues.
+ *
+ * `back` is a CEILING, not the window the sweeps actually use (callers pass
+ * their own budget), so widening it only widens sweeps that ASK for more: the
+ * daily results lookback runs a week back so a short outage — a box down for
+ * a weekend — self-heals on the next morning tick instead of waiting for the
+ * boot backfill to notice a whole-gameweek gap.
  */
 export function pollWindow(_league: string): { back: number; forward: number } {
-  return { back: 1, forward: 21 };
+  return { back: 7, forward: 21 };
 }
 
 /** "halftime" is a real status, not a flavour of live: the Sub Predictor's

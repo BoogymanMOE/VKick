@@ -466,7 +466,7 @@ function StandingItem({
   /** True while the home/away view is active, so a missing split reads "–". */
   splitView?: boolean;
 }) {
-  const { localize, lang } = useI18n();
+  const { localize, lang, t } = useI18n();
   // Persian digits: every figure renders through locale formatting — fa-IR
   // gives the Persian-Indic glyphs (۱, +۱۱, ٫ separator for decimals); EN
   // keeps Latin digits and the counting animation.
@@ -539,7 +539,12 @@ function StandingItem({
       ) : row.form ? (
         <FormStrip form={row.form} />
       ) : (
-        <span className="text-end text-xs text-ink-3">–</span>
+        // The honest dash: plain “–” alone read as a broken strip, so it now
+        // says when the squares will appear (also read out by screen readers
+        // via the title).
+        <span className="text-end text-xs text-ink-3" title={t("table.formEmpty")}>
+          –
+        </span>
       )}
     </li>
   );

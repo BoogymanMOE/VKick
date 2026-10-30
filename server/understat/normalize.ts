@@ -362,6 +362,12 @@ export function normalizeTeamHistoryFromApi(
 ): Record<string, NormTeamHistory> {
   const result: Record<string, NormTeamHistory> = {};
   for (const [key, team] of Object.entries(teams)) {
+    // Understat used to key `teams` by the title's slug form ("Liverpool"),
+    // which the league matcher reverse-looks-up in ABBR_BY_SLUG. It now keys
+    // by numeric understat id ("71") — every entry still carries `title`, so
+    // key BY TITLE (the matcher re-underscores spaces) and the record key is
+    // irrelevant. A payload where title went missing keeps the old key as a
+    // last resort so a shape change degrades to "no match", not a crash.
     let totalXg = 0;
     let totalXga = 0;
     let totalNpxG = 0;
@@ -394,7 +400,8 @@ export function normalizeTeamHistoryFromApi(
         xga: m.xGA == null ? null : parseNum(m.xGA),
       });
     }
-    result[key] = {
+    const resultKey = team?.title ? team.title.replace(/ /g, "_") : key;
+    result[resultKey] = {
       team_id: team.id,
       xg: count > 0 ? totalXg : 0,
       xga: count > 0 ? totalXga : 0,
