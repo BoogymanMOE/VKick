@@ -35,7 +35,7 @@ import type { LineupPlayer } from "../types";
 import type { Position } from "../types";
 import { competitionName } from "../lib/leagues";
 
-type Tab = "squad" | "fixtures" | "season" | "lineup" | "news";
+type Tab = "sheet" | "fixtures" | "season" | "news";
 
 const AVAILABILITY_TONE = { injured: "danger", suspended: "gold", doubtful: "muted" } as const;
 
@@ -69,7 +69,7 @@ export default function TeamPage() {
   const detailQuery = useTeamDetail(id);
   const squadQuery = useSquad(id);
 
-  const [tab, setTab] = useState<Tab>("squad");
+  const [tab, setTab] = useState<Tab>("sheet");
   // Which form badge the reader last tapped: its opponent + score is spelled
   // out under the strip (mobile taps have no hover tooltip).
   const [formDetail, setFormDetail] = useState<string | null>(null);
@@ -234,10 +234,9 @@ export default function TeamPage() {
           value={tab}
           onChange={setTab}
           options={[
-            { value: "squad", label: t("team.tab.squad") },
+            { value: "sheet", label: t("team.tab.sheet") },
             { value: "fixtures", label: t("team.tab.fixtures") },
             { value: "season", label: t("team.tab.season") },
-            { value: "lineup", label: t("team.tab.lineup") },
             { value: "news", label: t("team.tab.news") },
           ]}
         />
@@ -251,19 +250,46 @@ export default function TeamPage() {
         className="panel-in mt-lg"
         key={tab}
       >
-        {tab === "squad" ? <SquadTab squadQuery={squadQuery} teamColor={teamView.color} /> : null}
+        {tab === "sheet" ? (
+          <TeamSheetTab teamId={team.id} teamColor={teamView.color} squadQuery={squadQuery} />
+        ) : null}
         {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
         {tab === "season" ? <StatsTab stats={seasonStats} fixtures={fixtures} teamId={team.id} /> : null}
-        {tab === "lineup" ? <RecentLineupTab teamId={team.id} teamColor={teamView.color} /> : null}
         {tab === "news" ? <NewsTab teamId={team.id} league={team.league ?? ""} /> : null}
       </section>
     </>
   );
 }
 
-/* ------------------------------------------------------------ squad */
+/* ------------------------------------------------------------ team sheet */
 
-function SquadTab({
+/**
+ * One tab answers both questions a reader has about who plays: who lined up
+ * last time (the pitch, drawn with the published formation + XI), and who is
+ * on the books right now — every position, injured / suspended / doubtful
+ * included with their availability badges. The two halves settle on their own:
+ * a squad the weekly roster sync has not reached yet must not blank the pitch,
+ * and a club with no lineups yet must not blank the squad.
+ */
+function TeamSheetTab({
+  teamId,
+  teamColor,
+  squadQuery,
+}: {
+  teamId: string;
+  teamColor: string;
+  squadQuery: ReturnType<typeof useSquad>;
+}) {
+  const lineupQuery = useRecentLineup(teamId);
+  return (
+    <div className="space-y-lg">
+      <RecentLineupBlock query={lineupQuery} teamColor={teamColor} />
+      <SquadBlock squadQuery={squadQuery} teamColor={teamColor} />
+    </div>
+  );
+}
+
+function SquadBlock({
   squadQuery,
   teamColor,
 }: {
@@ -667,9 +693,14 @@ function StatCard({ title, rows }: { title: string; rows: Array<{ label: string;
 
 /* ------------------------------------------------------------ recent lineup */
 
-function RecentLineupTab({ teamId, teamColor }: { teamId: string; teamColor: string }) {
+function RecentLineupBlock({
+  query,
+  teamColor,
+}: {
+  query: ReturnType<typeof useRecentLineup>;
+  teamColor: string;
+}) {
   const { t, lang, localize } = useI18n();
-  const query = useRecentLineup(teamId);
   if (query.isLoading) return <PanelSkeleton height={192} />;
   if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
   const data = query.data;
