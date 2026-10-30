@@ -21,6 +21,7 @@ import { fillTranslations, withTranslation } from "../news/translate.js";
 import { buildFeedQuery } from "../matches/feed.js";
 import { settleStaleLive, settleStaleLiveAll, type LiveMatchRow } from "../matches/reconcile.js";
 import { currentSeasonLabel } from "../scoring/ledger.js";
+import { seasonWindow } from "../scoring/season.js";
 import { bad, requireUser } from "./shared.js";
 // Sync freshness for the ops surface: the client shows "data as of <time>"
 // rather than silently serving yesterday's football.
@@ -971,14 +972,19 @@ matchesRouter.get("/api/standings/:league", (req, res) => {
      ORDER BY s.rank ASC`,
     [league, season],
   );
+  // Only this season's fixtures: matches are kept across seasons (retention
+  // never deletes scores), so an unbounded fold would hand a club last season's
+  // home record and a form strip that ignores where the season started.
+  const window = seasonWindow(season);
   const formRows = all(
     db,
     `SELECT home_team_id, away_team_id, home_score, away_score
      FROM matches
      WHERE league = ? AND status = 'finished'
        AND home_score IS NOT NULL AND away_score IS NOT NULL
+       AND substr(kickoff_at, 1, 10) >= ? AND substr(kickoff_at, 1, 10) < ?
      ORDER BY kickoff_at DESC`,
-    [league],
+    [league, window.from, window.to],
   ) as FormMatchRow[];
   const form = foldForm(formRows);
   // Home and away records come out of the same finished matches, so the table's
