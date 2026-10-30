@@ -251,10 +251,10 @@ export default function TeamPage() {
         className="panel-in mt-lg"
         key={tab}
       >
-        {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
+        {tab === "squad" ? <SquadTab squadQuery={squadQuery} teamColor={teamView.color} /> : null}
         {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
         {tab === "season" ? <StatsTab stats={seasonStats} fixtures={fixtures} teamId={team.id} /> : null}
-        {tab === "lineup" ? <RecentLineupTab teamId={team.id} /> : null}
+        {tab === "lineup" ? <RecentLineupTab teamId={team.id} teamColor={teamView.color} /> : null}
         {tab === "news" ? <NewsTab teamId={team.id} league={team.league ?? ""} /> : null}
       </section>
     </>
@@ -263,7 +263,13 @@ export default function TeamPage() {
 
 /* ------------------------------------------------------------ squad */
 
-function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+function SquadTab({
+  squadQuery,
+  teamColor,
+}: {
+  squadQuery: ReturnType<typeof useSquad>;
+  teamColor: string;
+}) {
   const { t, lang } = useI18n();
   if (squadQuery.isLoading) return <PanelSkeleton height={192} />;
   if (squadQuery.isError) return <ErrorState onRetry={() => squadQuery.refetch()} />;
@@ -297,7 +303,7 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
       {POS_ORDER.map((pos) => {
         const group = squad.players.filter((p) => p.position === pos);
         if (group.length === 0) return null;
-        return <SquadSection key={pos} pos={pos} players={group} num={num} />;
+        return <SquadSection key={pos} pos={pos} players={group} num={num} teamColor={teamColor} />;
       })}
     </div>
   );
@@ -313,10 +319,12 @@ function SquadSection({
   pos,
   players,
   num,
+  teamColor,
 }: {
   pos: Position;
   players: SquadRow[];
   num: (value: number | string) => string;
+  teamColor: string;
 }) {
   const { t, dir, localize } = useI18n();
   const [collapsed, setCollapsed] = useLocalState<boolean>(
@@ -366,7 +374,12 @@ function SquadSection({
                 {/* A face for every squad member: the ESPN headshot where the
                     feed has one, the player's initials where it doesn't, on
                     the same footprint either way. */}
-                <PlayerAvatar name={localize(player.name)} src={player.avatarUrl} size="sm" />
+                <PlayerAvatar
+                  name={localize(player.name)}
+                  src={player.avatarUrl}
+                  teamColor={teamColor}
+                  size="sm"
+                />
                 <span className="player-name min-w-0">
                   <span className="block truncate text-sm font-bold text-ink">
                     {/* <bdi> isolates a Latin name so it cannot drift the row's
@@ -631,7 +644,7 @@ function StatCard({ title, rows }: { title: string; rows: Array<{ label: string;
 
 /* ------------------------------------------------------------ recent lineup */
 
-function RecentLineupTab({ teamId }: { teamId: string }) {
+function RecentLineupTab({ teamId, teamColor }: { teamId: string; teamColor: string }) {
   const { t, lang, localize } = useI18n();
   const query = useRecentLineup(teamId);
   if (query.isLoading) return <PanelSkeleton height={192} />;
@@ -651,6 +664,7 @@ function RecentLineupTab({ teamId }: { teamId: string }) {
           name={localize(player.name)}
           src={player.avatarUrl}
           fallbackSrc={player.headshot ?? player.headshotUrl}
+          teamColor={teamColor}
           size="sm"
         />
         <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>
@@ -678,6 +692,7 @@ function RecentLineupTab({ teamId }: { teamId: string }) {
                 starters: data.starters,
                 subs: [],
               }}
+              teamColor={teamColor}
             />
             <ul className="divide-y divide-line">{playerRows(data.starters)}</ul>
           </>
@@ -696,6 +711,7 @@ function RecentLineupTab({ teamId }: { teamId: string }) {
                   name={localize(player.name)}
                   src={player.avatarUrl}
                   fallbackSrc={player.headshot ?? player.headshotUrl}
+                  teamColor={teamColor}
                   size="sm"
                 />
                 <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>

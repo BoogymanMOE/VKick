@@ -162,6 +162,7 @@ function PlayerBoard({
                 name={localize(row.name)}
                 src={row.avatarUrl}
                 fallbackSrc={row.headshot}
+                teamColor={row.teamColor}
                 size="sm"
               />
               <div className="min-w-0 flex-1">

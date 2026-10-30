@@ -39,9 +39,12 @@ const asCandidate = (player: LineupPlayer): SlotCandidate => ({
 export function LineupPitch({
   lineup,
   playerEvents,
+  teamColor,
 }: {
   lineup: MatchLineup;
   playerEvents?: Record<string, LineupPlayerEvents>;
+  /** The club's colour, for the initials circle behind a face that is missing. */
+  teamColor?: string | null;
 }) {
   const { t, localize } = useI18n();
   // Carries the player itself plus the fields the placement helpers read, so a
@@ -65,6 +68,7 @@ export function LineupPitch({
                   key={player ? player.id : `empty-${rowIndex}-${index}`}
                   player={player}
                   name={player ? localize(player.name) : ""}
+                  teamColor={teamColor}
                   events={player ? playerEvents?.[player.id] : undefined}
                 />
               ))}
@@ -178,10 +182,12 @@ function PlayerMarks({ events }: { events?: LineupPlayerEvents }) {
 function PitchSlot({
   player,
   name,
+  teamColor,
   events,
 }: {
   player: LineupPlayer | null;
   name: string;
+  teamColor?: string | null;
   events?: LineupPlayerEvents;
 }) {
   if (!player) {
@@ -194,8 +200,14 @@ function PitchSlot({
   return (
     <span className="flex min-w-0 flex-1 flex-col items-center">
       <span className="relative">
-        <PlayerAvatar name={name} src={player.avatarUrl}
-          fallbackSrc={player.headshotUrl} size="md" className="border-pitch/60" />
+        <PlayerAvatar
+          name={name}
+          src={player.avatarUrl}
+          fallbackSrc={player.headshotUrl}
+          teamColor={teamColor}
+          size="md"
+          className="border-pitch/60"
+        />
         <Num className="absolute -end-1 -bottom-1 grid h-4 min-w-4 place-items-center rounded-full bg-volt px-0.5 text-xs leading-none text-black">
           {player.number > 0 ? player.number : "–"}
         </Num>
@@ -258,7 +270,7 @@ export function LineupsPanel({
           <Chip tone="pitch">{lineup.formation}</Chip>
         </div>
 
-        <LineupPitch lineup={lineup} playerEvents={playerEvents} />
+        <LineupPitch lineup={lineup} playerEvents={playerEvents} teamColor={team.color} />
 
         {/* The coach is not in every feed, and the lineups route has no coach
             endpoint at all — a bare "Coach:" label is worse than no line. */}

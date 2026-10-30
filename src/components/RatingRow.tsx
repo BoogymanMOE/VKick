@@ -54,6 +54,7 @@ export function RatingRow({
           name={localize(rating.name)}
           src={rating.avatarUrl}
           fallbackSrc={rating.headshotUrl}
+          teamColor={team.color}
           size="sm"
         />
 

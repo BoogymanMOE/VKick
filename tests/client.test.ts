@@ -7,6 +7,7 @@
  */
 import { strict as assert } from "node:assert";
 import { readableInk } from "../src/lib/colors.js";
+import { initialsOf } from "../src/lib/initials.js";
 import { breakdownItems } from "../src/lib/breakdown.js";
 import {
   buildPickerGroups,
@@ -28,6 +29,18 @@ function testReadableInk(): void {
   assert.equal(readableInk("#99C5EA"), "#04100B", "the pastel that failed AA with white");
   assert.equal(readableInk(null), "#FFFFFF", "an unknown colour keeps white");
   assert.equal(readableInk("not-a-colour"), "#FFFFFF", "a malformed value never throws");
+}
+
+/**
+ * The initials helper, exercised directly in case anything ever reaches back
+ * into it from the avatar and its fallback circle.
+ */
+function testInitialsOf(): void {
+  assert.equal(initialsOf("Cole Palmer"), "CP", "two words give both initials");
+  assert.equal(initialsOf("Ronald"), "R", "a single word gives one initial");
+  assert.equal(initialsOf("احمد"), "ا", "a non-Latin name keeps the first letter of the first word");
+  assert.equal(initialsOf(""), "?", "an empty string is a visible fallback, never blank");
+  assert.equal(initialsOf("   "), "?", "whitespace-only is treated as empty");
 }
 
 function testBreakdownItems(): void {
@@ -206,6 +219,7 @@ function testScopeRankDelta(): void {
 }
 
 export function runClientTests(): void {
+  testInitialsOf();
   testReadableInk();
   testBreakdownItems();
   testPickerGroups();

@@ -11,6 +11,8 @@ import type { Team } from "../types";
 import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
 import { cx } from "../lib/cx";
+import { readableInk, TEAM_FALLBACK } from "../lib/colors";
+import { initialsOf } from "../lib/initials";
 import { crestSources } from "../lib/logos";
 import { haptic } from "../lib/telegram";
 import { useLocalState } from "../lib/useLocalState";
@@ -316,23 +318,28 @@ export function Num({ children, className }: { children: ReactNode; className?: 
  * A player's face, in the circle every roster row and pitch slot uses.
  *
  * The feed carries an ESPN headshot URL for most players but not all, and a
- * CDN URL can 404 long after the sync stored it, so both cases fall back to the
- * player's initials on the same footprint — a roster reads evenly either way,
- * and a squad with no artwork at all still looks deliberate. The image is
- * decorative (the name is always rendered next to it) and lazy, since a squad
- * list is 25 of these. A failed local URL falls through to the remote URL,
- * then initials.
+ * CDN URL can 404 long after the sync stored it, so both cases fall back to a
+ * team-coloured circle with the player's initials on it — a roster reads evenly
+ * either way, and a squad with no artwork at all still looks deliberate. The
+ * circle is fixed-size (no intrinsic content width), so it never shifts when an
+ * image loads or fails, and the initials get readable ink chosen for the team
+ * colour (WCAG AA on arbitrary club colours, including the pastel that failed
+ * AA with white). The image is decorative (the name is always rendered next to
+ * it) and lazy, since a squad list is 25 of these. A failed local URL falls
+ * through to the remote URL, then the coloured initials.
  */
 export function PlayerAvatar({
   name,
   src,
   fallbackSrc,
+  teamColor,
   size = "md",
   className,
 }: {
   name: string;
   src?: string | null;
   fallbackSrc?: string | null;
+  teamColor?: string | null;
   size?: "sm" | "md" | "lg";
   className?: string;
 }) {
@@ -342,6 +349,8 @@ export function PlayerAvatar({
   // The API selects local before remote; a failed source advances to fallback.
   const candidates = [src, fallbackSrc].filter((candidate): candidate is string => Boolean(candidate));
   const resolved = candidates.find((candidate) => !brokenSources.includes(candidate)) ?? null;
+  // The club's colour, or the muted fallback — the circle is never unstyled.
+  const fill = teamColor && teamColor.trim() !== "" ? teamColor : TEAM_FALLBACK;
   useEffect(() => setLoaded(false), [resolved]);
   const onImageError = () => {
     if (resolved) setBrokenSources((sources) => [...sources, resolved]);
@@ -350,11 +359,12 @@ export function PlayerAvatar({
   return (
     <span
       className={cx(
-        "relative grid flex-none place-items-center overflow-hidden rounded-full border border-line bg-elevated font-bold text-ink-2",
+        "relative grid flex-none place-items-center overflow-hidden rounded-full border border-line font-bold",
         dims,
         className,
       )}
       aria-hidden="true"
+      style={{ backgroundColor: fill, color: readableInk(fill) }}
     >
       {resolved ? (
         <img
@@ -370,19 +380,12 @@ export function PlayerAvatar({
           )}
         />
       ) : (
-        initialsOf(name)
+        // <bdi> keeps a Persian or Latin initial from reordering the circle's
+        // contents in either page direction.
+        <bdi>{initialsOf(name)}</bdi>
       )}
     </span>
   );
-}
-
-/** Up to two initials from a player name — "Cole Palmer" → "CP", "Ronald" → "R". */
-function initialsOf(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  const first = words[0]!.charAt(0);
-  const last = words.length > 1 ? words[words.length - 1]!.charAt(0) : "";
-  return (first + last).toUpperCase();
 }
 
 /**
