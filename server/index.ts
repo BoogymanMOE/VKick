@@ -30,7 +30,7 @@ const ROOT_DIR = findProjectRoot(__dirname);
 import { getDb, get } from "./db/index.js";
 import { APP_BUILT_AT, APP_COMMIT } from "./appInfo.js";
 import { pruneFootballDetail, pruneSessions, logCapKb, RotatingLogger } from "./db/retention.js";
-import { startSyncLoop } from "./sync/service.js";
+import { backfillSeasonResults, startSyncLoop } from "./sync/service.js";
 import { startBot } from "./bot/index.js";
 import { startResolverLoop } from "./predictions/resolver.js";
 import { startBackupLoop } from "./backupSchedule.js";
@@ -227,6 +227,13 @@ const server = app.listen(PORT, () => {
     startSyncLoop();
     startResolverLoop();
     startBot(process.env.TELEGRAM_BOT_TOKEN ?? "");
+    // Fresh-database repair: a deploy that starts without the season's played
+    // gameweeks can never heal itself (the sweep polls one day back), so pages
+    // folded from finished matches — the standings form strip, home/away
+    // splits — ship blank rows until this one-time walk fills the gap.
+    void backfillSeasonResults()
+      .then((goals) => console.log(`[api] season backfill pass completed (${goals.length} goal alert(s))`))
+      .catch((err) => console.error("[api] season backfill pass FAILED:", String(err)));
     // Nightly DB snapshot. Runs here rather than as a Render cron job because a
     // persistent disk can only be mounted by its owning service (see
     // backupSchedule.ts). Skipped under SKIP_CRON=1, like the other loops.

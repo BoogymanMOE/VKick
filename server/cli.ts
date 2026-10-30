@@ -6,6 +6,7 @@
  *   npm run sync -- sync-match eng.1 401874934
  *   npm run sync -- standings
  *   npm run sync -- horizon              # backfill fixtures out to the 3-month calendar range
+ *   npm run sync -- results              # backfill finished results the fresh db never saw
  *   npm run sync -- understat             # league-wide xG/xPts (the expected tables)
  *   npm run sync -- dev-token 12345       # print a dev auth token (needs DEV_AUTH_SECRET set)
  *   npm run sync -- --dry-run             # fetch + normalize, print, write nothing
@@ -89,6 +90,14 @@ async function main(): Promise<void> {
       const { syncFixtureHorizon } = await import("./sync/service.js");
       const goals = await syncFixtureHorizon();
       log(`fixture horizon applied; ${goals.length} goal(s) detected`);
+      break;
+    }
+    case "results": {
+      // One-time repair for a fresh database that never learned the season's
+      // already-played gameweeks (the standings form strip folds from them).
+      const { backfillSeasonResults } = await import("./sync/service.js");
+      const goals = await backfillSeasonResults();
+      log(`results backfill applied; ${goals.length} goal(s) detected`);
       break;
     }
     case "rosters": {

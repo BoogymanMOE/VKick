@@ -1,12 +1,13 @@
 import cron from "node-cron";
 import { fetchScoreboard, fetchStandings, fetchSummary, fetchTeamRoster } from "../espn/client.js";
 import { LEAGUES, pollWindow, type LeagueSlug } from "../espn/types.js";
-import { getDb, all } from "../db/index.js";
+import { getDb, all, get } from "../db/index.js";
 import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
 import { onMatchFinished } from "../predictions/resolver.js";
 import { syncAllFavoriteTeamsUnderstat, syncLeagueUnderstatTables } from "./understat.js";
 import { queueGoalAlerts, queueMatchdayAlerts } from "../notifications.js";
 import { broadcast } from "../live/sse.js";
+import { seasonWindow } from "../scoring/season.js";
 // Sentinel: the loop's own failure detector — every pass below records its
 // outcome here, and the hourly check turns a dead loop or stale live matches
 // into one cooldown-gated alert (console at minimum, Telegram when wired).
@@ -119,6 +120,91 @@ export async function syncFixtureHorizon(): Promise<GoalAlert[]> {
         // one dead day must not strand the rest of the horizon.
         console.error(`[sync] horizon ${league} (${off}) FAILED:`, String(err));
       }
+    }
+  }
+  return goals;
+}
+
+/**
+ * Finished-results backfill for fresh databases.
+ *
+ * The routine sweep only polls one day back (`pollWindow`), so a database that
+ * starts empty — a fresh deploy, a rebuilt disk — never learns the results of
+ * the gameweeks already played: fixtures beyond yesterday are invisible forever
+ * and every screen folded from finished matches comes up empty (the standings
+ * form strip showed blank cells while every X beside it was correct — the feed
+ * had the data, the `matches` table did not). This pass compares each league's
+ * standings `played` against the scored finished matches actually stored in the
+ * season window, and for any league with a real gap walks the window once,
+ * day by day, applying every scoreboard it finds.
+ *
+ * One outcome, so cheapness needs no cleverness: leagues without a gap are
+ * skipped without a single HTTP call, and a league with a gap is fetched
+ * sequentially. Run at boot and by `npm run sync -- results`.
+ */
+
+/** Finished games under-counted before a league counts as needing repair —
+    cushions postponed/cancelled rows the standings may or may not include. */
+const BACKFILL_TOLERANCE = 2;
+/** Never walk more than this many days per league in one pass. */
+const BACKFILL_MAX_DAYS = 300;
+
+/** `YYYY-MM-DD` for today (UTC) — the day key the season-window reads use. */
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Called after boot with fire-and-forget semantics; never throws. */
+export async function backfillSeasonResults(): Promise<GoalAlert[]> {
+  const goals: GoalAlert[] = [];
+  const today = todayIso();
+  for (const league of LEAGUES) {
+    try {
+      const season =
+        get<{ season: string }>(db, "SELECT MAX(season) AS season FROM standings WHERE league = ?", [
+          league,
+        ])?.season;
+      if (!season) continue; // no standings for this league at all — nothing to reconcile
+      const { from, to } = seasonWindow(season);
+      const expected =
+        get<{ n: number }>(
+          db,
+          `SELECT COALESCE(SUM(played), 0) AS n FROM standings WHERE league = ? AND season = ?`,
+          [league, season],
+        )?.n ?? 0;
+      const wanted = Math.floor(expected / 2) - BACKFILL_TOLERANCE;
+      if (wanted <= 0) continue;
+      const stored =
+        get<{ n: number }>(
+          db,
+          `SELECT COUNT(*) AS n FROM matches
+           WHERE league = ? AND status = 'finished'
+             AND home_score IS NOT NULL AND away_score IS NOT NULL
+             AND substr(kickoff_at, 1, 10) >= ? AND substr(kickoff_at, 1, 10) < ?`,
+          [league, from, to],
+        )?.n ?? 0;
+      if (stored >= wanted) continue;
+
+      log(`${league}: standings say ${Math.floor(expected / 2)} finished match(es), db has ${stored} — backfilling ${from}..${today}`);
+      // Walk the season window newest-forward, capped: a league launched this
+      // season cannot need a walk past 300 days, and the cap bounds a
+      // pathological season label (bleeding into next year's rows) once.
+      const end = new Date(Math.min(new Date(to).getTime(), new Date(`${today}T00:00:00Z`).getTime() + 86_400_000));
+      const start = new Date(new Date(end).getTime() - BACKFILL_MAX_DAYS * 86_400_000);
+      let day = new Date(start.getTime() > new Date(`${from}T00:00:00Z`).getTime() ? start.getTime() : new Date(`${from}T00:00:00Z`).getTime());
+      while (day.getTime() < end.getTime()) {
+        const dateArg = day.toISOString().slice(0, 10).replace(/-/g, "");
+        try {
+          const json = await fetchScoreboard(league, dateArg);
+          applyScoreboard(db, json, league);
+        } catch (err) {
+          // One dead day must not strand the rest of the walk.
+          console.error(`[sync] backfill ${league} (${dateArg}) FAILED:`, String(err));
+        }
+        day = new Date(day.getTime() + 86_400_000);
+      }
+    } catch (err) {
+      console.error(`[sync] backfill ${league} FAILED:`, String(err));
     }
   }
   return goals;
