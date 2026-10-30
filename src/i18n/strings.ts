@@ -82,6 +82,8 @@ export const strings = {
   // League-group header, far end: "22 matches" / "2 matches".
   "matches.matchCount": "{count} matches",
   "matches.matchCountOne": "{count} match",
+  // Accessible name of a clickable team crest (feed rows, score hero).
+  "common.openTeam": "{team} — team page",
     // Tiny caption under the kickoff clock on feed rows.
   "matches.headerTz": "times in Tehran time",
   "matches.filter.all": "All",
@@ -810,6 +812,8 @@ export const strings = {
     "matches.headerCountOne": "{date} · {count} مسابقه",
     "matches.matchCount": "{count} بازی",
     "matches.matchCountOne": "{count} بازی",
+    // نام در دسترس‌پذیر نشان کلیک‌پذیر تیم (فید، هیروی نتیجه).
+    "common.openTeam": "صفحهٔ تیم {team}",
     // کپشن کوچک زیر ساعت شروع بازی در ردیف‌های فید.
     "matches.headerTz": "ساعت‌ها به وقت تهران",
     "matches.filter.all": "همه",

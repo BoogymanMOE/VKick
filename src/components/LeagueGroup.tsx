@@ -44,28 +44,51 @@ function LeagueHeader({ label, count }: { label: string; count: number }) {
   );
 }
 
-/** One team line of a match row: 22px crest + localized short name (+ star). */
-function TeamLine({
+/** One team line of a match row: localized short name (+ star). The crest
+ *  lives in its own grid cell so it can be its own link to the team page. */
+function NameLine({
   team,
   followed,
+  className,
 }: {
   team: Team;
   followed: boolean;
+  className?: string;
 }) {
   const { localize } = useI18n();
   return (
-    // The middle column is the scan path, so flex-none only the crest and
-    // star; the name truncates before anything else yields width.
-    <div className="flex min-w-0 items-center gap-[9px]">
-      <span className="flex-none">
-        <TeamBadge team={team} size="xs" />
-      </span>
+    // The name truncates before anything else yields width; the followed star
+    // stays pinned at the end.
+    <div className={cx("flex min-w-0 items-center gap-[9px]", className)}>
       <span className="min-w-0 truncate text-sm font-medium">{localize(team.shortName)}</span>
       <StarFilledIcon
         className={cx("h-3 w-3 flex-none text-volt", !followed && "hidden")}
         aria-hidden="true"
       />
     </div>
+  );
+}
+
+/** Crest → club page. Its own real link layered OVER the row's stretched
+ *  match link (nested <a> is invalid HTML, so the two are grid siblings — the
+ *  match link's ::after claims every tap the crests don't). The invisible
+ *  ::after pads the 22px badge out to a comfortable tap target. */
+function CrestLink({ team, className }: { team: Team; className?: string }) {
+  const { t, localize } = useI18n();
+  return (
+    <Link
+      to={`/team/${team.id}`}
+      aria-label={t("common.openTeam", { team: localize(team.name) })}
+      className={cx(
+        "relative flex h-[22px] w-[22px] items-center justify-center rounded-full"
+        + " transition-opacity duration-[var(--t-fast)] hover:opacity-80"
+        + " after:absolute after:-inset-x-2 after:-inset-y-1"
+        + " focus-visible:outline-2 focus-visible:outline-volt focus-visible:-outline-offset-2",
+        className,
+      )}
+    >
+      <TeamBadge team={team} size="xs" />
+    </Link>
   );
 }
 
@@ -140,8 +163,13 @@ export const MatchRow = memo(function MatchRow({
   const awayFollowed = isFavoriteTeam(match.away.id);
 
   return (
+    /* One grid, one row: time | crests | names | score. The match link sits
+       in the TIME cell and its ::after stretches across the whole li, so the
+       full row still opens the match — while the crest cells above it (later
+       siblings, position:relative) win their own taps and go to the teams. */
     <li
-      className="list-in"
+      className="list-in relative grid grid-cols-[minmax(2.75rem,auto)_1.375rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-[7px] px-3.5 py-[9px] transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated"
+      dir={lang === "fa" ? "rtl" : "ltr"}
       style={{
         "--stagger": `${Math.min(index, 8) * 30}ms`,
         contentVisibility: "auto",
@@ -152,13 +180,13 @@ export const MatchRow = memo(function MatchRow({
         to={`/match/${match.id}`}
         onPointerDown={() => prefetchMatch(match.id)}
         aria-label={label}
-        dir={lang === "fa" ? "rtl" : "ltr"}
-        className="flex min-w-0 items-center gap-3 px-3.5 py-[9px] transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated focus-visible:outline-2 focus-visible:outline-volt focus-visible:-outline-offset-2"
+        dir="ltr"
+        className="col-start-1 row-start-1 row-span-2 flex min-w-0 flex-col items-center justify-center gap-0.5 text-center after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-volt focus-visible:after:-outline-offset-2"
       >
         {/* TIME + STATUS column. Upcoming: kickoff clock. Live: the minute in
             the live coral, in place of the kickoff time. Halftime: the break
             label. Finished: "پایان" in muted ink. 44px floor, centred. */}
-        <div dir="ltr" className="flex min-w-11 flex-none flex-col items-center justify-center gap-0.5 text-center">
+        <div className="flex flex-col items-center justify-center gap-0.5 text-center">
           {isLive ? (
             minuteLabel ? (
               <span className="whitespace-nowrap text-[15px] font-bold leading-5 text-live">
@@ -192,20 +220,22 @@ export const MatchRow = memo(function MatchRow({
           )}
         </div>
 
-        {/* Middle column: home above, away below — the stacked-pairs layout.
+      </Link>
+
+        {/* Crests + names: home above, away below — the stacked-pairs layout.
             Persian names always win; English only where no name exists (the
             localize pass-through already guarantees that). */}
-        <div className="flex min-w-0 flex-1 flex-col gap-[7px]">
-          <TeamLine team={match.home} followed={homeFollowed} />
-          <TeamLine team={match.away} followed={awayFollowed} />
-        </div>
+        <CrestLink team={match.home} className="col-start-2 row-start-1" />
+        <CrestLink team={match.away} className="col-start-2 row-start-2" />
+        <NameLine team={match.home} followed={homeFollowed} className="col-start-3 row-start-1 min-w-0" />
+        <NameLine team={match.away} followed={awayFollowed} className="col-start-3 row-start-2 min-w-0" />
 
         {/* SCORE column: bold, one number per team line, aligned with that
             team (the cells share the team line's 22px height and the same
             7px row gap). Blank for upcoming matches — an upcoming row only
             carries the kickoff clock. */}
         {hasScore ? (
-          <div className="flex flex-none flex-col justify-end gap-[7px]">
+          <div className="col-start-4 row-span-2 flex flex-none flex-col justify-center gap-[7px]">
             <span className="flex h-[22px] items-center">
               <Num className="text-[15px] font-extrabold text-ink">
                 {match.homeScore ?? 0}
@@ -227,7 +257,6 @@ export const MatchRow = memo(function MatchRow({
             </span>
           </div>
         ) : null}
-      </Link>
     </li>
   );
 });

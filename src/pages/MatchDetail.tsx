@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ConfettiBurst } from "../components/Confetti";
 import { LineupsSkeleton,
@@ -275,13 +275,19 @@ export default function MatchDetail() {
         )}
       >
         <div className="flex items-center justify-between gap-2">
-          {/* HOME — the side the first score digit belongs to. */}
-          <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+          {/* HOME — the side the first score digit belongs to. The crest (or
+              the name under it) opens the club page; the link never wraps the
+              score's own column. */}
+          <Link
+            to={`/team/${home.id}`}
+            aria-label={t("common.openTeam", { team: localize(home.shortName) })}
+            className="flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-2xl focus-visible:outline-2 focus-visible:outline-volt focus-visible:-outline-offset-4"
+          >
             <TeamBadge team={home} size="md" />
             <span className="max-w-full truncate text-center text-sm font-bold text-ink">
               {localize(home.shortName)}
             </span>
-          </div>
+          </Link>
 
           <div className="flex flex-none flex-col items-center justify-center gap-1.5 self-stretch py-1">
             {/* Before kickoff there is no score — the kickoff clock is the
@@ -354,12 +360,16 @@ export default function MatchDetail() {
           </div>
 
           {/* AWAY — the side the second score digit belongs to. */}
-          <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+          <Link
+            to={`/team/${away.id}`}
+            aria-label={t("common.openTeam", { team: localize(away.shortName) })}
+            className="flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-2xl focus-visible:outline-2 focus-visible:outline-volt focus-visible:-outline-offset-4"
+          >
             <TeamBadge team={away} size="md" />
             <span className="max-w-full truncate text-center text-sm font-bold text-ink">
               {localize(away.shortName)}
             </span>
-          </div>
+          </Link>
         </div>
 
         {/* Date/time, then the facts a viewer looks for before kickoff: venue,
