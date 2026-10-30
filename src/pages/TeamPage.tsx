@@ -366,7 +366,10 @@ function SquadSection({
               <li
                 key={player.id}
                 dir={dir}
-                className="player-row rounded-card border border-line bg-surface p-2.5"
+                className={cx(
+                  "player-row rounded-card border border-line bg-surface p-2.5",
+                  player.active ? "" : "opacity-60",
+                )}
               >
                 <Num className="player-number text-xs font-bold text-ink-3">
                   {num(player.jersey ?? "–")}
@@ -385,6 +388,11 @@ function SquadSection({
                     {/* <bdi> isolates a Latin name so it cannot drift the row's
                         bidi run in Persian. */}
                     <bdi>{localize(player.name)}</bdi>
+                    {!player.active ? (
+                      <Chip tone="muted" className="ml-1">
+                        LEFT
+                      </Chip>
+                    ) : null}
                   </span>
                   <span className="block truncate text-xs text-ink-3">
                     {player.espnPosition ?? t(`pos.${player.position}`)}

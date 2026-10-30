@@ -771,6 +771,7 @@ export interface SquadRow {
   position: "GK" | "DEF" | "MID" | "FWD" | "OTHER";
   espnPosition: string | null;
   availability: ApiTeamAvailability | null;
+  active: boolean;
   jersey: number | null;
   headshot: string | null;
   avatarUrl?: string | null;
@@ -795,6 +796,7 @@ export function useSquad(teamId: string) {
         position: (p.position ?? "OTHER") as SquadRow["position"],
         espnPosition: p.espn_position,
         availability: p.availability ?? null,
+        active: p.active !== 0,
         jersey: p.jersey_number,
         headshot: p.headshot_url,
         avatarUrl: p.avatar_url ?? null,

@@ -410,6 +410,7 @@ export interface ApiSquadPlayer {
   appearances: number | null;
   season_goals: number | null;
   season_assists: number | null;
+  active: number | null;
 }
 
 /**

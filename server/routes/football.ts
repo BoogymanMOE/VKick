@@ -671,12 +671,15 @@ matchesRouter.get("/api/teams/:id/players", (req, res) => {
   const rows = all(
     db,
     `SELECT p.id, p.full_name, p.short_name, p.position, p.espn_position, p.jersey_number, p.headshot_url,
-            s.appearances, s.goals AS season_goals, s.assists AS season_assists
+            s.appearances, s.goals AS season_goals, s.assists AS season_assists,
+            p.active,
+            a.status AS availability_status, a.reason AS availability_reason, a.expected_return AS availability_expected_return
      FROM players p
      LEFT JOIN player_season_stats s ON s.player_id = p.id AND s.league = ? AND s.season = ?
-     WHERE p.team_id = ? AND p.active = 1
+     LEFT JOIN team_availability a ON a.team_id = p.team_id AND a.player_id = p.id
+     WHERE p.team_id = ?
      ORDER BY CASE p.position WHEN 'GK' THEN 0 WHEN 'DEF' THEN 1 WHEN 'MID' THEN 2 ELSE 3 END,
-              p.jersey_number ASC, p.full_name ASC`,
+              p.active DESC, p.jersey_number ASC, p.full_name ASC`,
     [team.league, season, teamId],
   );
   const coach = get<{ name: string }>(db, "SELECT name FROM team_coaches WHERE team_id = ?", [teamId]);

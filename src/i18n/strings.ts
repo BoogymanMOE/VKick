@@ -851,7 +851,7 @@ export const strings = {
     "status.live": "زنده",
     "status.finished": "پایان",
     "status.postponed": "به تعویق افتاد",
-    "status.abandoned": "نیمه‌کاره",
+    "status.abandoned": "رها شده",
     "status.cancelled": "لغو شد",
     "match.aet": "وقت اضافه",
     "match.pens": "{home}–{away} در ضربات پنالتی",
