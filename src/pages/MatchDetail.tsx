@@ -13,7 +13,7 @@ import { buildPlayerEvents } from "../lib/lineupEvents";
 import { buildMatchLineups } from "../lib/lineups";
 import { TopBar } from "../components/TopBar";
 import { PinIcon } from "../components/icons";
-import { LineupsPanel } from "../components/panels/LineupsPanel";
+import { LineupPitch, LineupsPanel } from "../components/panels/LineupsPanel";
 import { NewsCard } from "../components/panels/NewsCard";
 
 import {
@@ -35,6 +35,7 @@ import {
   useMatchH2H,
   useMatchForm,
   useMatchNews,
+  useRecentLineup,
 } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
 import { RATINGS_ENABLED } from "../lib/features";
@@ -454,7 +455,7 @@ export default function MatchDetail() {
           />
         ) : null}
         {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
-        {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
+        {tab === "lineups" ? <LineupsTab matchId={id} status={match.status} home={home} away={away} /> : null}
         {tab === "h2h" ? <H2HTab matchId={id} home={home} away={away} /> : null}
         {tab === "form" ? <FormTab matchId={id} home={home} away={away} /> : null}
         {tab === "news" ? <MatchNewsTab matchId={id} /> : null}
@@ -871,10 +872,14 @@ function MatchPlayerTable({
 
 function LineupsTab({
   matchId,
+  status,
   home,
   away,
 }: {
   matchId: string;
+  /** Pre-kickoff matches fall back to each side's previous XI until the
+   *  official one is named. */
+  status: string | undefined;
   home: { id: string; shortName: string; color: string };
   away: { id: string; shortName: string; color: string };
 }) {
@@ -895,13 +900,35 @@ function LineupsTab({
     [eventsQuery.data],
   );
   const data = query.data;
+
+  // Pre-kickoff with no official XI: show each side's LAST named XI instead.
+  // The flag gates the two recent-lineup fetches so they never run once the
+  // official XI has landed (or for live/finished matches, which never need
+  // them); once ESPN publishes, data.players fills and this turns false.
+  const wantPrevious = !query.isLoading && status === "scheduled" && (!data || data.players.length === 0);
+  const homePrev = useRecentLineup(home.id, wantPrevious);
+  const awayPrev = useRecentLineup(away.id, wantPrevious);
+
   if (query.isLoading) return <LineupsSkeleton />;
   if (query.isError) {
     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
   }
   if (!data || data.players.length === 0) {
-    // The Lineups tab is about the XI, not the stat sheet — an upcoming match
-    // must not say "stats land here after the first whistle".
+    if (status === "scheduled") {
+      if (homePrev.isLoading || awayPrev.isLoading) return <LineupsSkeleton />;
+      return (
+        <div className="space-y-3">
+          {[
+            { key: "home" as const, team: home, query: homePrev },
+            { key: "away" as const, team: away, query: awayPrev },
+          ].map((side) => (
+            <PreviousFormationCard key={side.key} team={side.team} query={side.query} />
+          ))}
+        </div>
+      );
+    }
+    // The Lineups tab is about the XI, not the stat sheet — an in-play or
+    // finished match with no data must not pretend otherwise.
     return <EmptyState icon="📋" title={t("lineups.noneYet")} hint={t("lineups.noneHint")} />;
   }
   const { homeLineup, awayLineup } = buildMatchLineups(data, home.id, away.id);
@@ -929,7 +956,61 @@ function LineupsTab({
       away={awayTeam}
       lineups={{ home: homeLineup, away: awayLineup }}
       playerEvents={playerEvents}
+      formationLabel={t("lineups.formation")}
     />
+  );
+}
+
+/**
+ * One side's PREVIOUS XI, shown while a fixture's official lineup is still
+ * unpublished: the last shape the club actually fielded, on the same pitch the
+ * real XI will use. When the official formation lands the whole tab flips back
+ * to LineupsPanel labelled plain "Formation".
+ */
+function PreviousFormationCard({
+  team,
+  query,
+}: {
+  team: { id: string; shortName: string; color: string };
+  query: ReturnType<typeof useRecentLineup>;
+}) {
+  const { t, localize } = useI18n();
+  const data = query.data;
+  const teamBadge: Team = {
+    id: team.id,
+    name: team.shortName,
+    shortName: team.shortName,
+    abbreviation: team.shortName.slice(0, 3),
+    color: team.color,
+    league: "PL",
+  };
+  const starters = data?.starters ?? [];
+  const formation = data?.match?.formation ?? "";
+  return (
+    <Card className="p-3">
+      <div className="flex items-center gap-2">
+        <TeamBadge team={teamBadge} size="sm" />
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(team.shortName)}</span>
+        <span className="flex-none label text-ink-3">{t("lineups.previousFormation")}</span>
+        {formation ? <Chip tone="pitch">{formation}</Chip> : null}
+      </div>
+      {starters.length > 0 ? (
+        <>
+          <p className="mt-2 text-xs text-ink-3">{t("lineups.previousFormationHint")}</p>
+          <div className="mt-2">
+            <LineupPitch
+              lineup={{ formation, coach: "", starters, subs: [] }}
+              teamColor={team.color}
+            />
+          </div>
+        </>
+      ) : (
+        // No recoverable last XI (the club's previous match had no summary):
+        // say so inside the same card instead of vanishing and leaving a
+        // phantom header for one side.
+        <p className="mt-2 text-xs text-ink-3">{t("team.lineupEmpty")}</p>
+      )}
+    </Card>
   );
 }/* ------------------------------------------------------------ adapters */
 

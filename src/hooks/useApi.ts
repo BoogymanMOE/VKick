@@ -665,12 +665,13 @@ export function useLeagueTeamStats(league: string) {
   });
 }
 
-/** Per-team season stat line + recent fixtures. */
-export function useRecentLineup(teamId: string) {
+/** Per-team last named XI + bench. `enabled` lets the match page fetch it
+ *  only while it actually needs the previous formation (pre-kickoff). */
+export function useRecentLineup(teamId: string, enabled = true) {
   return useQuery({
     queryKey: ["recent-lineup", teamId],
     queryFn: () => api.getRecentLineup(teamId),
-    enabled: Boolean(teamId),
+    enabled: Boolean(teamId) && enabled,
     staleTime: 5 * 60_000,
   });
 }

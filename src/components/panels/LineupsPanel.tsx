@@ -228,6 +228,7 @@ export function LineupsPanel({
   away,
   lineups,
   playerEvents,
+  formationLabel,
 }: {
   home: Team;
   away: Team;
@@ -238,8 +239,12 @@ export function LineupsPanel({
    * renders exactly as it did before the marks existed.
    */
   playerEvents?: Record<string, LineupPlayerEvents>;
+  /** The section's name — "Formation" normally, set by the pre-kickoff
+   *  fallback card when the XI shown is a previous one. */
+  formationLabel?: string;
 }) {
   const { t, localize } = useI18n();
+  const sectionLabel = formationLabel ?? t("lineups.formation");
   const [side, setSide] = useState<"home" | "away">("home");
 
   const team = side === "home" ? home : away;
@@ -265,8 +270,8 @@ export function LineupsPanel({
       <Card className="p-3">
         <div className="mb-3 flex items-center gap-2">
           <TeamBadge team={team} size="sm" />
-          <span className="text-sm font-bold text-ink">{localize(team.shortName)}</span>
-          <span className="flex-1" />
+          <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(team.shortName)}</span>
+          <span className="flex-none label text-ink-3">{sectionLabel}</span>
           <Chip tone="pitch">{lineup.formation}</Chip>
         </div>
 

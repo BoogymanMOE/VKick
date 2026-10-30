@@ -291,6 +291,12 @@ export const strings = {
     "lineups.noneHint": "Lineups usually appear about an hour before kickoff.",
     "lineups.emptyHint": "Lineups drop roughly an hour before kickoff.",
     "lineups.loadingHint": "Lineups not published yet",
+    // The XI section's name flips with its provenance: each side's previous XI
+    // until the official one is named, then plain "Formation".
+    "lineups.formation": "Formation",
+    "lineups.previousFormation": "Previous formation",
+    "lineups.previousFormationHint":
+      "The official XI isn't named yet — this is the club's last named XI.",
     "comments.liveThread": "Live thread",
     "comments.add": "Add comment",
     "comments.empty": "No comments yet",
@@ -1016,6 +1022,9 @@ export const strings = {
     "lineups.noneHint": "ترکیب‌ها معمولاً حدود یک ساعت قبل از شروع بازی اعلام می‌شوند.",
     "lineups.emptyHint": "ترکیب‌ها حدود یک ساعت قبل از شروع بازی اعلام می‌شوند.",
     "lineups.loadingHint": "ترکیب‌ها هنوز اعلام نشده‌اند",
+    "lineups.formation": "آرایش",
+    "lineups.previousFormation": "آرایش قبلی",
+    "lineups.previousFormationHint": "ترکیب رسمی هنوز اعلام نشده — این آخرین ترکیب اعلام‌شده باشگاه است.",
     "comments.liveThread": "گفت‌وگوی زنده",
     "comments.add": "افزودن دیدگاه",
     "comments.empty": "هنوز دیدگاهی نیست",
