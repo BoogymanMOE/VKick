@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { api, serverErrorKey, type ApiMatch, type ApiTeam, type ApiTeamAvailability } from "../lib/api";
+import {
+  api,
+  serverErrorKey,
+  type ApiMatch,
+  type ApiScorer,
+  type ApiTeam,
+  type ApiTeamAvailability,
+  type ApiTeamSplits,
+} from "../lib/api";
 import type { PredictionWindow } from "../lib/predictionWindow";
 import { TEAM_FALLBACK } from "../lib/colors";
 import { buildLeagueTabs, type LeagueTab } from "../lib/pickerGroups";
@@ -70,6 +78,12 @@ export function matchFromApi(m: ApiMatch): Match {
     minute: m.minute_display,
     predictions: [],
     round: m.round ?? null,
+    homePens: m.home_pens ?? null,
+    awayPens: m.away_pens ?? null,
+    decidedBy: m.decided_by ?? null,
+    venue: m.venue ?? null,
+    referee: m.referee ?? null,
+    attendance: m.attendance ?? null,
   };
 }
 
@@ -132,14 +146,25 @@ export interface StandingRow {
   form: string | null;
   /** Cup group name (e.g. "Group A"); null for league tables. */
   groupName: string | null;
+  /** Home and away records; null for a club with no finished match yet. */
+  splits: ApiTeamSplits | null;
+}
+
+export interface StandingsPayload {
+  season: string;
+  rows: StandingRow[];
+  /** Leading scorers, 0–5. Empty outside the competitions the stat sync covers. */
+  scorers: ApiScorer[];
 }
 
 export function useStandings(league: string) {
   return useQuery({
     queryKey: ["standings", league],
     queryFn: () => api.getStandings(league),
-    select: (data): StandingRow[] =>
-      data.standings.map((row) => ({
+    select: (data): StandingsPayload => ({
+      season: data.season,
+      scorers: data.scorers ?? [],
+      rows: data.standings.map((row) => ({
         // A standings row is not an ApiTeam: it carries `team_id`, not `id`.
         // Building the team explicitly instead of casting the row is what keeps
         // `/team/:id` links, React keys, isFavorite() and the bundled-crest
@@ -168,10 +193,18 @@ export function useStandings(league: string) {
         xga: row.xga ?? null,
         form: row.form ?? null,
         groupName: row.group_name ?? null,
-      })),
+        splits: row.splits ?? null,
+        })),
+    }),
     enabled: Boolean(league),
     staleTime: 5 * 60_000,
   });
+}
+
+/** The leading-scorer card data for a league, from the standings payload. */
+export function useStandingsScorers(league: string): ApiScorer[] {
+  const { data } = useStandings(league);
+  return data?.scorers ?? [];
 }
 
 /* ------------------------------------------------------------ favorites */
@@ -682,9 +715,12 @@ export function useTeamUnderstat(teamId: string) {
  * off the network.
  */
 export function useLeagueNews(league: string, teamId: string) {
+  const { lang } = useI18n();
   return useQuery({
-    queryKey: ["league-news", league, teamId],
-    queryFn: () => api.getLeagueNews(league, teamId),
+    // The language is part of the key: switching to Persian must refetch, or the
+    // cached English payload would keep serving an RTL page.
+    queryKey: ["league-news", league, teamId, lang],
+    queryFn: () => api.getLeagueNews(league, teamId, lang),
     enabled: Boolean(league && teamId),
     staleTime: 5 * 60_000,
   });
@@ -717,9 +753,10 @@ export function useMatchForm(matchId: string) {
 
 /** Articles tagged to this match's clubs; news turns over a few times a day. */
 export function useMatchNews(matchId: string) {
+  const { lang } = useI18n();
   return useQuery({
-    queryKey: ["match-news", matchId],
-    queryFn: () => api.getMatchNews(matchId),
+    queryKey: ["match-news", matchId, lang],
+    queryFn: () => api.getMatchNews(matchId, lang),
     enabled: Boolean(matchId),
     staleTime: 5 * 60_000,
   });

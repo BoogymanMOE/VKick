@@ -8,6 +8,9 @@ import { strict as assert } from "node:assert";
 import {
   normalizeStatus,
   statusDetailSaysHalftime,
+  notPlayedStatus,
+  decidedByFromDetail,
+  isNotPlayedStatus,
   normalizePosition,
   isPositional,
   normalizePositionName,
@@ -15,6 +18,8 @@ import {
   minuteDisplay,
   mapEventType,
   normalizeScoreboard,
+  normalizeSummaryMatch,
+  normalizeSummaryFacts,
   normalizeTimeline,
   normalizeRosters,
   normalizeRosterPlayers,
@@ -47,6 +52,41 @@ function testStatus() {
   assert.equal(statusDetailSaysHalftime(""), false);
   assert.equal(statusDetailSaysHalftime(undefined), false);
   assert.equal(statusDetailSaysHalftime("Kick Off"), false);
+}
+
+/**
+ * A called-off fixture is the one case where ESPN's coarse `state: "post"`
+ * lies: it also marks postponed and abandoned games that way. The wording has
+ * to win, or a 0-0 that nobody played reads as a result everywhere.
+ */
+function testNotPlayedAndDecidedBy() {
+  assert.equal(normalizeStatus("post", true, "Postponed"), "postponed");
+  assert.equal(normalizeStatus("post", true, "Match Postponed"), "postponed");
+  assert.equal(normalizeStatus("post", true, "Abandoned"), "abandoned");
+  assert.equal(normalizeStatus("post", true, "Suspended"), "abandoned");
+  assert.equal(normalizeStatus("post", true, "Cancelled"), "cancelled");
+  assert.equal(normalizeStatus("post", true, "Full Time"), "finished");
+  assert.equal(normalizeStatus("post", true, "FT-Pens"), "finished", "a shootout is a played result");
+  assert.equal(normalizeStatus("post", true, "AET"), "finished");
+  assert.equal(normalizeStatus("in", false, "Postponed"), "postponed", "wording wins over the live state");
+
+  assert.equal(notPlayedStatus("Postponed"), "postponed");
+  assert.equal(notPlayedStatus("FT"), null);
+  assert.equal(notPlayedStatus(undefined), null);
+  assert.ok(isNotPlayedStatus("postponed"));
+  assert.ok(isNotPlayedStatus("abandoned"));
+  assert.ok(isNotPlayedStatus("cancelled"));
+  assert.ok(!isNotPlayedStatus("finished"));
+
+  // How a knockout tie was separated — the only source of AET / pens truth.
+  assert.equal(decidedByFromDetail("FT-Pens"), "penalties");
+  assert.equal(decidedByFromDetail("Penalties"), "penalties");
+  assert.equal(decidedByFromDetail("Won on penalties"), "penalties");
+  assert.equal(decidedByFromDetail("After Extra Time"), "extra-time");
+  assert.equal(decidedByFromDetail("AET"), "extra-time");
+  assert.equal(decidedByFromDetail("FT"), null);
+  assert.equal(decidedByFromDetail("Pending"), null, "\"pending\" must not read as penalties");
+  assert.equal(decidedByFromDetail(undefined), null);
 }
 
 function testPositions() {
@@ -204,6 +244,130 @@ function testScoreboard() {
   assert.equal(teams.find((t) => t.id === "359")?.color, "#034694");
 }
 
+/**
+ * Postponed fixtures and shootout results on the scoreboard walk: a called-off
+ * game must not keep a score, and a tie decided on spot kicks must carry both
+ * the level score it finished 120 minutes on and the shootout tally.
+ */
+function testScoreboardNonPlayedAndShootout() {
+  const event = (
+    id: string,
+    description: string,
+    scores: [string, string],
+    homePens?: string,
+    awayPens?: string,
+  ) => ({
+    id,
+    date: "2026-10-28T20:00:00Z",
+    competitions: [
+      {
+        status: { type: { state: "post", completed: true, description } },
+        competitors: [
+          {
+            homeAway: "home",
+            score: scores[0],
+            shootoutScore: homePens,
+            team: { id: "10", displayName: "Home FC" },
+          },
+          {
+            homeAway: "away",
+            score: scores[1],
+            shootoutScore: awayPens,
+            team: { id: "20", displayName: "Away FC" },
+          },
+        ],
+      },
+    ],
+  });
+  const { matches } = normalizeScoreboard(
+    {
+      events: [
+        event("900", "Postponed", ["0", "0"]),
+        event("901", "FT-Pens", ["2", "2"], "4", "3"),
+        event("902", "AET", ["1", "0"]),
+      ],
+    },
+    "uefa.champions",
+  );
+  const [postponed, shootout, extraTime] = matches;
+  assert.ok(postponed && shootout && extraTime);
+  assert.equal(postponed.status, "postponed");
+  assert.equal(postponed.home_score, null, "a postponed fixture carries no score");
+  assert.equal(postponed.away_score, null, "a postponed fixture carries no score");
+  assert.equal(shootout.status, "finished");
+  assert.equal(shootout.home_score, 2, "the 120-minute score stays the score");
+  assert.equal(shootout.home_pens, 4);
+  assert.equal(shootout.away_pens, 3);
+  assert.equal(shootout.decided_by, "penalties");
+  assert.equal(extraTime.decided_by, "extra-time");
+  assert.equal(extraTime.home_pens, null, "no shootout → no pens score");
+  assert.equal(postponed.decided_by, null);
+}
+
+/**
+ * The pre-match facts a viewer looks for before kickoff: where, who referees,
+ * how many came. The shootout tally and the AET marker ride along so a tie
+ * that finished 1-1 and was won 4-3 on spot kicks reads as such.
+ */
+function testSummaryFactsAndShootout() {
+  const raw = {
+    header: {
+      id: "760500",
+      league: { slug: "uefa.champions" },
+      season: { year: 2026 },
+      competitions: [
+        {
+          id: "760500",
+          date: "2026-05-30T19:00:00Z",
+          status: {
+            type: { state: "post", completed: true, description: "FT-Pens", displayClock: "FT" },
+          },
+          competitors: [
+            {
+              homeAway: "home",
+              score: "1",
+              shootoutScore: "4",
+              team: { id: "132", displayName: "Bayern", abbreviation: "FCB" },
+            },
+            {
+              homeAway: "away",
+              score: "1",
+              shootoutScore: "3",
+              team: { id: "86", displayName: "Real Madrid", abbreviation: "RMA" },
+            },
+          ],
+        },
+      ],
+    },
+    gameInfo: {
+      venue: { fullName: "Allianz Arena", address: { city: "Munich" } },
+      officials: [
+        { displayName: "Assistant Referee One", position: { name: "Assistant Referee" } },
+        { displayName: "Michael Oliver", position: { name: "Referee" } },
+        { displayName: "VAR Room", position: { name: "Video Assistant Referee" } },
+      ],
+      attendance: 75000,
+    },
+  };
+  const facts = normalizeSummaryFacts(raw);
+  assert.equal(facts.venue, "Allianz Arena · Munich");
+  assert.equal(facts.referee, "Michael Oliver", "assistants and VAR never count as the referee");
+  assert.equal(facts.attendance, 75000);
+  assert.deepEqual(normalizeSummaryFacts({}), { venue: null, referee: null, attendance: null });
+
+  const match = normalizeSummaryMatch(raw);
+  assert.equal(match.status, "finished");
+  assert.equal(match.home_score, 1, "the 120-minute score, not the shootout");
+  assert.equal(match.away_score, 1);
+  assert.equal(match.home_pens, 4);
+  assert.equal(match.away_pens, 3);
+  assert.equal(match.decided_by, "penalties");
+  assert.equal(match.venue, "Allianz Arena · Munich");
+  assert.equal(match.referee, "Michael Oliver");
+  assert.equal(match.attendance, 75000);
+  assert.equal(match.minute_display, null, "a finished match has no clock");
+}
+
 /** Cup round extraction: notes/headline carry the round; leagues carry none. */
 function testRoundExtraction() {
   // Competition notes form (scoreboard payloads).
@@ -272,17 +436,20 @@ function testRoundExtraction() {
 
 export function runNormalizeTests(): void {
   testStatus();
+  testNotPlayedAndDecidedBy();
   testPositions();
   testFullRosterAndAvailability();
   testClock();
   testEventTypes();
   testScoreboard();
+  testScoreboardNonPlayedAndShootout();
+  testSummaryFactsAndShootout();
   testRoundExtraction();
   testTimeline();
   testRosters();
   testStandingsV2();
   console.log(
-    "  normalize: status, positions, clock, event types, scoreboard, rounds, timeline, rosters, standings OK",
+    "  normalize: status, postponements, positions, clock, event types, scoreboard, shootouts, rounds, timeline, rosters, standings OK",
   );
 }
 

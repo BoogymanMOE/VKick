@@ -5,6 +5,7 @@
  */
 import { strict as assert } from "node:assert";
 import { foldForm, type FormMatchRow } from "../server/standings/form.js";
+import { foldSplits } from "../server/standings/splits.js";
 
 const match = (home: string, away: string, homeScore: number, awayScore: number): FormMatchRow => ({
   home_team_id: home,
@@ -50,8 +51,52 @@ function testFormLimit(): void {
   assert.equal(foldForm(rows, 2).A, "WW", "the cap drops the oldest result, never the newest");
 }
 
+/**
+ * Home/away splits: the half of a season a single league table never shows.
+ * Points, goals and the W-D-L record all have to come off the right side of
+ * each match — a swapped home/away column would survive review for weeks.
+ */
+function testSplitFolding(): void {
+  const rows = [
+    match("A", "B", 2, 0), // A: home win; B: away loss
+    match("C", "A", 1, 1), // A: away draw
+    match("B", "A", 3, 1), // A: away loss
+    match("A", "C", 0, 2), // A: home loss
+  ];
+  const splits = foldSplits(rows);
+  const a = splits.A!;
+  assert.deepEqual(a.home, {
+    played: 2,
+    wins: 1,
+    draws: 0,
+    losses: 1,
+    goalsFor: 2,
+    goalsAgainst: 2,
+    points: 3,
+  });
+  assert.deepEqual(a.away, {
+    played: 2,
+    wins: 0,
+    draws: 1,
+    losses: 1,
+    goalsFor: 2,
+    goalsAgainst: 4,
+    points: 1,
+  });
+  // The other side of the same matches, read from each club's own half.
+  assert.equal(splits.B?.home.points, 3, "B beat A 3-1 at home");
+  assert.equal(splits.B?.home.goalsFor, 3);
+  assert.equal(splits.B?.away.losses, 1, "B lost 0-2 at A");
+  assert.equal(splits.B?.home.losses, 0);
+  assert.equal(splits.C?.home.draws, 1, "C drew 1-1 at home to A");
+  assert.equal(splits.C?.away.wins, 1, "C won 2-0 at A");
+  assert.equal(splits.D, undefined, "a club with no finished match has no split");
+  assert.deepEqual(foldSplits([]), {});
+}
+
 export function runStandingsTests(): void {
   testFormFolding();
   testFormLimit();
-  console.log("  standings: form folding, home/away sides and the result cap OK");
+  testSplitFolding();
+  console.log("  standings: form folding, home/away splits and the result cap OK");
 }

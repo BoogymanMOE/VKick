@@ -309,9 +309,27 @@ export function Chip({
   );
 }
 
-/** Numbers use the display face with tabular figures so scores never jitter. */
-export function Num({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cx("num-display tabular-nums", className)}>{children}</span>;
+/**
+ * Numbers use the display face with tabular figures so scores never jitter.
+ *
+ * `dir` is for the one shape that must not follow the sentence: a score or a
+ * shootout tally is always home–away left to right, even inside a Persian
+ * sentence whose flow runs the other way.
+ */
+export function Num({
+  children,
+  className,
+  dir,
+}: {
+  children: ReactNode;
+  className?: string;
+  dir?: "ltr" | "rtl" | "auto";
+}) {
+  return (
+    <span className={cx("num-display tabular-nums", className)} dir={dir}>
+      {children}
+    </span>
+  );
 }
 
 /**

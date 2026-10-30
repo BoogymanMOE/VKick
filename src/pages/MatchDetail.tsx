@@ -38,9 +38,9 @@ import {
 import { useI18n } from "../i18n/context";
 import { RATINGS_ENABLED } from "../lib/features";
 import { flipIntoPlace, getFlipFirst } from "../lib/flip";
-import { formatClock, formatKickoffDate, kickoffParts, toFaDigits } from "../lib/format";
+import { formatClock, formatKickoffDate, kickoffParts, parseMinute, toFaDigits } from "../lib/format";
 import { useNow } from "../hooks/useNow";
-import { useLiveUpdates } from "../hooks/useLiveUpdates";
+import { useLiveLinkConnected, useLiveUpdates } from "../hooks/useLiveUpdates";
 import type { FormGame, Team, TimelineEventType } from "../types";
 import { FormStrip } from "./Table";
 
@@ -112,7 +112,8 @@ export default function MatchDetail() {
     const score = `${match.home_score}-${match.away_score}`;
     if (scoreRef.current && scoreRef.current !== score && match.home_score !== null) {
       setBurst((v) => v + 1);
-      setFlashScore(true);            window.setTimeout(() => setFlashScore(false), 1400);
+      setFlashScore(true);
+      window.setTimeout(() => setFlashScore(false), 1400);
     }
     scoreRef.current = score;
   }, [match?.home_score, match?.away_score, match]);
@@ -149,10 +150,10 @@ export default function MatchDetail() {
     });
   }, [match]);
 
-  const currentMinute = useMemo(() => {
-    const m = /\d+/.exec(match?.minute_display ?? "");
-    return m ? Number(m[0]) : 0;
-  }, [match?.minute_display]);
+  // "90'+3'" must read as 90+3, not 90: the added minutes are the whole point
+  // of the stoppage-time clock, and reading only the first number dropped them.
+  const liveMinute = useMemo(() => parseMinute(match?.minute_display), [match?.minute_display]);
+  const liveLinkConnected = useLiveLinkConnected();
 
   const now = useNow(30_000);
 
@@ -178,6 +179,21 @@ export default function MatchDetail() {
           : t("match.minutes", { m: nf.format(minutes) }),
     });
   }, [match, now, t, nf]);
+
+  // Why this match has no result: postponed, abandoned or cancelled. A plain
+  // null label means it is a normal fixture.
+  const notPlayedLabel =
+    match?.status === "postponed"
+      ? t("status.postponed")
+      : match?.status === "cancelled"
+        ? t("status.cancelled")
+        : match?.status === "abandoned"
+          ? t("status.abandoned")
+          : null;
+  const pens =
+    match?.home_pens != null && match.away_pens != null
+      ? { home: match.home_pens, away: match.away_pens }
+      : null;
 
 
 
@@ -291,15 +307,23 @@ export default function MatchDetail() {
                 <LiveDot />
                 {match.status === "halftime" ? (
                   t("timeline.halftime")
-                ) : (
+                ) : liveMinute ? (
                   <span>
                     {t("status.live")} {"\u200F"}
                     <Num>
-                      <span dir="ltr">{nf.format(currentMinute)}′</span>
+                      <span dir="ltr">
+                        {nf.format(liveMinute.base)}
+                        {liveMinute.added ? `+${nf.format(liveMinute.added)}` : ""}′
+                      </span>
                     </Num>
                   </span>
+                ) : (
+                  t("status.live")
                 )}
               </Chip>
+            ) : notPlayedLabel ? (
+              // A called-off fixture is a state, not a 0-0 score.
+              <Chip tone="muted">{notPlayedLabel}</Chip>
             ) : countdownLabel ? (
               <Chip tone="volt" className="motion-safe:animate-pulse">
                 {countdownLabel}
@@ -307,12 +331,26 @@ export default function MatchDetail() {
             ) : (
               <Chip tone={match.status === "finished" ? "muted" : "volt"}>
                 {match.status === "finished" ? (
-                  t("status.finished")
+                  match.decided_by === "extra-time" ? (
+                    t("match.aet")
+                  ) : (
+                    t("status.finished")
+                  )
                 ) : (
                   <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
                 )}
               </Chip>
             )}
+            {/* A shootout is part of the result: without this line a 2-2 tie
+                decided 4-3 on spot kicks reads as a draw everywhere. */}
+            {pens ? (
+              <p className="text-[11px] font-bold text-ink-3">
+                <Num dir="ltr">
+                  {fa ? `${toFaDigits(pens.home)}–${toFaDigits(pens.away)}` : `${pens.home}–${pens.away}`}
+                </Num>{" "}
+                {t("match.pensShort")}
+              </p>
+            ) : null}
           </div>
 
           {/* AWAY — the side the second score digit belongs to. */}
@@ -324,14 +362,32 @@ export default function MatchDetail() {
           </div>
         </div>
 
-        {/* Date/time (and venue when the payload ever carries one — today
-            there is no venue field at all) as simple lines below the pill.
+        {/* Date/time, then the facts a viewer looks for before kickoff: venue,
+            referee and attendance (as far as ESPN's summary carries them).
             The clock is its own dir=ltr run so the bidi order never scrambles. */}
-        <div className="mt-2 text-center text-xs text-ink-2">
+        <div className="mt-2 space-y-0.5 text-center text-xs text-ink-2">
           <p>
             {kickoffParts(new Date(match.kickoff_at), locale).day}{" "}
             <span dir="ltr">{kickoffParts(new Date(match.kickoff_at), locale).clock}</span>
           </p>
+          {match.venue ? (
+            <p className="truncate">
+              {t("match.venue")}: <bdi>{match.venue}</bdi>
+            </p>
+          ) : null}
+          {match.referee ? (
+            <p className="truncate">
+              {t("match.referee")}: <bdi>{match.referee}</bdi>
+            </p>
+          ) : null}
+          {match.attendance ? (
+            <p>
+              {t("match.attendance")}: <Num>{fa ? toFaDigits(match.attendance) : match.attendance}</Num>
+            </p>
+          ) : null}
+          {inPlay && !liveLinkConnected ? (
+            <p className="text-ink-3">{t("match.liveStale")}</p>
+          ) : null}
         </div>
       </div>
 
@@ -363,7 +419,7 @@ export default function MatchDetail() {
           <TimelineTab
             matchId={id}
             live={inPlay}
-            minute={currentMinute}
+            minute={liveMinute?.base ?? 0}
             teams={[home, away]}
           />
         ) : null}
@@ -565,7 +621,13 @@ function StatsTab({
   // Synced box score first: all eight stats in display order. Possession and
   // pass accuracy are shares of 100 shown as "63%", with the bar split by the
   // raw percentage instead of a ratio.
-  const statRows: Array<{ label: string; homeValue: number | null; awayValue: number | null; pct?: boolean }> =
+  const statRows: Array<{
+    label: string;
+    homeValue: number | null;
+    awayValue: number | null;
+    pct?: boolean;
+    decimals?: number;
+  }> =
     served
       ? [
           { label: t("stats.possession"), homeValue: served.home.possession_pct, awayValue: served.away.possession_pct, pct: true },
@@ -576,6 +638,11 @@ function StatsTab({
           { label: t("stats.offsides"), homeValue: served.home.offsides, awayValue: served.away.offsides },
           { label: t("stats.passAccuracy"), homeValue: served.home.pass_accuracy_pct, awayValue: served.away.pass_accuracy_pct, pct: true },
           { label: t("stats.saves"), homeValue: served.home.saves, awayValue: served.away.saves },
+          // xG rides along only when both sides have it: a one-sided bar would
+          // invent a comparison the source never made.
+          ...(served.home.xg != null && served.away.xg != null
+            ? [{ label: t("xg.title"), homeValue: served.home.xg, awayValue: served.away.xg, decimals: 2 }]
+            : []),
         ]
       : [
           { label: t("stats.goals"), homeValue: homeTotals.goals, awayValue: awayTotals.goals },
@@ -620,6 +687,11 @@ function StatsTab({
             ))}
           </div>
         </div>
+        {/* The source has no xG for 27 of the 32 competitions we sync — say so
+            once here instead of leaving a hole where a familiar stat belongs. */}
+        {served && (served.home.xg == null || served.away.xg == null) ? (
+          <p className="mt-3 border-t border-line pt-2 text-xs text-ink-3">{t("xg.emptyHint")}</p>
+        ) : null}
       </Card>
 
       {/* Every player who appeared, both sides in one pass — no Home/Away
@@ -644,22 +716,22 @@ function StatCompareRow({
   homeValue,
   awayValue,
   pct = false,
+  decimals = 0,
 }: {
   label: string;
   homeValue: number | null;
   awayValue: number | null;
   pct?: boolean;
+  /** Fixed fraction digits (xG reads "1.84", not "1.8361"). */
+  decimals?: number;
 }) {
   const { lang } = useI18n();
   const fa = lang === "fa";
-  const show = (v: number | null) =>
-    v === null
-      ? "–"
-      : fa
-        ? toFaDigits(pct ? `${v}%` : String(v))
-        : pct
-          ? `${v}%`
-          : String(v);
+  const show = (v: number | null) => {
+    if (v === null) return "–";
+    const value = decimals > 0 ? v.toFixed(decimals) : String(v);
+    return fa ? toFaDigits(pct ? `${value}%` : value) : pct ? `${value}%` : value;
+  };
   const hv = homeValue ?? 0;
   const av = awayValue ?? 0;
   const total = hv + av;

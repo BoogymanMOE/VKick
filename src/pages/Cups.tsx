@@ -56,7 +56,15 @@ export default function Cups() {
   const matches = useMemo(() => matchesQuery.data ?? [], [matchesQuery.data]);
 
   const live = matches.filter((m) => m.status === "live");
-  const scheduled = matches.filter((m) => m.status === "scheduled");
+  // Not-played fixtures belong with the upcoming ones: a postponed tie must
+  // still be visible in its cup, labelled as postponed rather than vanish.
+  const scheduled = matches.filter(
+    (m) =>
+      m.status === "scheduled" ||
+      m.status === "postponed" ||
+      m.status === "abandoned" ||
+      m.status === "cancelled",
+  );
   const finished = matches.filter((m) => m.status === "finished");
 
   // Bulk expand/collapse for the bracket rounds. null = no override, so every
@@ -285,6 +293,23 @@ function CupMatchList({ matches, bare = false }: { matches: Match[]; bare?: bool
                     <Num>
                       {match.homeScore ?? 0}–{match.awayScore ?? 0}
                     </Num>
+                    {/* A shootout score sits inside the result chip, so a tie
+                        settled 4-3 on penalties never reads as a draw. */}
+                    {match.homePens != null && match.awayPens != null ? (
+                      <span className="text-[10px] font-bold text-ink-3">
+                        <Num dir="ltr">
+                          ({match.homePens}–{match.awayPens})
+                        </Num>
+                      </span>
+                    ) : null}
+                  </Chip>
+                ) : match.status !== "scheduled" ? (
+                  <Chip tone="muted">
+                    {match.status === "postponed"
+                      ? t("status.postponed")
+                      : match.status === "cancelled"
+                        ? t("status.cancelled")
+                        : t("status.abandoned")}
                   </Chip>
                 ) : (
                   <Chip tone="volt">
@@ -325,6 +350,11 @@ function TieCard({ tie }: { tie: BracketTie }) {
             <Num className="text-xs text-ink">
               {tie.aggHome ?? "–"}–{tie.aggAway ?? "–"}
             </Num>
+            {tie.aggHomePens != null && tie.aggAwayPens != null ? (
+              <Num dir="ltr" className="text-[10px] font-bold text-ink-3">
+                ({tie.aggHomePens}–{tie.aggAwayPens})
+              </Num>
+            ) : null}
           </span>
           <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">{tie.awayName}</span>
         </div>

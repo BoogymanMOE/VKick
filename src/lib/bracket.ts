@@ -5,8 +5,9 @@
  * enough to rebuild the tournament's shape — which pairings exist per round,
  * who advanced (aggregate across legs for two-legged ties), and which pairing
  * fed which — without any extra endpoint. What it can NOT tell us stays
- * unknown on purpose: penalty shootouts, away-goals ties and abandonments all
- * resolve to "undecided" rather than a guess.
+ * unknown on purpose only when the source withheld it: a level tie with a
+ * stored shootout score is resolved by that score, and a leg decided in extra
+ * time is marked as such.
  *
  * Live matches are excluded by the caller before this runs (the Cups page
  * surfaces them once, in the live section) — mirroring the old byRound map.
@@ -32,6 +33,11 @@ export interface BracketTie {
   /** Inferred advancing team — null while any leg is open, level or unscored. */
   winnerId: string | null;
   winnerName: string | null;
+  /** Shootout scores when the tie was settled on penalties (else null). */
+  aggHomePens: number | null;
+  aggAwayPens: number | null;
+  /** True when any leg was decided in extra time. */
+  extraTime: boolean;
   /** Tie keys of earlier rounds this tie's participants advanced from. */
   feeds: string[];
   /** Round label of the nearest feeder, for the "← Round of 16" caption. */
@@ -157,25 +163,43 @@ function makeTie(round: string, legs: Match[]): BracketTie {
   let homeGoals = 0;
   let awayGoals = 0;
   let scored = false;
+  let homePens = 0;
+  let awayPens = 0;
+  let pensScored = false;
+  let extraTime = false;
   for (const leg of legs) {
     if (leg.status !== "finished" || leg.homeScore == null || leg.awayScore == null) continue;
     scored = true;
     if (leg.home.id === homeId) {
       homeGoals += leg.homeScore;
       awayGoals += leg.awayScore;
+      if (leg.homePens != null && leg.awayPens != null) {
+        homePens += leg.homePens;
+        awayPens += leg.awayPens;
+        pensScored = true;
+      }
     } else {
       homeGoals += leg.awayScore;
       awayGoals += leg.homeScore;
+      if (leg.homePens != null && leg.awayPens != null) {
+        homePens += leg.awayPens;
+        awayPens += leg.homePens;
+        pensScored = true;
+      }
     }
+    if (leg.decidedBy === "extra-time" || leg.decidedBy === "penalties") extraTime = true;
   }
   const aggHome = scored ? homeGoals : null;
   const aggAway = scored ? awayGoals : null;
 
   let winnerId: string | null = null;
-  if (scored && legs.every((leg) => leg.status === "finished")) {
+  const settled = scored && legs.every((leg) => leg.status === "finished");
+  if (settled) {
     if (aggHome! > aggAway!) winnerId = homeId;
     else if (aggAway! > aggHome!) winnerId = awayId;
-    // Level aggregate: penalties/away-goals decided it, and we don't know how.
+    // Level on goals: the shootout decides. No shootout score means the source
+    // never told us — stay undecided instead of guessing a winner.
+    else if (pensScored && homePens !== awayPens) winnerId = homePens > awayPens ? homeId : awayId;
   }
 
   const winner = winnerId
@@ -195,6 +219,9 @@ function makeTie(round: string, legs: Match[]): BracketTie {
     aggAway,
     winnerId,
     winnerName: winner?.shortName ?? null,
+    aggHomePens: pensScored ? homePens : null,
+    aggAwayPens: pensScored ? awayPens : null,
+    extraTime,
     feeds: [],
     feedRound: null,
   };

@@ -29,6 +29,9 @@ function match(opts: {
   status?: Match["status"];
   homeScore?: number | null;
   awayScore?: number | null;
+  homePens?: number | null;
+  awayPens?: number | null;
+  decidedBy?: Match["decidedBy"];
 }): Match {
   seq += 1;
   return {
@@ -44,6 +47,9 @@ function match(opts: {
     minute: null,
     predictions: [],
     round: opts.round,
+    homePens: opts.homePens ?? null,
+    awayPens: opts.awayPens ?? null,
+    decidedBy: opts.decidedBy ?? null,
   };
 }
 
@@ -259,6 +265,103 @@ function testLiveExcludedAndEmpty(): void {
   assert.deepEqual(buildBracket([]).rounds, []);
 }
 
+/**
+ * A level tie is decided by the shootout, and the bracket is the one screen
+ * that used to say "undecided" for a final everybody watched. The aggregate
+ * keeps the 120-minute goals; only the advancing team comes from the pens.
+ */
+function testShootoutDecidesLevelTie(): void {
+  const b = buildBracket([
+    match({
+      home: ARS,
+      away: RMA,
+      round: "Final",
+      kickoff: "2026-05-30T19:00:00Z",
+      homeScore: 1,
+      awayScore: 1,
+      homePens: 4,
+      awayPens: 3,
+      decidedBy: "penalties",
+    }),
+    match({
+      home: PSG,
+      away: AJX,
+      round: "Final",
+      kickoff: "2026-05-31T19:00:00Z",
+      homeScore: 2,
+      awayScore: 2,
+      decidedBy: "extra-time",
+    }),
+  ]);
+  const [final] = b.rounds;
+  const [pens, noPens] = final!.ties;
+  assert.equal(pens?.winnerId, "ars", "the shootout winner advances");
+  assert.equal(pens?.aggHome, 1, "the aggregate stays the 120-minute score");
+  assert.equal(pens?.aggAway, 1);
+  assert.equal(pens?.aggHomePens, 4);
+  assert.equal(pens?.aggAwayPens, 3);
+  assert.equal(pens?.extraTime, true);
+  assert.equal(noPens?.winnerId, null, "level with no shootout score stays honestly undecided");
+  assert.equal(noPens?.aggHomePens, null);
+}
+
+/** Two legs level on aggregate: pens from the second leg decide, reoriented. */
+function testShootoutAcrossTwoLegs(): void {
+  const b = buildBracket([
+    match({
+      home: ARS,
+      away: BAY,
+      round: "Semi-final",
+      kickoff: "2026-04-28T19:00:00Z",
+      homeScore: 1,
+      awayScore: 0,
+    }),
+    match({
+      home: BAY,
+      away: ARS,
+      round: "Semi-final",
+      kickoff: "2026-05-05T19:00:00Z",
+      homeScore: 1,
+      awayScore: 0,
+      // Bayern won 5-4 on spot kicks at home; Arsenal's first-leg lead is wiped.
+      homePens: 5,
+      awayPens: 4,
+      decidedBy: "penalties",
+    }),
+  ]);
+  const tie = b.rounds[0]?.ties[0];
+  assert.equal(tie?.aggHome, 1, "aggregate oriented to the first leg");
+  assert.equal(tie?.aggAway, 1);
+  assert.equal(tie?.aggHomePens, 4, "pens reoriented to the first leg's home side");
+  assert.equal(tie?.aggAwayPens, 5);
+  assert.equal(tie?.winnerId, "bay", "the shootout winner, not the aggregate host");
+}
+
+/** A postponed leg is no leg: the tie waits rather than counting a 0-0. */
+function testPostponedLegKeepsTieOpen(): void {
+  const b = buildBracket([
+    match({
+      home: ARS,
+      away: BAY,
+      round: "Quarter-final",
+      kickoff: "2026-03-10T20:00:00Z",
+      homeScore: 1,
+      awayScore: 0,
+    }),
+    match({
+      home: BAY,
+      away: ARS,
+      round: "Quarter-final",
+      kickoff: "2026-03-17T20:00:00Z",
+      status: "postponed",
+    }),
+  ]);
+  const tie = b.rounds[0]?.ties[0];
+  assert.equal(tie?.aggHome, 1, "only the played leg counts");
+  assert.equal(tie?.aggAway, 0);
+  assert.equal(tie?.winnerId, null, "a postponed leg leaves the tie open");
+}
+
 export function runBracketTests(): void {
   testOrderRounds();
   testSingleLegWinner();
@@ -267,5 +370,8 @@ export function runBracketTests(): void {
   testFeederLinks();
   testFeederSurvivesMissingRound();
   testLiveExcludedAndEmpty();
-  console.log("  bracket: round order, tie folding, winner inference and feeder links OK");
+  testShootoutDecidesLevelTie();
+  testShootoutAcrossTwoLegs();
+  testPostponedLegKeepsTieOpen();
+  console.log("  bracket: round order, tie folding, shootouts, postponed legs and feeder links OK");
 }

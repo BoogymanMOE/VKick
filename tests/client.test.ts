@@ -17,6 +17,8 @@ import {
 } from "../src/lib/pickerGroups.js";
 import { scopeRankDelta, viewerStanding } from "../src/lib/leaderboard.js";
 import { leaguePickerSections } from "../src/lib/leaguePicker.js";
+import { getLiveLinkConnected, setLiveLinkConnected, subscribeLiveLink } from "../src/lib/liveLink.js";
+import { isNotPlayed } from "../src/lib/format.js";
 import type { ApiCompetition } from "../src/lib/api.js";
 import type { StringKey } from "../src/i18n/strings.js";
 import type { Team } from "../src/types.js";
@@ -218,6 +220,45 @@ function testScopeRankDelta(): void {
   );
 }
 
+/**
+ * The push-link store behind the "live link lost" line. It must start honest
+ * (assume connected until the stream says otherwise), notify on transitions
+ * only, and let a screen unsubscribe without leaking a listener.
+ */
+function testLiveLinkStore(): void {
+  assert.equal(getLiveLinkConnected(), true, "optimistic until proven lost");
+  let calls = 0;
+  const unsubscribe = subscribeLiveLink(() => {
+    calls += 1;
+  });
+  setLiveLinkConnected(false);
+  assert.equal(getLiveLinkConnected(), false);
+  assert.equal(calls, 1, "a transition notifies once");
+  setLiveLinkConnected(false);
+  assert.equal(calls, 1, "setting the same value is a no-op");
+  setLiveLinkConnected(true);
+  assert.equal(calls, 2, "reconnect notifies too");
+  unsubscribe();
+  setLiveLinkConnected(false);
+  assert.equal(calls, 2, "an unsubscribed listener is gone");
+  setLiveLinkConnected(true);
+}
+
+/**
+ * A fixture ESPN reports under "post" that was never played. Every screen that
+ * prints a score for "not scheduled" reads this helper, so pin the membership:
+ * a postponed game must not be counted as a 0-0 result anywhere.
+ */
+function testIsNotPlayed(): void {
+  assert.equal(isNotPlayed("postponed"), true);
+  assert.equal(isNotPlayed("abandoned"), true);
+  assert.equal(isNotPlayed("cancelled"), true);
+  assert.equal(isNotPlayed("finished"), false);
+  assert.equal(isNotPlayed("live"), false);
+  assert.equal(isNotPlayed("halftime"), false);
+  assert.equal(isNotPlayed("scheduled"), false);
+}
+
 export function runClientTests(): void {
   testInitialsOf();
   testReadableInk();
@@ -227,7 +268,9 @@ export function runClientTests(): void {
   testViewerStanding();
   testScopeRankDelta();
   testLeaguePickerSections();
+  testLiveLinkStore();
+  testIsNotPlayed();
   console.log(
-    "  client: contrast ink, breakdown rendering, picker grouping, viewer standing, league picker OK",
+    "  client: contrast ink, breakdown rendering, picker grouping, viewer standing, league picker, live link OK",
   );
 }

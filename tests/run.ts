@@ -17,6 +17,7 @@ import { runPasswordTests } from "./password.test.js";
 import { runNotificationTests } from "./notifications.test.js";
 import { runUnderstatTests } from "./understat.test.js";
 import { runStandingsTests } from "./standings.test.js";
+import { runNewsTests } from "./news.test.js";
 import { runFeedTests } from "./feed.test.js";
 import { runSeasonTests } from "./season.test.js";
 import { runClientTests } from "./client.test.js";
@@ -69,6 +70,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["notifications", runNotificationTests],
   ["understat", runUnderstatTests],
   ["standings", runStandingsTests],
+  ["news", runNewsTests],
   ["feed", runFeedTests],
   ["season", runSeasonTests],
   ["client", runClientTests],

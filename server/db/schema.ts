@@ -56,7 +56,10 @@ export function migrate(db: DatabaseSync): void {
       home_team_id    TEXT NOT NULL REFERENCES teams(id),
       away_team_id    TEXT NOT NULL REFERENCES teams(id),
       kickoff_at      TEXT NOT NULL,
-      status          TEXT NOT NULL DEFAULT 'scheduled',  -- scheduled / live / finished
+      -- scheduled / live / halftime / finished / postponed / abandoned /
+      -- cancelled. The last three are not "played": they carry no score and
+      -- must never count as a result (ESPN reports them under state "post").
+      status          TEXT NOT NULL DEFAULT 'scheduled',
       home_score      INTEGER,
       away_score      INTEGER,
       minute_display  TEXT,                    -- e.g. 90'+3' while live
@@ -64,6 +67,14 @@ export function migrate(db: DatabaseSync): void {
       home_formation  TEXT,
       away_formation  TEXT,
       espn_season     TEXT,
+      -- Knockout truth: a tie separated on penalties stores both the shootout
+      -- score and how it was decided, so no screen can render it as a draw.
+      home_pens       INTEGER,
+      away_pens       INTEGER,
+      decided_by      TEXT,                    -- 'penalties' | 'extra-time' | null
+      venue           TEXT,
+      referee         TEXT,
+      attendance      INTEGER,
       last_synced_at  TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_matches_league_kickoff ON matches(league, kickoff_at);
@@ -649,6 +660,21 @@ export function migrate(db: DatabaseSync): void {
   if (!matchCols.some((c) => c.name === "round")) {
     db.exec(`ALTER TABLE matches ADD COLUMN round TEXT;`);
   }
+  // Result truth + match facts arrived after the matches table shipped: a
+  // shootout score, how a tie was decided, and the venue/referee/attendance a
+  // pre-match page should show. Fresh DBs get them via CREATE TABLE.
+  for (const [col, type] of [
+    ["home_pens", "INTEGER"],
+    ["away_pens", "INTEGER"],
+    ["decided_by", "TEXT"],
+    ["venue", "TEXT"],
+    ["referee", "TEXT"],
+    ["attendance", "INTEGER"],
+  ] as const) {
+    if (!matchCols.some((c) => c.name === col)) {
+      db.exec(`ALTER TABLE matches ADD COLUMN ${col} ${type};`);
+    }
+  }
 
   // Recovery-code columns were added after the credentials table shipped;
   // fresh DBs get them via CREATE TABLE, older ones here. (SQLite has no
@@ -846,6 +872,22 @@ export function migrate(db: DatabaseSync): void {
       ? `[db] team seed inserted ${seeded} missing row(s)`
       : "[db] team seed: all rows already present (no-op)",
   );
+
+  // Persian news is ESPN's English text: this table caches one translation per
+  // (article, language) so the club/match News tabs stop rendering English
+  // paragraphs inside an RTL Persian page. Empty until a translator is
+  // configured (NEWS_TRANSLATE_*), and the client labels anything missing.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS news_translations (
+      article_id  TEXT NOT NULL,
+      lang        TEXT NOT NULL,
+      headline    TEXT NOT NULL,
+      description TEXT,
+      provider    TEXT,
+      created_at  TEXT NOT NULL,
+      PRIMARY KEY (article_id, lang)
+    );
+  `);
 
   // Availability is an additive cache for existing installations.
   db.exec(`

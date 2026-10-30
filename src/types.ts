@@ -3,8 +3,19 @@
  * real API payloads can slot in later without touching components.
  */
 
-/** "halftime" is a real server status (ESPN HT detection) — not a flavour of live. */
-export type MatchStatus = "scheduled" | "live" | "halftime" | "finished";
+/**
+ * The server's match state. "halftime" is a real status (ESPN HT detection) —
+ * not a flavour of live. The last three are NOT played: a postponed, abandoned
+ * or cancelled fixture has no result and must never be rendered as one.
+ */
+export type MatchStatus =
+  | "scheduled"
+  | "live"
+  | "halftime"
+  | "finished"
+  | "postponed"
+  | "abandoned"
+  | "cancelled";
 export type Position = "GK" | "DEF" | "MID" | "FWD" | "OTHER";
 /** The big five slugs — the picker defaults; any covered league can be followed. */
 export type LeagueId = "PL" | "LL" | "SA" | "BL" | "L1";
@@ -58,6 +69,15 @@ export interface Match {
   predictions: PredictionKind[];
   /** Cup round label from ESPN ("Quarter-final"); null for league matches. */
   round: string | null;
+  /** Shootout score when a knockout tie was settled on penalties. */
+  homePens?: number | null;
+  awayPens?: number | null;
+  /** How a level tie was separated; null for a match decided in 90 or 120. */
+  decidedBy?: "penalties" | "extra-time" | null;
+  /** Venue, referee and attendance as ESPN's summary reports them. */
+  venue?: string | null;
+  referee?: string | null;
+  attendance?: number | null;
   /** Set briefly when a goal lands, to drive the volt sweep animation. */
   goalFlash?: boolean;
 }
@@ -255,6 +275,12 @@ export interface NewsArticle {
   /** Full ESPN article URL, opened in a new tab. Null when the feed omits it. */
   webUrl: string | null;
   teamIds: string[];
+  /**
+   * True when the headline and summary are the cached Persian translation.
+   * False means the text below is still ESPN's English — the card says so
+   * rather than passing it off as Persian.
+   */
+  translated?: boolean;
 }
 
 /* ---------------------------------------------------- match detail extras */

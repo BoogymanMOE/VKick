@@ -16,6 +16,8 @@ import { fetchLeagueNews } from "../espn/client.js";
 import { competitionCatalogWithMatches } from "../espn/competitions.js";
 import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
 import { foldForm, type FormMatchRow } from "../standings/form.js";
+import { foldSplits } from "../standings/splits.js";
+import { fillTranslations, withTranslation } from "../news/translate.js";
 import { buildFeedQuery } from "../matches/feed.js";
 import { settleStaleLive, settleStaleLiveAll, type LiveMatchRow } from "../matches/reconcile.js";
 import { currentSeasonLabel } from "../scoring/ledger.js";
@@ -214,6 +216,14 @@ matchesRouter.get("/api/matches/:id/team-stats", (req, res) => {
      WHERE match_id = ?`,
     [matchId],
   );
+  // Expected goals are Understat's, so they exist for the big five only. A null
+  // xg is the honest answer for the other competitions, and the client explains
+  // the gap instead of drawing an empty bar.
+  const xgRows = all<{ team_id: string; xg: number | null }>(
+    db,
+    "SELECT team_id, xg FROM match_understat_stats WHERE match_id = ?",
+    [matchId],
+  );
   // The synced percentages arrive as REALs (86.4); the display contract is a
   // whole number. Counts stay as-is; anything missing rides out as 0.
   const pct = (v: unknown): number | null =>
@@ -222,6 +232,7 @@ matchesRouter.get("/api/matches/:id/team-stats", (req, res) => {
   const side = (teamId: string, goals: number | null) => {
     const row = rows.find((r) => r.team_id === teamId);
     if (!row) return null;
+    const xgRow = xgRows.find((r) => r.team_id === teamId);
     return {
       possession_pct: pct(row.possession_pct),
       corners: count(row.corners),
@@ -232,6 +243,7 @@ matchesRouter.get("/api/matches/:id/team-stats", (req, res) => {
       offsides: count(row.offsides),
       saves: count(row.saves),
       goals,
+      xg: typeof xgRow?.xg === "number" ? xgRow.xg : null,
     };
   };
   res.json({
@@ -476,18 +488,19 @@ matchesRouter.get("/api/matches/:id/news", async (req, res) => {
     if (match) await backfillSummary(match.league, matchId);
     rows = all<MatchNewsRow>(db, select, [matchId]);
   }
-  res.json({
-    articles: rows.map((r) => ({
-      id: r.article_id,
-      headline: r.headline,
-      description: r.description ?? "",
-      published: r.published ?? "",
-      byline: r.byline,
-      imageUrl: r.image_url,
-      webUrl: r.web_url,
-      teamIds: safeArr(r.team_ids_json),
-    })),
-  });
+  const articles = rows.map((r) => ({
+    id: r.article_id,
+    headline: r.headline,
+    description: r.description ?? "",
+    published: r.published ?? "",
+    byline: r.byline,
+    imageUrl: r.image_url,
+    webUrl: r.web_url,
+    teamIds: safeArr(r.team_ids_json),
+  }));
+  const lang = req.query.lang ? String(req.query.lang) : null;
+  fillTranslations(articles);
+  res.json({ articles: withTranslation(articles, lang) });
 });
 
 /* ------------------------------------------------------------ teams */
@@ -909,9 +922,14 @@ matchesRouter.get("/api/leagues/:league/news", (req, res) => {
   const league = String(req.params.league);
   if (!isAllowedLeague(league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
   const team = req.query.team ? String(req.query.team) : null;
+  const lang = req.query.lang ? String(req.query.lang) : null;
   getLeagueNews(league as LeagueSlug)
     .then((articles) => {
-      res.json({ articles: team ? articles.filter((a) => a.teamIds.includes(team)) : articles });
+      const scoped = team ? articles.filter((a) => a.teamIds.includes(team)) : articles;
+      // Answer in the reader's language where a translation is cached, and fill
+      // the rest in the background rather than making the tab wait on a model.
+      fillTranslations(scoped);
+      res.json({ articles: withTranslation(scoped, lang) });
     })
     .catch((err) => {
       // News is decoration on a page that is otherwise complete: an ESPN
@@ -963,12 +981,51 @@ matchesRouter.get("/api/standings/:league", (req, res) => {
     [league],
   ) as FormMatchRow[];
   const form = foldForm(formRows);
+  // Home and away records come out of the same finished matches, so the table's
+  // split view can never contradict the form strip beside it.
+  const splits = foldSplits(formRows);
+  // Leading scorers: our own season stat table, which the ESPN team-stats sync
+  // fills for the big five. A competition with no stat rows returns an empty
+  // list and the client simply does not draw the card.
+  const scorers = all<{
+    player_id: string;
+    full_name: string;
+    short_name: string | null;
+    headshot_url: string | null;
+    goals: number;
+    assists: number;
+    team_id: string;
+    team_name: string;
+    team_short: string | null;
+    team_color: string | null;
+    team_logo: string | null;
+  }>(
+    db,
+    `SELECT s.player_id, p.full_name, p.short_name, p.headshot_url,
+            s.goals, s.assists, s.team_id, t.name AS team_name, t.short_name AS team_short,
+            t.color AS team_color, t.logo_url AS team_logo
+     FROM player_season_stats s
+     JOIN players p ON p.id = s.player_id
+     JOIN teams t ON t.id = s.team_id
+     WHERE s.league = ? AND s.season = ? AND s.goals > 0
+     ORDER BY s.goals DESC, s.assists DESC, p.full_name ASC
+     LIMIT 5`,
+    [league, season],
+  ).map((row) => ({
+    ...row,
+    avatar_url: localHeadshotUrl(row.headshot_url, row.player_id),
+  }));
   res.json({
     season,
-    standings: rows.map((row) => ({
-      ...row,
-      form: form[(row as { team_id: string }).team_id] ?? null,
-    })),
+    standings: rows.map((row) => {
+      const id = (row as { team_id: string }).team_id;
+      return {
+        ...row,
+        form: form[id] ?? null,
+        splits: splits[id] ?? null,
+      };
+    }),
+    scorers,
   });
 });
 

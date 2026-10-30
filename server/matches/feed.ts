@@ -149,11 +149,18 @@ export function buildFeedQuery(q: FeedQuery = {}): FeedSql {
   const past = from ?? isoDayOffset(now, -FINISHED_LOOKBACK_DAYS);
   const future = to ?? isoDayOffset(now, UPCOMING_LOOKAHEAD_DAYS);
   const placeholders = IN_PROGRESS.map(() => "?").join(", ");
+  // Postponed/cancelled/abandoned fixtures stay in the window around their
+  // kickoff date so the feed can say so; without this branch they match
+  // neither the finished nor the scheduled clause and vanish silently.
   clauses.push(`(
       m.status IN (${placeholders})
       OR (m.status = 'finished' AND substr(m.kickoff_at, 1, 10) >= ?)
-      OR (m.status = 'scheduled' AND substr(m.kickoff_at, 1, 10) <= ?)
+      OR (
+        m.status IN ('scheduled', 'postponed', 'cancelled', 'abandoned')
+        AND substr(m.kickoff_at, 1, 10) <= ?
+        AND substr(m.kickoff_at, 1, 10) >= ?
+      )
     )`);
-  params.push(...IN_PROGRESS, past, future);
+  params.push(...IN_PROGRESS, past, future, past);
   return { where: clauses.join(" AND "), params, orderBy: FEED_ORDER, limit, mode: "window", past, future };
 }

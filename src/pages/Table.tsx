@@ -13,10 +13,13 @@ import {
   CountUp,
 } from "../components/ui";
 import { cx } from "../lib/cx";
+import { TEAM_FALLBACK } from "../lib/colors";
 
 import { StarFilledIcon } from "../components/icons";
 import { slugForLeague, useLeagueTabs, useStandings, useMatches, type StandingRow } from "../hooks/useApi";
+import type { ApiSplitRow } from "../lib/api";
 import { isCup } from "../lib/leagues";
+import { isNotPlayed } from "../lib/format";
 import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
 import { haptic } from "../lib/telegram";
@@ -179,7 +182,15 @@ export default function Table() {
   // extras read their catalog name — `league.<slug>` i18n keys don't exist.
   const tabLabel = (value: string) => tabs.find((tab) => tab.value === value)?.label ?? value;
   const standingsQuery = useStandings(slug);
-  const rows = standingsQuery.data ?? [];
+  // Stable identities: the split and expected tables are memoised on `rows`,
+  // and a fresh `[]` on every render would rebuild them (and flag the hook).
+  const rows = useMemo(() => standingsQuery.data?.rows ?? [], [standingsQuery.data]);
+  const scorers = useMemo(() => standingsQuery.data?.scorers ?? [], [standingsQuery.data]);
+  // Which record the table shows: the whole season, or only the home or away
+  // half of it. The splits are folded server-side from the same finished
+  // matches the form strip uses, so the two can never disagree.
+  const [split, setSplit] = useState<"total" | "home" | "away">("total");
+  const hasSplits = rows.some((row) => row.splits != null);
 
   // Expected points ride along on the standings payload (one left join
   // server-side, no extra request), and only the clubs Understat covers have
@@ -187,7 +198,7 @@ export default function Table() {
   const hasExpected = rows.some((row) => row.xpts != null);
   // Guard the view itself too: if it somehow renders without data, fall back
   // to the real table instead of a grid of dashes.
-  const showExpected = view === "expected" && hasExpected;
+  const showExpected = view === "expected" && hasExpected && split === "total";
   // Ranked by xPts, with the uncovered clubs parked below in table order
   // (Array#sort is stable) rather than dropped or given a fake rank.
   const expectedRows = useMemo(() => [...rows].sort((a, b) => (b.xpts ?? -1) - (a.xpts ?? -1)), [rows]);
@@ -197,9 +208,16 @@ export default function Table() {
     () => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en", { useGrouping: false }),
     [lang],
   );
-  const gwLabel = standingsQuery.data?.length
-    ? t("table.gw", { gw: weekFormatter.format(standingsQuery.data[0]?.played ?? 0) })
-    : null;
+  const gwLabel = rows.length ? t("table.gw", { gw: weekFormatter.format(rows[0]?.played ?? 0) }) : null;
+  // A split table is ranked on the split's own points, because that is the
+  // question the toggle asks ("best at home"); the overall table keeps ESPN's
+  // official rank, zone rule and all.
+  const splitRows = useMemo(() => {
+    if (split === "total" || !hasSplits) return null;
+    return rows
+      .map((row) => ({ row, record: row.splits?.[split] ?? null }))
+      .sort((a, b) => (b.record?.points ?? -1) - (a.record?.points ?? -1));
+  }, [rows, split, hasSplits]);
   const zoneSlug = ALIAS_SLUG[active] ?? active;
 
   return (
@@ -234,7 +252,7 @@ export default function Table() {
               <EmptyState title={t("table.emptyTitle")} hint={t("table.emptyHint")} />
             ) : (
               <>
-                {hasExpected ? (
+                {hasExpected && split === "total" ? (
                   <div className="mb-2">
                     <Segmented
                       value={view}
@@ -242,6 +260,19 @@ export default function Table() {
                       options={[
                         { value: "actual", label: t("table.viewActual") },
                         { value: "expected", label: t("table.viewExpected") },
+                      ]}
+                    />
+                  </div>
+                ) : null}
+                {hasSplits ? (
+                  <div className="mb-2">
+                    <Segmented
+                      value={split}
+                      onChange={setSplit}
+                      options={[
+                        { value: "total", label: t("table.overall") },
+                        { value: "home", label: t("table.home") },
+                        { value: "away", label: t("table.away") },
                       ]}
                     />
                   </div>
@@ -277,25 +308,46 @@ export default function Table() {
                   </>
                 ) : null}
 
-                {view === "actual" ? (
+                {view === "actual" || split !== "total" ? (
                   <>
                     {/* overflow-clip (not hidden) clips the card's corners while
                         staying a NON-scroll container, so the sticky header
                         inside still pins to the page scroll. */}
                     <div className="overflow-clip rounded-card border border-line bg-surface">
-                      <StandingsHeader stickyTop={stickyTop} />
+                      <StandingsHeader stickyTop={stickyTop} split={splitRows != null} />
                       <ul className="divide-y divide-line">
-                        {rows.map((row, index) => (
-                          <StandingItem
-                            key={row.team.id}
-                            row={row}
-                            index={index}
-                            mine={isFavorite(row.team.id)}
-                            zone={zoneOf(zoneSlug, row.rank ?? index + 1)}
-                          />
-                        ))}
+                        {splitRows
+                          ? splitRows.map(({ row, record }, index) => (
+                              <StandingItem
+                                key={row.team.id}
+                                row={row}
+                                index={index}
+                                mine={isFavorite(row.team.id)}
+                                // No zone bars here: European places are a
+                                // season-position rule, and a club 6th overall
+                                // can top the home table. Reusing the overall
+                                // zones would invent a qualification nobody has.
+                                zone={null}
+                                record={record}
+                                splitView
+                              />
+                            ))
+                          : rows.map((row, index) => (
+                              <StandingItem
+                                key={row.team.id}
+                                row={row}
+                                index={index}
+                                mine={isFavorite(row.team.id)}
+                                zone={zoneOf(zoneSlug, row.rank ?? index + 1)}
+                              />
+                            ))}
                       </ul>
                     </div>
+                    {/* Home and away, as their own tables — the half of the
+                        season a single league table never shows. */}
+                    {split === "total" ? null : (
+                      <p className="mt-2 text-xs text-ink-3">{t("table.splitHint")}</p>
+                    )}
                     {/* Zone legend: one small line, same order as the bars. */}
                     {ZONES[zoneSlug] ? (
                       <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
@@ -303,6 +355,49 @@ export default function Table() {
                         <LegendDot color={ZONE_COLOR.uel} label={t("league.UEL")} />
                         <LegendDot color={ZONE_COLOR.relegation} label={t("table.zoneReleg")} />
                       </p>
+                    ) : null}
+                    {/* Who is scoring: our own season stat table, so it only
+                        exists where that sync runs — no card, no dashes. */}
+                    {scorers.length > 0 && split === "total" ? (
+                      <section className="mt-lg">
+                        <SectionHeading title={t("table.scorers")} />
+                        <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
+                          {scorers.map((scorer, index) => (
+                            <li
+                              key={scorer.player_id}
+                              className="flex items-center gap-2.5 px-3 py-2"
+                            >
+                              <Num className="w-4 flex-none text-xs text-ink-3">{index + 1}</Num>
+                              <TeamBadge
+                                team={{
+                                  id: scorer.team_id,
+                                  name: scorer.team_name,
+                                  shortName: scorer.team_short ?? scorer.team_name,
+                                  abbreviation: "",
+                                  color: scorer.team_color ?? TEAM_FALLBACK,
+                                  logoUrl: scorer.team_logo ?? undefined,
+                                  // `league` only drives squad/competition lookups;
+                                  // the badge reads colour and crest.
+                                  league: "PL",
+                                }}
+                                size="sm"
+                              />
+                              <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+                                {scorer.full_name}
+                              </span>
+                              <span className="min-w-0 flex-none max-w-24 truncate text-xs text-ink-3">
+                                {scorer.team_short ?? scorer.team_name}
+                              </span>
+                              <Num className="flex-none text-sm font-extrabold text-ink">
+                                {lang === "fa"
+                                  ? new Intl.NumberFormat("fa-IR").format(scorer.goals)
+                                  : scorer.goals}
+                              </Num>
+                              <span className="sr-only">{t("table.goals")}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
                     ) : null}
                   </>
                 ) : null}
@@ -330,7 +425,7 @@ export default function Table() {
  */
 const COLS = "grid-cols-[1.25rem_minmax(0,1fr)_1.5rem_1.75rem_2rem_5rem]";
 
-function StandingsHeader({ stickyTop }: { stickyTop: number }) {
+function StandingsHeader({ stickyTop, split = false }: { stickyTop: number; split?: boolean }) {
   const { t } = useI18n();
   return (
     <div
@@ -347,7 +442,9 @@ function StandingsHeader({ stickyTop }: { stickyTop: number }) {
       <span className="text-end">{t("table.played")}</span>
       <span className="text-end">{t("table.gd")}</span>
       <span className="text-end">{t("table.pts")}</span>
-      <span className="text-end">{t("table.form")}</span>
+      {/* In a split table the last column is that half's W–D–L record; the
+          overall form strip belongs to the whole season and stays with it. */}
+      <span className="text-end">{split ? t("table.wdl") : t("table.form")}</span>
     </div>
   );
 }
@@ -357,11 +454,17 @@ function StandingItem({
   index,
   mine,
   zone,
+  record,
+  splitView = false,
 }: {
   row: StandingRow;
   index: number;
   mine: boolean;
   zone: Zone | null;
+  /** Set in a home/away table: that half's played / GD / points / W-D-L. */
+  record?: ApiSplitRow | null;
+  /** True while the home/away view is active, so a missing split reads "–". */
+  splitView?: boolean;
 }) {
   const { localize, lang } = useI18n();
   // Persian digits: every figure renders through locale formatting — fa-IR
@@ -372,8 +475,13 @@ function StandingItem({
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     }).format(v);
-  const gd = (row.goalsFor ?? 0) - (row.goalsAgainst ?? 0);
-  const rank = row.rank ?? index + 1;
+  // A split table must never fall back to season totals: a club with no
+  // finished match in that half shows dashes, not numbers from the full table.
+  const blank = splitView && record == null;
+  const gd = record ? record.goalsFor - record.goalsAgainst : (row.goalsFor ?? 0) - (row.goalsAgainst ?? 0);
+  const rank = record ? index + 1 : (row.rank ?? index + 1);
+  const played = blank ? null : record ? record.played : row.played;
+  const points = blank ? null : record ? record.points : row.points;
   return (
     <li
       className={cx(
@@ -409,22 +517,30 @@ function StandingItem({
         </span>
         {mine ? <StarFilledIcon className="h-3 w-3 flex-none text-volt" /> : null}
       </Link>
-      <Num className="text-end text-xs text-ink-3">
-        {row.played == null ? "–" : fmt(row.played)}
-      </Num>
+      <Num className="text-end text-xs text-ink-3">{played == null ? "–" : fmt(played)}</Num>
       <Num className={cx("text-end text-xs", gd >= 0 ? "text-ink-2" : "text-ink-3")}>
-        {gd > 0 ? `+${fmt(gd)}` : fmt(gd)}
+        {blank ? "–" : gd > 0 ? `+${fmt(gd)}` : fmt(gd)}
       </Num>
-      {row.points != null ? (
+      {points != null ? (
         lang === "fa" ? (
-          <Num className="text-end text-sm font-extrabold text-ink">{fmt(row.points)}</Num>
+          <Num className="text-end text-sm font-extrabold text-ink">{fmt(points)}</Num>
         ) : (
-          <CountUp value={row.points} className="text-end text-sm font-extrabold text-ink" />
+          <CountUp value={points} className="text-end text-sm font-extrabold text-ink" />
         )
       ) : (
         <Num className="text-end text-sm font-extrabold text-ink">–</Num>
       )}
-      {row.form ? <FormStrip form={row.form} /> : <span className="text-end text-xs text-ink-3">–</span>}
+      {blank ? (
+        <span className="text-end text-xs text-ink-3">–</span>
+      ) : record ? (
+        <Num className="text-end text-xs text-ink-2" dir="ltr">
+          {fmt(record.wins)}–{fmt(record.draws)}–{fmt(record.losses)}
+        </Num>
+      ) : row.form ? (
+        <FormStrip form={row.form} />
+      ) : (
+        <span className="text-end text-xs text-ink-3">–</span>
+      )}
     </li>
   );
 }
@@ -667,6 +783,15 @@ function KnockoutView({ slug }: { slug: string }) {
                   <div className="flex flex-none items-center gap-2">
                     {match.status === "scheduled" ? (
                       <span className="text-xs text-ink-3">vs</span>
+                    ) : isNotPlayed(match.status) ? (
+                      // Called off: a date and a state, never a 0-0 result.
+                      <span className="text-xs text-ink-3">
+                        {match.status === "postponed"
+                          ? t("status.postponed")
+                          : match.status === "cancelled"
+                            ? t("status.cancelled")
+                            : t("status.abandoned")}
+                      </span>
                     ) : (
                       <Num className="text-sm font-bold text-ink">
                         {match.homeScore ?? 0} - {match.awayScore ?? 0}

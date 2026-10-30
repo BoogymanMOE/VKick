@@ -147,10 +147,18 @@ export interface ApiMatch {
   home_team_id: string;
   away_team_id: string;
   kickoff_at: string;
-  status: "scheduled" | "live" | "halftime" | "finished";
+  status: "scheduled" | "live" | "halftime" | "finished" | "postponed" | "abandoned" | "cancelled";
   home_score: number | null;
   away_score: number | null;
   minute_display: string | null;
+  /** Shootout score when a knockout tie was settled on penalties. */
+  home_pens?: number | null;
+  away_pens?: number | null;
+  /** 'penalties' | 'extra-time' | null. */
+  decided_by?: "penalties" | "extra-time" | null;
+  venue?: string | null;
+  referee?: string | null;
+  attendance?: number | null;
   home_formation: string | null;
   away_formation: string | null;
   last_synced_at: string | null;
@@ -300,6 +308,8 @@ export interface TeamStats {
   offsides: number | null;
   saves: number | null;
   goals: number | null;
+  /** Understat expected goals; null outside the big five (or before the sync). */
+  xg: number | null;
 }
 
 export interface ApiStanding {
@@ -326,6 +336,41 @@ export interface ApiStanding {
   xga?: number | null;
   /** Last five results, oldest first, e.g. "WWDLW"; null before a club's first match. */
   form?: string | null;
+  /** Home and away records folded from the same matches; null with no fixtures. */
+  splits?: ApiTeamSplits | null;
+}
+
+/** One side of a club's season, as the home/away table needs it. */
+export interface ApiSplitRow {
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  points: number;
+}
+
+export interface ApiTeamSplits {
+  home: ApiSplitRow;
+  away: ApiSplitRow;
+}
+
+/** One row of the league's top-scorer card (our own season stat table). */
+export interface ApiScorer {
+  player_id: string;
+  full_name: string;
+  short_name: string | null;
+  headshot_url: string | null;
+  avatar_url: string | null;
+  goals: number;
+  assists: number;
+  team_id: string;
+  team_name: string;
+  team_short: string | null;
+  /** The club's crest and colour, so the scorer's badge is the real one. */
+  team_color: string | null;
+  team_logo: string | null;
 }
 
 export interface ApiTimelineEvent {
@@ -629,9 +674,20 @@ export const api = {
   getLeagueTeamStats: (league: string) =>
     request<{ season: string; teams: LeagueTeamStatRow[] }>(`/leagues/${encodeURIComponent(league)}/teams`),
 
-  /** League news feed, narrowed to one club when `teamId` is given. */
-  getLeagueNews: (league: string, teamId?: string) => {
-    const qs = teamId ? `?team=${encodeURIComponent(teamId)}` : "";
+  /**
+   * League news feed, narrowed to one club when `teamId` is given. `lang=fa`
+   * asks the server to overlay cached Persian translations; anything still
+   * untranslated comes back with `translated: false`.
+   */
+  getLeagueNews: (league: string, teamId?: string, lang?: string) => {
+    // Built by hand, not with URLSearchParams.size: older Telegram WebViews
+    // ship a URLSearchParams without that getter, and `undefined > 0` would
+    // silently drop the ?team=/lang= query on exactly the devices this app runs
+    // on.
+    const parts: string[] = [];
+    if (teamId) parts.push(`team=${encodeURIComponent(teamId)}`);
+    if (lang && lang !== "en") parts.push(`lang=${encodeURIComponent(lang)}`);
+    const qs = parts.length > 0 ? `?${parts.join("&")}` : "";
     return request<{ articles: NewsArticle[] }>(
       `/leagues/${encodeURIComponent(league)}/news${qs}`,
     );
@@ -742,7 +798,10 @@ export const api = {
   getForm: (id: string) => request<MatchForm>(`/matches/${id}/form`),
 
   /** Articles from this match's ESPN summary news block. */
-  getMatchNews: (id: string) => request<{ articles: NewsArticle[] }>(`/matches/${id}/news`),
+  getMatchNews: (id: string, lang?: string) =>
+    request<{ articles: NewsArticle[] }>(
+      `/matches/${encodeURIComponent(id)}/news${lang && lang !== "en" ? `?lang=${encodeURIComponent(lang)}` : ""}`,
+    ),
 
   getSquad: (teamId: string) =>
     request<{
@@ -778,7 +837,9 @@ export const api = {
     }>("/health/sync"),
 
   getStandings: (league: string) =>
-    request<{ season: string; standings: ApiStanding[] }>(`/standings/${encodeURIComponent(league)}`),
+    request<{ season: string; standings: ApiStanding[]; scorers?: ApiScorer[] }>(
+      `/standings/${encodeURIComponent(league)}`,
+    ),
 
   getRatings: (matchId: string) =>
     request<{

@@ -452,10 +452,25 @@ function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: strin
                 <Num>
                   {match.home_score ?? 0}–{match.away_score ?? 0}
                 </Num>
+                {match.home_pens != null && match.away_pens != null ? (
+                  <Num dir="ltr" className="text-[10px] font-bold text-ink-3">
+                    ({match.home_pens}–{match.away_pens})
+                  </Num>
+                ) : null}
               </Chip>
             ) : match.status === "live" ? (
               <Chip tone="live">
                 <Num>{match.minute_display ?? ""}</Num>
+              </Chip>
+            ) : match.status !== "scheduled" ? (
+              // Postponed / abandoned / cancelled: a fixture with no result yet
+              // must not advertise a countdown before one.
+              <Chip tone="muted">
+                {match.status === "postponed"
+                  ? t("status.postponed")
+                  : match.status === "cancelled"
+                    ? t("status.cancelled")
+                    : t("status.abandoned")}
               </Chip>
             ) : (
               <Chip tone="volt">
