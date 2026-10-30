@@ -1,0 +1,899 @@
+From 43e2650bdea0b94467928ce56948298050715dc7 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 25 Oct 2026 19:28:04 +0330
+Subject: [PATCH 227/230] Match detail: league title with round subtitle, named
+ scoreboard, center-spine timeline
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+TopBar title is now the competition name (subtitle = ESPN's cup round,
+localized; league matches send no round/gameweek, so no placeholder
+subtitle) and the round back-chevron next to it is gone. The scoreboard
+puts the team name under each crest, the big score reads home-first
+(first digit = the home side's goals, verified against Liverpool 2-0
+Brighton whose timeline credits both goals to the home team id), the
+live pill carries the minute, and the date/time sits below with the
+clock isolated dir=ltr so bidi never scrambles. Tabs are underline style
+with the same tab/panel aria wiring. Timeline is a center spine: minutes
+centered, a goal's produced score under its own minute, home events on
+the home column, away on the other, names wrap instead of truncating,
+scorer bold with an assist ("پاس: …"), swap line for subs, yellow/red/
+own-goal kinds localized. Stats tab localizes club names and Persian
+digits. FA strings added for yellow/red/own goal/assist/XI; kickoff
+renamed "شروع نیمه اول".
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/TimelineList.tsx | 312 ++++++++++++++++++++------------
+ src/i18n/names.ts               |  10 +
+ src/i18n/strings.ts             |  12 +-
+ src/pages/MatchDetail.tsx       | 230 ++++++++++++++++-------
+ 4 files changed, 380 insertions(+), 184 deletions(-)
+
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index 3527597..8c04622 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -5,6 +5,7 @@ import { useI18n } from "../i18n/context";
+ import type { StringKey } from "../i18n/strings";
+ import { BallIcon, CardIcon, SwapIcon } from "./icons";
+ import { cx } from "../lib/cx";
++import { toFaDigits } from "../lib/format";
+ import { formatScore, runningScore } from "../lib/timelineScore";
+ import { LiveDot, Num } from "./ui";
+ 
+@@ -111,13 +112,84 @@ function PinnedComment({
+   );
+ }
+ 
++/**
++ * The two spine cells. Both wrap (never truncate) and render: bold name, the
++ * second line under it, and the icon pinned to the spine edge. A goal gets a
++ * volt-tinted cell so it reads at a glance. Children = the comment trigger.
++ */
++function EventBody({ name, line2 }: { name: string; line2: string | null }) {
++  return name ? (
++    <span className="min-w-0 text-start" dir="auto">
++      <span className="block text-sm font-bold text-ink">{name}</span>
++      {line2 ? (
++        <span className="block text-xs text-ink-3">{line2}</span>
++      ) : null}
++    </span>
++  ) : null;
++}
++
++function HomeSpineCell({
++  parts,
++  goal,
++  children,
++}: {
++  parts: { icon: { glyph: ReactNode; className: string }; name: string; line2: string | null };
++  goal: boolean;
++  children?: ReactNode;
++}) {
++  return (
++    <div
++      className={cx(
++        "col-start-1 row-start-1 -me-2 flex min-w-0 items-center justify-end gap-2",
++        goal && "rounded-card border border-volt/30 bg-elevated px-2 py-1",
++      )}
++    >
++      {children}
++      <EventBody name={parts.name} line2={parts.line2} />
++      <span aria-hidden="true" className={cx("flex-none", parts.icon.className)}>
++        {parts.icon.glyph}
++      </span>
++    </div>
++  );
++}
++
++function AwaySpineCell({
++  parts,
++  goal,
++  children,
++}: {
++  parts: { icon: { glyph: ReactNode; className: string }; name: string; line2: string | null };
++  goal: boolean;
++  children?: ReactNode;
++}) {
++  return (
++    <div
++      className={cx(
++        "col-start-3 row-start-1 -ms-2 flex min-w-0 items-center justify-start gap-2",
++        goal && "rounded-card border border-volt/30 bg-elevated px-2 py-1",
++      )}
++    >
++      <span aria-hidden="true" className={cx("flex-none", parts.icon.className)}>
++        {parts.icon.glyph}
++      </span>
++      <EventBody name={parts.name} line2={parts.line2} />
++      {children}
++    </div>
++  );
++}
++
++/**
++ * A timeline with a CENTER SPINE: minutes live in the middle column, home-team
++ * events hang on the home side of it (the home column — start edge in both
++ * directions, matching the home-first scoreboard), away events on the other.
++ * Each event cell hugs the spine: text reads toward the minute it happened at.
++ * Names never truncate — they wrap.
++ */
+ export function TimelineList({
+   events,
+   comments = [],
+   liveMinute,
+   onOpenClip,
+-  teamColor,
+-  teamNames,
+   homeTeamId,
+   awayTeamId,
+ }: {
+@@ -127,18 +199,7 @@ export function TimelineList({
+   liveMinute?: number;
+   /** Handler for opening a comment's clip link (validated https by the server). */
+   onOpenClip?: (comment: Comment) => void;
+-  /**
+-   * teamId → club colour. The 8px dot beside the player names the side, so a
+-   * two-column read of who did what needs no names.
+-   */
+-  teamColor?: Record<string, string>;
+-  /**
+-   * teamId → localized club name. A row names the player(s) and the side, not
+-   * the English sentence the feed carries ("… Yellow Card at 12'"), which in a
+-   * Persian page scrambles the bidi run and repeats the player name.
+-   */
+-  teamNames?: Record<string, string>;
+-  /** The match's two sides, so a goal can carry the scoreline it produced. */
++  /** The match's two sides: the event's teamId picks ITS column. */
+   homeTeamId?: string;
+   awayTeamId?: string;
+ }) {
+@@ -153,7 +214,8 @@ export function TimelineList({
+   // The score beside each goal is a prefix count of the timeline's own goals,
+   // credited to the side each event names (src/lib/timelineScore.ts), so a
+   // goal reads "1–0" the moment it lands rather than leaving the reader to
+-  // scroll up to the scoreboard.
++  // scroll up to the scoreboard. Displayed UNDER the event's minute, so the
++  // center spine shows when AND what the score became.
+   const { byGoal } = useMemo(
+     () => runningScore(events, homeTeamId ?? "", awayTeamId ?? ""),
+     [events, homeTeamId, awayTeamId],
+@@ -180,13 +242,72 @@ export function TimelineList({
+     return vals.length > 0 ? vals[vals.length - 1]! : { home: 0, away: 0 };
+   }, [byGoal]);
+ 
+-  // Shared grid for a compact event row: minute | 16px icon | player(s) | right
+-  // slot (running score for goals, comment count for rows that have them).
+-  const ROW_GRID =
+-    "grid min-h-12 grid-cols-[40px_20px_minmax(0,1fr)_auto] items-center gap-2 px-1 py-2";
++  /** Digits through locale conversion: Persian-Indic glyphs under FA, Latin
++      under EN (toFaDigits passes non-digits through untouched). */
++  const digits = (value: string) => (dir === "rtl" ? toFaDigits(value) : value);
++
++  /** Comment-thread trigger shared by event rows and the HT/FT separators:
++      36px visual with an invisible 44px+ hit band (the same pattern as the
++      feed's league chips). */
++  const commentTrigger = (eventId: string, count: number) => {
++    const commentsOpen = openCommentsId === eventId;
++    return (
++      <button
++        type="button"
++        aria-expanded={commentsOpen}
++        onClick={() => setOpenCommentsId(commentsOpen ? null : eventId)}
++        className="relative inline-flex h-9 flex-none items-center gap-1 rounded-lg px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
++      >
++        <span aria-hidden="true">💬</span>
++        <Num>{count}</Num>
++        <span className="sr-only">{t("comments.liveThread")}</span>
++      </button>
++    );
++  };
++
++  /** The event parts the side cells render: icon, bold name, second line
++      (assist / swap partner / card kind). No English feed sentence in the FA
++      page — the event kind is localized here, names come through the person
++      map with the English fallback, and neither ever truncates. */
++  function eventParts(event: TimelineEvent): {
++    icon: { glyph: ReactNode; className: string };
++    name: string;
++    line2: string | null;
++  } {
++    const icon = eventIcon(event.type, event.description);
++    const names = event.participants.map(localize);
++    const [first, second] = names;
++
++    // Second line: what the FIRST name did with the second one.
++    let line2: string | null = null;
++    if (event.type === "goal" && second) {
++      line2 = t("timeline.assist", { name: second });
++    } else if (event.type === "goal" && /\bown goal\b/i.test(event.description)) {
++      line2 = t("timeline.ownGoal");
++    } else if (event.type === "card") {
++      line2 = t(
++        /\bred card\b|second yellow/i.test(event.description)
++          ? "timeline.red"
++          : /yellow/i.test(event.description)
++            ? "timeline.yellow"
++            : "timeline.card",
++      );
++    } else if (event.type === "substitution" && second) {
++      // ESPN's sub direction varies by feed, so the pair reads as a swap (⇄)
++      // rather than the page asserting an off/on order it can't verify.
++      line2 = `⇄ ${second}`;
++    } else if (!first) {
++      line2 = t(typeKey[event.type]);
++    }
++    return { icon, name: first ?? "", line2 };
++  }
++
++  // Shared grid: side cells flex, fixed center for the minute (+ the score a
++  // goal produced, directly under its minute).
++  const SPINE_GRID = "grid grid-cols-[minmax(0,1fr)_56px_minmax(0,1fr)] items-center gap-2 px-1";
+ 
+   return (
+-    <ol>
++    <ol className="relative">
+       {/* Live-minute indicator: a slim status row at the top, replaced by real
+           events as they land. The dot is the shared --live pulse. */}
+       {liveMinute !== undefined ? (
+@@ -197,7 +318,7 @@ export function TimelineList({
+           <LiveDot />
+           <span>{t("status.live")}</span>
+           <span dir="ltr">
+-            <Num>{liveMinute}'</Num>
++            <Num>{digits(String(liveMinute))}′</Num>
+           </span>
+         </li>
+       ) : null}
+@@ -206,8 +327,12 @@ export function TimelineList({
+         const isGoal = event.type === "goal";
+         const isSeparator = event.type === "halftime" || event.type === "fulltime";
+         const goalScore = byGoal.get(event.id);
+-        const icon = eventIcon(event.type, event.description);
+-        const club = event.teamId ? teamColor?.[event.teamId] : undefined;
++        const side: "home" | "away" | null =
++          event.teamId == null
++            ? null
++            : event.teamId === homeTeamId
++              ? "home"
++              : "away";
+         const next = events[index + 1];
+         // Comments pinned to this event, plus minute-pins falling in this
+         // event's window [event.start, next.start).
+@@ -238,117 +363,76 @@ export function TimelineList({
+               <span className="h-px flex-1 bg-line" aria-hidden="true" />
+               <span className="flex items-center gap-2">
+                 <span>{label}</span>
++                {/* Home–away and LTR, so the numbers read home-first in both
++                    directions — Persian digits still read left-to-right. */}
+                 <span dir="ltr" className="text-ink-2">
+-                  <Num>{score}</Num>
++                  <Num>{digits(score)}</Num>
+                 </span>
+-                {count > 0 ? (
+-                  <button
+-                    type="button"
+-                    aria-expanded={commentsOpen}
+-                    onClick={() => setOpenCommentsId(commentsOpen ? null : event.id)}
+-                    // 36px visual with an invisible 44px+ hit band (the same
+-                    // pattern as the feed's league chips): a full 44px visual
+-                    // control would balloon the row past the compact band.
+-                    className="relative inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
+-                  >
+-                    <span aria-hidden="true">💬</span>
+-                    <Num>{count}</Num>
+-                    <span className="sr-only">{t("comments.liveThread")}</span>
+-                  </button>
+-                ) : null}
++                {count > 0 ? commentTrigger(event.id, count) : null}
+               </span>
+               <span className="h-px flex-1 bg-line" aria-hidden="true" />
+             </li>
+           );
+         }
+ 
+-        const who = event.participants.map(localize).join(" · ");
+-        const team = event.teamId ? teamNames?.[event.teamId] : undefined;
+-
+-        return (
+-          <Fragment key={event.id}>
++        // No side (kickoff): a small centered note carrying the minute.
++        if (side === null) {
++          return (
+             <li
+-              className={cx(
+-                ROW_GRID,
+-                isGoal
+-                  ? "my-1 rounded-card border border-volt/30 bg-elevated"
+-                  : "border-b border-line",
+-              )}
++              key={event.id}
++              className="flex items-center justify-center gap-2 py-1.5 text-xs text-ink-3"
+             >
+-              {/* The minute reads LTR everywhere — digits plus an apostrophe
+-                  would mirror into Arabic-script order otherwise. */}
+-              <span dir="ltr" className="text-center text-sm font-extrabold text-ink-2">
+-                <Num>{event.minuteDisplay}</Num>
+-              </span>
+-              <span
+-                aria-hidden="true"
+-                className={cx("grid place-items-center", icon.className)}
+-                // The substitution arrows read as "off → on" in LTR; mirror
+-                // them in RTL so they keep reading against the text flow.
+-                style={
+-                  event.type === "substitution" && dir === "rtl"
+-                    ? { transform: "scaleX(-1)" }
+-                    : undefined
+-                }
+-              >
+-                {icon.glyph}
++              <span dir="ltr" className="text-sm font-extrabold text-ink-2">
++                <Num>{digits(event.minuteDisplay)}</Num>
+               </span>
+-              <span className="min-w-0">
+-                <span className="flex items-center gap-1.5">
+-                  {club ? (
+-                    <span
+-                      className="h-2 w-2 flex-none rounded-full ring-1 ring-ink-3"
+-                      style={{ backgroundColor: club }}
+-                      aria-hidden="true"
+-                    />
+-                  ) : null}
+-                  <span
+-                    className="truncate text-sm font-bold text-ink"
+-                    dir="auto"
+-                    title={count > 0 ? t(typeKey[event.type]) : undefined}
+-                  >
+-                    {who || <bdi>{event.description}</bdi>}
+-                  </span>
++              <span>{t(typeKey[event.type])}</span>
++              {count > 0 ? commentTrigger(event.id, count) : null}
++            </li>
++          );
++        }
++
++        return (
++          <Fragment key={event.id}>
++            <li className={cx(SPINE_GRID, index === 0 ? "pt-2" : "py-2")}>
++              {/* MINUTE — the middle of the spine. Persian digits under FA. */}
++              <span className="flex flex-col items-center gap-0.5">
++                <span dir="ltr" className="text-sm font-extrabold text-ink-2">
++                  <Num>{digits(event.minuteDisplay)}</Num>
+                 </span>
+-                {team ? (
+-                  <span className="block truncate text-xs text-ink-3">
+-                    <bdi>{team}</bdi>
+-                  </span>
+-                ) : null}
+-              </span>
+-              <span className="flex items-center justify-end gap-2 text-end">
+-                {/* The scoreline this goal produced. Always home–away and LTR,
+-                    so the number reads the same whichever side scored it. */}
++                {/* The scoreline this goal produced: under its own minute. */}
+                 {isGoal && goalScore ? (
+                   <span dir="ltr">
+-                    <Num className="text-sm font-extrabold text-volt">
+-                      {formatScore(goalScore)}
++                    <Num className="text-xs font-extrabold text-volt">
++                      {digits(formatScore(goalScore))}
+                     </Num>
+                   </span>
+                 ) : null}
+-                {/* The crowd thread trigger lives in the same row — 44px tall,
+-                    and rendered only on rows that actually have comments. */}
+-                {count > 0 ? (
+-                  <button
+-                    type="button"
+-                    aria-expanded={commentsOpen}
+-                    onClick={() => setOpenCommentsId(commentsOpen ? null : event.id)}
+-                    // 36px visual with an invisible 44px+ hit band (the same
+-                    // pattern as the feed's league chips): a full 44px visual
+-                    // control would balloon the row past the compact band.
+-                    className="relative inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
+-                  >
+-                    <span aria-hidden="true">💬</span>
+-                    <Num>{count}</Num>
+-                    <span className="sr-only">{t("comments.liveThread")}</span>
+-                  </button>
+-                ) : null}
+               </span>
++
++              {/* HOME — first column, content hugging the spine (its END edge
++                  in both directions): trigger, text, icon-at-spine. */}
++              {side === "home" ? (
++                <HomeSpineCell parts={eventParts(event)} goal={isGoal}>
++                  {count > 0 ? commentTrigger(event.id, count) : null}
++                </HomeSpineCell>
++              ) : (
++                <span aria-hidden="true" className="col-start-1 row-start-1" />
++              )}
++
++              {/* AWAY — third column, content hugging the spine: icon-at-spine,
++                  text, trigger. */}
++              {side === "away" ? (
++                <AwaySpineCell parts={eventParts(event)} goal={isGoal}>
++                  {count > 0 ? commentTrigger(event.id, count) : null}
++                </AwaySpineCell>
++              ) : (
++                <span aria-hidden="true" className="col-start-3 row-start-1" />
++              )}
+             </li>
+ 
+-            {/* The row's comment thread, once opened. Substitution arrows note
+-                their direction explicitly in the name pair, so the icon swap is
+-                cosmetic-only below. */}
++            {/* The row's comment thread, once opened. Substitution direction is
++                shown in the name pair, so the icon swap is cosmetic-only
++                below. */}
+             {commentsOpen ? (
+               <li className="px-1 pb-2">
+                 {/* The composer is intentionally unmounted for now, so the
+diff --git a/src/i18n/names.ts b/src/i18n/names.ts
+index c28396b..43340e1 100644
+--- a/src/i18n/names.ts
++++ b/src/i18n/names.ts
+@@ -247,6 +247,16 @@ export const personNamesFa: Record<string, string> = {
+   "FIFA World Cup Qualifying — UEFA": "مقدماتی جام جهانی — اروپا",
+   "FIFA World Cup Qualifying — CONMEBOL": "مقدماتی جام جهانی — آمریکای جنوبی",
+   "UEFA Nations League": "لیگ ملت‌های اروپا",
++  // Cup round labels (ESPN's `round`) — the match-detail subtitle and the Cups
++  // grouping headings show them; unknown rounds pass through as the English
++  // ESPN label, never truncated.
++  "Quarter-final": "یک‌چهارم نهایی",
++  "Semi-final": "نیمه‌نهایی",
++  "Final": "فینال",
++  "Round of 16": "مرحله ۱۶ تیمی",
++  "Round of 32": "مرحله ۳۲ تیمی",
++  "Qualifying round": "دور مقدماتی",
++  "Play-off": "پلی‌آف",
+ };
+ 
+ /** English string -> Persian, falling back to the input untouched. */
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 123f5d6..a61799c 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -144,6 +144,11 @@ export const strings = {
+     "timeline.other": "Update",
+     "timeline.halftime": "Half time",
+     "timeline.fulltime": "Full time",
++    "timeline.yellow": "Yellow card",
++    "timeline.red": "Red card",
++    "timeline.ownGoal": "Own goal",
++    "timeline.assist": "Assist: {name}",
++    "match.xi": "XI",
+     "timeline.comments": "{count} comments",
+     "pitchView.title": "Pitch View",
+     "pitchView.grid": "Goal grid",
+@@ -810,10 +815,15 @@ export const strings = {
+     "timeline.card": "کارت",
+     "timeline.sub": "تعویض",
+     "timeline.var": "بازبینی VAR",
+-    "timeline.kickoff": "آغاز بازی",
++    "timeline.kickoff": "شروع نیمه اول",
+     "timeline.other": "رویداد",
+     "timeline.halftime": "پایان نیمه اول",
+     "timeline.fulltime": "پایان بازی",
++    "timeline.yellow": "کارت زرد",
++    "timeline.red": "کارت قرمز",
++    "timeline.ownGoal": "گل به خودی",
++    "timeline.assist": "پاس: {name}",
++    "match.xi": "ترکیب اصلی",
+     "timeline.comments": "{count} دیدگاه",
+     "pitchView.title": "نمای زمین",
+     "pitchView.grid": "شبکه دروازه",
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 6e028b5..6a74bb1 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -20,7 +20,6 @@ import {
+   ErrorState,
+   LiveDot,
+   Num,
+-  Segmented,
+   TeamBadge,
+ } from "../components/ui";
+ import { cx } from "../lib/cx";
+@@ -30,7 +29,7 @@ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+ import { useI18n } from "../i18n/context";
+ import { RATINGS_ENABLED } from "../lib/features";
+ import { flipIntoPlace, getFlipFirst } from "../lib/flip";
+-import { formatClock, formatKickoff, formatKickoffDate } from "../lib/format";
++import { formatClock, formatKickoffDate, kickoffParts, toFaDigits } from "../lib/format";
+ import { useNow } from "../hooks/useNow";
+ import { useLiveUpdates } from "../hooks/useLiveUpdates";
+ import type { Team, TimelineEventType } from "../types";
+@@ -40,8 +39,9 @@ const TABS: Tab[] = ["timeline", "stats", "lineups"];
+ 
+ export default function MatchDetail() {
+   const { id = "" } = useParams();
+-  const { t, lang } = useI18n();
++  const { t, lang, localize } = useI18n();
+   const locale = lang === "fa" ? "fa-IR" : undefined;
++  const fa = lang === "fa";
+   useLiveUpdates();
+ 
+   const matchQuery = useQuery({
+@@ -172,7 +172,7 @@ export default function MatchDetail() {
+   if (matchQuery.isLoading) {
+     return (
+       <>
+-        <TopBar title={t("match.summary")} back />
++        <TopBar title={leagueLabel || t("match.summary")} />
+         <div className="mt-md">
+           <ScoreHeroSkeleton />
+         </div>
+@@ -183,7 +183,7 @@ export default function MatchDetail() {
+   if (matchQuery.isError) {
+     return (
+       <>
+-        <TopBar title={t("match.summary")} back />
++        <TopBar title={leagueLabel || t("match.summary")} />
+         <div className="mt-md">
+           <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => matchQuery.refetch()} />
+         </div>
+@@ -194,7 +194,7 @@ export default function MatchDetail() {
+   if (!match) {
+     return (
+       <>
+-        <TopBar title={t("match.summary")} back />
++        <TopBar title={leagueLabel || t("match.summary")} />
+         <div className="mt-md">
+           <EmptyState title={t("matches.empty")} hint={t("matches.emptyHint")} />
+         </div>
+@@ -221,56 +221,57 @@ export default function MatchDetail() {
+ 
+ 
+ 
++  // Cup matches carry ESPN's round ("Quarter-final"); league matches have no
++  // round in the payload and no gameweek either — the API sends neither — so
++  // the subtitle renders only when a round exists (never a bare placeholder).
++  const roundLabel = match.round ? localize(match.round) : null;
++
+   return (
+     <>
+       <ConfettiBurst trigger={burst} />
+ 
+-      {/* The scoreboard below already names both sides; a "Home vs Away" title
+-          from two long names scrambles the bidi run and truncates in Persian. */}
+-      <TopBar title={t("match.summary")} subtitle={leagueLabel} back />
++      {/* Title = the competition, subtitle = the round (cups). No round back
++          chevron next to the title — the scoreboard owns the screen and
++          navigation lives in the mini app chrome. */}
++      <TopBar title={leagueLabel} subtitle={roundLabel ?? undefined} />
+ 
+-      {/* Score header */}
++      {/* Scoreboard: crest with the team NAME under it, big score centered,
++          live pill with the minute. Home first — the first flex child, which
++          sits on the START edge (right in Persian, left in English) — the same
++          home-first order the Matches feed shows, with each crest's number
++          being that side's goals. */}
+       <div
+         className={cx(
+           "score-hero relative mt-md overflow-hidden rounded-card border p-3",
+           flashScore ? "goal-flash border-volt/60 bg-elevated" : "border-line",
+         )}
+       >
+-        <p className="pb-2 text-center text-xs font-bold text-ink-2">
+-          {leagueLabel} · {formatKickoff(new Date(match.kickoff_at), locale)}
+-        </p>
+-        <div className="flex items-center justify-between gap-3">
+-          {/* Badge only: the user tapped this match's card, so the crest is
+-              all the teams need — the scoreboard below already says who plays.
+-              The md badge keeps the crest as supporting context so the score
+-              itself is the hero. */}
+-          <div className="flex flex-col items-center">
++        <div className="flex items-center justify-between gap-2">
++          {/* HOME — the side the first score digit belongs to. */}
++          <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+             <TeamBadge team={home} size="md" />
++            <span className="max-w-full truncate text-center text-sm font-bold text-ink">
++              {localize(home.shortName)}
++            </span>
+           </div>
+ 
+-          <div className="flex flex-col items-center gap-1.5">
+-            {/* Before kickoff there is no score to show — the kickoff clock is
+-                the honest read, and dashes ("– : –") read as a broken scoreboard.
++          <div className="flex flex-none flex-col items-center justify-center gap-1.5 self-stretch py-1">
++            {/* Before kickoff there is no score — the kickoff clock is the
++                honest read, isolated LTR so the colon and digits never flip.
+                 Once a side has a number the score rolls up as it moves. */}
+             {match.home_score === null && match.away_score === null ? (
+               <Num className="text-lg leading-none text-ink-2">
+-                {formatClock(new Date(match.kickoff_at), locale)}
++                <span dir="ltr">{formatClock(new Date(match.kickoff_at), locale)}</span>
+               </Num>
+             ) : (
+               /* This row is the FLIP's Last frame: same key the tapped card
+-                 recorded its First rect under (see MatchCard onPointerDown). */
+-              <span data-flip-key="match-score" className="flex items-baseline gap-1">
+-                {match.home_score === null ? (
+-                  <Num className="text-display leading-none text-ink">–</Num>
+-                ) : (
+-                  <CountUp value={match.home_score} className="text-display leading-none text-ink" />
+-                )}
++                 recorded its First rect under (see MatchCard onPointerDown).
++                 NOT dir-ltr: in Persian the home number has to sit beside the
++                 home crest (start edge, right). */
++              <span data-flip-key="match-score" className="flex items-baseline justify-center gap-1">
++                <ScoreDigit value={match.home_score} fa={fa} />
+                 <Num className="text-display leading-none text-ink">:</Num>
+-                {match.away_score === null ? (
+-                  <Num className="text-display leading-none text-ink">–</Num>
+-                ) : (
+-                  <CountUp value={match.away_score} className="text-display leading-none text-ink" />
+-                )}
++                <ScoreDigit value={match.away_score} fa={fa} />
+               </span>
+             )}
+             {inPlay ? (
+@@ -279,9 +280,12 @@ export default function MatchDetail() {
+                 {match.status === "halftime" ? (
+                   t("timeline.halftime")
+                 ) : (
+-                  <>
+-                    {t("status.live")} <Num>{currentMinute}&#39;</Num>
+-                  </>
++                  <span>
++                    {t("status.live")} {"\u200F"}
++                    <Num>
++                      <span dir="ltr">{nf.format(currentMinute)}′</span>
++                    </Num>
++                  </span>
+                 )}
+               </Chip>
+             ) : countdownLabel ? (
+@@ -299,24 +303,37 @@ export default function MatchDetail() {
+             )}
+           </div>
+ 
+-          <div className="flex flex-col items-center">
++          {/* AWAY — the side the second score digit belongs to. */}
++          <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
+             <TeamBadge team={away} size="md" />
++            <span className="max-w-full truncate text-center text-sm font-bold text-ink">
++              {localize(away.shortName)}
++            </span>
+           </div>
+         </div>
+-      </div>
+ 
+-      <div className="mt-md">          <Segmented
+-          id="match-tabs"
+-          value={tab}
+-          onChange={setTab}
+-          options={[
+-            { value: "timeline", label: t("match.tabTimeline") },
+-            { value: "stats", label: t("match.tabStats") },
+-            { value: "lineups", label: t("match.tabLineups") },
+-          ]}
+-        />
++        {/* Date/time (and venue when the payload ever carries one — today
++            there is no venue field at all) as simple lines below the pill.
++            The clock is its own dir=ltr run so the bidi order never scrambles. */}
++        <div className="mt-2 text-center text-xs text-ink-2">
++          <p>
++            {kickoffParts(new Date(match.kickoff_at), locale).day}{" "}
++            <span dir="ltr">{kickoffParts(new Date(match.kickoff_at), locale).clock}</span>
++          </p>
++        </div>
+       </div>
+ 
++      <UnderlineTabs
++        id="match-tabs"
++        value={tab}
++        onChange={setTab}
++        options={[
++          { value: "timeline", label: t("match.tabTimeline") },
++          { value: "stats", label: t("match.tabStats") },
++          { value: "lineups", label: t("match.tabLineups") },
++        ]}
++      />
++
+       {/* The panel that the tabs above (role=tab/aria-controls) point at: the
+           labelled-by ties tab → panel so screen readers announce the owning
+           tab, and arrow keys on the tablist land here. */}
+@@ -348,6 +365,70 @@ export default function MatchDetail() {
+ 
+ /* ------------------------------------------------------------ tabs */
+ 
++/**
++ * One score digit: a goal rolls up in EN, but Persian renders statically —
++ * CountUp prints Latin digits, and an animated Persian-digit roll isn't worth
++ * its own clock component here.
++ */
++function ScoreDigit({ value, fa }: { value: number | null; fa: boolean }) {
++  if (value === null) return <Num className="text-display leading-none text-ink">–</Num>;
++  return fa ? (
++    <Num className="text-display leading-none text-ink">{toFaDigits(value)}</Num>
++  ) : (
++    <CountUp value={value} className="text-display leading-none text-ink" />
++  );
++}
++
++/**
++ * Underline-style tabs for the match page: a volt underline marks the active
++ * tab instead of the shared sliding pill, per the redesign. Same tab wiring
++ * as Segmented: tab id `${id}-${value}`, panel `${id}-panel`, tabs carry
++ * role="tab" + aria-selected + aria-controls (the panel below depends on it).
++ */
++function UnderlineTabs<T extends string>({
++  id,
++  value,
++  options,
++  onChange,
++}: {
++  id: string;
++  value: T;
++  options: Array<{ value: T; label: string }>;
++  onChange: (value: T) => void;
++}) {
++  return (
++    <div role="tablist" className="mt-md flex border-b border-line">
++      {options.map((option) => {
++        const active = option.value === value;
++        return (
++          <button
++            key={option.value}
++            type="button"
++            role="tab"
++            id={`${id}-${option.value}`}
++            aria-selected={active}
++            aria-controls={`${id}-panel`}
++            onClick={() => onChange(option.value)}
++            className={cx(
++              "relative min-h-11 flex-1 px-2 text-sm font-bold transition-colors duration-[var(--t-fast)]",
++              active ? "text-ink" : "text-ink-3 hover:text-ink-2",
++            )}
++          >
++            {option.label}
++            <span
++              aria-hidden="true"
++              className={cx(
++                "absolute inset-x-3 bottom-0 h-0.5 rounded-full",
++                active ? "bg-volt" : "bg-transparent",
++              )}
++            />
++          </button>
++        );
++      })}
++    </div>
++  );
++}
++
+ function TimelineTab({
+   matchId,
+   live,
+@@ -360,7 +441,7 @@ function TimelineTab({
+   /** Both sides, for the timeline markers' club tint and the team label. */
+   teams: Array<{ id: string; shortName: string; color: string }>;
+ }) {
+-  const { t, localize } = useI18n();
++  const { t } = useI18n();
+   const query = useQuery({
+     queryKey: ["timeline", matchId],
+     queryFn: () => api.getTimeline(matchId),
+@@ -378,10 +459,6 @@ function TimelineTab({
+   const adapted = events
+     .map(adaptTimelineEvent)
+     .filter((e) => e.type !== "other"); // drop commentary noise; keep kickoff + structured events
+-  const teamColor = Object.fromEntries(teams.map((team) => [team.id, team.color]));
+-  // teamId → localized club name, so a card names the side without printing the
+-  // English event sentence the feed carries.
+-  const teamNames = Object.fromEntries(teams.map((team) => [team.id, localize(team.shortName)]));
+ 
+   if (query.isLoading) return <TimelineSkeleton rows={4} />;
+   if (query.isError) {
+@@ -396,8 +473,6 @@ function TimelineTab({
+       events={adapted}
+       comments={pinned}
+       liveMinute={live ? minute : undefined}
+-      teamColor={teamColor}
+-      teamNames={teamNames}
+       homeTeamId={teams[0]?.id}
+       awayTeamId={teams[1]?.id}
+     />
+@@ -420,7 +495,7 @@ function StatsTab({
+   };
+   away: typeof home;
+ }) {
+-  const { t } = useI18n();
++  const { t, localize } = useI18n();
+   const query = useQuery({
+     queryKey: ["matchPlayers", matchId],
+     queryFn: () => api.getMatchPlayers(matchId),
+@@ -510,10 +585,10 @@ function StatsTab({
+                 style={{ backgroundColor: home.color }}
+                 aria-hidden="true"
+               />
+-              <span className="truncate">{home.shortName}</span>
++              <span className="truncate">{localize(home.shortName)}</span>
+             </span>
+             <span className="flex min-w-0 items-center gap-1.5 text-xs font-bold text-ink">
+-              <span className="truncate">{away.shortName}</span>
++              <span className="truncate">{localize(away.shortName)}</span>
+               <span
+                 className="h-2.5 w-2.5 flex-none rounded-full ring-1 ring-ink-3"
+                 style={{ backgroundColor: away.color }}
+@@ -532,10 +607,10 @@ function StatsTab({
+       {/* Every player who appeared, both sides in one pass — no Home/Away
+           toggle to remember to tap. */}
+       {homeRows.length > 0 ? (
+-        <MatchPlayerTable title={home.shortName} color={home.color} rows={homeRows} />
++        <MatchPlayerTable title={localize(home.shortName)} color={home.color} rows={homeRows} />
+       ) : null}
+       {awayRows.length > 0 ? (
+-        <MatchPlayerTable title={away.shortName} color={away.color} rows={awayRows} />
++        <MatchPlayerTable title={localize(away.shortName)} color={away.color} rows={awayRows} />
+       ) : null}
+     </div>
+   );
+@@ -557,7 +632,16 @@ function StatCompareRow({
+   awayValue: number | null;
+   pct?: boolean;
+ }) {
+-  const show = (v: number | null) => (v === null ? "–" : pct ? `${v}%` : String(v));
++  const { lang } = useI18n();
++  const fa = lang === "fa";
++  const show = (v: number | null) =>
++    v === null
++      ? "–"
++      : fa
++        ? toFaDigits(pct ? `${v}%` : String(v))
++        : pct
++          ? `${v}%`
++          : String(v);
+   const hv = homeValue ?? 0;
+   const av = awayValue ?? 0;
+   const total = hv + av;
+@@ -596,7 +680,8 @@ function MatchPlayerTable({
+   color: string;
+   rows: Array<Record<string, unknown>>;
+ }) {
+-  const { t, localize } = useI18n();
++  const { t, localize, lang } = useI18n();
++  const fa = lang === "fa";
+   const num = (v: unknown): number => (typeof v === "number" ? v : 0);
+   const str = (v: unknown): string => (typeof v === "string" ? v : "");
+   return (
+@@ -632,21 +717,28 @@ function MatchPlayerTable({
+               <td className="p-2">
+                 <span className="block truncate font-bold text-ink">{localize(str(r.full_name))}</span>
+                 <span className="text-xs text-ink-3">
+-                  {num(r.minutes_played)}&#39; {r.started ? "· XI" : ""}
++                  {fa ? toFaDigits(num(r.minutes_played)) : num(r.minutes_played)}′{" "}
++                  {r.started ? `· ${t("match.xi")}` : ""}
+                 </span>
+               </td>
+               <td className="p-2 text-end">
+-                <Num className={num(r.goals) > 0 ? "font-bold text-volt" : "text-ink-2"}>{num(r.goals)}</Num>
++                <Num className={num(r.goals) > 0 ? "font-bold text-volt" : "text-ink-2"}>
++                  {fa ? toFaDigits(num(r.goals)) : num(r.goals)}
++                </Num>
+               </td>
+               <td className="p-2 text-end">
+                 <Num className={num(r.assists) > 0 ? "font-bold text-gold" : "text-ink-2"}>
+-                  {num(r.assists)}
++                  {fa ? toFaDigits(num(r.assists)) : num(r.assists)}
+                 </Num>
+               </td>
+-              <td className="p-2 text-end text-ink-2">{num(r.shots)}</td>
++              <td className="p-2 text-end text-ink-2">
++                {fa ? toFaDigits(num(r.shots)) : num(r.shots)}
++              </td>
+               {RATINGS_ENABLED ? (
+                 <td className="p-2 text-end">
+-                  <Num className="font-bold text-ink">{num(r.stat_score)}</Num>
++                  <Num className="font-bold text-ink">
++                    {fa ? toFaDigits(num(r.stat_score)) : num(r.stat_score)}
++                  </Num>
+                 </td>
+               ) : null}
+             </tr>
+-- 
+2.54.0.windows.1
+

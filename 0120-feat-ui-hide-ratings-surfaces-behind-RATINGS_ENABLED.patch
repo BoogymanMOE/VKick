@@ -1,0 +1,227 @@
+From b5a2e8cf3828215a25bd088a54a4ef8163d826c3 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 00:30:53 +0330
+Subject: [PATCH 120/230] feat(ui): hide ratings surfaces behind
+ RATINGS_ENABLED
+
+The Ratings route, intro slide, notification toggle and stats points column disappear while the flag is off, leaving the code in place for the feature's return.
+---
+ src/App.tsx               |  6 +++++-
+ src/i18n/strings.ts       |  2 ++
+ src/pages/MatchDetail.tsx | 20 ++++++++++++++------
+ src/pages/Onboarding.tsx  | 24 +++++++++++++++++++-----
+ src/pages/Profile.tsx     | 32 ++++++++++++++++++--------------
+ 5 files changed, 58 insertions(+), 26 deletions(-)
+
+diff --git a/src/App.tsx b/src/App.tsx
+index 75628dd..ea6bd43 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
+ import { AppShell } from "./components/AppShell";
+ import { AuthProvider, RequireAuth } from "./hooks/useAuth";
+ import { useFavorites } from "./hooks/useFavorites";
++import { RATINGS_ENABLED } from "./lib/features";
+ import { LEGAL_ROUTES } from "./lib/legal";
+ 
+ // Every screen is lazy so the first paint only ships the shell, the auth gate
+@@ -53,7 +54,10 @@ export default function App() {
+                 MatchDetail, so it silently landed on Timeline — legacy links
+                 now open the match summary itself. */}
+             <Route path="/match/:id/shot-plotter" element={<ShotPlotterRedirect />} />
+-            <Route path="/ratings" element={<Ratings />} />
++            {/* Ratings are off for now: the lazy import stays (it is only
++                fetched when this still-rendered route is reached), and legacy
++                deep links land on the feed instead of a missing screen. */}
++            <Route path="/ratings" element={RATINGS_ENABLED ? <Ratings /> : <Navigate to="/matches" replace />} />
+             <Route path="/table" element={<Table />} />
+             <Route path="/profile" element={<Profile />} />
+             <Route path="/admin" element={<Admin />} />
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 54abcb4..d2c1750 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -413,6 +413,7 @@ export const strings = {
+     "error.hint": "The connection dropped or the data source hiccuped. Your data is safe — tap to retry.",
+     "timeline.emptyHint": "Goals, cards and subs appear here live — check back at kickoff.",
+     "matches.emptyHint": "Scores land here the moment games go live.",
++    "stats.noneYet": "No player stats yet",
+     "stats.noneHint": "Stats land here after the first whistle.",
+     "board.emptyHint": "Predict any match — correct picks pay season points.",
+     "board.belowPage": "Below the top 100",
+@@ -636,6 +637,7 @@ export const strings = {
+     "error.hint": "اتصال قطع شد یا منبع داده مکث کرد. داده‌هایت سالم است — برای تلاش دوباره بزن.",
+     "timeline.emptyHint": "گل‌ها، کارت‌ها و تعویض‌ها همین‌جا زنده می‌آیند — سر ساعت بازی سر بزن.",
+     "matches.emptyHint": "نتایج همین لحظه‌ای که بازی‌ها زنده می‌شوند اینجا می‌نشیند.",
++    "stats.noneYet": "هنوز آماری برای بازیکنان نیست",
+     "stats.noneHint": "آمارها بعد از سوت اول همین‌جا می‌آیند.",
+     "board.emptyHint": "روی هر بازی پیش‌بینی کن — انتخاب‌های درست امتیاز فصل می‌گیرند.",
+     "ratings.noneHint": "آمار بازیکن‌ها بعد از شروع بازی ظاهر می‌شود.",
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 35e5911..b7f7574 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -29,6 +29,7 @@ import { api, type ApiTimelineEvent } from "../lib/api";
+ import { TEAM_FALLBACK } from "../lib/colors";
+ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+ import { useI18n } from "../i18n/context";
++import { RATINGS_ENABLED } from "../lib/features";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+ import { useNow } from "../hooks/useNow";
+ import { useLiveUpdates } from "../hooks/useLiveUpdates";
+@@ -365,7 +366,7 @@ function StatsTab({
+     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+   }
+   if (rows.length === 0) {
+-    return <EmptyState title={t("ratings.noneYet")} hint={t("stats.noneHint")} />;
++    return <EmptyState title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
+   }
+ 
+   const selected = team === "home" ? home : away;
+@@ -412,7 +413,12 @@ function MatchPlayerTable({
+             <th className="p-2 text-end font-bold">{t("stats.goals")}</th>
+             <th className="p-2 text-end font-bold">{t("stats.assists")}</th>
+             <th className="p-2 text-end font-bold">{t("stats.shots")}</th>
+-            <th className="p-2 text-end font-bold">{t("ratings.points")}</th>
++            {/* The points-style stat score is the ratings feature's number;
++                with the flag off the column is gone and the remaining four
++                share its width (the table is already w-full). */}
++            {RATINGS_ENABLED ? (
++              <th className="p-2 text-end font-bold">{t("ratings.points")}</th>
++            ) : null}
+           </tr>
+         </thead>
+         <tbody>
+@@ -433,9 +439,11 @@ function MatchPlayerTable({
+                 </Num>
+               </td>
+               <td className="p-2 text-end text-ink-2">{num(r.shots)}</td>
+-              <td className="p-2 text-end">
+-                <Num className="font-bold text-ink">{num(r.stat_score)}</Num>
+-              </td>
++              {RATINGS_ENABLED ? (
++                <td className="p-2 text-end">
++                  <Num className="font-bold text-ink">{num(r.stat_score)}</Num>
++                </td>
++              ) : null}
+             </tr>
+           ))}
+         </tbody>
+@@ -464,7 +472,7 @@ function LineupsTab({
+     return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+   }
+   if (!data || data.players.length === 0) {
+-    return <EmptyState title={t("ratings.noneYet")} hint={t("stats.noneHint")} />;
++    return <EmptyState title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
+   }
+ 
+   const toPlayer = (r: Record<string, unknown>) => ({
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 0b2b816..ba2322f 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -21,7 +21,7 @@ import type { StringKey } from "../i18n/strings";
+ import { serverErrorKey } from "../lib/api";
+ import { haptic, selectionHaptic, notifyHaptic } from "../lib/telegram";
+ import { buildPickerGroups, teamsInGroup } from "../lib/pickerGroups";
+-import { PREDICTIONS_ENABLED } from "../lib/features";
++import { PREDICTIONS_ENABLED, RATINGS_ENABLED } from "../lib/features";
+ 
+ const TOTAL_STEPS = 3;
+ 
+@@ -43,9 +43,12 @@ const ALL_SLIDES = [
+   { key: "rate", titleKey: "intro.rate.title", bodyKey: "intro.rate.body", Glyph: PencilIcon },
+ ] as const;
+ 
+-// Predictions are off for now: the slide stays in the repo and comes back with
+-// the flag. Only the list is filtered — its copy and glyph are untouched.
+-const SLIDES = ALL_SLIDES.filter((slide) => PREDICTIONS_ENABLED || slide.key !== "predict");
++// Predictions and ratings are off for now: each slide stays in the repo and
++// comes back with its flag. Only the list is filtered — copy and glyph are
++// untouched.
++const SLIDES = ALL_SLIDES.filter(
++  (s) => (PREDICTIONS_ENABLED || s.key !== "predict") && (RATINGS_ENABLED || s.key !== "rate"),
++);
+ 
+ /**
+  * First-run onboarding in the concept's order:
+@@ -61,7 +64,18 @@ export default function Onboarding() {
+   const { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, toggleAndAnchor } =
+     useFavorites();
+   const followed = useFollowedLeagues();
+-  const [intro, setIntro] = useState(() => !introSeen());
++  const [intro, setIntro] = useState(() => {
++    if (SLIDES.length >= 2) return !introSeen();
++    // With a single idea left the intro is a screen that explains one thing and
++    // asks for a tap: skip it, but still mark it seen so nothing reappears when
++    // a flag is turned back on and the list grows.
++    try {
++      localStorage.setItem(INTRO_KEY, "1");
++    } catch {
++      /* private mode */
++    }
++    return false;
++  });
+   const [step, setStep] = useState(0);
+   const [saved, setSaved] = useState(false);
+ 
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 69fcdcc..9e2ed84 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -11,7 +11,7 @@ import { useNotificationPrefs, useReferral } from "../hooks/useApi";
+ import { useI18n } from "../i18n/context";
+ import { api, serverErrorKey } from "../lib/api";
+ import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
+-import { PREDICTIONS_ENABLED } from "../lib/features";
++import { PREDICTIONS_ENABLED, RATINGS_ENABLED } from "../lib/features";
+ import { LEGAL_ROUTES } from "../lib/legal";
+ import { useLocalState } from "../lib/useLocalState";
+ import { haptic, notifyHaptic, shareToTelegram } from "../lib/telegram";
+@@ -184,7 +184,7 @@ export default function Profile() {
+             label={t("profile.notifications")}
+             hint={
+               serverPrefs.goals ||
+-              serverPrefs.ratings ||
++              (RATINGS_ENABLED && serverPrefs.ratings) ||
+               (PREDICTIONS_ENABLED && serverPrefs.deadline)
+                 ? t("profile.notificationsOn")
+                 : t("profile.notificationsOff")
+@@ -357,18 +357,22 @@ export default function Profile() {
+               }
+             />
+           ) : null}
+-          <ListRow
+-            label={t("profile.notifRatings")}
+-            hint={t("profile.notifRatingsHint")}
+-            onToggle={() => setPref("ratings")(!serverPrefs.ratings)}
+-            right={
+-              <Switch
+-                checked={serverPrefs.ratings}
+-                label={t("profile.notifRatings")}
+-                onChange={setPref("ratings")}
+-              />
+-            }
+-          />
++          {/* The rating-window push is gated off, so its switch is too —
++              leaving it would promise a notification nothing can send. */}
++          {RATINGS_ENABLED ? (
++            <ListRow
++              label={t("profile.notifRatings")}
++              hint={t("profile.notifRatingsHint")}
++              onToggle={() => setPref("ratings")(!serverPrefs.ratings)}
++              right={
++                <Switch
++                  checked={serverPrefs.ratings}
++                  label={t("profile.notifRatings")}
++                  onChange={setPref("ratings")}
++                />
++              }
++            />
++          ) : null}
+         </div>
+       </BottomSheet>
+ 
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,398 @@
+From 30422f0bb1608f851375909928bae335cdc588f7 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 16 Oct 2026 01:57:28 +0330
+Subject: [PATCH 100/230] Close the last micro-interactions: score roll-up, win
+ confetti, toasts, pull ring
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The score header snapped from one number to the next; it now rolls up with the
+same CountUp the tables use, so a goal lands instead of jumping.
+
+A pick that pays off is the one moment this app can celebrate, and the user is
+already on the match when it resolves, so a win fires the existing confetti
+burst. The fire-once rule lives in src/lib/predictionWin.ts and is tested: the
+first payload of a session only seeds the status map, so opening an
+already-resolved match celebrates nothing and a settled pick never re-fires.
+
+Toasts drop in from above the header and leave upward, and the tone now owns a
+4px accent bar on the card's leading edge (border-s-4, so it flips in Persian)
+over the existing 1px tone border — a card rather than a pill, since an accent
+bar needs a straight edge to sit on.
+
+The pull-to-refresh indicator is a ball turning inside a volt ring that fills
+with the drag and closes at the threshold, instead of a generic spinner.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ design-system.md                 |  5 +++
+ src/components/PullToRefresh.tsx | 41 +++++++++++++++----
+ src/components/Toast.tsx         | 19 ++++++---
+ src/index.css                    |  7 +++-
+ src/lib/predictionWin.ts         | 28 +++++++++++++
+ src/pages/MatchDetail.tsx        | 37 +++++++++++++++--
+ tests/predictionWin.test.ts      | 68 ++++++++++++++++++++++++++++++++
+ tests/run.ts                     |  2 +
+ 8 files changed, 189 insertions(+), 18 deletions(-)
+ create mode 100644 src/lib/predictionWin.ts
+ create mode 100644 tests/predictionWin.test.ts
+
+diff --git a/design-system.md b/design-system.md
+index b693062..0d943c0 100644
+--- a/design-system.md
++++ b/design-system.md
+@@ -96,6 +96,11 @@ Only transform + opacity animate (60fps). Respect `prefers-reduced-motion`.
+ 8. **Skeleton shimmer** — 1.4s gradient sweep on loading cards.
+ 9. **Live card halo** — live match cards carry a static cyan halo plus a 2.4s ring pulse (`.live-glow`);
+    opacity only, so scheduled and finished cards stay flat.
++10. **Toast drop** — a toast slides down from above the header (`.toast-in`) and leaves the same way
++    (`.toast-out`); its tone owns a 4px accent bar on the card's leading edge (`border-s-4`, so it flips
++    in Persian): volt success, danger error, gold evaluation.
++11. **Pull ring** — the feed's refresh indicator is the ball turning inside a volt ring that fills with
++    the drag and closes at the threshold; transform and stroke-dashoffset only, no layout work.
+ 
+ ## 5. Platform notes
+ 
+diff --git a/src/components/PullToRefresh.tsx b/src/components/PullToRefresh.tsx
+index 32dee9f..533d2ea 100644
+--- a/src/components/PullToRefresh.tsx
++++ b/src/components/PullToRefresh.tsx
+@@ -1,11 +1,18 @@
+-import { RefreshIcon } from "./icons";
++import { BallIcon } from "./icons";
+ import { THRESHOLD } from "../hooks/usePullToRefresh";
+ 
+ const TRAVEL = 56;
++/** The progress ring in the indicator's 36px box. */
++const RING_RADIUS = 16;
++const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+ 
+ /**
+- * The pull progress marker. Transform-only (no height animation): it slides in
+- * under the sticky TopBar and snaps to volt once armed, so the drag costs a
++ * The pull progress marker: a ball turning inside a volt ring that fills as the
++ * gesture grows, so the drag reads as winding the feed up rather than as a
++ * generic spinner. The disc also scales in with the pull.
++ *
++ * Transform- and stroke-dashoffset-only (no height animation): it slides in
++ * under the sticky TopBar and turns volt once armed, so the drag costs a
+  * composite layer rather than a layout pass on the low-end webviews we target.
+  *
+  * Decorative by design — the TopBar refresh button carries the same action for
+@@ -15,6 +22,7 @@ export function PullIndicator({ pull }: { pull: number }) {
+   if (pull <= 0) return null;
+   const progress = Math.min(pull / THRESHOLD, 1);
+   const armed = pull >= THRESHOLD;
++  const tone = armed ? "var(--volt)" : "var(--text-muted)";
+   return (
+     <div
+       aria-hidden="true"
+@@ -25,15 +33,32 @@ export function PullIndicator({ pull }: { pull: number }) {
+       }}
+     >
+       <span
+-        className="grid h-9 w-9 place-items-center rounded-full border bg-elevated transition-colors duration-[var(--t-fast)]"
++        className="relative grid h-9 w-9 place-items-center rounded-full border bg-elevated"
+         style={{
+           borderColor: armed ? "var(--volt)" : "var(--border-subtle)",
+-          color: armed ? "var(--volt)" : "var(--text-muted)",
++          boxShadow: armed ? "0 0 14px -4px var(--volt)" : undefined,
++          transform: `scale(${(0.86 + progress * 0.14).toFixed(3)})`,
+         }}
+       >
+-        <RefreshIcon
+-          className="transition-transform duration-[var(--t-fast)]"
+-          style={{ transform: `rotate(${Math.round(progress * 180)}deg)` }}
++        {/* Progress ring: starts at twelve o'clock and draws clockwise as the
++            pull approaches the threshold. */}
++        <svg viewBox="0 0 36 36" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true">
++          <circle
++            cx="18"
++            cy="18"
++            r={RING_RADIUS}
++            fill="none"
++            stroke="var(--volt)"
++            strokeWidth="2"
++            strokeLinecap="round"
++            strokeDasharray={RING_LENGTH}
++            strokeDashoffset={RING_LENGTH * (1 - progress)}
++          />
++        </svg>
++        <BallIcon
++          className="h-4 w-4"
++          strokeWidth={2}
++          style={{ color: tone, transform: `rotate(${Math.round(progress * 360)}deg)` }}
+         />
+       </span>
+     </div>
+diff --git a/src/components/Toast.tsx b/src/components/Toast.tsx
+index 9f40b0a..144cb7c 100644
+--- a/src/components/Toast.tsx
++++ b/src/components/Toast.tsx
+@@ -17,11 +17,17 @@ const GLYPHS: Record<string, ReactNode> = {
+   "⚽": <BallIcon className="h-4 w-4" />,
+ };
+ 
++/*
++ * The tone owns a 4px accent bar on the card's leading edge (`border-s-4`, so
++ * it moves to the right in Persian like everything else) over the 1px tone
++ * border: success volt, error danger, evaluative gold. It is colour + width
++ * only — the toast keeps one tint, one icon and one line of copy.
++ */
+ const toneClass: Record<ToastTone, string> = {
+-  volt: "border-volt text-volt",
+-  gold: "border-gold text-gold",
+-  danger: "border-danger text-danger",
+-  muted: "border-line text-ink-2",
++  volt: "border-volt border-s-4 text-volt",
++  gold: "border-gold border-s-4 text-gold",
++  danger: "border-danger border-s-4 text-danger",
++  muted: "border-line border-s-4 text-ink-2",
+ };
+ 
+ const toneTint: Record<ToastTone, string | undefined> = {
+@@ -89,7 +95,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
+               if (toast.leaving) setToasts((prev) => prev.filter((item) => item.id !== toast.id));
+             }}
+             className={cx(
+-              "flex w-full max-w-[420px] items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold backdrop-blur-md",
++              // A card, not a pill: an accent bar needs a straight leading edge
++              // to sit on. Slides in from above the header and leaves upward
++              // (.toast-in / .toast-out).
++              "flex w-full max-w-[420px] items-center gap-2 rounded-card border px-3 py-2 text-xs font-bold backdrop-blur-md",
+               toast.leaving ? "toast-out" : "toast-in",
+               toneClass[toast.tone],
+             )}
+diff --git a/src/index.css b/src/index.css
+index 82399f6..f8809e7 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -555,13 +555,16 @@
+     }
+   }
+ 
++  /* Premium toast: it drops in from above the header and leaves the same way,
++     so a transient alert arrives and goes without a jump cut. Transform +
++     opacity only; -140% clears the safe-area padding the stack sits under. */
+   .toast-in {
+     animation: toast-in var(--t-std) var(--ease-pop) both;
+   }
+   @keyframes toast-in {
+     from {
+       opacity: 0;
+-      transform: translateY(-14px) scale(0.96);
++      transform: translateY(-140%) scale(0.96);
+     }
+     to {
+       opacity: 1;
+@@ -582,7 +585,7 @@
+     }
+     to {
+       opacity: 0;
+-      transform: translateY(-10px) scale(0.98);
++      transform: translateY(-140%) scale(0.98);
+     }
+   }
+ 
+diff --git a/src/lib/predictionWin.ts b/src/lib/predictionWin.ts
+new file mode 100644
+index 0000000..4feda3e
+--- /dev/null
++++ b/src/lib/predictionWin.ts
+@@ -0,0 +1,28 @@
++/**
++ * "Did a pick just pay off?" — the one rule behind the match page's win
++ * confetti, kept out of the component so it can be tested without a DOM.
++ *
++ * `previous` is the mechanic → status map observed on the render before this
++ * one. `null` means this is the first payload of the session (a fresh mount),
++ * and that must NEVER celebrate: opening a finished match whose picks already
++ * resolved is not a win the user just watched happen, and re-reading the same
++ * payload on a refetch must not shower the screen again.
++ */
++export interface ResolvedPick {
++  mechanic: string;
++  status: string;
++  points_awarded: number;
++}
++
++export function justPaidOut(
++  previous: ReadonlyMap<string, string> | null,
++  rows: readonly ResolvedPick[],
++): boolean {
++  if (!previous) return false;
++  return rows.some(
++    (row) =>
++      row.points_awarded > 0 &&
++      (row.status === "correct" || row.status === "partial") &&
++      previous.get(row.mechanic) !== row.status,
++  );
++}
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 7e53cfc..a124074 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -25,6 +25,7 @@ import {
+   Button,
+   Card,
+   Chip,
++  CountUp,
+   EmptyState,
+   ErrorState,
+   LiveDot,
+@@ -42,6 +43,7 @@ import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+ import { useNow } from "../hooks/useNow";
+ import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
++import { justPaidOut } from "../lib/predictionWin";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+ import { useLiveUpdates } from "../hooks/useLiveUpdates";
+ import type { Team } from "../types";
+@@ -124,6 +126,22 @@ export default function MatchDetail() {
+     staleTime: 0,
+   });
+ 
++  // A pick that just paid off is the one moment this app can celebrate, and the
++  // user is already looking at the match when it resolves. The status map is
++  // what keeps it to a single burst (src/lib/predictionWin.ts): the first
++  // payload of the session only seeds it, so opening an already-resolved match
++  // celebrates nothing, and a row sitting at "correct" never re-fires.
++  const statusRef = useRef<Map<string, string> | null>(null);
++  useEffect(() => {
++    const rows = predictionsQuery.data?.predictions;
++    if (!rows) return;
++    const previous = statusRef.current;
++    statusRef.current = new Map(rows.map((row) => [row.mechanic, row.status]));
++    if (!justPaidOut(previous, rows)) return;
++    setBurst((value) => value + 1);
++    notifyHaptic("success");
++  }, [predictionsQuery.data]);
++
+   if (matchQuery.isLoading) {
+     return (
+       <>
+@@ -214,9 +232,22 @@ export default function MatchDetail() {
+           </div>
+ 
+           <div className="flex flex-col items-center gap-1.5">
+-            <Num className="text-[40px] leading-none text-ink">
+-              {match.home_score ?? "–"} : {match.away_score ?? "–"}
+-            </Num>
++            {/* The score rolls up to its new value when the feed moves, so a
++                goal lands rather than snapping. A side that hasn't played keeps
++                the honest dash (null is not zero). */}
++            <span className="flex items-baseline gap-1">
++              {match.home_score === null ? (
++                <Num className="text-[40px] leading-none text-ink">–</Num>
++              ) : (
++                <CountUp value={match.home_score} className="text-[40px] leading-none text-ink" />
++              )}
++              <Num className="text-[40px] leading-none text-ink">:</Num>
++              {match.away_score === null ? (
++                <Num className="text-[40px] leading-none text-ink">–</Num>
++              ) : (
++                <CountUp value={match.away_score} className="text-[40px] leading-none text-ink" />
++              )}
++            </span>
+             {live ? (
+               <Chip tone="live">
+                 <LiveDot />
+diff --git a/tests/predictionWin.test.ts b/tests/predictionWin.test.ts
+new file mode 100644
+index 0000000..fbf3f8e
+--- /dev/null
++++ b/tests/predictionWin.test.ts
+@@ -0,0 +1,68 @@
++/**
++ * The prediction win confetti's fire-once rule (`src/lib/predictionWin.ts`).
++ * What matters here is the negative side: a celebration that fires on a plain
++ * page open, or again on every refetch of an already-settled pick, is worse
++ * than no celebration at all.
++ */
++import { strict as assert } from "node:assert";
++import { justPaidOut, type ResolvedPick } from "../src/lib/predictionWin.js";
++
++const pick = (mechanic: string, status: string, points_awarded: number): ResolvedPick => ({
++  mechanic,
++  status,
++  points_awarded,
++});
++
++/** A fresh mount (no previous map) never celebrates, whatever the payload says. */
++function testFirstObservation(): void {
++  assert.equal(justPaidOut(null, [pick("shot_predict", "correct", 5)]), false, "opening a resolved match");
++  assert.equal(justPaidOut(null, []), false, "empty payload");
++}
++
++/** Pending (or anything else) → a paying status is the win. */
++function testFlip(): void {
++  const pending = new Map([["shot_predict", "pending"]]);
++  assert.equal(justPaidOut(pending, [pick("shot_predict", "correct", 5)]), true, "pending → correct");
++  assert.equal(justPaidOut(pending, [pick("shot_predict", "partial", 2)]), true, "pending → partial");
++  assert.equal(
++    justPaidOut(pending, [pick("shot_predict", "correct", 5), pick("sub", "pending", 0)]),
++    true,
++    "one winner among pending picks is enough",
++  );
++}
++
++/** A pick first seen already resolved counts as a flip — it was picked this session. */
++function testNewMechanic(): void {
++  assert.equal(justPaidOut(new Map(), [pick("sub", "correct", 4)]), true, "a new resolved row");
++}
++
++/** No payout, or no change: nothing fires. */
++function testQuiet(): void {
++  const settled = new Map([["shot_predict", "correct"]]);
++  assert.equal(
++    justPaidOut(settled, [pick("shot_predict", "correct", 5)]),
++    false,
++    "a settled pick never re-fires on refetch",
++  );
++  assert.equal(
++    justPaidOut(new Map([["watch", "wrong"]]), [pick("watch", "wrong", 0)]),
++    false,
++    "a miss celebrates nothing",
++  );
++  assert.equal(justPaidOut(new Map([["watch", "void"]]), [pick("watch", "void", 0)]), false, "a void pays 0");
++  // Any move into a paying status is a payout, so a (never-served) re-resolve
++  // downward still reads as a change rather than as silence.
++  assert.equal(
++    justPaidOut(new Map([["watch", "correct"]]), [pick("watch", "partial", 2)]),
++    true,
++    "a changed paying status counts as a fresh payout",
++  );
++}
++
++export function runPredictionWinTests(): void {
++  testFirstObservation();
++  testFlip();
++  testNewMechanic();
++  testQuiet();
++  console.log("  predictionWin: first observation, flip, new row and no-repeat rules OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 9426b3b..edecf07 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -30,6 +30,7 @@ import { runRateLimitTests } from "./rateLimit.test.js";
+ import { runPredictionsGateTests } from "./predictionsGate.test.js";
+ import { runPickSummaryTests } from "./pickSummary.test.js";
+ import { runPredictionWindowTests } from "./predictionWindow.test.js";
++import { runPredictionWinTests } from "./predictionWin.test.js";
+ import { runOptimisticTests } from "./optimistic.test.js";
+ import { runCompetitionsTests } from "./competitions.test.js";
+ import { runAnchorRaceTests } from "./anchorRace.test.js";
+@@ -76,6 +77,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["predictionsGate", runPredictionsGateTests],
+   ["pickSummary", runPickSummaryTests],
+   ["predictionWindow", runPredictionWindowTests],
++  ["predictionWin", runPredictionWinTests],
+   ["optimistic", runOptimisticTests],
+   ["competitions", runCompetitionsTests],
+   ["anchorRace", runAnchorRaceTests],
+-- 
+2.54.0.windows.1
+

@@ -5,7 +5,7 @@
  * locale, no dayPeriod).
  */
 import { strict as assert } from "node:assert";
-import { kickoffParts } from "../src/lib/format.js";
+import { kickoffParts, parseMinute } from "../src/lib/format.js";
 
 /**
  * Fixed instant expressed in the test runner's OWN system timezone. Build a
@@ -96,7 +96,26 @@ function testFaIR(): void {
   assert.ok(parts.day.length > 0, "fa-IR weekday present");
 }
 
+/**
+ * The live clock is what a viewer checks most often. Added time has to survive
+ * parsing, or the page shows "90" for a match in the 94th minute — the exact
+ * bug this replaced reading only the first number.
+ */
+function testParseMinute(): void {
+  assert.deepEqual(parseMinute("54'"), { base: 54, added: 0 });
+  assert.deepEqual(parseMinute("90'+3'"), { base: 90, added: 3 }, "stoppage time kept apart");
+  assert.deepEqual(parseMinute("45+2"), { base: 45, added: 2 });
+  assert.deepEqual(parseMinute("90+4"), { base: 90, added: 4 });
+  assert.deepEqual(parseMinute("120'+"), { base: 120, added: 0 }, "a dangling plus adds nothing");
+  assert.deepEqual(parseMinute(" 7 "), { base: 7, added: 0 }, "whitespace tolerated");
+  assert.equal(parseMinute("HT"), null, "no number, no clock");
+  assert.equal(parseMinute(""), null);
+  assert.equal(parseMinute(null), null);
+  assert.equal(parseMinute(undefined), null);
+}
+
 export function runKickoffPartsTests(): void {
   testEnUS();
   testFaIR();
+  testParseMinute();
 }

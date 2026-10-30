@@ -1,0 +1,170 @@
+From d70c6d4a00553eafe764bb4b07a940d71fac5e6c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 13:35:26 +0330
+Subject: [PATCH 210/230] feat(embed): embed flag, hide ad in embed mode,
+ overridable safe-area insets
+
+---
+ index.html                     |  9 +++++++++
+ src/components/AppShell.tsx    |  4 +++-
+ src/components/BottomSheet.tsx |  2 +-
+ src/components/InlineAd.tsx    |  3 +++
+ src/components/TabBar.tsx      |  2 +-
+ src/components/Toast.tsx       |  2 +-
+ src/index.css                  | 17 ++++++++++++++---
+ src/lib/embed.ts               |  5 +++++
+ src/pages/Login.tsx            |  2 +-
+ 9 files changed, 38 insertions(+), 8 deletions(-)
+ create mode 100644 src/lib/embed.ts
+
+diff --git a/index.html b/index.html
+index 8253cf4..82bf2fc 100644
+--- a/index.html
++++ b/index.html
+@@ -78,6 +78,15 @@
+     <meta property="og:image:height" content="360" />
+     <meta name="twitter:card" content="summary_large_image" />
+     <title>Vkick</title>
++    <!-- Share mode: /frame.html loads the app with ?embed=1 so the fake phone
++         can own the safe-area insets (an iframe has none of its own). Any normal
++         load — phone, desktop, Telegram — must be untouched. -->
++    <script>
++      try {
++        if (new URLSearchParams(window.location.search).get("embed") === "1")
++          document.documentElement.dataset.embed = "1";
++      } catch {}
++    </script>
+     <!-- BEGIN Tapsell ad loader -->
+     <script type="text/javascript">
+       (function () {
+diff --git a/src/components/AppShell.tsx b/src/components/AppShell.tsx
+index 92209ed..974cae7 100644
+--- a/src/components/AppShell.tsx
++++ b/src/components/AppShell.tsx
+@@ -60,7 +60,9 @@ export function AppShell() {
+         // The sticky tab bar is 4px (its own pt-1) + 56px (min-h-14) + the
+         // safe-area inset — reserving only 56px left the last card tucked under
+         // it. The extra 4px is the difference.
+-        style={{ paddingBottom: "calc(60px + max(env(safe-area-inset-bottom), 8px))" }}
++        style={{
++          paddingBottom: "calc(60px + max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 8px))",
++        }}
+       >
+         <Suspense
+           fallback={
+diff --git a/src/components/BottomSheet.tsx b/src/components/BottomSheet.tsx
+index 6ad2abc..ef10e49 100644
+--- a/src/components/BottomSheet.tsx
++++ b/src/components/BottomSheet.tsx
+@@ -115,7 +115,7 @@ export function BottomSheet({
+         )}
+         style={{
+           transform: dragY ? `translateY(${dragY}px)` : undefined,
+-          paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
++          paddingBottom: "max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 16px)",
+         }}
+       >
+         {/* Drag handle: drag down past 90px to dismiss. */}
+diff --git a/src/components/InlineAd.tsx b/src/components/InlineAd.tsx
+index 7473a43..cfdf750 100644
+--- a/src/components/InlineAd.tsx
++++ b/src/components/InlineAd.tsx
+@@ -1,4 +1,5 @@
+ import type { CSSProperties } from "react";
++import { IS_EMBED } from "../lib/embed";
+ 
+ /**
+  * The feed's inline ad: a 56px hosted iframe (A-ADS, adaptive size) sitting
+@@ -8,6 +9,8 @@ import type { CSSProperties } from "react";
+  * collide with the app's dashed-border-means-nothing-here language).
+  */
+ export function InlineAd() {
++  // Share mode (?embed=1 inside /frame.html): clean screenshots, no ad iframe.
++  if (IS_EMBED) return null;
+   return (
+     <div
+       className="my-3 flex items-center gap-2 rounded-card border border-line bg-elevated p-2"
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index deb4370..8a3a414 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -25,7 +25,7 @@ export function TabBar() {
+     // imperceptible but ran on every scroll frame.
+     // Ad is now inline and scrolls with content, so TabBar sits at the very bottom.
+     <nav
+-      className="pad-safe-bottom sticky z-20 border-t border-line bg-base/95 ps-[env(safe-area-inset-left)] pe-[env(safe-area-inset-right)]"
++      className="pad-safe-bottom sticky z-20 border-t border-line bg-base/95 ps-[var(--safe-left, env(safe-area-inset-left, 0px))] pe-[var(--safe-right, env(safe-area-inset-right, 0px))]"
+     >
+       <ul className="mx-auto flex w-full max-w-[560px] items-stretch justify-between px-2 pt-1">
+         {tabs.map(({ to, key, Icon }) => (
+diff --git a/src/components/Toast.tsx b/src/components/Toast.tsx
+index 6b3b775..b47ebd9 100644
+--- a/src/components/Toast.tsx
++++ b/src/components/Toast.tsx
+@@ -95,7 +95,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
+         // `auto` (not inherited rtl/ltr): an English "Updated 9:41 PM" inside a
+         // Persian app must read LTR, while a Persian message reads RTL.
+         dir="auto"
+-        className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-3 pt-[max(env(safe-area-inset-top),10px)]"
++        className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-3 pt-[max(var(--safe-top, env(safe-area-inset-top, 0px)),10px)]"
+         role="status"
+         aria-live="polite"
+       >
+diff --git a/src/index.css b/src/index.css
+index 47a2877..e4379dd 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -154,12 +154,23 @@
+     unicode-bidi: isolate;
+   }
+ 
+-  /* Safe-area padding helpers — Telegram headers, iPhone home indicator, etc. */
++  /* Safe-area padding helpers — Telegram headers, iPhone home indicator, etc.
++     The var indirection only exists for share mode: /frame.html embeds the app
++     in an iframe, and an iframe has no real safe-area insets, so the frame
++     page supplies --safe-top/--safe-bottom itself (see html[data-embed] below).
++     Without the variables — every real user, everywhere — the fallback resolves
++     to exactly the env() value this rule had before. */
+   .pad-safe-top {
+-    padding-top: max(env(safe-area-inset-top), 8px);
++    padding-top: max(var(--safe-top, env(safe-area-inset-top, 0px)), 8px);
+   }
+   .pad-safe-bottom {
+-    padding-bottom: max(env(safe-area-inset-bottom), 8px);
++    padding-bottom: max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 8px);
++  }
++  /* Share mode only: the fake phone's island and home bar. Undefined for every
++     real user, so the values above stay identical to today. */
++  html[data-embed="1"] {
++    --safe-top: 34px;
++    --safe-bottom: 20px;
+   }
+ 
+   /* Squad row: one grid whose tracks flip with `dir`, so the jersey number sits
+diff --git a/src/lib/embed.ts b/src/lib/embed.ts
+new file mode 100644
+index 0000000..4e13a18
+--- /dev/null
++++ b/src/lib/embed.ts
+@@ -0,0 +1,5 @@
++/**
++ * True when the app runs inside the share-mode frame (/frame.html loads it with ?embed=1).
++ */
++export const IS_EMBED =
++  typeof window !== "undefined" && new URLSearchParams(window.location.search).get("embed") === "1";
+diff --git a/src/pages/Login.tsx b/src/pages/Login.tsx
+index 508def8..351f8a7 100644
+--- a/src/pages/Login.tsx
++++ b/src/pages/Login.tsx
+@@ -96,7 +96,7 @@ export default function Login() {
+ 
+       <main
+         className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-5"
+-        style={{ paddingBottom: "calc(40px + max(env(safe-area-inset-bottom), 8px))" }}
++        style={{ paddingBottom: "calc(40px + max(var(--safe-bottom, env(safe-area-inset-bottom, 0px)), 8px))" }}
+       >
+         {/* Hero: the mark over the wordmark, over the floodlit wash. */}
+         <section className="rise-in px-1 pb-10 text-center">
+-- 
+2.54.0.windows.1
+

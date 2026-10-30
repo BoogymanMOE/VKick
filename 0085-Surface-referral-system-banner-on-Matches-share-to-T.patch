@@ -1,0 +1,180 @@
+From 37be41c0a7000ba75d4cfb39c9efb4ec538a00c8 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 14:23:06 +0330
+Subject: [PATCH 085/230] Surface referral system: banner on Matches,
+ share-to-Telegram on Profile
+
+---
+ src/components/icons.tsx |  8 ++++++++
+ src/i18n/strings.ts      |  9 +++++++++
+ src/lib/telegram.ts      | 12 ++++++++++++
+ src/pages/Matches.tsx    | 28 +++++++++++++++++++++++++++-
+ src/pages/Profile.tsx    | 19 +++++++++++++++++--
+ 5 files changed, 73 insertions(+), 3 deletions(-)
+
+diff --git a/src/components/icons.tsx b/src/components/icons.tsx
+index c1ae91f..d3bf8e6 100644
+--- a/src/components/icons.tsx
++++ b/src/components/icons.tsx
+@@ -181,6 +181,14 @@ export const CloseIcon = (p: SVGProps<SVGSVGElement>) => (
+   </svg>
+ );
+ 
++/** Share — the referral "Share to Telegram" action. */
++export const ShareIcon = (p: SVGProps<SVGSVGElement>) => (
++  <svg {...base(p)} width={18} height={18}>
++    <path d="M12 3l4 4m-4-4L8 7m4-4v13" />
++    <path d="M5 12v7a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0019 19v-7" />
++  </svg>
++);
++
+ /** Filled variant, for the "already your anchor club" state. */
+ export const StarFilledIcon = (p: SVGProps<SVGSVGElement>) => (
+   <svg {...base(p)} width={12} height={12} fill="currentColor" strokeWidth={1.2}>
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 796de1e..33ce5a2 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -249,6 +249,10 @@ export const strings = {
+       "Share your code — when a friend joins and redeems it, you earn points on the global board.",
+     "referral.copy": "Copy",
+     "referral.copied": "Code copied",
++    "referral.share": "Share to Telegram",
++    "referral.shareText": "Join me on Vkick! ⚽ Predict matches, rate players, climb the boards.",
++    "referral.bannerTitle": "Invite friends & earn points!",
++    "referral.bannerCta": "Invite",
+     "referral.statInvited": "{invited} friend(s) joined",
+     "referral.statPaid": "{rewarded} of {max} bonuses paid",
+     "referral.redeemPlaceholder": "Have a code? Enter it",
+@@ -804,6 +808,11 @@ export const strings = {
+       "کدت را به اشتراک بگذار — وقتی دوستی بیاید و کدت را ثبت کند، امتیاز روی تابلوی سراسری می‌گیری.",
+     "referral.copy": "کپی",
+     "referral.copied": "کد کپی شد",
++    "referral.share": "اشتراک در تلگرام",
++    "referral.shareText":
++      "من رو در وی‌کیک همراهی کن! ⚽ بازی‌ها رو پیش‌بینی کن، به بازیکنان امتیاز بده، توی تابلوها بالا برو.",
++    "referral.bannerTitle": "دعوت دوستان و گرفتن امتیاز!",
++    "referral.bannerCta": "دعوت",
+     "referral.statInvited": "{invited} دوست پیوست",
+     "referral.statPaid": "{rewarded} از {max} پاداش پرداخت شده",
+     "referral.redeemPlaceholder": "کد داری؟ واردش کن",
+diff --git a/src/lib/telegram.ts b/src/lib/telegram.ts
+index ea3e561..eeb2278 100644
+--- a/src/lib/telegram.ts
++++ b/src/lib/telegram.ts
+@@ -141,3 +141,15 @@ export function selectionHaptic(): void {
+ export function notifyHaptic(type: "error" | "success" | "warning"): void {
+   telegram()?.HapticFeedback?.notificationOccurred(type);
+ }
++
++/**
++ * Open the Telegram share sheet for a URL + text. Returns false when the SDK
++ * is unavailable (plain browser), so the caller can fall back to clipboard.
++ */
++export function shareToTelegram(url: string, text: string): boolean {
++  const app = telegram();
++  if (!app?.openTelegramLink) return false;
++  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
++  app.openTelegramLink(shareUrl);
++  return true;
++}
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 9b5a6c1..dbaa683 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -25,7 +25,15 @@ import { useI18n } from "../i18n/context";
+ import { formatClock, formatDayHeader, formatKickoff } from "../lib/format";
+ import { LEAGUE_BY_SLUG } from "../lib/leagues";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+-import { BallIcon, PlusIcon, RefreshIcon, ShirtIcon, StarFilledIcon, TableIcon } from "../components/icons";
++import {
++  BallIcon,
++  PlusIcon,
++  RefreshIcon,
++  ShareIcon,
++  ShirtIcon,
++  StarFilledIcon,
++  TableIcon,
++} from "../components/icons";
+ import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
+ import { usePullToRefresh } from "../hooks/usePullToRefresh";
+ import { PullIndicator } from "../components/PullToRefresh";
+@@ -266,6 +274,24 @@ export default function Matches() {
+         </Link>
+       </div>
+ 
++      {/* Referral banner — surfaces the invite system from the feed. */}
++      <Link
++        to="/profile"
++        onClick={() => haptic("light")}
++        className="mt-3 flex items-center gap-3 rounded-card border border-volt/40 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++      >
++        <span className="grid h-10 w-10 flex-none place-items-center rounded-full bg-volt/15 text-volt">
++          <ShareIcon className="h-5 w-5" />
++        </span>
++        <span className="min-w-0 flex-1">
++          <span className="block text-sm font-bold text-ink">{t("referral.bannerTitle")}</span>
++          <span className="block text-xs text-ink-3">{t("referral.hint")}</span>
++        </span>
++        <span className="inline-flex min-h-11 flex-none items-center rounded-full bg-volt px-4 text-xs font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95">
++          {t("referral.bannerCta")}
++        </span>
++      </Link>
++
+       {/* Everything below sits under the sticky header. The wrapper gives the
+           pull-to-refresh marker an anchor so it slides in between header and
+           feed instead of fighting the header for the same band. */}
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 29a7e2a..f81d42d 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -2,7 +2,7 @@ import { useState } from "react";
+ import { useNavigate } from "react-router-dom";
+ import { BottomSheet, SheetActions } from "../components/BottomSheet";
+ import { TopBar } from "../components/TopBar";
+-import { ChevronRightIcon, CloseIcon, PencilIcon } from "../components/icons";
++import { ChevronRightIcon, CloseIcon, PencilIcon, ShareIcon } from "../components/icons";
+ import { useToast } from "../components/toastContext";
+ import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch } from "../components/ui";
+ import { useAuth } from "../hooks/authContext";
+@@ -13,7 +13,7 @@ import { api, serverErrorKey } from "../lib/api";
+ import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
+ import { LEGAL_ROUTES } from "../lib/legal";
+ import { useLocalState } from "../lib/useLocalState";
+-import { haptic, notifyHaptic } from "../lib/telegram";
++import { haptic, notifyHaptic, shareToTelegram } from "../lib/telegram";
+ 
+ /**
+  * Reject after `ms` so a request that never settles cannot pin the UI in a
+@@ -494,6 +494,17 @@ function ReferralSection() {
+     }
+   };
+ 
++  const share = () => {
++    haptic("light");
++    const code = referral?.code;
++    if (!code) return;
++    const url = `${window.location.origin}?startapp=${code}`;
++    const ok = shareToTelegram(url, t("referral.shareText"));
++    if (!ok) {
++      void copy();
++    }
++  };
++
+   const submit = () => {
+     const code = codeDraft.trim();
+     if (!code || redeeming) return;
+@@ -519,6 +530,10 @@ function ReferralSection() {
+           <Button variant="ghost" onClick={() => void copy()} disabled={!referral}>
+             {t("referral.copy")}
+           </Button>
++          <Button variant="ghost" onClick={share} disabled={!referral}>
++            <ShareIcon className="h-4 w-4" />
++            {t("referral.share")}
++          </Button>
+         </div>
+         {referral ? (
+           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line pt-2 text-xs text-ink-3">
+-- 
+2.54.0.windows.1
+

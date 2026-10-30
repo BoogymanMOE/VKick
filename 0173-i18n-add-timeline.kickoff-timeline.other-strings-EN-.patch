@@ -1,0 +1,40 @@
+From 6647d9f9a168f10d53209add0bc92cdf78359025 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 19:48:00 +0330
+Subject: [PATCH 173/230] i18n: add timeline.kickoff + timeline.other strings
+ (EN + FA)
+
+Future-proof the chip labels for the new kickoff/other event types in
+both English and Persian so the UI never renders a missing-string fall
+back when those types appear.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/strings.ts | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 304c3e3..08c7fb9 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -116,6 +116,8 @@ export const strings = {
+     "timeline.card": "Card",
+     "timeline.sub": "Substitution",
+     "timeline.var": "VAR check",
++    "timeline.kickoff": "Kickoff",
++    "timeline.other": "Update",
+     "timeline.halftime": "Half time",
+     "timeline.fulltime": "Full time",
+     "timeline.comments": "{count} comments",
+@@ -746,6 +748,8 @@ export const strings = {
+     "timeline.card": "کارت",
+     "timeline.sub": "تعویض",
+     "timeline.var": "بازبینی VAR",
++    "timeline.kickoff": "آغاز بازی",
++    "timeline.other": "رویداد",
+     "timeline.halftime": "پایان نیمه اول",
+     "timeline.fulltime": "پایان بازی",
+     "timeline.comments": "{count} دیدگاه",
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,332 @@
+From 1951d391afd1c6ca284c566d70da8600442b5e4a Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 15:52:46 +0330
+Subject: [PATCH 016/230] Test that the write endpoints actually return 429
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+writeLimiter was already wired onto both POST /ratings and POST /comments,
+so the audit item was stale — but nothing tested it, which meant a
+refactor could drop it silently and no one would find out.
+
+The suite drives the real ratingsRouter over real HTTP with a real
+session token against a throwaway database: requests 1..60 reach the
+handler and get its own 400, request 61 is refused by the limiter with
+TOO_MANY_REQUESTS and a sane Retry-After. Asserting the handler's own
+status is what makes it a wiring test rather than a unit test — a
+limiter mounted after the handler, or on the wrong method, fails it.
+
+Writing it surfaced the real contract: both routes share ONE limiter
+instance, so the 60/min budget is shared and alternating endpoints is
+not a way around the cap. The test now pins that instead of assuming
+per-route budgets.
+---
+ tests/rateLimit.test.ts | 271 ++++++++++++++++++++++++++++++++++++++++
+ tests/run.ts            |   4 +
+ 2 files changed, 275 insertions(+)
+ create mode 100644 tests/rateLimit.test.ts
+
+diff --git a/tests/rateLimit.test.ts b/tests/rateLimit.test.ts
+new file mode 100644
+index 0000000..ac5d967
+--- /dev/null
++++ b/tests/rateLimit.test.ts
+@@ -0,0 +1,271 @@
++/**
++ * Rate limiting on the write endpoints.
++ *
++ * The interesting property is not "a limiter exists" but "a spam loop gets a
++ * 429". So this drives the REAL ratingsRouter over real HTTP with a real
++ * session token: the handler chain runs for exactly `max` requests and the
++ * next one is refused. A limiter that is attached to the router but never
++ * reached (wrong order, mounted after the handler) fails this suite.
++ *
++ * The database is a throwaway file, so nothing here touches the dev data.
++ */
++import { strict as assert } from "node:assert";
++import fs from "node:fs";
++import http from "node:http";
++import os from "node:os";
++import path from "node:path";
++import type { AddressInfo } from "node:net";
++import express from "express";
++import { getDb, run, get } from "../server/db/index.js";
++import { rateLimit } from "../server/auth/rateLimit.js";
++
++/** Rate limit presets, mirrored so the assertions track the real numbers. */
++const WINDOW_MAX = 60;
++
++interface Hit {
++  status: number;
++  body: { error?: string; retryAfter?: number } | null;
++  retryAfter: string | null;
++}
++
++async function hit(port: number, url: string, headers: Record<string, string> = {}): Promise<Hit> {
++  return new Promise((resolve, reject) => {
++    const req = http.request(
++      { host: "127.0.0.1", port, path: url, method: "GET", headers },
++      (res) => {
++        let raw = "";
++        res.on("data", (c) => (raw += c));
++        res.on("end", () =>
++          resolve({
++            status: res.statusCode ?? 0,
++            body: raw ? (JSON.parse(raw) as Hit["body"]) : null,
++            retryAfter: res.headers["retry-after"] ?? null,
++          }),
++        );
++      },
++    );
++    req.on("error", reject);
++    req.end();
++  });
++}
++
++async function hitPost(
++  port: number,
++  url: string,
++  headers: Record<string, string>,
++  body: string,
++): Promise<Hit> {
++  return new Promise((resolve, reject) => {
++    const req = http.request(
++      {
++        host: "127.0.0.1",
++        port,
++        path: url,
++        method: "POST",
++        headers: { "content-type": "application/json", "content-length": Buffer.byteLength(body), ...headers },
++      },
++      (res) => {
++        let raw = "";
++        res.on("data", (c) => (raw += c));
++        res.on("end", () =>
++          resolve({
++            status: res.statusCode ?? 0,
++            body: raw ? (JSON.parse(raw) as Hit["body"]) : null,
++            retryAfter: res.headers["retry-after"] ?? null,
++          }),
++        );
++      },
++    );
++    req.on("error", reject);
++    req.end(body);
++  });
++}
++
++/** Listen on an ephemeral port so the suite never collides with a dev server. */
++async function listen(app: express.Express): Promise<{ port: number; close: () => Promise<void> }> {
++  const server = app.listen(0);
++  await new Promise<void>((r) => server.once("listening", () => r()));
++  const port = (server.address() as AddressInfo).port;
++  return { port, close: () => new Promise<void>((r) => server.close(() => r())) };
++}
++
++export async function runRateLimitTests(): Promise<void> {
++  /* =============================================== limiter mechanics */
++
++  {
++    // A throwaway limiter so this test can't be polluted by the writeLimiter
++    // bucket the route test below fills (buckets are module-level state).
++    const limiter = rateLimit({ name: "unit", windowMs: 60_000, max: 3 });
++    const app = express();
++    app.get("/x", limiter, (_req, res) => res.json({ ok: true }));
++    const { port, close } = await listen(app);
++    try {
++      const codes = [];
++      for (let i = 0; i < 4; i++) codes.push((await hit(port, "/x")).status);
++      // Exactly `max` requests pass; the next one is refused. Off-by-one here
++      // is the classic bug — the boundary is what users actually feel.
++      assert.deepEqual(codes, [200, 200, 200, 429]);
++
++      const refused = await hit(port, "/x");
++      assert.equal(refused.body?.error, "TOO_MANY_REQUESTS");
++      // Retry-After must exist, be a positive integer number of seconds, and
++      // never exceed the window (a longer hint tells clients to wait too long).
++      const retry = Number(refused.retryAfter);
++      assert.ok(Number.isInteger(retry) && retry > 0 && retry <= 60, `bad Retry-After: ${refused.retryAfter}`);
++
++      // Still refused while the window is open — one lucky request is not enough.
++      assert.equal((await hit(port, "/x")).status, 429);
++    } finally {
++      await close();
++    }
++  }
++
++  {
++    // Buckets are per-window: after it lapses the same caller is served again.
++    const limiter = rateLimit({ name: "window", windowMs: 40, max: 1 });
++    const app = express();
++    app.get("/x", limiter, (_req, res) => res.json({ ok: true }));
++    const { port, close } = await listen(app);
++    try {
++      assert.equal((await hit(port, "/x")).status, 200);
++      assert.equal((await hit(port, "/x")).status, 429);
++      await new Promise((r) => setTimeout(r, 60));
++      assert.equal((await hit(port, "/x")).status, 200, "bucket must reset once the window lapses");
++    } finally {
++      await close();
++    }
++  }
++
++  {
++    // Two named limiters on one route keep separate buckets; without the name
++    // in the key they would share state and starve each other.
++    const a = rateLimit({ name: "ns-a", windowMs: 60_000, max: 1 });
++    const b = rateLimit({ name: "ns-b", windowMs: 60_000, max: 1 });
++    const app = express();
++    app.get("/x", a, b, (_req, res) => res.json({ ok: true }));
++    const { port, close } = await listen(app);
++    try {
++      assert.equal((await hit(port, "/x")).status, 200);
++      // `a` is exhausted, so this is refused by `a` regardless of `b`.
++      assert.equal((await hit(port, "/x")).status, 429);
++    } finally {
++      await close();
++    }
++  }
++
++  {
++    // extraKey adds a second dimension: same IP, different account, separate budget.
++    const limiter = rateLimit({
++      name: "ek",
++      windowMs: 60_000,
++      max: 1,
++      extraKey: (req) => String(req.query.who ?? ""),
++    });
++    const app = express();
++    app.get("/x", limiter, (_req, res) => res.json({ ok: true }));
++    const { port, close } = await listen(app);
++    try {
++      assert.equal((await hit(port, "/x?who=alice")).status, 200);
++      assert.equal((await hit(port, "/x?who=alice")).status, 429, "same account shares a bucket");
++      assert.equal((await hit(port, "/x?who=bob")).status, 200, "a different account has its own budget");
++    } finally {
++      await close();
++    }
++  }
++
++  /* =============================================== the real write routes */
++
++  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-rl-"));
++  const previousDb = process.env.SQLITE_PATH;
++  process.env.SQLITE_PATH = path.join(dir, "ratings.db");
++  let handle: ReturnType<typeof getDb> | null = null;
++  try {
++    // Imported AFTER SQLITE_PATH is set: these modules call getDb() at module
++    // scope, so a stale path here would point the suite at the dev database.
++    const { ratingsRouter } = await import("../server/routes/ratings.js");
++
++    const app = express();
++    app.use(express.json());
++    app.use(ratingsRouter);
++    const { port, close } = await listen(app);
++
++    try {
++      // A real session so requireUser passes: this exercises the real chain
++      // (requireUser → writeLimiter → handler) rather than a stand-in.
++      const db = getDb();
++      handle = db;
++      const now = new Date().toISOString();
++      run(db, "INSERT INTO users (telegram_id, display_name, created_at) VALUES ('999999', 'Rate Test', ?)", [
++        now,
++      ]);
++      const user = get<{ id: number }>(db, "SELECT id FROM users WHERE telegram_id = '999999'");
++      assert.ok(user, "test user created");
++      const token = "mg_ratelimit_test_token";
++      run(db, "INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES (?, ?, ?, ?)", [
++        token,
++        user!.id,
++        now,
++        now,
++      ]);
++      const auth = { authorization: `Bearer ${token}` };
++
++      // Both POST routes share ONE writeLimiter instance, so the budget is shared
++      // across them: alternating endpoints is not a way around the cap. Spend
++      // it evenly so neither route is pinned to a single 400-vs-429 verdict.
++      const urls = [
++        "/api/matches/401918766/ratings",
++        "/api/matches/401918766/comments",
++      ] as const;
++      const statuses: number[] = [];
++      for (let i = 0; i < WINDOW_MAX; i++) {
++        statuses.push((await hitPost(port, urls[i % urls.length] as string, auth, "{}")).status);
++      }
++      // Every request inside the budget reached its handler, which rejects the
++      // empty body with 400 — proof the limiter let them through rather than
++      // short-circuiting at the edge.
++      assert.ok(
++        statuses.every((s) => s === 400),
++        `first ${WINDOW_MAX} writes should reach the handlers, got ${[...new Set(statuses)]}`,
++      );
++
++      // Past the budget BOTH endpoints refuse, and the refusal is the limiter's
++      // own error, not the handler's validation error.
++      for (const url of urls) {
++        const over = await hitPost(port, url, auth, "{}");
++        assert.equal(over.status, 429, `${url}: write ${WINDOW_MAX + 1} must be 429`);
++        assert.equal(over.body?.error, "TOO_MANY_REQUESTS", `${url}: error code`);
++        assert.ok(Number(over.retryAfter) > 0, `${url}: Retry-After header`);
++      }
++
++      // Reads are not rate limited: a profile screen that fetches three lists
++      // in a row must never trip the write budget.
++      const reads = [];
++      for (let i = 0; i < WINDOW_MAX + 5; i++) reads.push((await hit(port, "/api/matches/401918766/comments", auth)).status);
++      assert.ok(
++        reads.every((s) => s === 200),
++        `reads must stay unthrottled, got ${[...new Set(reads)]}`,
++      );
++    } finally {
++      await close();
++    }
++  } finally {
++    if (previousDb === undefined) delete process.env.SQLITE_PATH;
++    else process.env.SQLITE_PATH = previousDb;
++    // getDb() caches its handle for the process, and Windows refuses to delete
++    // an open file. Close it first, then sweep; never let cleanup fail the suite.
++    try {
++      handle?.close();
++    } catch {
++      /* already closed */
++    }
++    try {
++      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
++    } catch {
++      /* a leftover temp dir must not fail a passing suite */
++    }
++  }
++
++  console.log(
++    "  rateLimit: boundary/reset/namespacing/extraKey, ratings+comments POST 429 after the limit, reads unthrottled OK",
++  );
++}
+\ No newline at end of file
+diff --git a/tests/run.ts b/tests/run.ts
+index 516f7a2..d2b1f1d 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -25,6 +25,8 @@ import { runVerifyTests } from "./verify.test.js";
+ import { runBracketTests } from "./bracket.test.js";
+ import { runReferralTests } from "./referral.test.js";
+ import { runSeedDemoTests } from "./seedDemo.test.js";
++import { runRateLimitTests } from "./rateLimit.test.js";
++
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -50,6 +52,8 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["bracket", runBracketTests],
+   ["referral", runReferralTests],
+   ["seedDemo", runSeedDemoTests],
++  ["rateLimit", runRateLimitTests],
++  
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

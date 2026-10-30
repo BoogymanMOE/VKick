@@ -1,0 +1,94 @@
+From 6c616857f7f4c6db052d7bb812f70363c8a1496b Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 16:25:14 +0330
+Subject: [PATCH 167/230] polish(browse): verify post-trim state, fix any
+ layout/search/RTL/empty-state issues
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Verified at 390x720 in EN and FA: exactly the big-five leagues render
+(no Turkish/Dutch/international teams), rows meet the 44px target, names
+localize into Persian, and the layout flips correctly in RTL. Fixes:
+- an empty filter result used to fade out into a silent blank panel —
+  it now shows an empty state (icon + copy, en+fa);
+- dropped the monogram tile whose leading letter doubled the name
+  ("PPremier League") — same call the onboarding league list made.
+
+No search input and no Done/Continue CTA exist in this view by design —
+it is a competition browser, not a picker (the picker lives in onboarding);
+nothing added.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/strings.ts |  4 ++++
+ src/pages/Table.tsx | 23 +++++++++--------------
+ 2 files changed, 13 insertions(+), 14 deletions(-)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index eea2156..304c3e3 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -492,6 +492,8 @@ export const strings = {
+     "browse.comingSoon": "Not in your feed yet",
+     "browse.liveScores": "Live scores & fixtures",
+     "browse.soon": "Soon",
++    "browse.empty": "Nothing to browse here yet",
++    "browse.emptyHint": "Competitions appear here as soon as their fixtures sync.",
+     // Prediction history + the "why did I get X" breakdown panel.
+     "predictions.title": "Your predictions",
+     "predictions.subtitle": "Why each pick scored what it scored",
+@@ -1097,6 +1099,8 @@ export const strings = {
+     "browse.comingSoon": "هنوز در فید شما نیست",
+     "browse.liveScores": "نتایج زنده و برنامه بازی‌ها",
+     "browse.soon": "به‌زودی",
++    "browse.empty": "فعلاً چیزی برای مرور نیست",
++    "browse.emptyHint": "مسابقات به محض همگام‌شدن برنامه‌شان اینجا می‌آیند.",
+     "predictions.title": "پیش‌بینی‌های شما",
+     "predictions.subtitle": "چرا هر انتخاب این امتیاز را گرفت",
+     "predictions.empty": "هنوز پیش‌بینی‌ای ثبت نشده",
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index e8a22fc..0c1fbcd 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -310,6 +310,12 @@ function BrowseContent() {
+         <div className="mt-4">
+           <CompRowSkeleton rows={6} />
+         </div>
++      ) : groups.leagues.length + groups.cups.length + groups.tournaments.length === 0 ? (
++        // The filter user picked (or the catalog) has nothing to list — say so
++        // instead of fading out into a silent blank panel.
++        <div className="mt-4 fade-swap">
++          <EmptyState icon="📈" title={t("browse.empty")} hint={t("browse.emptyHint")} />
++        </div>
+       ) : (
+         sections.map(
+           ({ title, rows }) =>
+@@ -343,20 +349,9 @@ function BrowseContent() {
+                               : "border-line bg-surface hover:bg-elevated",
+                           )}
+                         >
+-                          <span
+-                            className={cx(
+-                              "grid h-9 w-9 flex-none place-items-center rounded-full border text-xs font-extrabold",
+-                              soon ? "border-line text-ink-3" : "border-volt text-volt",
+-                            )}
+-                            style={{
+-                              backgroundColor: soon
+-                                ? undefined
+-                                : "color-mix(in srgb, var(--volt) 12%, transparent)",
+-                            }}
+-                            aria-hidden="true"
+-                          >
+-                            {comp.name.slice(0, 1)}
+-                          </span>
++                          {/* No monogram tile: a single letter beside the full
++                              name reads as doubled text ("PPremier League") —
++                              the same call the onboarding league list made. */}
+                           <span className="min-w-0 flex-1">
+                             <span className="block truncate text-sm font-bold text-ink">
+                               {localize(comp.name)}
+-- 
+2.54.0.windows.1
+

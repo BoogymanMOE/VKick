@@ -1,0 +1,477 @@
+From 58648bfccce5109a2588c6fc3587af6051c44eb6 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 17 Oct 2026 01:16:39 +0330
+Subject: [PATCH 105/230] Close 7 gaps: remove Predict tab, trim leagues to top
+ 5, fix lint
+
+FIX 1: Remove Predict tab, Make Picks CTA, PredictionsHub, and all
+prediction-related imports/state from MatchDetail. 3 tabs remain:
+Timeline / Stats / Lineups.
+
+FIX 2: Trim the league catalog to only the 5 big-five European leagues.
+- types.ts: LEAGUES, COMPETITIONS, ALL_DOMESTIC narrowed; CUPS,
+  INTERNATIONALS, NARROW_WINDOW removed; isCup/pollWindow stubbed.
+- catalog.ts: EXTRA_COMPETITIONS import removed, only COMPETITIONS emitted.
+- leagues.ts: cup slugs removed, isCup always false.
+- teamGroups.ts: international SQL branch removed (IN () was invalid).
+- seedTeams.ts already only had top-5 clubs (unchanged).
+
+FIX 3: Browse and Table already had back={true} on their TopBar (verified).
+
+FIX 4: TopBar and Login headers already borderless inside (verified).
+
+FIX 5: Toast DWELL_MS.muted = 1500ms already in place (verified).
+
+FIX 6: No navigator.onLine / online/offline listener / "you can update"
+text exists in this codebase. The "Last sync" muted toast in Matches.tsx
+auto-dismisses in 1500ms. React Query refetchOnWindowFocus handles
+silent refetch on return. The "you can update" message the user saw is
+likely Telegram WebApp's own behavior, not this app's code.
+
+FIX 7: StatsPanel.tsx renders only team badges + StatBar list. No pitch,
+no grid, no "no shots" message. PitchView/ShotPredictor not imported by
+Stats tab (verified).
+
+Typecheck: 0 errors. Lint: 0 errors, 2 pre-existing warnings.
+Sync dry-run: only eng.1, esp.1, ita.1, ger.1, fra.1 polled.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/db/teamGroups.ts   | 26 +++--------
+ server/espn/catalog.ts    | 50 +++++---------------
+ server/espn/types.ts      | 98 ++++++++++-----------------------------
+ src/lib/leagues.ts        | 27 +++--------
+ src/pages/MatchDetail.tsx | 85 ++-------------------------------
+ 5 files changed, 52 insertions(+), 234 deletions(-)
+
+diff --git a/server/db/teamGroups.ts b/server/db/teamGroups.ts
+index ca49bfc..66a5519 100644
+--- a/server/db/teamGroups.ts
++++ b/server/db/teamGroups.ts
+@@ -1,4 +1,4 @@
+-import { INTERNATIONALS, LEAGUES } from "../espn/types.js";
++import { LEAGUES } from "../espn/types.js";
+ 
+ /**
+  * The picker-group vocabulary and the favorites caps, in one place.
+@@ -30,33 +30,21 @@ export const MAX_INTERNATIONAL_FAVORITES = 5;
+  *
+  *  1. a big-five league keeps its slug (the Top-5 picker tabs);
+  *  2. any other non-empty league is a club outside the big five → `other`;
+- *  3. a side seen in an international-tournament match is a national team;
+- *  4. a side with NO matches at all is a national team too — this is the seed's
+- *     `league = ''` default, so seeded national sides land in the International
+- *     tab on a fresh database before any fixture has been synced, instead of
+- *     being stranded in `other`;
+- *  5. everything else (a cup-only club, seen only in club competitions) → `other`.
++ *  3. a side with NO matches at all falls into `other` (no national sides
++ *     are seeded anymore, so the international branch is gone);
++ *  4. everything else (a cup-only club, seen only in club competitions) → `other`.
+  *
+- * Bind TEAM_GROUP_PARAMS (big-five slugs then international slugs) before any
+- * other placeholder in the same statement.
++ * Bind TEAM_GROUP_PARAMS (big-five slugs) before any other placeholder in the
++ * same statement.
+  */
+ export const TEAM_GROUP_SQL = `CASE
+     WHEN t.league IN (${LEAGUES.map(() => "?").join(", ")}) THEN t.league
+     WHEN t.league != '' THEN '${OTHER_GROUP}'
+-    WHEN EXISTS (
+-      SELECT 1 FROM matches m
+-      WHERE (m.home_team_id = t.id OR m.away_team_id = t.id)
+-        AND m.league IN (${INTERNATIONALS.map(() => "?").join(", ")})
+-    ) THEN '${INTL_GROUP}'
+-    WHEN NOT EXISTS (
+-      SELECT 1 FROM matches m2
+-      WHERE m2.home_team_id = t.id OR m2.away_team_id = t.id
+-    ) THEN '${INTL_GROUP}'
+     ELSE '${OTHER_GROUP}'
+   END`;
+ 
+ /** Bind values for the placeholders inside TEAM_GROUP_SQL, in order. */
+-export const TEAM_GROUP_PARAMS: string[] = [...LEAGUES, ...INTERNATIONALS];
++export const TEAM_GROUP_PARAMS: string[] = [...LEAGUES];
+ 
+ /** True when a group_key is the international (national-team) bucket. */
+ export function isInternationalGroup(group: string | null | undefined): boolean {
+diff --git a/server/espn/catalog.ts b/server/espn/catalog.ts
+index 5b860a0..98075d1 100644
+--- a/server/espn/catalog.ts
++++ b/server/espn/catalog.ts
+@@ -1,53 +1,27 @@
+ /**
+- * The Browse catalog: the synced COMPETITIONS list followed by the browse-only
+- * EXTRA_COMPETITIONS, each marked `comingSoon`.
+- *
+- * Lives in a pure module (no express, no db) so the invariant that broke
+- * once is testable: a slug the sync has promoted must appear exactly once. It
+- * did not — `ned.1`, `por.1`, `tur.1` and `sco.1` were left in
+- * EXTRA_COMPETITIONS after promotion, so Browse rendered each twice (once
+- * "live scores", once "not in your feed yet") under a duplicate React key.
+- *
+- * Dedupe is defensive: `extra.ts` is the source of truth and a promoted slug
+- * must be deleted there, but the catalog must never emit duplicates even if
+- * that edit is forgotten.
++ * The Browse catalog: the 5 big-five leagues, each with its display name.
++ * No cups, no internationals, no extra competitions.
+  */
+ import { COMPETITIONS, isCup, type LeagueSlug } from "./types.js";
+-import { EXTRA_COMPETITIONS } from "./extra.js";
+ 
+ export type CompetitionKind = "league" | "cup" | "tournament";
+ 
+ export interface CatalogEntry {
+-  slug: LeagueSlug | string;
++  slug: LeagueSlug;
+   name: string;
+   kind: CompetitionKind;
+-  /** True when the competition owns a league table (never for a cup). */
++  /** True when the competition owns a league table (always true for leagues). */
+   hasTable: boolean;
+-  /** True for ESPN competitions the sync does not poll yet. */
++  /** True for ESPN competitions the sync does not poll yet. Always false now. */
+   comingSoon: boolean;
+ }
+ 
+ export function competitionCatalog(): CatalogEntry[] {
+-  const seen = new Set<string>();
+-  const entries: CatalogEntry[] = [
+-    ...COMPETITIONS.map((c) => ({
+-      slug: c.slug,
+-      name: c.name,
+-      kind: c.kind,
+-      hasTable: !isCup(c.slug),
+-      comingSoon: false,
+-    })),
+-    ...EXTRA_COMPETITIONS.map((c) => ({
+-      slug: c.slug,
+-      name: c.name,
+-      kind: c.kind,
+-      hasTable: false,
+-      comingSoon: true,
+-    })),
+-  ];
+-  return entries.filter((entry) => {
+-    if (seen.has(entry.slug)) return false;
+-    seen.add(entry.slug);
+-    return true;
+-  });
++  return COMPETITIONS.map((c) => ({
++    slug: c.slug,
++    name: c.name,
++    kind: c.kind,
++    hasTable: !isCup(c.slug),
++    comingSoon: false,
++  }));
+ }
+diff --git a/server/espn/types.ts b/server/espn/types.ts
+index 83f6ec9..d69aade 100644
+--- a/server/espn/types.ts
++++ b/server/espn/types.ts
+@@ -3,82 +3,12 @@ export type LeagueSlug = "eng.1" | "esp.1" | "ita.1" | "ger.1" | "fra.1";
+ /** The big five domestic leagues — the ones the favorites rule is built on. */
+ export const LEAGUES: LeagueSlug[] = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
+ 
+-/**
+- * Domestic leagues beyond the big five — EMPTY. Trimmed to top-5 only.
+- */
+-export const DOMESTIC_EXTRAS: LeagueSlug[] = [];
+-
+-/** Every competition that owns a league table. */
++/** Every competition that owns a league table (big five only now). */
+ export const ALL_DOMESTIC: LeagueSlug[] = [...LEAGUES];
+ 
+-/**
+- * Cup competitions — synced alongside the big five for table exemptions only.
+- * Trimmed to the competitions the fallen-aways file still tracks (Copa del Rey
+- * had FallenAway rows, the rest are legacy). No new cup will be added here.
+- */
+-export const CUPS: string[] = ["esp.copa_del_rey"];
+-
+-/**
+- * International football: national-team tournaments plus the club world stage.
+- * These share the `teams` table with club competitions, but their sides carry
+- * no domestic league (see `teamFromCompetitor`), so national teams land in the
+- * app's "International" group instead of under a league tab.
+- *
+- * Every slug here was verified live against ESPN's scoreboard endpoint before
+- * being added — a wrong slug fails silently as an empty competition.
+- */
+-export const INTERNATIONALS: string[] = [
+-  "fifa.world",
+-  "fifa.cwc",
+-  "uefa.euro",
+-  "uefa.euroq",
+-  "uefa.nations",
+-  "fifa.worldq.uefa",
+-  "fifa.worldq.conmebol",
+-  "conmebol.america",
+-  "caf.nations",
+-  "concacaf.gold",
+-];
+-
+-/** All domestic leagues + cups + internationals — everything the sync polls. */
+-export const LEAGUES_ALL: string[] = [...ALL_DOMESTIC, ...CUPS, ...INTERNATIONALS];
+-
+-/**
+- * Competitions polled on the narrow sweep window instead of the wide one.
+- *
+- * See `pollWindow`: the international calendars are a handful of fixed
+- * matchdays, so a 21-day lookahead for them is almost entirely wasted requests
+- * against ESPN's unofficial API. UCL qualifying and the Super Cup are one-off
+- * dates for the same reason.
+- */
+-const NARROW_WINDOW = new Set<string>([...INTERNATIONALS, "uefa.super_cup", "uefa.champions_qual"]);
+-
+-/**
+- * Sweep window (days either side of today) for one competition.
+- *
+- * This is the knob governing our request budget: the 6-hourly sweep walks
+- * every competition DAY BY DAY, so widening the catalog multiplies its call
+- * count. The big five and the club cups keep the wide 21-day lookahead that
+- * future-fixture browsing and prediction need; the long tail gets a week.
+- */
+-export function pollWindow(league: string): { back: number; forward: number } {
+-  return NARROW_WINDOW.has(league) ? { back: 1, forward: 7 } : { back: 1, forward: 21 };
+-}
+-
+-/**
+- * True for every competition WITHOUT a league table — cups and international
+- * tournaments alike. It also carries the "this competition does not own a
+- * club's domestic league" meaning used by the team upsert, which is what stops
+- * a Real Madrid synced from a Champions League scoreboard from claiming
+- * uefa.champions as its own league.
+- */
+-export function isCup(league: string): boolean {
+-  return !ALL_DOMESTIC.includes(league as LeagueSlug);
+-}
+-
+-/** Seeded competition labels — the display names users browse by. */
++/** Seeded competition labels — the 5 big-five leagues with display names. */
+ export const COMPETITIONS: Array<{
+-  slug: string;
++  slug: LeagueSlug;
+   name: string;
+   kind: "league";
+ }> = [
+@@ -89,8 +19,28 @@ export const COMPETITIONS: Array<{
+   { slug: "fra.1", name: "Ligue 1", kind: "league" },
+ ];
+ 
++/** Cups removed — top-5 leagues only. Empty for consumers that still import it. */
++export const CUPS: LeagueSlug[] = [];
++
++/** Internationals removed — top-5 leagues only. Empty for consumers that still import it. */
++export const INTERNATIONALS: string[] = [];
++
+ /**
+- * "halftime" is a real status, not a flavour of live: the Sub Predictor's
++ * Cups and internationals removed — top-5 leagues only.
++ * isCup always returns false for the big five.
++ */
++export function isCup(_league: string): boolean {
++  return false;
++}
++
++/**
++ * Sweep window: 21 days forward for all big-five leagues.
++ */
++export function pollWindow(_league: string): { back: number; forward: number } {
++  return { back: 1, forward: 21 };
++}
++
++/** "halftime" is a real status, not a flavour of live: the Sub Predictor's
+  * lock rule needs it. ESPN stays state:"in" through the break — the
+  * description/shortDetail ("Halftime" / "HT") is the only reliable signal.
+  */
+diff --git a/src/lib/leagues.ts b/src/lib/leagues.ts
+index df39371..82f9043 100644
+--- a/src/lib/leagues.ts
++++ b/src/lib/leagues.ts
+@@ -8,7 +8,7 @@
+  */
+ import type { LeagueId } from "../types";
+ 
+-/** ESPN slug -> the app's LeagueId. Cups have no LeagueId (big five only). */
++/** ESPN slug -> the app's LeagueId. Only the big five. */
+ export const LEAGUE_BY_SLUG: Record<string, LeagueId> = {
+   "eng.1": "PL",
+   "esp.1": "LL",
+@@ -27,29 +27,14 @@ export const SLUG_BY_LEAGUE: Record<LeagueId, string> = {
+ 
+ /**
+  * Whatever league-scoped identifier a value is — big-five alias ("PL") or an
+- * ESPN slug ("ned.1") — return the slug to query the server with. Aliases
+- * translate; slugs (and anything else) pass through unchanged. The league
+- * tabs mix both values by design, so every screen that consumes them needs
+- * exactly this coercion.
++ * ESPN slug — return the slug to query the server with. Aliases translate;
++ * slugs pass through unchanged.
+  */
+ export function slugForLeague(idOrSlug: string): string {
+   return SLUG_BY_LEAGUE[idOrSlug as LeagueId] ?? idOrSlug;
+ }
+ 
+-const CUP_SLUGS = new Set([
+-  "uefa.champions",
+-  "uefa.europa",
+-  "uefa.europa.conf",
+-  "uefa.super_cup",
+-  "uefa.champions_qual",
+-  "eng.fa",
+-  "eng.league_cup",
+-  "esp.copa_del_rey",
+-  "ita.coppa_italia",
+-  "ger.dfb_pokal",
+-  "fra.coupe_de_france",
+-]);
+-
+-export function isCup(slug: string): boolean {
+-  return CUP_SLUGS.has(slug);
++/** Cups are removed — top-5 leagues only. */
++export function isCup(_slug: string): boolean {
++  return false;
+ }
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 88c8372..e55d771 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -11,10 +11,8 @@ import { TimelineList } from "../components/TimelineList";
+ import { TopBar } from "../components/TopBar";
+ import { CommentaryPanel } from "../components/panels/CommentaryPanel";
+ import { LineupsPanel } from "../components/panels/LineupsPanel";
+-import { PredictionsHub } from "../components/panels/PredictionsHub";
+ 
+ import {
+-  Button,
+   Card,
+   Chip,
+   CountUp,
+@@ -33,14 +31,11 @@ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+ import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+ import { useNow } from "../hooks/useNow";
+-import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
+-import { justPaidOut } from "../lib/predictionWin";
+-import { haptic } from "../lib/telegram";
+ import { useLiveUpdates } from "../hooks/useLiveUpdates";
+ import type { Team } from "../types";
+ 
+-type Tab = "timeline" | "predict" | "stats" | "lineups";
+-const TABS: Tab[] = ["timeline", "predict", "stats", "lineups"];
++type Tab = "timeline" | "stats" | "lineups";
++const TABS: Tab[] = ["timeline", "stats", "lineups"];
+ 
+ export default function MatchDetail() {
+   const { id = "" } = useParams();
+@@ -121,31 +116,7 @@ export default function MatchDetail() {
+     return t("predict.startsIn", { time: `${minutes}m` });
+   }, [match, now, t]);
+ 
+-  // The deadline bar needs the pick count. Same query key as the Predict tab,
+-  // so this shares its cache instead of costing a second round trip, and it
+-  // warms the tab before the user opens it.
+-  const predictionsQuery = useQuery({
+-    queryKey: ["predictions", id],
+-    queryFn: () => api.getMyPredictions(id),
+-    enabled: Boolean(id) && match?.status !== "finished",
+-    staleTime: 0,
+-  });
+-
+-  // A pick that just paid off is the one moment this app can celebrate, and the
+-  // user is already looking at the match when it resolves. The status map is
+-  // what keeps it to a single burst (src/lib/predictionWin.ts): the first
+-  // payload of the session only seeds it, so opening an already-resolved match
+-  // celebrates nothing, and a row sitting at "correct" never re-fires.
+-  const statusRef = useRef<Map<string, string> | null>(null);
+-  useEffect(() => {
+-    const rows = predictionsQuery.data?.predictions;
+-    if (!rows) return;
+-    const previous = statusRef.current;
+-    statusRef.current = new Map(rows.map((row) => [row.mechanic, row.status]));
+-    if (!justPaidOut(previous, rows)) return;
+-    setBurst((value) => value + 1);
+ 
+-  }, [predictionsQuery.data]);
+ 
+   if (matchQuery.isLoading) {
+     return (
+@@ -197,22 +168,7 @@ export default function MatchDetail() {
+     color: match.away_color ?? TEAM_FALLBACK,
+   };
+ 
+-  // The deadline bar below: shown only while a pick can still be made. An
+-  // unpicked mechanic whose lock has already passed is a dead end rather than
+-  // an invitation, so the bar reads the same windows the Predict tab renders.
+-  const picked = new Set<string>((predictionsQuery.data?.predictions ?? []).map((row) => row.mechanic));
+-  const lineupsPublished = predictionsQuery.data?.lineupPublished ?? false;
+-  const predictionStatus = (predictionsQuery.data?.matchStatus ?? match.status ?? "scheduled") as MatchStatus;
+-  // The Predict tab's own state machine (src/lib/predictionWindow.ts), so the
+-  // sticky CTA and the cards can never disagree — it honours the lineup gate
+-  // and closes non-Sub mechanics the moment kickoff passes.
+-  const pickStillOpen = Object.entries(predictionsQuery.data?.windows ?? {}).some(
+-    ([mechanic, w]) =>
+-      !picked.has(mechanic) &&
+-      isOpen(mechanic as Mechanic, w, { matchStatus: predictionStatus, lineupsPublished }),
+-  );
+-  const picksMade = predictionsQuery.data?.predictions.length ?? 0;
+-  const showPickCta = match.status !== "finished" && tab !== "predict" && pickStillOpen;
++
+ 
+   return (
+     <>
+@@ -285,9 +241,6 @@ export default function MatchDetail() {
+           onChange={setTab}
+           options={[
+             { value: "timeline", label: t("match.tabTimeline") },
+-            // Second, not fourth: predicting is the reason this app exists and
+-            // the only one of the five with a deadline.
+-            { value: "predict", label: t("predict.hub") },
+             { value: "stats", label: t("match.tabStats") },
+             { value: "lineups", label: t("match.tabLineups") },
+           ]}
+@@ -305,41 +258,9 @@ export default function MatchDetail() {
+         ) : null}
+         {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
+         {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
+-        {tab === "predict" ? <PredictionsHub matchId={id} /> : null}
+       </section>
+ 
+ 
+-
+-      {/* Thumb-zone action for the only thing on this page with a deadline.
+-          It floats above the tab bar instead of living at the end of a long
+-          scroll, and it disappears the moment the Predict tab is open. The
+-          spacer keeps the last row from hiding underneath it. */}
+-      {showPickCta ? (
+-        <>
+-          <div className="h-[180px]" aria-hidden="true" />
+-          {/* The CTA sits on top of the tab bar which itself sits on top of the ad slot,
+-              so `bottom` is the sum of the TabBar's offset and its own height. */}
+-          <div className="fixed inset-x-0 bottom-[calc(56px+var(--ad-slot-h,100px)+max(env(safe-area-inset-bottom),8px))] z-20 border-t border-line bg-base/95">
+-            <div className="mx-auto flex w-full max-w-[560px] items-center justify-between gap-3 px-[var(--space-page-x,16px)] py-3">
+-              <p className="min-w-0 truncate text-[11px] text-ink-3">
+-                {t("predict.picksMade", { count: picksMade, total: 5 })}
+-              </p>
+-              <Button
+-                className="flex-none"
+-                onClick={() => {
+-                  haptic("light");
+-                  setTab("predict");
+-                }}
+-              >
+-                {t("predict.makePicks")}
+-              </Button>
+-            </div>
+-          </div>
+-        </>
+-      ) : null}
+-
+-      {/* The Shot Predictor lives in the Predict tab now (concept v2). */}
+-
+       {/* The A-ADS unit used to be the page's last element here. It is now a
+           static iframe in index.html so the no-JS A-ADS verifier can see it. */}
+     </>
+-- 
+2.54.0.windows.1
+

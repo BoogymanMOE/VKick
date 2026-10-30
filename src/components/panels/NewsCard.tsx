@@ -24,7 +24,11 @@ function openArticle(url: string): void {
  * would both navigate and open the link.
  */
 export function NewsCard({ article, locale }: { article: NewsArticle; locale?: string }) {
-  const { t, dir } = useI18n();
+  const { t, dir, lang } = useI18n();
+  // The Persian UI shows the cached translation when there is one; when the
+  // translator has not reached this article yet the text below is still ESPN's
+  // English, so the card says so instead of passing it off as Persian.
+  const untranslated = lang === "fa" && article.translated === false;
   const dateFmt = new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
@@ -41,9 +45,24 @@ export function NewsCard({ article, locale }: { article: NewsArticle; locale?: s
           className="mb-2 h-32 w-full rounded-lg object-cover"
         />
       ) : null}
-      <h3 className="text-sm font-bold leading-snug text-ink">{article.headline}</h3>
+      <h3
+        className="text-sm font-bold leading-snug text-ink"
+        {...(untranslated ? { dir: "ltr", lang: "en" } : {})}
+      >
+        {article.headline}
+      </h3>
       {article.description ? (
-        <p className="mt-1 line-clamp-2 text-xs text-ink-2">{article.description}</p>
+        <p
+          className="mt-1 line-clamp-2 text-xs text-ink-2"
+          {...(untranslated ? { dir: "ltr", lang: "en" } : {})}
+        >
+          {article.description}
+        </p>
+      ) : null}
+      {untranslated ? (
+        <span className="mt-1.5 inline-flex rounded-full border border-line px-1.5 py-0.5 text-[10px] font-bold text-ink-3">
+          {t("team.news.sourceLang")}
+        </span>
       ) : null}
       <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
         <span>{article.published ? dateFmt.format(new Date(article.published)) : ""}</span>

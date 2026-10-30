@@ -1,0 +1,316 @@
+From 0fe089e0b164881c741108a274100779f27e34d1 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 13 Oct 2026 21:39:51 +0330
+Subject: [PATCH 080/230] Make the crash card render, gate the dev token, drop
+ the ad switch
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The ErrorBoundary fallback read t(), but the boundary sits OUTSIDE
+I18nProvider, so the recovery card itself threw and a render crash became
+the white screen the boundary exists to prevent — its copy is hardcoded
+English now.
+
+currentAuthToken()'s production guard was compiled to `typeof process`, which
+is false in every browser, so production sent the hardcoded `dev:1` bearer
+token instead of returning null; it reads import.meta.env.PROD, which Vite
+resolves at build time. isTelegram() treated the empty initData string the
+SDK leaves outside Telegram as proof of a Telegram client.
+
+ADS_ENABLED gated nothing (both ad units are raw markup in index.html), so
+AdBanner.tsx, the vite define and its declaration are gone, and the privacy
+copy no longer claims the web build shows no ads.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ .env.example                     | 24 ++++++++--------------
+ index.html                       |  4 ++--
+ src/components/AdBanner.tsx      | 35 --------------------------------
+ src/components/ErrorBoundary.tsx | 21 +++++++++++--------
+ src/i18n/strings.ts              |  9 ++++----
+ src/lib/auth.ts                  |  9 +++++---
+ src/lib/telegram.ts              | 12 +++++++++--
+ src/vite-env.d.ts                | 12 -----------
+ vite.config.ts                   | 10 ++-------
+ 9 files changed, 44 insertions(+), 92 deletions(-)
+ delete mode 100644 src/components/AdBanner.tsx
+
+diff --git a/.env.example b/.env.example
+index d2d402b..21782ce 100644
+--- a/.env.example
++++ b/.env.example
+@@ -43,20 +43,12 @@ RETENTION_DAYS=120
+ # Size cap for logs/api.log in KB (rotates once to api.log.1). 0 = uncapped.
+ RETENTION_LOG_KB=512
+ 
+-# Ads (Telegram Mini App only): the Anonymous Ads (A-ADS) banner. Sign up at
+-# https://a-ads.com, create an ad unit, then put its id in the `data-aa`
+-# attribute and the iframe `src` in index.html. A-ADS serves a banner iframe,
+-# so no block id format is required.
++# Ads: the Anonymous Ads (A-ADS) banner and the Tapsell loader, both in
++# index.html. Sign up at https://a-ads.com, create an ad unit, then put its id
++# in the `data-aa` attribute and the iframe `src` in index.html. A-ADS serves a
++# banner iframe, so no block id format is required.
+ #
+-# The unit is RAW HTML in index.html, not a React component, on purpose: the
+-# A-ADS verifier does not run JavaScript, so an ad drawn by the SPA is invisible
+-# to it. Because it has to be in the initial document it is NOT gated by the
+-# switch below — editing index.html is the only way to turn it off.
+-
+-# Ads master switch. Must be exactly "true" for any ad to render; anything else
+-# (unset, "false", "1", "yes") renders none. Read through vite.config's define
+-# as __ADS_ENABLED__ (declared in src/vite-env.d.ts); VITE_ADS_ENABLED is
+-# declared but unread, so setting only that does nothing. Baked in at BUILD
+-# time: flip it and rebuild. Currently gates nothing: the only ad unit is the
+-# ungated static A-ADS iframe in index.html (AdBanner.tsx is no longer used).
+-ADS_ENABLED=false
++# Both units are RAW HTML/scripts in index.html, not React components, on
++# purpose: the A-ADS verifier does not run JavaScript, so an ad drawn by the SPA
++# is invisible to it. There is no environment switch for either one — editing
++# index.html is the only way to turn them off.
+diff --git a/index.html b/index.html
+index 6164fbd..ea438bd 100644
+--- a/index.html
++++ b/index.html
+@@ -109,8 +109,8 @@
+     <script type="module" src="/src/main.tsx"></script>
+     <!-- A-ADS (Anonymous Ads) unit, served as RAW HTML on purpose: the A-ADS
+          verifier does not run JavaScript, so an ad drawn by the SPA is invisible
+-         to it ("Not found"). Being the initial document's own markup, it is NOT
+-         gated by ADS_ENABLED — editing this block is the only way to turn it off. -->
++         to it ("Not found"). It is the initial document's own markup, and no
++         environment switch gates it — editing this block is the only way to turn it off. -->
+     <div
+       id="a-ads"
+       style="margin: 20px auto; max-width: 468px; min-height: 100px; position: relative; z-index: 1"
+diff --git a/src/components/AdBanner.tsx b/src/components/AdBanner.tsx
+deleted file mode 100644
+index 7117d5c..0000000
+--- a/src/components/AdBanner.tsx
++++ /dev/null
+@@ -1,35 +0,0 @@
+-/**
+- * Inline sponsored banner (Anonymous Ads / A-ADS).
+- *
+- * The iframe is only created when ADS_ENABLED was exactly "true" at build time,
+- * which vite.config's `define` injects as `__ADS_ENABLED__`. Returning null
+- * before the iframe exists means a disabled build never requests the A-ADS unit
+- * at all, rather than loading it and hiding it with CSS.
+- *
+- * The switch is read through the define (not `import.meta.env`) so it is baked
+- * at build time: flipping it needs a rebuild. See `.env.example`.
+- */
+-const ADS_ENABLED = __ADS_ENABLED__ === "true";
+-
+-export default function AdBanner() {
+-  if (!ADS_ENABLED) return null;
+-
+-  return (
+-    <div className="mx-auto my-6 max-w-[468px] min-h-[100px]">
+-      <iframe
+-        data-aa="2458182"
+-        src="//acceptable.a-ads.com/2458182/?size=Adaptive"
+-        style={{
+-          border: 0,
+-          padding: 0,
+-          overflow: "hidden",
+-          display: "block",
+-          margin: "auto",
+-        }}
+-        width="100%"
+-        height="auto"
+-        title="Advertisement"
+-      ></iframe>
+-    </div>
+-  );
+-}
+diff --git a/src/components/ErrorBoundary.tsx b/src/components/ErrorBoundary.tsx
+index e312b8a..3e66512 100644
+--- a/src/components/ErrorBoundary.tsx
++++ b/src/components/ErrorBoundary.tsx
+@@ -1,5 +1,4 @@
+ import { Component, type ErrorInfo, type ReactNode } from "react";
+-import { useI18n } from "../i18n/context";
+ import { reportClientError } from "../lib/errorReporting";
+ 
+ /**
+@@ -7,10 +6,13 @@ import { reportClientError } from "../lib/errorReporting";
+  * the whole Mini App; with it, the user gets an honest "something broke" card
+  * and a one-tap retry instead of a dead webview.
+  *
+- * Copy comes from i18n so a Persian user never meets an English error card —
+- * a class component can't call useI18n, so the strings are read by an inner
+- * function component (the boundary itself stays a class: error boundaries
+- * must be classes).
++ * The fallback copy is HARDCODED ENGLISH on purpose. This boundary sits
++ * OUTSIDE <I18nProvider> (see main.tsx) and React renders a boundary's fallback
++ * at the boundary's own position — so the provider is below the fallback, never
++ * above it. Reading t() here threw "useI18n must be used inside <I18nProvider>"
++ * and the recovery card became the white screen it exists to prevent. English
++ * copy on a crashed screen beats a dead webview in Persian; localizing this
++ * again means moving the provider ABOVE the boundary, not calling the hook here.
+  */
+ interface Props {
+   children: ReactNode;
+@@ -56,21 +58,22 @@ export class ErrorBoundary extends Component<Props, State> {
+  * as a component — without this the file trips `only-export-components`.
+  */
+ export function FallbackCard({ onRetry }: { onRetry: () => void }) {
+-  const { t } = useI18n();
+   return (
+     <div role="alert" className="grid min-h-[100svh] place-items-center px-6">
+       <div className="w-full max-w-[380px] rounded-card border border-line bg-surface p-5 text-center">
+         <p className="text-3xl" aria-hidden="true">
+           ⚽
+         </p>
+-        <p className="mt-2 text-base font-bold text-ink">{t("errorBoundary.title")}</p>
+-        <p className="mt-1 text-xs leading-relaxed text-ink-2">{t("errorBoundary.body")}</p>
++        <p className="mt-2 text-base font-bold text-ink">Something went wrong</p>
++        <p className="mt-1 text-xs leading-relaxed text-ink-2">
++          The screen hit an unexpected error. Retrying usually fixes it.
++        </p>
+         <button
+           type="button"
+           onClick={onRetry}
+           className="mt-4 min-h-11 w-full rounded-full bg-volt px-4 text-sm font-bold text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
+         >
+-          {t("errorBoundary.retry")}
++          Try again
+         </button>
+       </div>
+     </div>
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index b86e165..796de1e 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -341,13 +341,12 @@ export const strings = {
+       "Your sign-in identity (Telegram or username), display name, language, favorite clubs and leagues, predictions, ratings, comments, notification preferences, invite codes, and the points you earn. Nothing else.",
+     "legal.privacy.where.title": "Where it lives",
+     "legal.privacy.where.body":
+-      "On this app's own server, in a single database. We don't sell or share your data, and the web build loads no third-party analytics or ad tracker.",
++      "On this app's own server, in a single database. We don't sell or share your data.",
+     "legal.privacy.espn.title": "Football data",
+     "legal.privacy.espn.body":
+       "Fixtures, scores, lineups and stats come from ESPN's public API. That data is ESPN's; we only store the copy we need to show it to you.",
+     "legal.privacy.ads.title": "Ads",
+-    "legal.privacy.ads.body":
+-      "Inside Telegram only, a clearly-marked sponsored card may be shown through Adsgram. The web build shows no ads and never loads the ad SDK.",
++    "legal.privacy.ads.body": "This app displays ads provided by A-ADS and Tapsell to support development.",
+     "legal.privacy.delete.title": "Deleting your data",
+     "legal.privacy.delete.body":
+       "Profile → Delete account removes your account and everything in it — favorites, picks, ratings, comments and points — immediately and permanently.",
+@@ -901,13 +900,13 @@ export const strings = {
+       "هویت ورودت (تلگرام یا نام کاربری)، نام نمایشی، زبان، باشگاه‌ها و لیگ‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها، تنظیمات اعلان، کدهای دعوت و امتیازهایی که می‌گیری. چیز دیگری نه.",
+     "legal.privacy.where.title": "کجا نگه داشته می‌شود",
+     "legal.privacy.where.body":
+-      "روی سرور همین برنامه، در یک پایگاه داده. داده‌ات را نمی‌فروشیم و به اشتراک نمی‌گذاریم و نسخه وب هیچ ابزار تحلیلی یا ردیاب تبلیغاتی شخص ثالثی بار نمی‌کند.",
++      "روی سرور همین برنامه، در یک پایگاه داده. داده‌ات را نمی‌فروشیم و به اشتراک نمی‌گذاریم.",
+     "legal.privacy.espn.title": "داده فوتبال",
+     "legal.privacy.espn.body":
+       "برنامه بازی‌ها، نتایج، ترکیب‌ها و آمار از API عمومی ESPN می‌آید. آن داده مال ESPN است؛ ما فقط نسخه‌ای را نگه می‌داریم که برای نمایش لازم است.",
+     "legal.privacy.ads.title": "تبلیغات",
+     "legal.privacy.ads.body":
+-      "فقط داخل تلگرام، ممکن است یک کارت اسپانسری مشخصاً برچسب‌خورده از طریق Adsgram نمایش داده شود. نسخه وب هیچ تبلیغی نشان نمی‌دهد و کیت تبلیغاتی را بار نمی‌کند.",
++      "این برنامه برای حمایت از توسعه، تبلیغاتی را که A-ADS و Tapsell ارائه می‌دهند نمایش می‌دهد.",
+     "legal.privacy.delete.title": "حذف داده‌ها",
+     "legal.privacy.delete.body":
+       "پروفایل ← حذف حساب، حسابت و همه‌چیز درونش — باشگاه‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها و امتیازها — را فوراً و برای همیشه پاک می‌کند.",
+diff --git a/src/lib/auth.ts b/src/lib/auth.ts
+index fd53202..a55b40a 100644
+--- a/src/lib/auth.ts
++++ b/src/lib/auth.ts
+@@ -155,9 +155,12 @@ export function currentAuthToken(): string | null {
+   const initData = telegramInitData();
+   if (initData) return initData;
+ 
+-  if (typeof process !== "undefined" && process.env?.NODE_ENV === "production") {
+-    return null;
+-  }
++  // Vite replaces `import.meta.env.PROD` with a literal at build time. The old
++  // `process.env.NODE_ENV` form was compiled to `typeof process != "undefined"`
++  // — false in every browser — so production skipped this return and sent the
++  // hardcoded `dev:1` below as its bearer token instead of falling back to null.
++  // Never spell this with `process.env` again; it is not defined client-side.
++  if (import.meta.env.PROD) return null;
+ 
+   const dev = new URLSearchParams(window.location.search).get("devUser");
+   return dev ? `dev:${dev}` : `dev:1`;
+diff --git a/src/lib/telegram.ts b/src/lib/telegram.ts
+index a61a8b2..ea3e561 100644
+--- a/src/lib/telegram.ts
++++ b/src/lib/telegram.ts
+@@ -56,8 +56,16 @@ declare global {
+ 
+ export const telegram = (): TelegramWebApp | undefined => window.Telegram?.WebApp;
+ 
+-/** True only when actually running inside a Telegram client. */
+-export const isTelegram = (): boolean => Boolean(telegram()?.initData !== undefined && telegram());
++/**
++ * True only when Telegram actually handed us signed init data.
++ *
++ * `initData` is an empty STRING — not undefined — whenever telegram-web-app.js
++ * has loaded outside a real Telegram client, which is every plain-browser
++ * visitor (index.html loads the SDK for everyone). Testing `!== undefined`
++ * therefore reported "inside Telegram" to web users and switched on the
++ * Telegram-only copy on the Login screen. No initData means no identity.
++ */
++export const isTelegram = (): boolean => Boolean(telegram()?.initData);
+ 
+ /**
+  * Wait for the Mini App environment. The official script tag makes initData
+diff --git a/src/vite-env.d.ts b/src/vite-env.d.ts
+index 3038ce3..5b710f0 100644
+--- a/src/vite-env.d.ts
++++ b/src/vite-env.d.ts
+@@ -5,18 +5,6 @@ declare global {
+   /** Injected by vite.config `define` — the package.json version at build time. */
+   const __APP_VERSION__: string;
+ 
+-  /**
+-   * Injected by vite.config `define` — the build-time ADS_ENABLED switch, as a
+-   * string. Only the exact value "true" enables the ad banner; anything else
+-   * (unset, "false", "1") leaves it out of the tree entirely.
+-   */
+-  const __ADS_ENABLED__: string;
+-
+-  interface ImportMetaEnv {
+-    /** The Vite-native spelling of the same switch (`VITE_ADS_ENABLED`). */
+-    readonly VITE_ADS_ENABLED?: string;
+-  }
+-
+   interface Window {
+     /**
+      * Set by the inline boot script in index.html once the Telegram SDK has
+diff --git a/vite.config.ts b/vite.config.ts
+index cd5874f..a1abe1a 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -1,21 +1,15 @@
+-import { defineConfig, loadEnv } from "vite";
++import { defineConfig } from "vite";
+ import react from "@vitejs/plugin-react";
+ import tailwindcss from "@tailwindcss/vite";
+ import pkg from "./package.json";
+ 
+-export default defineConfig(({ mode }) => {
+-  // `.env` files are not in process.env while this config is evaluated, so load
+-  // them explicitly. An empty prefix keeps every key (not just VITE_ ones) —
+-  // only the value below is exposed to the client, so nothing else leaks.
+-  // Real environment variables win, which is what a Render build sets.
+-  const _env = loadEnv(mode, process.cwd(), "");
++export default defineConfig(() => {
+   return {
+     plugins: [react(), tailwindcss()],
+     // Single source of truth for the app version (package.json) — surfaced in
+     // Profile and usable anywhere via the global below.
+     define: {
+       __APP_VERSION__: JSON.stringify(pkg.version),
+-      __ADS_ENABLED__: JSON.stringify(_env.ADS_ENABLED ?? ""),
+     },
+     build: {
+       // The app runs in Telegram's webview on low-end Android, which can lag the
+-- 
+2.54.0.windows.1
+

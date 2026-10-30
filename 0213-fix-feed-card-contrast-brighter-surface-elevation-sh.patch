@@ -1,0 +1,46 @@
+From f4496afe7c2c1c57b488968dcfc2d921291ae028 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 16:22:51 +0330
+Subject: [PATCH 213/230] =?UTF-8?q?fix(feed):=20card=20contrast=20?=
+ =?UTF-8?q?=E2=80=94=20brighter=20surface=20+=20elevation=20shadow?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/MatchCard.tsx | 2 +-
+ tokens.css                   | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index b968b86..e7a69bc 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -101,7 +101,7 @@ export const MatchCard = memo(function MatchCard({
+         // on the left in Persian; explicit so the card reads correctly even if
+         // the shell ever stops setting dir on the root.
+         dir={lang === "fa" ? "rtl" : "ltr"}
+-        className="block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2"
++        className="block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated shadow-[0_2px_8px_-4px_rgba(0,0,0,0.5)] focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2"
+         style={{
+           // Red for a running match, amber for the break, neutral otherwise —
+           // a feed of a dozen half-time cards must not read as a dozen alarms.
+diff --git a/tokens.css b/tokens.css
+index 2ca2cae..771ed42 100644
+--- a/tokens.css
++++ b/tokens.css
+@@ -9,9 +9,9 @@
+ 
+   /* surfaces — green-black pitch under floodlights */
+   --bg-base: #081613;
+-  --bg-surface: #0b1d19;
++  --bg-surface: #0e2520;
+   --bg-elevated: #122c25;
+-  --border-subtle: #1e3b34;
++  --border-subtle: #2a4d44;
+   --text-primary: #edf7f3;
+   --text-secondary: #93aea6;
+   /* Ink for text drawn ON a volt surface (the selected date chip, primary
+-- 
+2.54.0.windows.1
+

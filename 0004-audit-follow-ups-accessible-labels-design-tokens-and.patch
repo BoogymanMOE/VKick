@@ -1,0 +1,77 @@
+From b140957d1ca8a20d33498b44b17c7c27af339044 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 01:48:00 +0330
+Subject: [PATCH 4/4] audit follow-ups: accessible labels, design tokens, and
+ repo cleanup
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Row aria-label in LeagueGroup.tsx: trimmed to the visible text only,
+  removing the duplicated score-repeat that was confusing screen readers.
+- Date-chip aria-labels in DateStrip.tsx: now start with the chip's visible
+  text (day abbreviation + digits) instead of the full date-formatted string,
+  so WCAG 2.5.3 passes and the label matches what the user sees.
+- Divider colour: replaced hardcoded `#1d2b26` with the `--line` CSS token
+  so the 1px hairline stays on the design system.
+
+Reverts to cleanup:
+- audit-full.md, scripts/*.mjs, ui-code.txt, vkick-halftime-and-jalali.patch
+  and the pre-existing d/audit-main worktree are intentionally left untracked;
+  see the original audit's caveat about HEAD ≠ fbb9c91.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/DateStrip.tsx   | 6 +++++-
+ src/components/LeagueGroup.tsx | 9 ++++++---
+ 2 files changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index c03fd28..95ddda8 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -160,7 +160,11 @@ export function DateStrip({ selected, onSelect, daysWithFavorites }: DateStripPr
+             // "Today" keeps its own marker even when another day is selected,
+             // so the user always knows where they are in the week.
+             aria-current={isToday ? "date" : undefined}
+-            aria-label={fullDate.format(day)}
++            aria-label={
++            // Screen reader reads the same thing the user sees.
++            // Combine the day-name abbreviation (Mon, Tue...) with digits.
++            `${t(\`dates.day.${DAY_NAMES[day.getDay()]}\`)}${digits.format(dayNum)}`
++          }
+             onClick={() => onSelect(day)}
+             className={`relative flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border text-center transition-all duration-[var(--t-fast)] active:scale-[0.96] after:absolute after:-inset-x-1 after:inset-y-0 after:content-[''] ${
+               isSelected
+diff --git a/src/components/LeagueGroup.tsx b/src/components/LeagueGroup.tsx
+index 9a841d3..6bcdd96 100644
+--- a/src/components/LeagueGroup.tsx
++++ b/src/components/LeagueGroup.tsx
+@@ -109,9 +109,12 @@ export const MatchRow = memo(function MatchRow({
+       : isFinished
+         ? t("status.finished")
+         : clock;
+-  const label = hasScore
+-    ? `${home} ${match.homeScore ?? 0}-${match.awayScore ?? 0}, ${away} ${match.awayScore ?? 0}, ${status}`
++  // Visually visible text — keep aria-label in sync so screen readers
++  // read the same thing the user sees, without duplication.
++  const visible = hasScore
++    ? `${home} ${match.homeScore ?? 0}-${match.awayScore ?? 0}, ${status}`
+     : `${home} ${t("common.versus")} ${away}, ${clock}`;
++  const label = visible;
+ 
+   const homeFollowed = isFavoriteTeam(match.home.id);
+   const awayFollowed = isFavoriteTeam(match.away.id);
+@@ -215,7 +218,7 @@ export function LeagueGroup({ league, matches, isFavoriteTeam, index }: LeagueGr
+     >
+       <LeagueHeader label={label} count={matches.length} />
+       {/* Rows under the header: 1px hairline dividers, no per-match borders. */}
+-      <ul className="divide-y divide-[#1d2b26]">
++      <ul className="divide-y divide-[var(--line)]">
+         {matches.map((match, rowIndex) => (
+           <MatchRow key={match.id} match={match} isFavoriteTeam={isFavoriteTeam} index={index + rowIndex} />
+         ))}
+-- 
+2.54.0.windows.1
+

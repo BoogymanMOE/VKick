@@ -1,0 +1,321 @@
+From 94ace5814f1165afb3f8996238ad5d27d22c8708 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 02:46:16 +0330
+Subject: [PATCH 189/230] design(space): vertical spacing scale
+ (xs/sm/md/lg/xl/2xl) applied to feed, profile, match detail
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+--space-xs..2xl tokens map to named --spacing-* utilities in index.css. The
+three rhythm-critical pages (Matches, Profile, MatchDetail) now use mt-md/lg/
+xl instead of ad-hoc 12/16/24px: Matches group headers break at mt-lg, Profile
+sections breathe at mt-xl with space-y-sm list gaps, MatchDetail headers to
+content sit at mt-md. Tight in-card gaps (mt-1/mt-2) are intentional exceptions.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/index.css             | 10 ++++++++++
+ src/pages/MatchDetail.tsx | 12 ++++++------
+ src/pages/Matches.tsx     | 16 ++++++++--------
+ src/pages/Profile.tsx     | 32 ++++++++++++++++----------------
+ tokens.css                |  9 +++++++++
+ 5 files changed, 49 insertions(+), 30 deletions(-)
+
+diff --git a/src/index.css b/src/index.css
+index ee58711..cd9104d 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -35,6 +35,16 @@
+   --text-lg: var(--type-lg);
+   --text-display: var(--type-display);
+ 
++  /* Vertical spacing scale — named steps map from the --space-* tokens.
++     Tailwind's bare-number scale (mt-2, mt-4…) still works unchanged; the
++     named steps are what call sites use once a value carries intent. */
++  --spacing-xs: var(--space-xs);
++  --spacing-sm: var(--space-sm);
++  --spacing-md: var(--space-md);
++  --spacing-lg: var(--space-lg);
++  --spacing-xl: var(--space-xl);
++  --spacing-2xl: var(--space-2xl);
++
+   --radius-card: 14px;
+   --radius-e-card: var(--radius-card);
+   --radius-s-card: var(--radius-card);
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index d89ad3f..49c826a 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -140,7 +140,7 @@ export default function MatchDetail() {
+     return (
+       <>
+         <TopBar title={t("match.summary")} back />
+-        <div className="mt-3">
++        <div className="mt-md">
+           <ScoreHeroSkeleton />
+         </div>
+       </>
+@@ -151,7 +151,7 @@ export default function MatchDetail() {
+     return (
+       <>
+         <TopBar title={t("match.summary")} back />
+-        <div className="mt-4">
++        <div className="mt-md">
+           <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => matchQuery.refetch()} />
+         </div>
+       </>
+@@ -162,7 +162,7 @@ export default function MatchDetail() {
+     return (
+       <>
+         <TopBar title={t("match.summary")} back />
+-        <div className="mt-4">
++        <div className="mt-md">
+           <EmptyState title={t("matches.empty")} hint={t("matches.emptyHint")} />
+         </div>
+       </>
+@@ -199,7 +199,7 @@ export default function MatchDetail() {
+       {/* Score header */}
+       <div
+         className={cx(
+-          "score-hero relative mt-3 overflow-hidden rounded-card border p-3",
++          "score-hero relative mt-md overflow-hidden rounded-card border p-3",
+           flashScore ? "goal-flash border-volt/60 bg-elevated" : "border-line",
+         )}
+       >
+@@ -270,7 +270,7 @@ export default function MatchDetail() {
+         </div>
+       </div>
+ 
+-      <div className="mt-4">          <Segmented
++      <div className="mt-md">          <Segmented
+           id="match-tabs"
+           value={tab}
+           onChange={setTab}
+@@ -289,7 +289,7 @@ export default function MatchDetail() {
+         id="match-tabs-panel"
+         role="tabpanel"
+         aria-labelledby={`match-tabs-${tab}`}
+-        className="panel-in mt-4"
++        className="panel-in mt-md"
+         key={tab}
+       >
+         {tab === "timeline" ? (
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index c871272..11910b2 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -47,7 +47,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
+ 
+ function GroupHeader({ id, label, count, tone }: { id: string; label: string; count: number; tone: "live" | "gold" | "muted" }) {
+   return (
+-    <div className="mb-2 mt-5 flex items-center gap-2 first:mt-0">
++    <div className="mb-2 mt-lg flex items-center gap-2 first:mt-0">
+       <h2
+         id={id}
+         className={cx(
+@@ -305,7 +305,7 @@ export default function Matches() {
+             scroll container: overflow-x-auto clips vertically too, so without
+             the padding the extra target area above and below is unreachable. */}
+         {!league && (followed.count > 0 || favCount > 0) ? (
+-          <div className="-mx-[var(--space-page-x,16px)] -my-1 mt-4 flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
++          <div className="-mx-[var(--space-page-x,16px)] -my-1 mt-md flex items-center gap-1.5 overflow-x-auto px-[var(--space-page-x,16px)] py-1">
+             {followed.count > 0 ? (
+               <>
+                 <button
+@@ -355,7 +355,7 @@ export default function Matches() {
+         {/* Single-league deep link: name the scope, let the user leave. Without
+           this the screen looks like a broken feed when the window is quiet. */}
+         {league ? (
+-          <div className="mt-4 flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3">
++          <div className="mt-md flex items-center justify-between gap-2 rounded-card border border-line bg-surface px-4 py-3">
+             <p className="min-w-0 truncate text-xs text-ink-2">
+               {t("matches.leagueScope", {
+                 league: competitionName(league, lang),
+@@ -410,18 +410,18 @@ export default function Matches() {
+             card only when there is nothing cached, and an empty day that offers
+             the next day with football instead of a dead end. */}
+         {matchesQuery.isLoading ? (
+-          <ul className="mt-4 space-y-2" aria-busy="true">
++          <ul className="mt-md space-y-2" aria-busy="true">
+             <MatchCardSkeleton />
+             <MatchCardSkeleton />
+             <MatchCardSkeleton />
+             <MatchCardSkeleton />
+           </ul>
+         ) : hasFeedError ? (
+-          <div className="mt-4">
++          <div className="mt-md">
+             <ErrorState onRetry={() => matchesQuery.refetch()} />
+           </div>
+         ) : dayMatches.length === 0 ? (
+-          <div className="mt-4">
++          <div className="mt-md">
+             <EmptyState
+               icon="⚽"
+               title={t("matches.emptyDay", { day: dayLabel(selectedDay) })}
+@@ -452,7 +452,7 @@ export default function Matches() {
+           <div key={selectedKey} className="day-swap">
+             {/* My teams group: matches where a favorite team is playing. */}
+             {favCount > 0 && myTeamsMatches.length > 0 && (
+-              <section className="mt-4">
++              <section className="mt-md">
+                 <div className="mb-2 flex items-center gap-2">
+                   <StarFilledIcon className="h-3.5 w-3.5 text-gold" aria-hidden="true" />
+                   <h2 className="text-sm font-bold text-ink-2">{t("matches.myTeams")}</h2>
+@@ -534,7 +534,7 @@ export default function Matches() {
+ 
+         {/* Sync note, not a second refresh button: pull-to-refresh and the
+           TopBar icon already carry the action, so this line only reports it. */}
+-        <p className="mt-6 text-center text-xs text-ink-3">
++        <p className="mt-xl text-center text-xs text-ink-3">
+           {t("matches.hint")}
+           {syncStale
+             ? ` · ${t("matches.syncDelayed")}`
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 8f4b8cf..a361234 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -160,7 +160,7 @@ export default function Profile() {
+     <>
+       <TopBar title={t("profile.title")} />
+ 
+-      <Card className="mt-3 flex items-center gap-3 p-4">
++      <Card className="mt-md flex items-center gap-3 p-4">
+         <Avatar name={displayName} tone="volt" size="lg" />
+         <div className="min-w-0 flex-1">
+           <p className="truncate text-md font-bold text-ink">{displayName}</p>
+@@ -192,9 +192,9 @@ export default function Profile() {
+         </Chip>
+       </Card>
+ 
+-      <section className="mt-6">
++      <section className="mt-xl">
+         <SectionHeading title={t("profile.account")} />
+-        <div className="space-y-2">
++        <div className="space-y-sm">
+           <FavoriteTeamsStrip />
+           <ListRow
+             label={t("profile.telegram")}
+@@ -241,9 +241,9 @@ export default function Profile() {
+ 
+       <ReferralSection />
+ 
+-      <section className="mt-6">
++      <section className="mt-xl">
+         <SectionHeading title={t("profile.settings")} />
+-        <div className="space-y-2">
++        <div className="space-y-sm">
+           <ListRow label={t("profile.language")} right={<LanguageToggle />} />
+           <ListRow
+             label={t("profile.haptics")}
+@@ -263,9 +263,9 @@ export default function Profile() {
+         </div>
+       </section>
+ 
+-      <section className="mt-6">
++      <section className="mt-xl">
+         <SectionHeading title={t("profile.about")} />
+-        <Card className="space-y-2 p-3">
++        <Card className="space-y-sm p-3">
+           <p className="text-sm text-ink-2">{t("profile.aboutBody")}</p>
+           <div className="flex items-center justify-between border-t border-line pt-2 text-xs text-ink-3">
+             <span>{t("profile.version")}</span>
+@@ -276,9 +276,9 @@ export default function Profile() {
+         </Card>
+       </section>
+ 
+-      <section className="mt-6">
++      <section className="mt-xl">
+         <SectionHeading title={t("profile.legal")} />
+-        <div className="space-y-2">
++        <div className="space-y-sm">
+           <ListRow
+             label={t("legal.privacyTitle")}
+             onClick={() => {
+@@ -300,7 +300,7 @@ export default function Profile() {
+ 
+       <WhatsNew />
+ 
+-      <section className="mt-6">
++      <section className="mt-xl">
+         <SectionHeading title={t("profile.dangerZone")} />
+         {/* The one destructive row on the page: the label carries the live
+             (coral) colour so the stakes are visible without reading the hint. */}
+@@ -318,14 +318,14 @@ export default function Profile() {
+       </section>
+ 
+       {user?.isAdmin ? (
+-        <section className="mt-6">
++        <section className="mt-xl">
+           <Button variant="ghost" className="w-full" onClick={() => navigate("/admin")}>
+             Admin Dashboard
+           </Button>
+         </section>
+       ) : null}
+ 
+-      <section className="mt-6 mb-2">
++      <section className="mt-xl mb-2">
+         <Button variant="ghost" className="w-full text-danger" onClick={signOut}>
+           {t("profile.signOut")}
+         </Button>
+@@ -342,7 +342,7 @@ export default function Profile() {
+           </Button>
+         }
+       >
+-        <div className="space-y-2">
++        <div className="space-y-sm">
+           <ListRow
+             label={t("profile.notifGoals")}
+             hint={t("profile.notifGoalsHint")}
+@@ -463,7 +463,7 @@ export default function Profile() {
+         <p className="text-sm leading-relaxed text-ink-2">{t("profile.deleteConfirmBody")}</p>
+         {deleteError ? (
+           <p
+-            className="mt-3 rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
++            className="mt-md rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
+             role="alert"
+           >
+             {deleteError}
+@@ -590,7 +590,7 @@ function ReferralSection() {
+   };
+ 
+   return (
+-    <section className="mt-6">
++    <section className="mt-xl">
+       <SectionHeading title={t("referral.title")} />
+       <Card className="space-y-3 p-3">
+         <p className="text-xs text-ink-2">{t("referral.hint")}</p>
+@@ -659,7 +659,7 @@ function WhatsNew() {
+   if (latest.version === seenRelease) return null;
+ 
+   return (
+-    <section className="mt-6">
++    <section className="mt-xl">
+       <SectionHeading title={t("whatsNew.title")} />
+       <Card className="relative p-3">
+         <div className="flex items-center justify-between">
+diff --git a/tokens.css b/tokens.css
+index 82a71aa..2ca2cae 100644
+--- a/tokens.css
++++ b/tokens.css
+@@ -57,6 +57,15 @@
+      previous 12px (px-3) read as cramped. */
+   --space-page-x: 16px;
+ 
++  /* Vertical spacing scale — section breaks, card stacks, group gaps.
++     Page gutter is --space-page-x (16px, horizontal). These are vertical. */
++  --space-xs: 4px;    /* tight: inside a card, between label+value */
++  --space-sm: 8px;    /* default: between match cards, chip rows */
++  --space-md: 12px;   /* comfortable: between a header and its content */
++  --space-lg: 16px;   /* section break: between groups on the feed */
++  --space-xl: 24px;   /* page break: between major sections (Profile, Table) */
++  --space-2xl: 32px;  /* screen-level: top of page before first content */
++
+ }
+ body {
+   background: var(--bg-base);
+-- 
+2.54.0.windows.1
+

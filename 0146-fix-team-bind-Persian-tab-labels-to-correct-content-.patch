@@ -1,0 +1,100 @@
+From adb1fc81dcbc5937b026b0afb36b3f0603ab0fc0 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 00:21:23 +0330
+Subject: [PATCH 146/230] fix(team): bind Persian tab labels to correct
+ content, dedupe i18n keys
+
+---
+ src/i18n/strings.ts    | 16 ++++++++--------
+ src/pages/TeamPage.tsx | 14 +++++++-------
+ 2 files changed, 15 insertions(+), 15 deletions(-)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 92c35e0..137e897 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -225,9 +225,10 @@ export const strings = {
+     "commentary.title": "Commentary",
+     "team.title": "Team",
+     "team.leagueUnsupported": "This league is no longer supported",
+-    "team.tabSquad": "Squad",
+-    "team.tabFixtures": "Fixtures",
+-    "team.tabStats": "Season",
++    "team.tab.squad": "Squad",
++    "team.tab.fixtures": "Fixtures",
++    "team.tab.season": "Season",
++    "team.tab.xg": "xG",
+     "team.played": "{played} matches played",
+     "team.appearances": "{count} apps",
+     "team.squadEmpty": "Squad not synced yet",
+@@ -235,7 +236,6 @@ export const strings = {
+     "team.noFixtures": "No fixtures stored for this club yet.",
+     "team.statsEmpty": "No season stats yet",
+     "team.statsEmptyHint": "Team averages fill in after the next completed round.",
+-    "team.tabXg": "xG",
+     "team.statsAttack": "Attack",
+     "team.statsDefense": "Defense & control",
+     "xg.title": "Expected goals",
+@@ -838,9 +838,10 @@ export const strings = {
+     "commentary.title": "گزارش زنده",
+     "team.title": "تیم",
+     "team.leagueUnsupported": "این لیگ دیگر پشتیبانی نمی‌شود",
+-    "team.tabSquad": "بازیکنان",
+-    "team.tabFixtures": "بازی‌ها",
+-    "team.tabStats": "فصل",
++    "team.tab.squad": "ترکیب",
++    "team.tab.fixtures": "بازی‌ها",
++    "team.tab.season": "آمار فصل",
++    "team.tab.xg": "xG",
+     "team.played": "{played} بازی انجام داده",
+     "team.appearances": "{count} بازی",
+     "team.squadEmpty": "ترکیب تیم هنوز همگام‌سازی نشده",
+@@ -848,7 +849,6 @@ export const strings = {
+     "team.noFixtures": "هنوز بازی‌ای برای این باشگاه ثبت نشده.",
+     "team.statsEmpty": "هنوز آمار فصل موجود نیست",
+     "team.statsEmptyHint": "میانگین‌های تیم بعد از هفته کامل بعدی پر می‌شوند.",
+-    "team.tabXg": "گل انتظاری",
+     "team.statsAttack": "حمله",
+     "team.statsDefense": "دفاع و کنترل",
+     "xg.title": "گل‌های انتظاری",
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 95f169f..c076505 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -24,7 +24,7 @@ import type { ApiMatch } from "../lib/api";
+ import type { Position } from "../types";
+ import { competitionName } from "../lib/leagues";
+ 
+-type Tab = "squad" | "form" | "stats" | "xg";
++type Tab = "squad" | "fixtures" | "season" | "xg";
+ 
+ const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
+ 
+@@ -129,18 +129,18 @@ export default function TeamPage() {
+           value={tab}
+           onChange={setTab}
+           options={[
+-            { value: "squad", label: t("team.tabSquad") },
+-            { value: "form", label: t("team.tabFixtures") },
+-            { value: "stats", label: t("team.tabStats") },
+-            { value: "xg", label: t("team.tabXg") },
++            { value: "squad", label: t("team.tab.squad") },
++            { value: "fixtures", label: t("team.tab.fixtures") },
++            { value: "season", label: t("team.tab.season") },
++            { value: "xg", label: t("team.tab.xg") },
+           ]}
+         />
+       </div>
+ 
+       <section className="panel-in mt-4" key={tab}>
+         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
+-        {tab === "form" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
+-        {tab === "stats" ? <StatsTab stats={seasonStats} /> : null}
++        {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
++        {tab === "season" ? <StatsTab stats={seasonStats} /> : null}
+         {tab === "xg" ? (
+           <XgTab
+             teamId={team.id}
+-- 
+2.54.0.windows.1
+

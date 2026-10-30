@@ -36,6 +36,24 @@ export function seasonLabelForDate(now: Date): string {
 const TRACKED_PLACEHOLDERS = LEAGUES.map(() => "?").join(", ");
 
 /**
+ * The calendar days a season label covers, as sortable ISO days.
+ *
+ * "2026-27" is the Aug–May European season (from 2026-08-01, exclusive end at
+ * 2027-08-01); a bare "2026" is a calendar-year competition. Used to keep
+ * derived tables — form strips, home/away splits — to the season the standings
+ * row belongs to, because matches are stored across seasons and RETENTION_DAYS
+ * never deletes them.
+ */
+export function seasonWindow(label: string): { from: string; to: string } {
+  const calendarYear = !label.includes("-");
+  const start = parseInt(label.slice(0, 4), 10);
+  if (!Number.isFinite(start)) return seasonWindow(seasonLabelForDate(new Date()));
+  return calendarYear
+    ? { from: `${start}-01-01`, to: `${start + 1}-01-01` }
+    : { from: `${start}-08-01`, to: `${start + 1}-08-01` };
+}
+
+/**
  * The season the scoring tables are currently open for (leaderboards, ledger
  * stamps, streak rows). Pure read — never mutates anything.
  */

@@ -1,0 +1,1697 @@
+From b228a2181f72151e499ad781cc93683edcdd5359 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 16 Oct 2026 15:40:44 +0330
+Subject: [PATCH 101/230] Make the match page live-accurate: goal scores,
+ faces, formation pitch, shot plot
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The timeline was not synced with the clock, and a goal read "Goal — Cole
+Palmer" without saying what it did to the match. The header polled every five
+minutes while the server's live pulse was refreshing the minute and score
+straight from ESPN every 15s, so 20s is now the beat — through the half-time
+break too, which used to leave a match frozen on "HT" until the screen was
+touched. An SSE goal event now invalidates every match-scoped query family
+(timeline, comments, commentary, players, ratings, lineups, predictions), not
+just the header, so a goal moves the feed and the scoreboard together. Each
+goal carries the score it produced, walked as a prefix count over the
+timeline's own goals (src/lib/timelineScore.ts, tested), so a goal reads
+"1–0" as it lands.
+
+Player faces: PlayerAvatar renders the ESPN headshot in a circle and falls
+back to the player's initials on the same footprint when the feed has no
+artwork or the URL 404s, used by both the lineups pitch/bench and the club
+page's squad list.
+
+The lineups tab draws a pitch instead of a list of names — turf, real
+markings, the XI standing in its published shape with faces and shirt
+numbers. That surfaced a placement bug worth calling out: ESPN files wingers
+as midfielders, so a published 4-3-3 arrives as five midfielders and one
+forward and dealing it by unit silently dropped both wide men off the pitch.
+placePublishedXI rebalances those advanced roles into the forward band when
+the shape has room, and falls back to one band per unit when the XI does not
+fit its own shape — either way every starter is drawn.
+
+The stats tab gains a Pitch View: the match's located events dropped into the
+6x4 grid the Shot Predictor is scored against (geometry mirrored from
+server/scoring/shotGrid.ts and pinned by tests), and a to-scale pitch with
+each shot drawn at its real position and, for a goal, the line the ball took
+to the goal mouth. It refreshes on the same query the timeline owns, so it
+moves live. ESPN publishes no pass coordinates at all, so nothing here
+invents them: the panel draws what the feed locates and says so when it
+locates nothing.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/TimelineList.tsx        |  24 +-
+ src/components/panels/LineupsPanel.tsx | 156 +++++++++---
+ src/components/panels/PitchView.tsx    | 330 +++++++++++++++++++++++++
+ src/components/ui.tsx                  |  63 +++++
+ src/hooks/useLiveUpdates.ts            |  31 ++-
+ src/i18n/strings.ts                    |  20 ++
+ src/lib/api.ts                         |   3 +
+ src/lib/formations.ts                  | 143 ++++++++++-
+ src/lib/timelineScore.ts               |  61 +++++
+ src/lib/zones.ts                       |  20 ++
+ src/pages/MatchDetail.tsx              |  41 ++-
+ src/pages/TeamPage.tsx                 |  17 +-
+ src/types.ts                           |   8 +
+ tests/formations.test.ts               | 203 +++++++++++++++
+ tests/run.ts                           |   2 +
+ tests/shotGrid.test.ts                 |  18 +-
+ tests/timelineScore.test.ts            |  74 ++++++
+ 17 files changed, 1151 insertions(+), 63 deletions(-)
+ create mode 100644 src/components/panels/PitchView.tsx
+ create mode 100644 src/lib/timelineScore.ts
+ create mode 100644 tests/timelineScore.test.ts
+
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index 3c2370d..09d09c2 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -1,10 +1,11 @@
+-import { Fragment } from "react";
++import { Fragment, useMemo } from "react";
+ import type { CSSProperties, ReactNode } from "react";
+ import type { Comment, TimelineEvent } from "../types";
+ import { useI18n } from "../i18n/context";
+ import type { StringKey } from "../i18n/strings";
+ import { BallIcon, CardIcon, SwapIcon } from "./icons";
+ import { cx } from "../lib/cx";
++import { formatScore, runningScore } from "../lib/timelineScore";
+ import { Chip, Num } from "./ui";
+ 
+ const typeKey: Record<TimelineEvent["type"], StringKey> = {
+@@ -111,6 +112,8 @@ export function TimelineList({
+   liveMinute,
+   onOpenClip,
+   teamColor,
++  homeTeamId,
++  awayTeamId,
+ }: {
+   events: TimelineEvent[];
+   /** Pinned crowd comments, rendered under their event/minute. */
+@@ -123,12 +126,25 @@ export function TimelineList({
+    * caused the moment, so a two-column read of who did what needs no names.
+    */
+   teamColor?: Record<string, string>;
++  /** The match's two sides, so a goal can carry the scoreline it produced. */
++  homeTeamId?: string;
++  awayTeamId?: string;
+ }) {
+   const { t, localize } = useI18n();
+ 
+   const latestSeconds = liveMinute === undefined ? null : Math.max(...events.map((e) => e.minuteSeconds), 0);
+   const openClip = (comment: Comment) => (onOpenClip ? onOpenClip(comment) : undefined);
+ 
++  // "Goal — Cole Palmer" on its own never said what the goal DID to the match.
++  // The score beside each goal is a prefix count of the timeline's own goals,
++  // credited to the side each event names (src/lib/timelineScore.ts), so a
++  // goal reads "1–0" the moment it lands rather than leaving the reader to
++  // scroll up to the scoreboard.
++  const { byGoal } = useMemo(
++    () => runningScore(events, homeTeamId ?? "", awayTeamId ?? ""),
++    [events, homeTeamId, awayTeamId],
++  );
++
+   return (
+     <ol className="relative space-y-3 ps-10">
+       {/* Vertical timeline rail, one continuous line the markers sit on. */}
+@@ -136,6 +152,7 @@ export function TimelineList({
+ 
+       {events.map((event, index) => {
+         const isGoal = event.type === "goal";
++        const goalScore = byGoal.get(event.id);
+         const mark = eventMark(event.type, event.description);
+         const club = event.teamId ? teamColor?.[event.teamId] : undefined;
+         const isNewestLive =
+@@ -190,6 +207,11 @@ export function TimelineList({
+                     {event.minuteDisplay}
+                   </Num>
+                   <Chip tone={isGoal ? "volt" : "muted"}>{t(typeKey[event.type])}</Chip>
++                  {/* The scoreline this goal produced. Always home–away, so the
++                      number reads the same whichever side scored it. */}
++                  {goalScore ? (
++                    <Num className="text-sm font-black text-volt">{formatScore(goalScore)}</Num>
++                  ) : null}
+                   {/* The crowd thread on this moment — surfaced, not buried. */}
+                   {count > 0 ? (
+                     <span className="ms-auto inline-flex items-center gap-1 text-[11px] font-bold text-gold">
+diff --git a/src/components/panels/LineupsPanel.tsx b/src/components/panels/LineupsPanel.tsx
+index 3623948..73199bb 100644
+--- a/src/components/panels/LineupsPanel.tsx
++++ b/src/components/panels/LineupsPanel.tsx
+@@ -1,11 +1,108 @@
+ import { useState } from "react";
+ import { useI18n } from "../../i18n/context";
+-import type { LineupPlayer, MatchLineup, Position, Team } from "../../types";
+-import { cx } from "../../lib/cx";
+-import { Card, Chip, Num, Segmented, TeamBadge } from "../ui";
++import type { LineupPlayer, MatchLineup, Team } from "../../types";
++import { Card, Chip, Num, PlayerAvatar, Segmented, TeamBadge } from "../ui";
++import { placePublishedXI, type SlotCandidate } from "../../lib/formations";
+ 
+-const order: Position[] = ["GK", "DEF", "MID", "FWD"];
++/** `LineupPlayer` → the shape the placement helpers reason about. */
++const asCandidate = (player: LineupPlayer): SlotCandidate => ({
++  id: player.id,
++  espnPosition: player.espnPosition ?? null,
++  // A missing shirt number is not number 0 (0 is a legal keeper number).
++  jersey: player.number > 0 ? player.number : null,
++  unit: player.position,
++  formationPlace: player.formationPlace ?? null,
++});
+ 
++/**
++ * The published XI on a pitch: turf, markings, and the eleven standing in the
++ * shape they were named in.
++ *
++ * The shape comes from ESPN's own `formation` string when it is one the
++ * catalogue knows AND the XI fits it, so a 4-2-3-1 really draws a holding pair
++ * and an attacking three (see `placePublishedXI`, which also folds ESPN's
++ * winger-as-midfielder habit back into the forward band). When the feed leaves
++ * the shape blank, sends a form the catalogue doesn't carry, or the XI simply
++ * does not fit it, the rows are derived from what the XI contains — one band
++ * per unit — so a leaked lineup still shows every player it has instead of an
++ * assumed 4-3-3 that drops the extras.
++ *
++ * Attack is at the top, the keeper's goal at the bottom (`pitchRows`), and the
++ * block is forced LTR: a left-back belongs on the left in Persian too.
++ */
++function LineupPitch({ lineup }: { lineup: MatchLineup }) {
++  const { t, localize } = useI18n();
++  // Carries the player itself plus the fields the placement helpers read, so a
++  // placed slot can still render a face and a name.
++  const candidates = lineup.starters.map((player) => ({ ...player, ...asCandidate(player) }));
++  const { rows, slots } = placePublishedXI(lineup.formation, candidates);
++
++  if (rows.length === 0) return null;
++
++  return (
++    <div dir="ltr">
++      <p className="mb-1 text-center label text-ink-3">↑ {t("shot.attackingEnd")}</p>
++      <div className="relative overflow-hidden rounded-card border border-line bg-pitch/20 p-2">
++        <div className="relative flex flex-col gap-2.5">
++          {rows.map((row, rowIndex) => (
++            <div key={`${row.unit}-${row.size}-${row.goal ? "g" : "f"}`} className="flex items-start gap-1">
++              {slots[rowIndex].map((player, index) => (
++                <PitchSlot
++                  key={player ? player.id : `empty-${rowIndex}-${index}`}
++                  player={player}
++                  name={player ? localize(player.name) : ""}
++                />
++              ))}
++            </div>
++          ))}
++        </div>
++
++        {/* Markings, painted over the slots in the real pitch's proportions —
++            goal lines, penalty areas, six-yard boxes, spots, halfway line and
++            centre circle — so a band reads as a place on a pitch rather than a
++            row of avatars. Purely decorative and pointer-transparent. */}
++        <div className="pointer-events-none absolute inset-2" aria-hidden="true">
++          <span className="absolute inset-x-0 top-0 h-px bg-white/30" />
++          <span className="absolute inset-x-0 bottom-0 h-px bg-white/40" />
++          <span className="absolute bottom-0 left-1/2 h-[16%] w-[57%] -translate-x-1/2 border-x border-t border-white/25" />
++          <span className="absolute bottom-0 left-1/2 h-[6%] w-[28%] -translate-x-1/2 border-x border-t border-white/20" />
++          <span className="absolute bottom-[11%] left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-white/50" />
++          <span className="absolute top-1/2 left-1/2 aspect-square h-[22%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15" />
++          <span className="absolute inset-x-0 top-1/2 h-px bg-white/15" />
++          <span className="absolute top-0 left-1/2 h-[14%] w-[51%] -translate-x-1/2 border-x border-b border-white/15" />
++        </div>
++      </div>
++    </div>
++  );
++}
++
++/** One player on the pitch: face (or initials), shirt number, name. */
++function PitchSlot({ player, name }: { player: LineupPlayer | null; name: string }) {
++  if (!player) {
++    return (
++      <span className="flex min-w-0 flex-1 justify-center">
++        <span className="h-10 w-10 rounded-full border border-dashed border-white/25" aria-hidden="true" />
++      </span>
++    );
++  }
++  return (
++    <span className="flex min-w-0 flex-1 flex-col items-center">
++      <span className="relative">
++        <PlayerAvatar name={name} src={player.headshot} size="md" className="border-pitch/60" />
++        <Num className="absolute -end-1 -bottom-1 grid h-4 min-w-4 place-items-center rounded-full bg-volt px-0.5 text-[9px] leading-none text-black">
++          {player.number > 0 ? player.number : "–"}
++        </Num>
++      </span>
++      <span className="mt-1 block w-full truncate text-center text-[9px] font-bold text-ink-2">{name}</span>
++    </span>
++  );
++}
++
++/**
++ * The official lineups, as they were published: the shape drawn on a pitch,
++ * then the bench below it. Two sides, one at a time, because an XI on a phone
++ * is already a lot of names.
++ */
+ export function LineupsPanel({
+   home,
+   away,
+@@ -32,40 +129,33 @@ export function LineupsPanel({
+         ]}
+       />
+ 
+-      <Card className="pitch-watermark p-3">
++      <Card className="p-3">
+         <div className="mb-3 flex items-center gap-2">
+           <TeamBadge team={team} size="sm" />
+           <span className="text-sm font-bold text-ink">{localize(team.shortName)}</span>
+           <span className="flex-1" />
+-          <Chip tone="muted">{lineup.formation}</Chip>
++          <Chip tone="pitch">{lineup.formation}</Chip>
+         </div>
+ 
+-        <div className="space-y-3">
+-          {order.map((position) => {
+-            const group = lineup.starters.filter((player) => player.position === position);
+-            if (group.length === 0) return null;
+-            return (
+-              <div key={position} className="flex flex-wrap justify-center gap-1.5">
+-                {group.map((player) => (
+-                  <PlayerChip key={player.id} player={player} />
+-                ))}
+-              </div>
+-            );
+-          })}
+-        </div>
++        <LineupPitch lineup={lineup} />
+ 
+-        <p className="mt-3 border-t border-line pt-2 text-[11px] text-ink-3">
+-          {t("lineups.coach")}: {localize(lineup.coach)}
+-        </p>
++        {/* The coach is not in every feed, and the lineups route has no coach
++            endpoint at all — a bare "Coach:" label is worse than no line. */}
++        {lineup.coach ? (
++          <p className="mt-3 border-t border-line pt-2 text-[11px] text-ink-3">
++            {t("lineups.coach")}: {localize(lineup.coach)}
++          </p>
++        ) : null}
+       </Card>
+ 
+       <Card className="p-3">
+         <p className="mb-2 label text-ink-2">{t("lineups.bench")}</p>
+         <ul className="space-y-1.5">
+           {lineup.subs.map((player) => (
+-            <li key={player.id} className="flex items-center gap-2 text-xs">
+-              <Num className="w-6 flex-none text-ink-3">{player.number}</Num>
+-              <span className="flex-1 truncate text-ink">{localize(player.name)}</span>
++            <li key={player.id} className="flex items-center gap-2.5 text-xs">
++              <PlayerAvatar name={localize(player.name)} src={player.headshot} size="sm" />
++              <Num className="w-5 flex-none text-ink-3">{player.number > 0 ? player.number : "–"}</Num>
++              <span className="min-w-0 flex-1 truncate text-ink">{localize(player.name)}</span>
+               <Chip tone="muted" normalCase>
+                 {t(`pos.${player.position}`)}
+               </Chip>
+@@ -76,19 +166,3 @@ export function LineupsPanel({
+     </div>
+   );
+ }
+-
+-function PlayerChip({ player }: { player: LineupPlayer }) {
+-  const { localize } = useI18n();
+-  return (
+-    <div className="w-[68px] text-center">
+-      <span
+-        className={cx(
+-          "mx-auto grid h-8 w-8 place-items-center rounded-full border border-line bg-elevated text-[11px] font-bold text-ink",
+-        )}
+-      >
+-        <Num>{player.number}</Num>
+-      </span>
+-      <p className="mt-1 truncate text-[10px] font-bold text-ink-2">{localize(player.name)}</p>
+-    </div>
+-  );
+-}
+diff --git a/src/components/panels/PitchView.tsx b/src/components/panels/PitchView.tsx
+new file mode 100644
+index 0000000..d41de97
+--- /dev/null
++++ b/src/components/panels/PitchView.tsx
+@@ -0,0 +1,330 @@
++import { useMemo, useState } from "react";
++import { useQuery } from "@tanstack/react-query";
++import { api, type ApiTimelineEvent } from "../../lib/api";
++import { useI18n } from "../../i18n/context";
++import { Card, Chip, Num, Segmented } from "../ui";
++import { cellZone, cellFromFieldPosition, GRID_COLS, GRID_ROWS, ZONE_LABEL_KEY } from "../../lib/zones";
++
++type Side = { id: string; shortName: string; color: string };
++
++/** An event the feed actually placed on the pitch — the only kind we can draw. */
++type LocatedEvent = ApiTimelineEvent & { field_x: number; field_y: number };
++
++function isLocated(event: ApiTimelineEvent): event is LocatedEvent {
++  return (
++    event.field_x !== null &&
++    event.field_y !== null &&
++    Number.isFinite(event.field_x) &&
++    Number.isFinite(event.field_y)
++  );
++}
++
++/**
++ * The live shot plot: every event ESPN gave a position to, drawn twice — in the
++ * 6×4 grid the Shot Predictor is scored against, and on a to-scale pitch.
++ *
++ * WHERE THE DATA COMES FROM, AND WHAT IT CAN'T SHOW
++ * ESPN fills `fieldPositionX/Y` on key events, and in practice only on goals and
++ * the occasional shot — the sync stores exactly what arrives (`timeline_events.
++ * field_x/field_y/goal_y`) and this plot draws exactly that. There is no pass
++ * feed in the payload at all, so nothing here invents one: an empty pitch means
++ * the feed located nothing, and the hint says so rather than implying the match
++ * had no shots. It refreshes with the timeline query the Timeline tab owns, so
++ * a goal that lands mid-match appears here without a reload.
++ */
++export function PitchView({
++  matchId,
++  live,
++  home,
++  away,
++}: {
++  matchId: string;
++  /** Live matches refresh on the same 20s beat as the header and timeline. */
++  live: boolean;
++  home: Side;
++  away: Side;
++}) {
++  const { t } = useI18n();
++  const [mode, setMode] = useState<"grid" | "pitch">("grid");
++
++  // Same key as the Timeline tab, so the two share one cache entry and one
++  // in-flight request instead of polling ESPN-synced rows twice.
++  const query = useQuery({
++    queryKey: ["timeline", matchId],
++    queryFn: () => api.getTimeline(matchId),
++    refetchInterval: live ? 20_000 : false,
++  });
++
++  const located = useMemo(() => (query.data?.events ?? []).filter(isLocated), [query.data]);
++
++  return (
++    <Card className="p-3">
++      {/* The title and count live here rather than in a SectionHeading above:
++          the count is this panel's own data, and a heading plus a header row
++          printed "Pitch View" twice. */}
++      <div className="mb-3 flex items-center gap-2">
++        <span className="label label-lg text-ink-2">{t("pitchView.title")}</span>
++        <span className="flex-1" />
++        <Chip tone="pitch">
++          <Num>{located.length}</Num>
++        </Chip>
++      </div>
++
++      <Segmented
++        value={mode}
++        onChange={setMode}
++        options={[
++          { value: "grid", label: t("pitchView.grid") },
++          { value: "pitch", label: t("pitchView.full") },
++        ]}
++      />
++
++      <p className="mt-2 mb-2 text-[11px] text-ink-3">{t("pitchView.hint")}</p>
++
++      {mode === "grid" ? (
++        <GoalGrid events={located} home={home} away={away} />
++      ) : (
++        <FullPitch events={located} home={home} away={away} />
++      )}
++
++      {located.length === 0 ? (
++        <p className="mt-3 rounded-card border border-dashed border-line px-3 py-4 text-center text-[11px] text-ink-3">
++          <span className="block font-bold text-ink-2">{t("pitchView.empty")}</span>
++          {t("pitchView.emptyHint")}
++        </p>
++      ) : (
++        <Legend events={located} home={home} away={away} />
++      )}
++    </Card>
++  );
++}
++
++/** Which club a located event belongs to, as a colour. */
++function colorFor(teamId: string | null, home: Side, away: Side): string {
++  if (teamId === home.id) return home.color;
++  if (teamId === away.id) return away.color;
++  return "var(--text-muted)";
++}
++
++/**
++ * Who is who, and what a marker means. The counts live in the header chip — a
++ * number next to a singular noun ("3 Goal") is what two unpluralised labels
++ * produce, and the app has no plural machinery to fix it with. The two marker
++ * styles are the thing a reader cannot infer.
++ */
++function Legend({ events, home, away }: { events: LocatedEvent[]; home: Side; away: Side }) {
++  const { t, localize } = useI18n();
++  const hasShot = events.some((e) => e.type !== "goal");
++
++  return (
++    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line pt-2">
++      {[home, away].map((side) => (
++        <span key={side.id} className="inline-flex items-center gap-1.5 text-[11px] text-ink-2">
++          <span
++            className="h-2.5 w-2.5 rounded-full"
++            style={{ backgroundColor: side.color }}
++            aria-hidden="true"
++          />
++          <span className="truncate">{localize(side.shortName)}</span>
++        </span>
++      ))}
++      <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-3">
++        <span className="h-2.5 w-2.5 rounded-full ring-1 ring-white/70" aria-hidden="true" />
++        {t("pitchView.goal")}
++      </span>
++      {hasShot ? (
++        <span className="inline-flex items-center gap-1.5 text-[11px] text-ink-3">
++          <span className="h-2.5 w-2.5 rounded-full border border-white/70" aria-hidden="true" />
++          {t("pitchView.shot")}
++        </span>
++      ) : null}
++    </div>
++  );
++}
++
++/**
++ * The Shot Predictor's own grid, with the match's real shots dropped into their
++ * cells. Same geometry as the picker (`cellFromFieldPosition`, mirrored by
++ * `src/lib/zones.ts` and pinned by tests/shotGrid.test.ts), so a goal plotted in
++ * "inside left" is in the cell the picker would have scored for it.
++ */
++function GoalGrid({ events, home, away }: { events: LocatedEvent[]; home: Side; away: Side }) {
++  const { t } = useI18n();
++
++  const byCell = useMemo(() => {
++    const map = new Map<string, LocatedEvent[]>();
++    for (const event of events) {
++      const { gridX, gridY } = cellFromFieldPosition(event.field_x, event.field_y);
++      const key = `${gridX}-${gridY}`;
++      const bucket = map.get(key);
++      if (bucket) bucket.push(event);
++      else map.set(key, [event]);
++    }
++    return map;
++  }, [events]);
++
++  const cells = Array.from({ length: GRID_ROWS * GRID_COLS }, (_, i) => ({
++    gridX: i % GRID_COLS,
++    gridY: Math.floor(i / GRID_COLS),
++  }));
++
++  return (
++    // A pitch never mirrors with the reading direction — left stays left in fa.
++    <div dir="ltr">
++      <p className="mb-1 text-center label text-ink-3">↑ {t("shot.attackingEnd")}</p>
++      <div className="relative overflow-hidden rounded-card border border-line bg-pitch/20 p-2">
++        <div className="relative grid gap-0.5" style={{ gridTemplateColumns: `repeat(${GRID_COLS}, 1fr)` }}>
++          {cells.map(({ gridX, gridY }) => {
++            const pins = byCell.get(`${gridX}-${gridY}`) ?? [];
++            const zone = cellZone(gridX, gridY);
++            return (
++              <div
++                key={`${gridX}-${gridY}`}
++                role="img"
++                aria-label={`${t(ZONE_LABEL_KEY[zone])} · ${pins.length}`}
++                className="relative flex aspect-[4/3] flex-wrap content-center items-center justify-center gap-0.5 rounded-[4px] border border-white/10 bg-white/5 p-0.5"
++              >
++                {pins.slice(0, 4).map((pin) => (
++                  <span
++                    key={pin.id}
++                    title={`${pin.minute_display} · ${pin.description}`}
++                    className="block h-2 w-2 rounded-full ring-1 ring-white/70"
++                    style={{
++                      backgroundColor:
++                        pin.type === "goal" ? colorFor(pin.team_id, home, away) : "transparent",
++                      borderColor: colorFor(pin.team_id, home, away),
++                    }}
++                  />
++                ))}
++                {pins.length > 4 ? (
++                  <Num className="text-[9px] font-bold text-ink-2">+{pins.length - 4}</Num>
++                ) : null}
++              </div>
++            );
++          })}
++        </div>
++
++        {/* Markings painted over the cells — goal line, penalty area, six-yard
++            box, spot and the halfway line — the same geometry the Shot
++            Predictor draws, so the grid reads as a pitch, not a keypad. */}
++        <div className="pointer-events-none absolute inset-2" aria-hidden="true">
++          <span className="absolute inset-x-0 top-0 h-px bg-white/40" />
++          <span className="absolute top-0 left-1/2 h-[18%] w-[57%] -translate-x-1/2 border-x border-b border-white/25" />
++          <span className="absolute top-0 left-1/2 h-[7%] w-[28%] -translate-x-1/2 border-x border-b border-white/20" />
++          <span className="absolute top-[13%] left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-white/50" />
++          <span className="absolute inset-x-0 top-1/2 h-px bg-white/15" />
++          <span className="absolute top-1/2 left-1/2 aspect-square h-[24%] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15" />
++        </div>
++      </div>
++    </div>
++  );
++}
++
++/* ------------------------------------------------------------- full pitch */
++
++/** A real pitch is 105m × 68m, and the diagram is drawn to those proportions. */
++const PITCH_W = 68;
++const PITCH_H = 105;
++const BOX_W = 40.32;
++const BOX_D = 16.5;
++const SIX_W = 18.32;
++const SIX_D = 5.5;
++const GOAL_W = 7.32;
++const ARC_R = 9.15;
++/** Where a 9.15m arc crosses the 16.5m box edge: 34 ± sqrt(9.15² − 5.5²). */
++const ARC_X1 = (34 - 7.31).toFixed(2);
++const ARC_X2 = (34 + 7.31).toFixed(2);
++
++/**
++ * ESPN field coordinates → diagram points. `fieldPositionX` runs to the
++ * opponent's goal (drawn at the top) and `fieldPositionY` across the width, so
++ * both sides' shots converge on one goal — the standard shot-map read.
++ */
++function toPoint(fieldX: number, fieldY: number): { x: number; y: number } {
++  return { x: (fieldY / 100) * PITCH_W, y: ((100 - fieldX) / 100) * PITCH_H };
++}
++
++function FullPitch({ events, home, away }: { events: LocatedEvent[]; home: Side; away: Side }) {
++  const { t } = useI18n();
++  return (
++    <div dir="ltr" className="overflow-hidden rounded-card border border-line bg-pitch/20 p-2">
++      <svg
++        viewBox={`0 0 ${PITCH_W} ${PITCH_H}`}
++        className="block h-auto w-full"
++        role="img"
++        aria-label={t("pitchView.aria")}
++      >
++        <g fill="none" stroke="rgba(255,255,255,0.28)" strokeWidth="0.35">
++          <rect x="0.2" y="0.2" width={PITCH_W - 0.4} height={PITCH_H - 0.4} rx="0.6" />
++          <line x1="0.2" y1={PITCH_H / 2} x2={PITCH_W - 0.2} y2={PITCH_H / 2} />
++          <circle cx={PITCH_W / 2} cy={PITCH_H / 2} r={ARC_R} />
++          {/* Own end (bottom): penalty area, six-yard box, the D. */}
++          <rect x={(PITCH_W - BOX_W) / 2} y={PITCH_H - BOX_D} width={BOX_W} height={BOX_D} />
++          <rect x={(PITCH_W - SIX_W) / 2} y={PITCH_H - SIX_D} width={SIX_W} height={SIX_D} />
++          <path d={`M ${ARC_X1} ${PITCH_H - BOX_D} A ${ARC_R} ${ARC_R} 0 0 1 ${ARC_X2} ${PITCH_H - BOX_D}`} />
++          {/* Attacking end (top). */}
++          <rect x={(PITCH_W - BOX_W) / 2} y="0" width={BOX_W} height={BOX_D} />
++          <rect x={(PITCH_W - SIX_W) / 2} y="0" width={SIX_W} height={SIX_D} />
++          <path d={`M ${ARC_X1} ${BOX_D} A ${ARC_R} ${ARC_R} 0 0 0 ${ARC_X2} ${BOX_D}`} />
++        </g>
++        <g fill="rgba(255,255,255,0.55)">
++          <circle cx={PITCH_W / 2} cy={PITCH_H / 2} r="0.7" />
++          <circle cx={PITCH_W / 2} cy={PITCH_H - 11} r="0.7" />
++          <circle cx={PITCH_W / 2} cy="11" r="0.7" />
++        </g>
++        <g stroke="rgba(255,255,255,0.55)" strokeWidth="0.9">
++          <line x1={(PITCH_W - GOAL_W) / 2} y1={PITCH_H} x2={(PITCH_W + GOAL_W) / 2} y2={PITCH_H} />
++          <line x1={(PITCH_W - GOAL_W) / 2} y1="0" x2={(PITCH_W + GOAL_W) / 2} y2="0" />
++        </g>
++
++        {/* The shots. A goal also draws the line the ball took to the goal
++            mouth (`goal_y`), which is the part a scoreline can never show. */}
++        {events.map((event) => {
++          const point = toPoint(event.field_x, event.field_y);
++          const color = colorFor(event.team_id, home, away);
++          const isGoal = event.type === "goal";
++          const crossing =
++            isGoal && event.goal_y !== null ? { x: (event.goal_y / 100) * PITCH_W, y: 0 } : null;
++          return (
++            <g key={event.id}>
++              <title>{`${event.minute_display} · ${event.description}`}</title>
++              {crossing ? (
++                <>
++                  <line
++                    x1={point.x}
++                    y1={point.y}
++                    x2={crossing.x}
++                    y2={crossing.y}
++                    stroke={color}
++                    strokeWidth="0.3"
++                    strokeDasharray="1 1"
++                    opacity="0.7"
++                  />
++                  <circle
++                    cx={crossing.x}
++                    cy={crossing.y}
++                    r="1.1"
++                    fill={color}
++                    stroke="white"
++                    strokeWidth="0.3"
++                  />
++                </>
++              ) : null}
++              <circle
++                cx={point.x}
++                cy={point.y}
++                r="2.3"
++                fill={isGoal ? color : "none"}
++                stroke={isGoal ? "rgba(255,255,255,0.8)" : color}
++                strokeWidth={isGoal ? "0.4" : "0.7"}
++              />
++              <text x={point.x + 3.2} y={point.y + 1} fontSize="2.8" fill="rgba(255,255,255,0.75)">
++                {event.minute_display}
++              </text>
++            </g>
++          );
++        })}
++      </svg>
++    </div>
++  );
++}
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index 13ee978..c386132 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -300,6 +300,69 @@ export function Num({ children, className }: { children: ReactNode; className?:
+   return <span className={cx("num-display tabular-nums", className)}>{children}</span>;
+ }
+ 
++/**
++ * A player's face, in the circle every roster row and pitch slot uses.
++ *
++ * The feed carries an ESPN headshot URL for most players but not all, and a
++ * CDN URL can 404 long after the sync stored it, so both cases fall back to the
++ * player's initials on the same footprint — a roster reads evenly either way,
++ * and a squad with no artwork at all still looks deliberate. The image is
++ * decorative (the name is always rendered next to it) and lazy, since a squad
++ * list is 25 of these.
++ */
++export function PlayerAvatar({
++  name,
++  src,
++  size = "md",
++  className,
++}: {
++  name: string;
++  src?: string | null;
++  size?: "sm" | "md" | "lg";
++  className?: string;
++}) {
++  const [broken, setBroken] = useState(false);
++  const [loaded, setLoaded] = useState(false);
++  const dims = { sm: "h-8 w-8 text-[10px]", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm" }[size];
++  const photo = src && !broken ? src : null;
++  return (
++    <span
++      className={cx(
++        "relative grid flex-none place-items-center overflow-hidden rounded-full border border-line bg-elevated font-bold text-ink-2",
++        dims,
++        className,
++      )}
++      aria-hidden="true"
++    >
++      {photo ? (
++        <img
++          src={photo}
++          alt=""
++          onError={() => setBroken(true)}
++          onLoad={() => setLoaded(true)}
++          loading="lazy"
++          decoding="async"
++          className={cx(
++            "h-full w-full object-cover transition-opacity duration-[var(--t-fast)] ease-[var(--ease-out)]",
++            loaded ? "opacity-100" : "opacity-0",
++          )}
++        />
++      ) : (
++        initialsOf(name)
++      )}
++    </span>
++  );
++}
++
++/** Up to two initials from a player name — "Cole Palmer" → "CP", "Ronald" → "R". */
++function initialsOf(name: string): string {
++  const words = name.trim().split(/\s+/).filter(Boolean);
++  if (words.length === 0) return "?";
++  const first = words[0]!.charAt(0);
++  const last = words.length > 1 ? words[words.length - 1]!.charAt(0) : "";
++  return (first + last).toUpperCase();
++}
++
+ /**
+  * Evaluative (gold) totals count up from zero on mount — season points,
+  * standings points, xPts — so a number that just appeared reads as earned
+diff --git a/src/hooks/useLiveUpdates.ts b/src/hooks/useLiveUpdates.ts
+index f9949fa..8931b9f 100644
+--- a/src/hooks/useLiveUpdates.ts
++++ b/src/hooks/useLiveUpdates.ts
+@@ -1,6 +1,31 @@
+ import { useEffect } from "react";
+ import { useQueryClient } from "@tanstack/react-query";
+ 
++/**
++ * Query families that are keyed by a match id, in the same order their keys are
++ * declared by the screens that own them. An SSE update about one match has to
++ * refresh every one of them — a goal that moves the scoreboard but leaves the
++ * timeline, the shot plot and the lineup panel on their old payload is exactly
++ * the "the timeline is out of sync" complaint this hook exists to answer.
++ */
++const MATCH_SCOPED_KEYS = [
++  "match",
++  "timeline",
++  "comments",
++  "commentary",
++  "matchPlayers",
++  "ratings",
++  "lineups",
++  "predictions",
++] as const;
++
++/**
++ * Server-sent live updates. The sync's live pulse and summary pass broadcast a
++ * goal the moment ESPN reports it, which lands here first — polling is the
++ * backstop, this is the instant path. Refreshing the match's whole query family
++ * (not just the header) is what keeps the feed, the score and the timeline
++ * moving together.
++ */
+ export function useLiveUpdates() {
+   const queryClient = useQueryClient();
+ 
+@@ -14,8 +39,12 @@ export function useLiveUpdates() {
+           type?: string;
+         };
+         if (data.matchId) {
++          // The matchday feed and the club screens ride along: a goal changes
++          // the card's score too, and they carry no match id of their own.
+           queryClient.invalidateQueries({ queryKey: ["matches"] });
+-          queryClient.invalidateQueries({ queryKey: ["match", data.matchId] });
++          for (const key of MATCH_SCOPED_KEYS) {
++            queryClient.invalidateQueries({ queryKey: [key, data.matchId] });
++          }
+         }
+       } catch {
+         // ignore malformed events
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 6f6121b..bd750ac 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -112,6 +112,16 @@ export const strings = {
+     "timeline.halftime": "Half time",
+     "timeline.fulltime": "Full time",
+     "timeline.comments": "{count} comments",
++    "pitchView.title": "Pitch View",
++    "pitchView.grid": "Goal grid",
++    "pitchView.full": "Pitch",
++    "pitchView.hint": "Every located shot, mapped to the attacking goal",
++    "pitchView.empty": "No shot positions yet",
++    "pitchView.emptyHint":
++      "The feed places goals and some shots on the pitch; they appear here as the match runs.",
++    "pitchView.goal": "Goal",
++    "pitchView.shot": "Shot",
++    "pitchView.aria": "Shot map for this match",
+     "ratings.title": "Crowd Ratings",
+     "ratings.subtitle": "The eye test, next to the stat sheet",
+     "ratings.votes": "{count} votes",
+@@ -683,6 +693,16 @@ export const strings = {
+     "timeline.halftime": "پایان نیمه اول",
+     "timeline.fulltime": "پایان بازی",
+     "timeline.comments": "{count} دیدگاه",
++    "pitchView.title": "نمای زمین",
++    "pitchView.grid": "شبکه دروازه",
++    "pitchView.full": "زمین",
++    "pitchView.hint": "هر شوت ثبت‌شده، روی دروازه حمله نگاشت شده",
++    "pitchView.empty": "هنوز موقعیت شوتی ثبت نشده",
++    "pitchView.emptyHint":
++      "فید فقط گل‌ها و بعضی شوت‌ها را مکان‌یابی می‌کند؛ همان‌طور که بازی پیش می‌رود اینجا می‌آیند.",
++    "pitchView.goal": "گل",
++    "pitchView.shot": "شوت",
++    "pitchView.aria": "نقشه شوت‌های این بازی",
+     "ratings.title": "امتیاز هواداران",
+     "ratings.subtitle": "چشم هوادار در کنار آمار",
+     "ratings.votes": "{count} رأی",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 07362f9..8c7be01 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -658,6 +658,9 @@ export const api = {
+         short_name: string | null;
+         position: string;
+         jersey_number: number | null;
++        /** ESPN headshot URL for the pitch/bench avatars; null for the players
++         *  the feed carries no artwork for (the UI shows initials). */
++        headshot_url: string | null;
+         /** ESPN's granular role ("CD-L", "AM-R") — places a player on a side
+          *  of their line. Null for feeds that don't publish one. */
+         espn_position: string | null;
+diff --git a/src/lib/formations.ts b/src/lib/formations.ts
+index e8baa55..03d6131 100644
+--- a/src/lib/formations.ts
++++ b/src/lib/formations.ts
+@@ -128,6 +128,23 @@ export interface SlotCandidate {
+   espnPosition: string | null;
+   jersey: number | null;
+   unit: Unit;
++  /**
++   * ESPN's 1..11 slot in the formation. Only a tiebreaker: it orders players
++   * inside a line when the feed publishes no granular role (a leaked XI often
++   * arrives as eleven plain "MID"/"DEF" rows), and is ignored otherwise. A
++   * predicted XI has no slot yet, so the field stays optional.
++   */
++  formationPlace?: string | null;
++}
++
++/**
++ * Ordering tiebreaker inside a line: ESPN's formation slot when the feed has
++ * one, else shirt number. Never the reason a player is placed in a line —
++ * that is still the granular role and the unit — only the order among equals.
++ */
++function tieBreak(candidate: SlotCandidate): number {
++  const place = Number.parseInt(String(candidate.formationPlace ?? ""), 10);
++  return Number.isFinite(place) ? place : (candidate.jersey ?? 99);
+ }
+ 
+ /**
+@@ -192,14 +209,14 @@ const ADVANCED_ROLES = new Set([
+   "F-C",
+ ]);
+ 
+-/** Left to right on the pitch, then by shirt number. */
+-export function orderForLine(candidates: SlotCandidate[]): SlotCandidate[] {
++/** Left to right on the pitch, then by formation slot (or shirt number). */
++export function orderForLine<T extends SlotCandidate>(candidates: T[]): T[] {
+   return [...candidates].sort((a, b) => {
+     const side =
+       SIDE_ORDER[slotRoleFor(a.espnPosition, a.unit).side] -
+       SIDE_ORDER[slotRoleFor(b.espnPosition, b.unit).side];
+     if (side !== 0) return side;
+-    return (a.jersey ?? 99) - (b.jersey ?? 99);
++    return tieBreak(a) - tieBreak(b);
+   });
+ }
+ 
+@@ -211,18 +228,27 @@ export function orderForLine(candidates: SlotCandidate[]): SlotCandidate[] {
+  * and the attacking three what is left. Dealing row by row would hand the same
+  * players to both bands.
+  */
+-export function fillFormation(
++export function fillFormation<T extends SlotCandidate>(
+   formationId: string,
+-  candidates: SlotCandidate[],
+-): Array<Array<SlotCandidate | null>> {
+-  const rows = pitchRows(formationId);
+-  const slots: Array<Array<SlotCandidate | null>> = rows.map((row) => new Array(row.size).fill(null));
++  candidates: T[],
++): Array<Array<T | null>> {
++  return fillRows(pitchRows(formationId), candidates);
++}
++
++/**
++ * Deal a squad onto an explicit set of pitch rows — `fillFormation` without the
++ * formation catalogue, so a caller that has already resolved the rows (a
++ * published XI whose shape string ESPN did not fill in, see
++ * `pitchRowsFromUnits`) draws through the same placement rules.
++ */
++export function fillRows<T extends SlotCandidate>(rows: PitchRow[], candidates: T[]): Array<Array<T | null>> {
++  const slots: Array<Array<T | null>> = rows.map((row) => new Array(row.size).fill(null));
+ 
+   for (const unit of UNITS) {
+     const rowIndexes = rows.map((row, index) => (row.unit === unit ? index : -1)).filter((i) => i >= 0);
+     if (rowIndexes.length === 0) continue;
+ 
+-    // Deepest role first, then across the pitch, then shirt number.
++    // Deepest role first, then across the pitch, then formation slot / number.
+     const pool = candidates
+       .filter((c) => c.unit === unit)
+       .sort((a, b) => {
+@@ -232,7 +258,7 @@ export function fillFormation(
+           SIDE_ORDER[slotRoleFor(a.espnPosition, a.unit).side] -
+           SIDE_ORDER[slotRoleFor(b.espnPosition, b.unit).side];
+         if (side !== 0) return side;
+-        return (a.jersey ?? 99) - (b.jersey ?? 99);
++        return tieBreak(a) - tieBreak(b);
+       });
+ 
+     let next = 0;
+@@ -274,6 +300,103 @@ export function pitchRows(formationId: string): PitchRow[] {
+   ];
+ }
+ 
++/** How many players a squad has in each unit. */
++export function unitCounts(candidates: SlotCandidate[]): Record<Unit, number> {
++  const counts: Record<Unit, number> = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
++  for (const c of candidates) counts[c.unit] += 1;
++  return counts;
++}
++
++/**
++ * Coarse units rebalanced against a shape.
++ *
++ * ESPN files wingers and attacking midfielders as MID, so a published 4-3-3
++ * regularly arrives as five midfielders and one forward (LW, ST, RW, CM, CM,
++ * CDM). Dealing that by unit drops the two wide men off the pitch entirely —
++ * they are "extras" in a band that only has three slots. While the shape has
++ * room up front and too many midfielders, the most advanced midfielder is
++ * promoted into the forward band: a winger belongs on the wing of a front
++ * three, which is where the shape puts him.
++ *
++ * Non-destructive and idempotent: an XI that already fits comes back as-is, and
++ * a purely central midfielder is never promoted (only roles that `advanceFor`
++ * already calls advanced move).
++ */
++export function balanceForFormation<T extends SlotCandidate>(formationId: string, candidates: T[]): T[] {
++  const required = requiredUnits(formationId);
++  let out = [...candidates];
++  for (;;) {
++    const counts = unitCounts(out);
++    if (!(counts.MID > required.MID && counts.FWD < required.FWD)) break;
++    let best: T | null = null;
++    let bestAdvance = -1;
++    for (const candidate of out) {
++      if (candidate.unit !== "MID") continue;
++      const advance = advanceFor(candidate.espnPosition);
++      if (advance > bestAdvance) {
++        bestAdvance = advance;
++        best = candidate;
++      }
++    }
++    // Only a genuinely advanced role is promoted — a plain CM stays a CM.
++    if (!best || bestAdvance < 2) break;
++    const promoted = best;
++    out = out.map((candidate) => (candidate === promoted ? ({ ...candidate, unit: "FWD" } as T) : candidate));
++  }
++  return out;
++}
++
++/**
++ * A published XI placed on the pitch: the rows it is drawn on, and who stands
++ * in each slot.
++ */
++export interface PlacedXI<T> {
++  rows: PitchRow[];
++  /** Row-major, one entry per slot; a null slot is a hole in the shape. */
++  slots: Array<Array<T | null>>;
++}
++
++/**
++ * Place a PUBLISHED XI: the team's own shape when the XI fits it after
++ * rebalancing, otherwise one band per unit, sized to what the XI contains.
++ *
++ * The fallback is what keeps the promise that a leaked or partial lineup still
++ * shows every player it has — assuming a 4-3-3 for a five-man midfield is how
++ * two starters went missing.
++ *
++ * Rows and placement come back together on purpose: the rebalance changes the
++ * units, so a caller that took the rows and dealt the original squad itself
++ * would draw the very hole this function exists to close.
++ */
++export function placePublishedXI<T extends SlotCandidate>(formationId: string, candidates: T[]): PlacedXI<T> {
++  const known = isValidFormationId(formationId);
++  const squad = known ? balanceForFormation(formationId, candidates) : candidates;
++  const counts = unitCounts(squad);
++  const required = known ? requiredUnits(formationId) : null;
++  const rows =
++    required && UNITS.every((unit) => counts[unit] === required[unit])
++      ? pitchRows(formationId)
++      : pitchRowsFromUnits(counts);
++  return { rows, slots: fillRows(rows, squad) };
++}
++
++/**
++ * Pitch rows built from what an XI actually contains — the fallback for a
++ * published lineup whose shape ESPN left blank or sent in a form the catalogue
++ * doesn't carry. One row per unit (attack at the top, keeper last), sized to
++ * the squad, so every starter is drawn instead of the extras being dropped as
++ * they would be if a 4-3-3 were assumed for a five-man midfield.
++ */
++export function pitchRowsFromUnits(counts: Record<Unit, number>): PitchRow[] {
++  const rows: PitchRow[] = [];
++  for (const unit of ["FWD", "MID", "DEF"] as Unit[]) {
++    const size = Math.max(0, counts[unit]);
++    if (size > 0) rows.push({ unit, size, goal: false });
++  }
++  if (counts.GK > 0) rows.push({ unit: "GK", size: counts.GK, goal: true });
++  return rows;
++}
++
+ /** Squad list order: unit, then across the pitch, then shirt number. */
+ export function compareSquad(a: SlotCandidate, b: SlotCandidate): number {
+   const unit = UNIT_ORDER[a.unit] - UNIT_ORDER[b.unit];
+diff --git a/src/lib/timelineScore.ts b/src/lib/timelineScore.ts
+new file mode 100644
+index 0000000..c60ab47
+--- /dev/null
++++ b/src/lib/timelineScore.ts
+@@ -0,0 +1,61 @@
++/**
++ * The running score a goal event happened at.
++ *
++ * A goal row on its own says "Goal — Cole Palmer" and nothing else; the score
++ * it produced is what a fan actually reads the timeline for. The feed carries
++ * no per-event score, but it does carry every goal in order with the team that
++ * scored it (`timeline_events.team_id`, the same column the goal alerts credit
++ * a scorer from — see `queueGoalAlerts`), so the score is a prefix count.
++ *
++ * Pure and order-dependent on purpose: the API sorts by `minute_seconds ASC`,
++ * and the walk credits each goal to whichever side the event names. A goal with
++ * no `team_id` (ESPN omits it on some payloads) leaves the tally untouched
++ * rather than guessing a side — the timeline is honest about what it knows.
++ */
++
++/** The fields the walk reads; `TimelineEvent` satisfies this shape. */
++export interface ScoredTimelineEvent {
++  id: string;
++  type: string;
++  teamId: string | null;
++}
++
++export interface Score {
++  home: number;
++  away: number;
++}
++
++export interface RunningScore {
++  /** Event id → the score as it stood *after* that goal. */
++  byGoal: Map<string, Score>;
++  /** Goals credited to each side by the walk. */
++  home: number;
++  away: number;
++}
++
++/**
++ * Walk a chronological timeline and return the score after each goal.
++ * Non-goal events are skipped; every goal gets an entry so the caller can
++ * render the score next to it without guessing.
++ */
++export function runningScore(
++  events: ScoredTimelineEvent[],
++  homeTeamId: string,
++  awayTeamId: string,
++): RunningScore {
++  const byGoal = new Map<string, Score>();
++  let home = 0;
++  let away = 0;
++  for (const event of events) {
++    if (event.type !== "goal") continue;
++    if (event.teamId === homeTeamId) home += 1;
++    else if (event.teamId === awayTeamId) away += 1;
++    byGoal.set(event.id, { home, away });
++  }
++  return { byGoal, home, away };
++}
++
++/** "2–1" — the app's scoreline separator (see the TeamPage fixture rows). */
++export function formatScore(score: Score): string {
++  return `${score.home}–${score.away}`;
++}
+diff --git a/src/lib/zones.ts b/src/lib/zones.ts
+index ff4f16b..54fe756 100644
+--- a/src/lib/zones.ts
++++ b/src/lib/zones.ts
+@@ -29,6 +29,26 @@ export function cellCenter(gridX: number, gridY: number): { x: number; y: number
+   };
+ }
+ 
++/**
++ * The grid cell an ESPN field position falls in — the inverse of `cellCenter`,
++ * mirroring `cellFromFieldPosition` in server/scoring/shotGrid.ts. This is what
++ * lets the live shot plot drop a real shot into the same 6×4 grid the Shot
++ * Predictor scores against, so "inside left" means the same cell on both
++ * screens. Out-of-range coordinates clamp into the grid instead of escaping it.
++ */
++export function cellFromFieldPosition(
++  fieldPositionX: number,
++  fieldPositionY: number,
++): { gridX: number; gridY: number } {
++  const clamp = (value: number, max: number) => Math.min(max - 1, Math.max(0, value));
++  const x = Math.min(100, Math.max(0, fieldPositionX));
++  const y = Math.min(100, Math.max(0, fieldPositionY));
++  const gridX = clamp(Math.floor(y / (100 / GRID_COLS)), GRID_COLS);
++  const rowsFromOwnEnd = clamp(Math.floor(x / (100 / GRID_ROWS)), GRID_ROWS);
++  // Rows count from the attacking end so the drawing matches the Predictor grid.
++  return { gridX, gridY: GRID_ROWS - 1 - rowsFromOwnEnd };
++}
++
+ /** Classify a field position into one of the 6 zones (server parity). */
+ export function zoneForFieldPosition(fieldPositionX: number, fieldPositionY: number): ShotZone {
+   const x = Math.min(100, Math.max(0, fieldPositionX));
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index a124074..b04767f 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -19,6 +19,7 @@ import { CommentaryPanel } from "../components/panels/CommentaryPanel";
+ import { CommentsSection } from "../components/panels/CommentsPanel";
+ import { adaptComments } from "../lib/adaptComments";
+ import { LineupsPanel } from "../components/panels/LineupsPanel";
++import { PitchView } from "../components/panels/PitchView";
+ import { PredictionsHub } from "../components/panels/PredictionsHub";
+ import { ChartIcon, ChevronRightIcon, StarIcon } from "../components/icons";
+ import {
+@@ -63,12 +64,27 @@ export default function MatchDetail() {
+     queryKey: ["match", id],
+     queryFn: () => api.getMatch(id),
+     enabled: Boolean(id),
++    // 20s while the match is in play: the server's live pulse rewrites the
++    // minute and score straight from ESPN every 15s, so anything slower left
++    // the header showing a clock minutes behind the game (the "not synced with
++    // time" report). Paused when the tab is in the background — a hidden tab
++    // holds the last good payload instead of spending the battery.
+     refetchInterval: (query) =>
+-      query.state.data?.match.status === "live" && !document.hidden ? 300_000 : false,
++      (query.state.data?.match.status === "live" || query.state.data?.match.status === "halftime") &&
++      !document.hidden
++        ? 20_000
++        : false,
+     refetchIntervalInBackground: false,
+   });
+   const match = matchQuery.data?.match;
+   const live = match?.status === "live";
++  /**
++   * Live OR the half-time break. The clock keeps moving INTO the break and the
++   * second half starts from it, so every refresh decision polls on this —
++   * polling on `live` alone left a match frozen on "HT" until the user
++   * touched the screen again.
++   */
++  const inPlay = live || match?.status === "halftime";
+   // Competition name for the header: big-five alias, else the catalog name
+   // (cups/tournaments), so a cup match never shows a raw "uefa.champions".
+   const leagueLabel = useCompetitionLabel(match?.league ?? "");
+@@ -295,13 +311,13 @@ export default function MatchDetail() {
+         {tab === "timeline" ? (
+           <TimelineTab
+             matchId={id}
+-            live={live}
++            live={inPlay}
+             minute={currentMinute}
+             myUserId={user?.id}
+             teams={[home, away]}
+           />
+         ) : null}
+-        {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
++        {tab === "stats" ? <StatsTab matchId={id} live={inPlay} home={home} away={away} /> : null}
+         {tab === "lineups" ? <LineupsTab matchId={id} home={home} away={away} /> : null}
+         {tab === "predict" ? <PredictionsHub matchId={id} /> : null}
+         {tab === "ratings" ? <RatingsTab matchId={id} live={live} league={match.league} /> : null}
+@@ -384,7 +400,11 @@ function TimelineTab({
+   const query = useQuery({
+     queryKey: ["timeline", matchId],
+     queryFn: () => api.getTimeline(matchId),
+-    refetchInterval: live ? 30_000 : false,
++    // 20s in play, and the SSE goal event invalidates this key outright, so a
++    // goal lands within a second of the server seeing it. The poll is the
++    // backstop for everything ESPN doesn't shout about (a corrected minute, a
++    // sub, a card).
++    refetchInterval: live ? 20_000 : false,
+   });
+   const events = query.data?.events ?? [];
+   const adapted = events.map(adaptTimelineEvent);
+@@ -424,6 +444,8 @@ function TimelineTab({
+         comments={comments}
+         liveMinute={live ? minute : undefined}
+         teamColor={teamColor}
++        homeTeamId={teams[0]?.id}
++        awayTeamId={teams[1]?.id}
+       />
+ 
+       <div className="mt-4">
+@@ -456,10 +478,13 @@ function TimelineTab({
+ 
+ function StatsTab({
+   matchId,
++  live,
+   home,
+   away,
+ }: {
+   matchId: string;
++  /** Refresh the shot plot while the match is in play. */
++  live: boolean;
+   home: {
+     id: string;
+     name: string;
+@@ -490,6 +515,8 @@ function StatsTab({
+ 
+   return (
+     <div className="space-y-3">
++      <PitchView matchId={matchId} live={live} home={home} away={away} />
++
+       <MatchPlayerTable title={home.shortName} color={home.color} rows={homeRows} />
+       <MatchPlayerTable title={away.shortName} color={away.color} rows={awayRows} />
+       {/* Match stats → season stats: the same cross-link pattern as the
+@@ -600,6 +627,12 @@ function LineupsTab({
+     name: String(r.full_name),
+     position: String(r.position ?? "MID") as "GK" | "DEF" | "MID" | "FWD",
+     number: typeof r.jersey_number === "number" ? r.jersey_number : 0,
++    // The pitch is only as good as these three: the face, the granular role
++    // that decides which side of a line a player stands on, and ESPN's slot for
++    // the leaked XIs that carry no role.
++    headshot: typeof r.headshot_url === "string" ? r.headshot_url : null,
++    espnPosition: typeof r.espn_position === "string" ? r.espn_position : null,
++    formationPlace: typeof r.formation_place === "string" ? r.formation_place : null,
+   });
+   const homeTeam: Team = {
+     id: home.id,
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 13e87d5..5ab800c 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -8,6 +8,7 @@ import {
+   EmptyState,
+   ErrorState,
+   Num,
++  PlayerAvatar,
+   SectionHeading,
+   Segmented,
+   TeamBadge,
+@@ -171,12 +172,18 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+                   key={player.id}
+                   className="flex items-center gap-3 rounded-card border border-line bg-surface p-2.5"
+                 >
+-                  <Num className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-[11px] text-ink-2">
+-                    {player.jersey ?? "–"}
+-                  </Num>
++                  {/* A face for every squad member: the ESPN headshot where the
++                      feed has one, the player's initials where it doesn't, on
++                      the same footprint either way. */}
++                  <PlayerAvatar name={localize(player.name)} src={player.headshot} size="md" />
+                   <span className="min-w-0 flex-1">
+-                    <span className="block truncate text-sm font-bold text-ink">{localize(player.name)}</span>
+-                    <span className="text-[11px] text-ink-3">
++                    <span className="flex items-baseline gap-1.5">
++                      <Num className="flex-none text-[10px] font-bold text-ink-3">{player.jersey ?? "–"}</Num>
++                      <span className="min-w-0 truncate text-sm font-bold text-ink">
++                        {localize(player.name)}
++                      </span>
++                    </span>
++                    <span className="block text-[11px] text-ink-3">
+                       {player.espnPosition ?? t(`pos.${player.position}`)}
+                       {player.appearances ? ` · ${t("team.appearances", { count: player.appearances })}` : ""}
+                     </span>
+diff --git a/src/types.ts b/src/types.ts
+index 46843f7..5d92c65 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -120,6 +120,14 @@ export interface LineupPlayer {
+    * predictor builds by hand, which then fall back to shirt-number order.
+    */
+   espnPosition?: string | null;
++  /**
++   * ESPN's 1..11 slot in the published shape — the tiebreaker that orders a
++   * line when the feed publishes no granular role. Absent for a predicted XI.
++   */
++  formationPlace?: string | null;
++  /** ESPN headshot URL; missing for some players, so every render falls back
++   *  to initials (`PlayerAvatar`). */
++  headshot?: string | null;
+   /** Set once the sub predictor resolves. */
+   subbedOff?: string;
+ }
+diff --git a/tests/formations.test.ts b/tests/formations.test.ts
+index 8f6a532..c01f4b3 100644
+--- a/tests/formations.test.ts
++++ b/tests/formations.test.ts
+@@ -8,15 +8,20 @@ import { strict as assert } from "node:assert";
+ import {
+   FORMATIONS,
+   XI_SIZE,
++  balanceForFormation,
+   compareSquad,
+   fillFormation,
++  fillRows,
+   getFormation,
+   isValidFormationId,
+   isValidXI,
+   lineUnits,
+   pitchRows,
++  pitchRowsFromUnits,
++  placePublishedXI,
+   requiredUnits,
+   slotRoleFor,
++  unitCounts,
+   unitTally,
+   type SlotCandidate,
+   type Unit,
+@@ -153,6 +158,15 @@ const c = (id: string, espnPosition: string | null, jersey: number | null, unit:
+   unit,
+ });
+ 
++/** Same candidate, but with ESPN's formation slot instead of a shirt number. */
++const p = (id: string, espnPosition: string | null, formationPlace: string, unit: Unit): SlotCandidate => ({
++  id,
++  espnPosition,
++  jersey: null,
++  unit,
++  formationPlace,
++});
++
+ /** The pitch draws attack at the top and the keeper's goal at the bottom. */
+ function testPitchRows(): void {
+   const rows = pitchRows("4-3-3");
+@@ -263,6 +277,190 @@ function testFillFormationPlacement(): void {
+   );
+ }
+ 
++/**
++ * The published-XI pitch draws from the shape ESPN sent, and from what the XI
++ * actually contains when ESPN sent no usable shape — the fallback exists so a
++ * leaked lineup still renders a full XI instead of an empty pitch.
++ */
++function testDerivedRows(): void {
++  assert.deepEqual(
++    pitchRowsFromUnits({ GK: 1, DEF: 4, MID: 3, FWD: 3 }).map((r) => `${r.unit}${r.size}`),
++    ["FWD3", "MID3", "DEF4", "GK1"],
++    "same draw order as a 4-3-3's own rows",
++  );
++  const fiveMid = pitchRowsFromUnits({ GK: 1, DEF: 4, MID: 5, FWD: 1 });
++  assert.deepEqual(
++    fiveMid.map((r) => `${r.unit}${r.size}`),
++    ["FWD1", "MID5", "DEF4", "GK1"],
++    "a five-man midfield keeps all five in one band",
++  );
++  assert.equal(fiveMid[fiveMid.length - 1].goal, true, "the keeper's row is still the goal line");
++  // A unit nobody plays in simply has no row — never an empty band on the pitch.
++  assert.deepEqual(
++    pitchRowsFromUnits({ GK: 1, DEF: 3, MID: 4, FWD: 0 }).map((r) => r.unit),
++    ["MID", "DEF", "GK"],
++    "no attack row for a squad with no forwards",
++  );
++}
++
++/** fillRows is fillFormation without the catalogue: same placement rules. */
++function testFillRows(): void {
++  const squad = [
++    c("gk", "G", 1, "GK"),
++    c("lb", "LB", 3, "DEF"),
++    c("cb1", "CB", 5, "DEF"),
++    c("rb", "RB", 2, "DEF"),
++    c("cm1", "CM", 8, "MID"),
++    c("cm2", "CM", 6, "MID"),
++    c("cm3", "CM", 10, "MID"),
++    c("st1", "ST", 9, "FWD"),
++    c("st2", "ST", 11, "FWD"),
++    c("st3", "ST", 7, "FWD"),
++  ];
++  const derived = pitchRowsFromUnits(unitCounts(squad));
++  assert.deepEqual(
++    fillRows(derived, squad)
++      .flat()
++      .filter(Boolean)
++      .map((p) => p.id),
++    ["st3", "st1", "st2", "cm2", "cm1", "cm3", "lb", "cb1", "rb", "gk"],
++    "drawn attack to keeper, left to right inside each line",
++  );
++  // Every player lands in exactly one slot.
++  const placed = fillRows(derived, squad).flat().filter(Boolean);
++  assert.equal(new Set(placed.map((x) => x.id)).size, placed.length, "nobody is drawn twice");
++}
++
++/**
++ * A published 4-3-3 arrives from ESPN as five midfielders and one forward —
++ * the wingers wear the MID unit. Drawn as-is, two starters vanish; the shape
++ * rebalance moves the advanced ones up front, where the shape has room.
++ */
++function testPublishedShape(): void {
++  const published433 = [
++    c("gk", "G", 1, "GK"),
++    c("lb", "LB", 3, "DEF"),
++    c("cb1", "CB", 5, "DEF"),
++    c("cb2", "CB", 4, "DEF"),
++    c("rb", "RB", 2, "DEF"),
++    c("cdm", "CDM", 6, "MID"),
++    c("cm1", "CM", 8, "MID"),
++    c("cm2", "CM", 10, "MID"),
++    c("lw", "LW", 11, "MID"),
++    c("rw", "RW", 7, "MID"),
++    c("st", "ST", 9, "FWD"),
++  ];
++
++  const drawn = placePublishedXI("4-3-3", published433);
++  assert.deepEqual(
++    drawn.rows.map((r) => `${r.unit}${r.size}`),
++    ["FWD3", "MID3", "DEF4", "GK1"],
++    "the named shape is used once the units are rebalanced",
++  );
++  const slots = drawn.slots;
++  const placed = slots.flat().filter(Boolean);
++  assert.equal(placed.length, 11, "every starter is on the pitch");
++  assert.deepEqual(
++    slots[0].map((p) => p?.id ?? "-"),
++    ["lw", "st", "rw"],
++    "the wide men stand in the front three, on their own sides",
++  );
++  assert.deepEqual(
++    slots[1].map((p) => p?.id ?? "-"),
++    ["cdm", "cm1", "cm2"],
++    "the central trio keeps the midfield band",
++  );
++
++  // A shape the XI already fits is left alone — no spurious promotions.
++  const balanced = balanceForFormation("4-2-3-1", [
++    c("cdm", "CDM", 6, "MID"),
++    c("cm", "CM", 8, "MID"),
++    c("lw", "LW", 11, "MID"),
++    c("am", "CAM", 10, "MID"),
++    c("rw", "RW", 7, "MID"),
++    c("st", "ST", 9, "FWD"),
++  ]);
++  assert.deepEqual(
++    unitCounts(balanced),
++    { GK: 0, DEF: 0, MID: 5, FWD: 1 },
++    "a 4-2-3-1's five midfielders stay midfielders",
++  );
++
++  // A plain central midfielder is never promoted, however many there are.
++  const allCentral = balanceForFormation("4-3-3", [
++    c("cm1", "CM", 8, "MID"),
++    c("cm2", "CM", 10, "MID"),
++    c("cm3", "CM", 6, "MID"),
++    c("cm4", "CM", 4, "MID"),
++  ]);
++  assert.deepEqual(unitCounts(allCentral).MID, 4, "no winger, nothing promoted");
++}
++
++/** Rows always hold every candidate, whatever the shape says. */
++function testPublishedRowsNeverDrop(): void {
++  for (const shape of ["", "nonsense", "4-3-3", "3-5-2", "4-2-3-1", "5-3-2"]) {
++    const squad = [
++      c("gk", "G", 1, "GK"),
++      c("lb", "LB", 3, "DEF"),
++      c("cb1", "CB", 5, "DEF"),
++      c("cb2", "CB", 4, "DEF"),
++      c("cb3", "CB", 15, "DEF"),
++      c("rb", "RB", 2, "DEF"),
++      c("cdm", "CDM", 6, "MID"),
++      c("cm", "CM", 8, "MID"),
++      c("lm", "LM", 11, "MID"),
++      c("rm", "RM", 7, "MID"),
++      c("st", "ST", 9, "FWD"),
++    ];
++    const counts = unitCounts(squad);
++    const required = requiredUnits("4-3-3");
++    const fitted = balanceForFormation("4-3-3", squad);
++    const drawn = placePublishedXI(shape, squad);
++    // The hand-made squad above never matches a catalogue shape exactly, so the
++    // derived rows are the ones that must survive.
++    assert.equal(
++      drawn.rows.reduce((a, r) => a + r.size, 0),
++      11,
++      `${shape}: 11 slots`,
++    );
++    assert.equal(
++      new Set(
++        drawn.slots
++          .flat()
++          .filter(Boolean)
++          .map((p) => p.id),
++      ).size,
++      11,
++      `${shape}: all eleven placed`,
++    );
++    assert.ok(counts.DEF === 5 && required.DEF === 4, "the fixture really is a mismatch");
++    assert.equal(unitCounts(fitted).DEF, 5, "defenders are never rearranged");
++  }
++}
++
++/** ESPN's formation slot orders a line when the feed has no granular roles. */
++function testFormationPlaceTiebreak(): void {
++  // Four plain defenders, slots 2-5: the slot decides the order, not the shirt.
++  const plain = fillFormation("4-3-3", [
++    p("d1", null, "2", "DEF"),
++    p("d2", null, "3", "DEF"),
++    p("d3", null, "4", "DEF"),
++    p("d4", null, "5", "DEF"),
++  ]);
++  assert.deepEqual(
++    plain[2].map((x) => x?.id ?? "-"),
++    ["d1", "d2", "d3", "d4"],
++    "formation slot is the tiebreaker once the side is resolved",
++  );
++  // A granular role still outranks the slot: the left-back stays left.
++  const mixed = fillFormation("4-3-3", [
++    c("lb", "LB", 66, "DEF"),
++    { ...p("others", null, "2", "DEF"), jersey: 4 },
++    { ...p("other2", null, "3", "DEF"), jersey: 5 },
++  ]);
++  assert.equal(mixed[2][0]?.id, "lb", "a real left-back keeps the left slot");
++}
++
+ /** The squad list reads in the same order the pitch does. */
+ function testCompareSquad(): void {
+   const sorted = [
+@@ -289,8 +487,13 @@ export function runFormationTests(): void {
+   testUnitTally();
+   testSlotRoles();
+   testPitchRows();
++  testDerivedRows();
++  testPublishedShape();
++  testPublishedRowsNeverDrop();
+   testFillLine();
++  testFillRows();
+   testFillFormationPlacement();
++  testFormationPlaceTiebreak();
+   testCompareSquad();
+   console.log(`  formations: ${FORMATIONS.length} shapes, unit mapping, XI rules, slot placement OK`);
+ }
+diff --git a/tests/run.ts b/tests/run.ts
+index edecf07..d3f3d9f 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -45,6 +45,7 @@ import { runModerationTests } from "./moderation.test.js";
+ import { runErrorsTests } from "./errors.test.js";
+ import { runAdsgramTests } from "./adsgram.test.js";
+ import { runBotMenuTests } from "./botMenu.test.js";
++import { runTimelineScoreTests } from "./timelineScore.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -92,6 +93,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["errors", runErrorsTests],
+   ["adsgram", runAdsgramTests],
+   ["botMenu", runBotMenuTests],
++  ["timelineScore", runTimelineScoreTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+diff --git a/tests/shotGrid.test.ts b/tests/shotGrid.test.ts
+index 0a425ba..e978455 100644
+--- a/tests/shotGrid.test.ts
++++ b/tests/shotGrid.test.ts
+@@ -7,6 +7,7 @@
+ import { strict as assert } from "node:assert";
+ import { GRID_COLS, GRID_ROWS, cellFromFieldPosition, cellCenter } from "../server/scoring/shotGrid.js";
+ import { zoneForFieldPosition, SHOT_ZONES } from "../server/scoring/shotZones.js";
++import { cellFromFieldPosition as clientCell } from "../src/lib/zones.js";
+ 
+ type Cell = { gridX: number; gridY: number };
+ 
+@@ -48,6 +49,20 @@ function testCellCenters() {
+   assert.ok(far.y > 80, "last column centre near the right edge");
+ }
+ 
++/**
++ * The client mirrors this geometry (`src/lib/zones.ts`), because the live shot
++ * plot drops real ESPN coordinates into the same grid the Shot Predictor is
++ * scored against. A drift here would put a goal in one cell and score the pick
++ * in another, so the two are compared cell-for-cell across the whole range.
++ */
++function testClientParity() {
++  for (let x = -20; x <= 120; x += 2.5) {
++    for (let y = -20; y <= 120; y += 2.5) {
++      assert.deepEqual(clientCell(x, y), cells(x, y), `client grid matches server at (${x},${y})`);
++    }
++  }
++}
++
+ /** Zone classification: the box edge and the width thirds (shotZones.ts). */
+ function testZones() {
+   assert.equal(SHOT_ZONES.length, 6, "exactly six zones");
+@@ -69,6 +84,7 @@ export function runShotGridTests(): void {
+   testBounds();
+   testQuadrants();
+   testCellCenters();
++  testClientParity();
+   testZones();
+-  console.log("  shotGrid: grid mapping, cell centres and zone classification OK");
++  console.log("  shotGrid: grid mapping, client parity, cell centres and zone classification OK");
+ }
+diff --git a/tests/timelineScore.test.ts b/tests/timelineScore.test.ts
+new file mode 100644
+index 0000000..5775ffe
+--- /dev/null
++++ b/tests/timelineScore.test.ts
+@@ -0,0 +1,74 @@
++/**
++ * The timeline's running score (`src/lib/timelineScore.ts`). What matters is
++ * that the score beside a goal is a count of the goals BEFORE it, credited to
++ * the side the event names — an off-by-one or a flipped side would print a
++ * wrong scoreline next to a real goal, which is worse than printing none.
++ */
++import { strict as assert } from "node:assert";
++import { formatScore, runningScore, type ScoredTimelineEvent } from "../src/lib/timelineScore.js";
++
++const HOME = "359";
++const AWAY = "360";
++
++const goal = (id: string, teamId: string | null): ScoredTimelineEvent => ({
++  id,
++  type: "goal",
++  teamId,
++});
++const other = (id: string, type: string): ScoredTimelineEvent => ({ id, type, teamId: HOME });
++
++/** Each goal carries the score it produced, in home–away order. */
++function testWalk(): void {
++  const { byGoal, home, away } = runningScore(
++    [goal("g1", HOME), other("c1", "card"), goal("g2", AWAY), goal("g3", HOME)],
++    HOME,
++    AWAY,
++  );
++  assert.deepEqual(byGoal.get("g1"), { home: 1, away: 0 }, "opener is 1-0");
++  assert.deepEqual(byGoal.get("g2"), { home: 1, away: 1 }, "the reply levels it");
++  assert.deepEqual(byGoal.get("g3"), { home: 2, away: 1 }, "the winner");
++  assert.equal(byGoal.size, 3, "only goals get a score");
++  assert.equal(home, 2);
++  assert.equal(away, 1);
++}
++
++/** Non-goal events never enter the map, and no goals is an empty map. */
++function testNonGoals(): void {
++  const { byGoal, home, away } = runningScore(
++    [other("k1", "kickoff"), other("h1", "halftime"), other("f1", "fulltime")],
++    HOME,
++    AWAY,
++  );
++  assert.equal(byGoal.size, 0, "no goals, no scoreline");
++  assert.equal(home + away, 0);
++}
++
++/** A goal ESPN sent without a side leaves the tally alone rather than guessing. */
++function testUnknownSide(): void {
++  const { byGoal, home, away } = runningScore([goal("g1", HOME), goal("g2", null)], HOME, AWAY);
++  assert.deepEqual(byGoal.get("g1"), { home: 1, away: 0 });
++  assert.deepEqual(byGoal.get("g2"), { home: 1, away: 0 }, "an unattributed goal adds nothing");
++  assert.equal(home, 1);
++  assert.equal(away, 0);
++}
++
++/** A team id that belongs to neither side changes nothing. */
++function testForeignTeam(): void {
++  const { byGoal } = runningScore([goal("g1", "999")], HOME, AWAY);
++  assert.deepEqual(byGoal.get("g1"), { home: 0, away: 0 });
++}
++
++/** The scoreline reads the way the app prints fixture results. */
++function testFormat(): void {
++  assert.equal(formatScore({ home: 3, away: 0 }), "3–0");
++  assert.equal(formatScore({ home: 0, away: 0 }), "0–0");
++}
++
++export function runTimelineScoreTests(): void {
++  testWalk();
++  testNonGoals();
++  testUnknownSide();
++  testForeignTeam();
++  testFormat();
++  console.log("  timelineScore: goal-by-goal running score, unattributed goals, format OK");
++}
+-- 
+2.54.0.windows.1
+

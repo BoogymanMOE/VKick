@@ -1,0 +1,29 @@
+From 205e15ec3d18035903abd20d550b9ea2ab9e7c7c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 01:34:11 +0330
+Subject: [PATCH 204/230] =?UTF-8?q?fix(dateStrip):=20even=20calendar=20but?=
+ =?UTF-8?q?ton=20spacing=20=E2=80=94=20matches=20inter-chip=20gap?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/DateStrip.tsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index 0256370..d5eb500 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -160,7 +160,7 @@ export function DateStrip({
+             onOpenCalendar();
+           }}
+           aria-label={t("calendar.open")}
+-          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96] me-[var(--space-page-x,16px)]"
++          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96] ms-1 me-[var(--space-page-x,16px)]"
+         >
+           <CalendarIcon className="h-5 w-5" />
+         </button>
+-- 
+2.54.0.windows.1
+

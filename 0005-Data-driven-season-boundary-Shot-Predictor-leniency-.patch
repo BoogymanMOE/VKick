@@ -1,0 +1,460 @@
+From 977a6256667ca76203b8775e05ef618387287135 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 02:47:23 +0330
+Subject: [PATCH 005/230] Data-driven season boundary; Shot Predictor leniency
+ rules pinned as spec
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Season (scoring-rules.md §8):
+- new activeSeason() in server/scoring/season.ts: the active label follows
+  the most recent tracked-league kickoff — summer gap keeps the finished
+  season's boards open, label flips at the new season's first kickoff,
+  future fixtures never flip it early; calendar Aug–May stays as fallback
+- ledger award() stamps, leaderboard reads and streak rows all use it;
+  currentSeasonLabel kept for cosmetic stat-table fallbacks
+- tests/season.test.ts: label mapping, the summer-gap case where data and
+  calendar disagree, first-kickoff flip, award season stamps, and the
+  synthetic-boundary streak roll the roadmap asked for
+
+Shot Predictor (scoring-rules.md §3):
+- formula was locked; leniency now pinned as executable spec: lenientSoT
+  scores exactly +2 with no located shots, adjacency-only pays exactly the
+  zone points; scoring-rules.md documents lenientSoT/zoneFromFallback as
+  locked behavior instead of agent caveats
+
+Docs: roadmap Phase 2/4 boxes ticked; README not-started list updated.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ CHANGELOG.md                  |  16 +++++
+ README.md                     |   1 -
+ roadmap.md                    |   4 +-
+ scoring-rules.md              |   9 ++-
+ server/routes/leaderboards.ts |   8 ++-
+ server/scoring/ledger.ts      |  19 ++++--
+ server/scoring/season.ts      |  56 ++++++++++++++++
+ server/scoring/streak.ts      |   5 +-
+ tests/predictionScore.test.ts |  19 ++++++
+ tests/season.test.ts          | 118 +++++++++++++++++++++++++++++++++-
+ 10 files changed, 238 insertions(+), 17 deletions(-)
+ create mode 100644 server/scoring/season.ts
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 19fc4fc..ac22f6c 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -61,6 +61,22 @@
+   instead of the removed My Teams screen; the not-started list reflects that
+   the inline Adsgram Task card is live (Tapsell was the old plan); the API
+   surface section names both bearer-token families and the favorites caps.
++- **Season boundary is data-driven (scoring-rules.md §8).** New
++  `activeSeason()` (`server/scoring/season.ts`): the active label follows the
++  most recent tracked-league kickoff, so the season closes when the last
++  tracked league finishes and opens at the next one's first kickoff — not on
++  Aug 1. Summer internationals keep scoring into the finished season's boards;
++  future fixtures never flip the label early. Ledger stamps, leaderboard
++  reads and streak rows all use it; `tests/season.test.ts` pins the
++  summer-gap case where the data rule and the calendar disagree, the flip,
++  award stamps, and the synthetic-boundary streak roll.
++- **Shot Predictor formula finalized with pinned leniency tests.** The
++  formula was locked (exact 5 / adjacent 2 / +2 SoT / +5 goal, best single
++  shot pays); the two leniency rules are now pinned as executable spec —
++  `lenientSoT` scores **exactly +2** when no located shot exists, and the
++  adjacency-only path pays exactly the zone points — and `scoring-rules.md`
++  §3 documents both flags (`lenientSoT`, `zoneFromFallback`) as locked
++  behavior rather than agent caveats.
+ 
+ ### Tooling & performance
+ 
+diff --git a/README.md b/README.md
+index 5b928f8..94b23b7 100644
+--- a/README.md
++++ b/README.md
+@@ -106,7 +106,6 @@ Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by mi
+ - Referral mechanics (Phase 4)
+ - Full bracket tree for cups — round groupings exist (`matches.round` from ESPN notes, grouped on the Cups screen), but not a connected knockout tree
+ - League tables for a followed league outside the big five — the tabs (`LEAGUE_TABS`) and `syncStandings()` are big-five only
+-- Season boundary driven by the last tracked league finishing, rather than the calendar year, and a test for it
+ 
+ (Ads: the inline **Adsgram Task card is live** on Matchday and Match detail — Telegram-only, and off entirely unless `VITE_ADSGRAM_TASK_BLOCK_ID` is set (`src/lib/ads.ts`). Rewarded/interstitial formats are deliberately unused.)
+ 
+diff --git a/roadmap.md b/roadmap.md
+index 75a5829..d27eb5b 100644
+--- a/roadmap.md
++++ b/roadmap.md
+@@ -52,7 +52,7 @@ Concept: `concept.md`. Mechanics: `prediction-mechanics.md`. Scoring: `scoring-r
+ - [x] Tiebreaker: `reached_total_at` recorded at award time; rank level totals by who got there first.
+ - [x] Public, browsable board screens (`src/pages/Leaderboards.tsx`) over three no-auth endpoints (global / league / club). Identity is the unique `@username` (display name only as fallback, since names collide on a public board); the caller's own row is flagged `is_you` and highlighted.
+ - [x] Season **scoping**: every ledger and totals row carries `scope_season` and reads filter on `currentSeasonLabel()`, and `rollSeasonIfNeeded()` resets a user's streak when their row carries the previous label — so the three views move together.
+-- [ ] **Season boundary exactly as specified** — "closes when the last tracked league finishes". What exists is a calendar rule (Aug–May European year), not a rule driven by the final tracked league's last fixture, and it has no test. See Phase 4.
++- [x] **Season boundary exactly as specified** — "closes when the last tracked league finishes". `activeSeason()` (`server/scoring/season.ts`) derives the label from the most recent tracked-league kickoff: the summer gap keeps the finished season's boards open, and the label flips at the new season's first tracked kickoff, not on a calendar date. Ledger stamps, board reads and streak rows all use it; covered by `tests/season.test.ts` (summer-gap disagreement with the calendar, first-kickoff flip, award stamps, synthetic-boundary streak roll).
+ - [x] Transparent "why did I get X" breakdown panel: `src/pages/Predictions.tsx` over `GET /api/me/predictions`, rendering the resolver's own stored `breakdown` line items (`src/lib/breakdown.ts`), including the Shot Predictor's `zoneFromFallback` and `lenientSoT` leniency flags.
+ 
+ **Exit criteria met:** predictions resolve correctly after a real matchday and the three boards update; a user can find themselves on all three.
+@@ -89,7 +89,7 @@ Concept: `concept.md`. Mechanics: `prediction-mechanics.md`. Scoring: `scoring-r
+ - [ ] Ad integration (Tapsell) at natural break points — post-pick onboarding, league tables, post-match reveal — never mid-match.
+ - [ ] Referral/invite mechanic: share your club/league picks or a leaderboard link (likely the primary growth channel).
+ - [ ] Bug bash / stability pass across the full loop (onboard → predict → live match → rate → check rank). `npm test` covers the pure logic (scoring, grid, formations, normalization, migrations, password) but nothing exercises the live loop end to end.
+-- [ ] Leaderboard season-reset tested against a synthetic boundary. Nothing in `tests/` covers the season rollover today.
++- [x] Leaderboard season-reset tested against a synthetic boundary — `tests/season.test.ts` inserts the finished season's last fixture and the new season's opener and drives `rollSeasonIfNeeded` across the flip; the Shot Predictor's leniency rules (`lenientSoT` exact-+2 cap, adjacency-only) are pinned in `tests/predictionScore.test.ts`.
+ 
+ **Exit criteria:** a stranger could sign up via a shared Telegram link and understand what to do within a minute or two, unassisted.
+ 
+diff --git a/scoring-rules.md b/scoring-rules.md
+index 5616715..2e6f09b 100644
+--- a/scoring-rules.md
++++ b/scoring-rules.md
+@@ -110,7 +110,12 @@ One player, one zone on the 6-zone pitch grid. Zones are left/center/right × in
+ - The scored shot a goal: **+5**
+ - Max **12** (exact + on target + goal). Player recorded no shots: 0.
+ 
+-**Data caveats (for the agent):** ESPN publishes shot coordinates almost exclusively on *goal* events (and only in some leagues). Therefore: (a) zone points need a *located* shot — goals always qualify; (b) the +2 on-target bonus is awarded **leniently from the stat sheet** whenever the picked player recorded ≥1 shot on target (`match_player_stats.shots_on_target`) even if no located shot exists — in that case the pick scores exactly +2. Shot attribution to the picked player uses event participants; if none match (older sync data), the match's located shots are used as a lenient fallback rather than voiding picks.
++**Leniency rules (locked):** ESPN publishes shot coordinates almost exclusively on *goal* events (and only in some leagues), so two leniency rules are part of the final formula, both flagged in the `breakdown` so the "why did I get X" panel shows when they fired:
++
++- `lenientSoT` — the +2 on-target bonus is awarded **from the stat sheet** whenever the picked player recorded ≥1 shot on target (`match_player_stats.shots_on_target`), independent of zone outcomes. With no located shot at all, the pick scores **exactly +2** — no zone or goal points can stack on the pure-tally path.
++- `zoneFromFallback` — shot attribution uses event participants; if none match (older sync data), the match's located shots are used as a lenient fallback rather than voiding picks. The flag records that the score came from a teammate's located shot, not the picked player's own.
++
++Neither flag adds points by itself; they exist so adjudication is transparent and revisitable.
+ 
+ ### 4. Player to Watch
+ 
+@@ -165,7 +170,7 @@ Every award appends one immutable `point_ledger` row (source = `prediction` or `
+ 
+ **Tiebreaker:** level totals rank by whoever reached that total first. Each totals row stores `reached_total_at` — the ledger timestamp of the award that pushed the user to that exact total, written at award time and never recomputed.
+ 
+-**Season boundary:** opens when the first tracked league starts, closes when the last finishes; all three views (and streak state) reset together. Implemented via the season label on every totals/streak row (e.g. `2026-27`).
++**Season boundary:** opens when the first tracked league kicks off, closes when the last one finishes — implemented **data-driven**, not by a calendar date: the active label is the Aug–May label of the most recent tracked-league match whose kickoff has passed (`activeSeason()` in `server/scoring/season.ts`). A summer gap therefore keeps the finished season's boards readable (summer internationals score into them), and the label flips exactly at the new season's first tracked kickoff — future-dated fixtures never flip it early. Fresh databases fall back to the calendar label. All three views (and streak state) reset together via the season label on every totals/streak row (e.g. `2026-27`); `rollSeasonIfNeeded` does the streak reset lazily. Pinned by `tests/season.test.ts` against a synthetic boundary.
+ 
+ **The ratings firewall:** the 3-card rating system and comments are cosmetic/social only. No code path from `crowd_ratings` or `timeline_comments` reaches the ledger — only prediction resolutions and streak bonuses append to it. The Player to Watch crowd *gate* reads rating averages but never writes points from them. A test (`tests/predictionScore.test.ts`) pins that ratings produce no ledger rows.
+ 
+diff --git a/server/routes/leaderboards.ts b/server/routes/leaderboards.ts
+index 8024a3f..4c9cd3c 100644
+--- a/server/routes/leaderboards.ts
++++ b/server/routes/leaderboards.ts
+@@ -11,7 +11,8 @@
+  */
+ import express, { type Request } from "express";
+ import { getDb, get } from "../db/index.js";
+-import { readLeaderboard, readViewerRank, currentSeasonLabel } from "../scoring/ledger.js";
++import { readLeaderboard, readViewerRank } from "../scoring/ledger.js";
++import { activeSeason } from "../scoring/season.js";
+ import { verifyInitData, verifyDevToken } from "../telegram/verify.js";
+ import { botToken, devSecret } from "./shared.js";
+ 
+@@ -56,7 +57,10 @@ function optionalViewerId(req: Request): number | undefined {
+ 
+ function boardPayload(scope: string, req: Request) {
+   const viewerId = optionalViewerId(req);
+-  const season = currentSeasonLabel();
++  // Data-driven season (scoring-rules.md §8): the label follows the most
++  // recent tracked-league kickoff, so boards close when the last league
++  // finishes and open at the next one's first kickoff — not on a calendar date.
++  const season = activeSeason(db);
+   return {
+     board: readLeaderboard(db, scope, season, LEADERBOARD_LIMIT, viewerId).map((r) => ({
+       rank: r.rank,
+diff --git a/server/scoring/ledger.ts b/server/scoring/ledger.ts
+index 78f382d..b089fc1 100644
+--- a/server/scoring/ledger.ts
++++ b/server/scoring/ledger.ts
+@@ -19,12 +19,16 @@
+  */
+ import type { DatabaseSync } from "node:sqlite";
+ import { all, get, run, tx } from "../db/index.js";
++import { activeSeason, seasonLabelForDate } from "./season.js";
+ 
+-/** Season label mirroring sync/service.ts's currentSeason() (Aug–May European year). */
++/**
++ * Calendar label (Aug–May European year) — the FALLBACK the data-driven
++ * boundary (activeSeason, server/scoring/season.ts) rests on: fresh databases
++ * and stat-table displays with no season rows yet. Scoring stamps and board
++ * reads use activeSeason; keep this exported for those cosmetic fallbacks.
++ */
+ export function currentSeasonLabel(now: Date = new Date()): string {
+-  const y = now.getUTCFullYear();
+-  const startYear = now.getUTCMonth() >= 7 ? y : y - 1;
+-  return `${startYear}-${String(startYear + 1).slice(2)}`;
++  return seasonLabelForDate(now);
+ }
+ 
+ export type LedgerSource = "prediction" | "streak_bonus";
+@@ -74,7 +78,10 @@ export function award(db: DatabaseSync, input: AwardInput): number | null {
+     // would lie about when the user reached their current total.
+     return null;
+   }
+-  const season = input.season ?? currentSeasonLabel();
++  // Season stamp: the DATA-driven boundary (scoring-rules.md §8 — the season
++  // closes when the last tracked league finishes and opens at the next one's
++  // first kickoff), not a calendar date. An explicit input.season wins.
++  const season = input.season ?? activeSeason(db);
+   const awardedAt = new Date().toISOString();
+ 
+   try {
+@@ -149,7 +156,7 @@ function bumpTotal(
+  * their favorite club plays. Call this when a favorite-club match resolves.
+  */
+ export function rollSeasonIfNeeded(db: DatabaseSync, userId: number): string {
+-  const season = currentSeasonLabel();
++  const season = activeSeason(db);
+   const row = get<{ scope_season: string }>(db, "SELECT scope_season FROM user_streaks WHERE user_id = ?", [
+     userId,
+   ]);
+diff --git a/server/scoring/season.ts b/server/scoring/season.ts
+new file mode 100644
+index 0000000..0ff1a71
+--- /dev/null
++++ b/server/scoring/season.ts
+@@ -0,0 +1,56 @@
++/**
++ * Season boundary (scoring-rules.md §8) — the data-driven label.
++ *
++ * The spec: a season "opens when the first tracked league starts, closes when
++ * the last finishes". A fixed calendar date (Aug 1) can't express that — a
++ * season that runs late, or an early-starting next season, would flip the
++ * label while football says otherwise. So the ACTIVE season label follows the
++ * data: it is the Aug–May label of the most recent tracked-league match whose
++ * kickoff has passed.
++ *
++ * Consequences (both intended):
++ *  - During the summer gap the finished season's label persists, so summer
++ *    internationals keep scoring into the boards that just closed, and no
++ *    empty "new season" board appears before any football is played.
++ *  - The label flips at the new season's first tracked kickoff — the moment
++ *    the season actually "opens" — even if that is weeks off the calendar
++ *    date, and future-dated fixtures never flip it early.
++ *
++ * Tracked = the big five domestic leagues (scoring-rules.md "tracked
++ * league"; cups and internationals inherit the label of the season they sit
++ * inside rather than driving it). Falls back to the calendar label when the
++ * data can't answer: a fresh database, no tracked matches yet, or a schema
++ * without kickoff_at (minimal test mirrors).
++ */
++import type { DatabaseSync } from "node:sqlite";
++import { get } from "../db/index.js";
++import { LEAGUES } from "../espn/types.js";
++
++/** The Aug–May European-year label for a moment ("2026-27"). */
++export function seasonLabelForDate(now: Date): string {
++  const y = now.getUTCFullYear();
++  const startYear = now.getUTCMonth() >= 7 ? y : y - 1;
++  return `${startYear}-${String(startYear + 1).slice(2)}`;
++}
++
++const TRACKED_PLACEHOLDERS = LEAGUES.map(() => "?").join(", ");
++
++/**
++ * The season the scoring tables are currently open for (leaderboards, ledger
++ * stamps, streak rows). Pure read — never mutates anything.
++ */
++export function activeSeason(db: DatabaseSync, now: Date = new Date()): string {
++  try {
++    const row = get<{ kickoff_at: string }>(
++      db,
++      `SELECT kickoff_at FROM matches
++       WHERE league IN (${TRACKED_PLACEHOLDERS}) AND kickoff_at IS NOT NULL AND kickoff_at <= ?
++       ORDER BY kickoff_at DESC LIMIT 1`,
++      [...LEAGUES, now.toISOString()],
++    );
++    if (row?.kickoff_at) return seasonLabelForDate(new Date(row.kickoff_at));
++  } catch {
++    /* schema without kickoff_at (minimal test mirrors) — calendar fallback */
++  }
++  return seasonLabelForDate(now);
++}
+diff --git a/server/scoring/streak.ts b/server/scoring/streak.ts
+index de88f53..a92dc26 100644
+--- a/server/scoring/streak.ts
++++ b/server/scoring/streak.ts
+@@ -20,7 +20,8 @@
+  */
+ import type { DatabaseSync } from "node:sqlite";
+ import { get, run, tx } from "../db/index.js";
+-import { award, rollSeasonIfNeeded, currentSeasonLabel } from "./ledger.js";
++import { award, rollSeasonIfNeeded } from "./ledger.js";
++import { activeSeason } from "./season.js";
+ import { POINTS, updateStreak, type StreakState } from "./predictionScore.js";
+ 
+ interface StreakRow {
+@@ -201,7 +202,7 @@ function evaluateStreakSync(
+       JSON.stringify(update.state.thresholdsPaid),
+       update.state.lastMatchId,
+       update.state.active,
+-      currentSeasonLabel(),
++      activeSeason(db),
+       new Date().toISOString(),
+     ],
+   );
+diff --git a/tests/predictionScore.test.ts b/tests/predictionScore.test.ts
+index f44a014..321b915 100644
+--- a/tests/predictionScore.test.ts
++++ b/tests/predictionScore.test.ts
+@@ -203,6 +203,25 @@ function testShotPredict() {
+     counts: { shots: 2, shotsOnTarget: 0 },
+   });
+   assert.equal(offTargetInZone.points, 5, "exact zone, off-target shot = zone points only");
++
++  // Lenient SoT ALONE pays exactly +2 (scoring-rules.md §3: no located shots
++  // at all, but the stat sheet shows ≥1 on target — "the pick scores exactly
++  // +2"). No zone or goal points can stack on top of the pure tally path.
++  const tallyOnly = scoreShotPredict("inside_center", {
++    locatedShots: [],
++    counts: { shots: 2, shotsOnTarget: 1 },
++  });
++  assert.equal(tallyOnly.points, 2, "lenient SoT with no located shots = exactly +2");
++  assert.equal(tallyOnly.status, "partial");
++  assert.equal(tallyOnly.breakdown.lenientSoT, 1, "the breakdown flags the pure-tally path");
++
++  // Adjacent zone with a zero SoT tally = exactly the zone points, nothing else.
++  const adjacentOnly = scoreShotPredict("inside_center", {
++    locatedShots: [{ kind: "on_target", fieldPositionX: 60, fieldPositionY: 50 }], // outside_center: adjacent
++    counts: { shots: 1, shotsOnTarget: 0 },
++  });
++  assert.equal(adjacentOnly.points, POINTS.shotZoneAdjacent, "adjacent zone, no tally = exactly +2");
++  assert.equal(adjacentOnly.breakdown.lenientSoT, 0);
+ }
+ 
+ /* ------------------------------------------------------------ watch */
+diff --git a/tests/season.test.ts b/tests/season.test.ts
+index 24c25aa..c146afc 100644
+--- a/tests/season.test.ts
++++ b/tests/season.test.ts
+@@ -13,7 +13,8 @@ import fs from "node:fs";
+ import os from "node:os";
+ import path from "node:path";
+ import { migrate } from "../server/db/schema.js";
+-import { currentSeasonLabel, rollSeasonIfNeeded } from "../server/scoring/ledger.js";
++import { currentSeasonLabel, rollSeasonIfNeeded, award } from "../server/scoring/ledger.js";
++import { activeSeason, seasonLabelForDate } from "../server/scoring/season.js";
+ 
+ interface StreakRow {
+   current: number;
+@@ -96,9 +97,122 @@ function testNoRow(): void {
+   assert.equal(count.n, 0, "rollSeasonIfNeeded never invents a streak row");
+ }
+ 
++/* -------------------------------------------- the data-driven boundary (§8) */
++
++/** Insert a match row; kickoff drives the boundary, status does not. */
++function addMatch(
++  db: DatabaseSync,
++  id: string,
++  kickoff: string,
++  league = "eng.1",
++  status = "finished",
++): void {
++  // The matches FKs need real team rows; make them idempotent per test.
++  const team = db.prepare(
++    "INSERT OR IGNORE INTO teams (id, name, league) VALUES (?, ?, ?)",
++  );
++  team.run("57", "Home FC", league === "fifa.world" ? "" : league);
++  team.run("64", "Away FC", league === "fifa.world" ? "" : league);
++  db.prepare(
++    `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status)
++     VALUES (?, ?, '57', '64', ?, ?)`,
++  ).run(id, league, kickoff, status);
++}
++
++/** The Aug–May mapping itself: Aug 1 flips, Jul 31 doesn't, January holds. */
++function testSeasonLabelForDate(): void {
++  assert.equal(seasonLabelForDate(new Date("2026-07-31T23:59:59Z")), "2025-26");
++  assert.equal(seasonLabelForDate(new Date("2026-08-01T00:00:00Z")), "2026-27");
++  assert.equal(seasonLabelForDate(new Date("2026-05-24T16:00:00Z")), "2025-26");
++  assert.equal(seasonLabelForDate(new Date("2026-12-31T00:00:00Z")), "2026-27");
++  assert.equal(seasonLabelForDate(new Date("2027-01-15T00:00:00Z")), "2026-27");
++}
++
++/**
++ * The rule the roadmap flagged as missing: the label is driven by the last
++ * tracked league's fixtures, not the calendar. Pinned against the exact case
++ * where the two disagree — the summer gap after Aug 1 with no new fixtures yet.
++ */
++function testActiveSeasonIsDataDriven(): void {
++  const db = tempDb();
++  const aug10 = new Date("2026-08-10T00:00:00Z");
++
++  // Fresh database: nothing to read — calendar fallback.
++  assert.equal(activeSeason(db, aug10), seasonLabelForDate(aug10));
++
++  // Last tracked match of the season: May 24. On Aug 10 the calendar rule
++  // would already say "2026-27"; the data rule keeps "2025-26" open until
++  // the new season actually kicks off.
++  addMatch(db, "m-last", "2026-05-24T16:00:00.000Z");
++  assert.equal(activeSeason(db, aug10), "2025-26", "summer gap keeps the finished season open");
++
++  // Non-tracked matches (summer internationals) never flip the label.
++  addMatch(db, "m-wc", "2026-07-05T16:00:00.000Z", "fifa.world");
++  assert.equal(activeSeason(db, aug10), "2025-26", "internationals inherit, never drive");
++
++  // The new season's first tracked kickoff IS the flip — and future fixtures
++  // appearing early don't flip it before kickoff.
++  addMatch(db, "m-new", "2026-08-22T11:30:00.000Z", "esp.1", "scheduled");
++  assert.equal(activeSeason(db, new Date("2026-08-21T00:00:00Z")), "2025-26", "no early flip");
++  assert.equal(activeSeason(db, new Date("2026-08-23T00:00:00Z")), "2026-27", "flips at first kickoff");
++}
++
++/** Awards stamp the ACTIVE season: a May fixture lands in the finished season even later. */
++function testAwardStampsActiveSeason(): void {
++  const db = tempDb();
++  const userId = addUser(db, "10", "Scorer");
++  addMatch(db, "m-may", "2026-05-24T16:00:00.000Z");
++
++  const ledgerId = award(db, {
++    userId,
++    matchId: "m-may",
++    source: "prediction",
++    mechanic: "lineup",
++    points: 5,
++    sourceId: 1,
++    league: "eng.1",
++    teamIds: ["57", "64"],
++  });
++  assert.ok(ledgerId !== null, "award recorded");
++  const row = db.prepare("SELECT scope_season FROM point_ledger WHERE id = ?").get(ledgerId) as {
++    scope_season: string;
++  };
++  assert.equal(row.scope_season, "2025-26", "a May fixture stamps the season it belongs to");
++}
++
++/**
++ * The synthetic boundary the roadmap asked for: a streak row stamped with the
++ * finished season resets the moment the new season's first tracked match has
++ * kicked off — verified against inserted fixtures, not the wall clock.
++ */
++function testRollAgainstSyntheticBoundary(): void {
++  const db = tempDb();
++  const userId = addUser(db, "11", "Boundary");
++  addMatch(db, "m-old", "2026-05-24T16:00:00.000Z");
++  addMatch(db, "m-new", "2026-08-22T11:30:00.000Z");
++  db.prepare(
++    `INSERT INTO user_streaks
++       (user_id, current, season_hits, thresholds_paid, last_match_id, streak_active, scope_season, updated_at)
++     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
++  ).run(userId, 7, 9, "[3,5]", "m-old", 1, "2025-26", "2026-01-01T00:00:00.000Z");
++
++  // With the new season's kickoff in the data, the active label is 2026-27.
++  assert.equal(activeSeason(db), "2026-27");
++  assert.equal(rollSeasonIfNeeded(db, userId), "2026-27", "rolls onto the data-driven label");
++  const row = streakOf(db, userId);
++  assert.equal(row.current, 0, "streak reset at the boundary");
++  assert.equal(row.scope_season, "2026-27");
++}
++
+ export function runSeasonTests(): void {
+   testRollsPreviousSeason();
+   testCurrentSeasonUntouched();
+   testNoRow();
+-  console.log("  season: previous-season streak reset, current-season no-op and no-row path OK");
++  testSeasonLabelForDate();
++  testActiveSeasonIsDataDriven();
++  testAwardStampsActiveSeason();
++  testRollAgainstSyntheticBoundary();
++  console.log(
++    "  season: previous-season streak reset, current-season no-op and no-row path, data-driven boundary (summer gap, first-kickoff flip, award stamps, synthetic roll) OK",
++  );
+ }
+-- 
+2.54.0.windows.1
+

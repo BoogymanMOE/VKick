@@ -1,0 +1,31 @@
+From f8b67bb4bd45e6998e9ae51113b9962365739acc Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 10 Oct 2026 20:12:07 +0330
+Subject: [PATCH 051/230] Stabilize isFavorite callback identity in
+ useFavorites
+
+Wrap the ids derivation in useMemo so the isFavorite callback identity
+no longer changes every render. This lets MatchCard's React.memo actually
+skip re-renders when the favorite set has not changed.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/hooks/useApi.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 6dd6d09..a3dce26 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -200,7 +200,7 @@ export function useFavorites() {
+   const teams = favoritesQuery.data?.teams ?? [];
+   const anchorId = favoritesQuery.data?.anchorId ?? null;
+ 
+-  const ids = teams.map((t) => t.id);
++  const ids = useMemo(() => teams.map((t) => t.id), [teams]);
+   const isFavorite = useCallback((teamId: string) => ids.includes(teamId), [ids]);
+ 
+   const add = useMutation({
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,114 @@
+From 023819be9375934bb3c1164dca0f656f4565f35c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 15:52:20 +0330
+Subject: [PATCH 015/230] Add a temporary auth probe to diagnose Telegram login
+ on a device
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Deliberately NO behavior change. verifyInitData currently deletes both
+`hash` and `signature` from the data-check-string, which contradicts the
+Telegram spec: the bot-token HMAC excludes only `hash`, while the
+signature is excluded solely on the separate Ed25519 third-party path.
+Two independent implementations agree (Telegram's own
+@telegram-apps/init-data-node splits validate/validate3rd that way;
+init-data-py documents HMAC_EXCLUDED={hash},
+ED25519_EXCLUDED={hash,signature} and cites the spec).
+
+1f4f420 changed this and claimed empirical confirmation "against a live
+bot token" — there was no such capture, and the change looks like the
+cause of real logins failing. That is a claim to settle with a device,
+not with more reading, so the probe is the next step.
+
+One line per /api/auth/guest call, reporting only booleans and initData
+KEY NAMES — never the initData string, hash, signature value or bot
+token. Field names are the whole point: whether the client sent
+`signature` decides which algorithm is correct.
+
+It replaces the previous failure-only line, which could not distinguish
+a successful Telegram login from no login at all. To be removed once a
+real phone login is confirmed.
+---
+ server/routes/auth.ts | 44 ++++++++++++++++++++++++++++++++++---------
+ 1 file changed, 35 insertions(+), 9 deletions(-)
+
+diff --git a/server/routes/auth.ts b/server/routes/auth.ts
+index c232e71..26fa0cc 100644
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -29,6 +29,39 @@ export const authRouter = express.Router();
+ 
+ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
+ 
++/* ---------------------------------------------------------------------------
++ * TEMP AUTH PROBE — delete this block and its one call site once a real
++ * Telegram client has been observed on a device.
++ *
++ * One line per /api/auth/guest call so a phone test is readable at a glance:
++ * was initData sent, did it verify, and did the user end up Telegram or a
++ * guest.
++ *
++ * It logs initData KEY NAMES and booleans only — never the initData string,
++ * never the hash, never the signature value, never the bot token. Field
++ * names are not secrets and are what actually matter here: whether the
++ * client sent `signature` decides which check-string algorithm is correct.
++ */
++function authProbeGuest(initData: string, verified: { ok: true } | { ok: false; reason: string } | null, outcome: "telegram" | "guest"): void {
++  const keys = initData
++    ? [...new URLSearchParams(initData).keys()].sort().join(",")
++    : "";
++  const hasSignature = initData ? new URLSearchParams(initData).has("signature") : false;
++  const verdict = !initData
++    ? "no-initData"
++    : !botToken()
++      ? "no-bot-token"
++      : !verified
++        ? "no-verdict"
++        : verified.ok
++          ? "pass"
++          : `fail(${verified.reason})`;
++  console.log(
++    `[auth:guest] PROBE initData=${initData ? "yes" : "no"} verify=${verdict} ` +
++      `signature=${hasSignature ? "yes" : "no"} outcome=${outcome} keys=[${keys}]`,
++  );
++}
++
+ /**
+  * Well-formed scrypt hash of a random secret, used ONLY to equalize login
+  * timing for unknown usernames (one scrypt verification either way). It
+@@ -123,15 +156,6 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
+   const initData = String(req.body?.initData ?? "");
+   const verified = initData && botToken() ? verifyInitData(initData, botToken()) : null;
+ 
+-  // A sent-but-unverified initData is the one auth outcome worth an ops line:
+-  // it means a Telegram user is about to become a guest (silent downgrade).
+-  // Successes and plain web guests stay silent — they are the normal paths.
+-  if (initData && !verified?.ok) {
+-    const reason =
+-      verified && !verified.ok ? verified.reason : botToken() ? "verify returned no verdict" : "no bot token configured";
+-    console.log(`[auth:guest] initData sent but NOT verified (falling back to guest) reason="${reason}"`);
+-  }
+-
+   // Telegram identity wins over the guest id, so reopening in the Mini App
+   // merges straight into the Telegram account instead of a second profile.
+   if (verified?.ok) {
+@@ -144,6 +168,7 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
+     // Same device previously used the web guest path: bring its data along.
+     mergeIfGuest(req, user);
+     const token = issueSession(user.id);
++    authProbeGuest(initData, verified, "telegram"); // TEMP AUTH PROBE
+     res.json({ ok: true, mode: "telegram", token, user: publicUser(user) });
+     return;
+   }
+@@ -156,6 +181,7 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
+   );
+   const user = existing ?? upsertUser(syntheticId, `Guest ${deviceId.slice(0, 4)}`);
+   const token = issueSession(user.id);
++  authProbeGuest(initData, verified, "guest"); // TEMP AUTH PROBE
+   res.json({ ok: true, mode: "session", token, user: publicUser(user) });
+ });
+ 
+-- 
+2.54.0.windows.1
+

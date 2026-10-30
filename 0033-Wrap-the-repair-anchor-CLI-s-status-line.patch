@@ -1,0 +1,29 @@
+From f9a24f7bcffd33c2c41ea5b9d20cf8fa859899ef Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 9 Oct 2026 02:21:56 +0330
+Subject: [PATCH 033/230] Wrap the repair-anchor CLI's status line
+
+Formatting-only change so the SQLITE_PATH banner matches the surrounding
+console output style.
+---
+ server/dev/repairAnchors.ts | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/server/dev/repairAnchors.ts b/server/dev/repairAnchors.ts
+index 01ba890..3e1edf6 100644
+--- a/server/dev/repairAnchors.ts
++++ b/server/dev/repairAnchors.ts
+@@ -113,7 +113,9 @@ function main(): void {
+   const db = getDb();
+   const report = repairAnchors(db, { apply });
+ 
+-  console.log(`[repair-anchors] ${apply ? "APPLY" : "DRY RUN"} (SQLITE_PATH=${process.env.SQLITE_PATH ?? "./data/matchday.db"})`);
++  console.log(
++    `[repair-anchors] ${apply ? "APPLY" : "DRY RUN"} (SQLITE_PATH=${process.env.SQLITE_PATH ?? "./data/matchday.db"})`,
++  );
+   console.log(`  users with follows scanned : ${report.scanned}`);
+   console.log(`  healthy (exactly 1 anchor) : ${report.healthy}`);
+   console.log(`  no anchor, repairable      : ${report.repairable}`);
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,251 @@
+From 8c64f51fb22989aa410f14fa5a069f04f82690f6 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 19:09:57 +0330
+Subject: [PATCH 088/230] Replace 15s polling with SSE push for live score
+ updates
+
+---
+ server/index.ts             |  2 ++
+ server/live/sse.ts          | 26 ++++++++++++++++++++++++++
+ server/routes/live.ts       | 28 ++++++++++++++++++++++++++++
+ server/sync/service.ts      | 11 ++++++++++-
+ src/hooks/useApi.ts         |  6 +-----
+ src/hooks/useLiveUpdates.ts | 29 +++++++++++++++++++++++++++++
+ src/pages/MatchDetail.tsx   |  7 +++----
+ src/pages/Matches.tsx       |  2 ++
+ 8 files changed, 101 insertions(+), 10 deletions(-)
+ create mode 100644 server/live/sse.ts
+ create mode 100644 server/routes/live.ts
+ create mode 100644 src/hooks/useLiveUpdates.ts
+
+diff --git a/server/index.ts b/server/index.ts
+index bb41295..b2b8d39 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -47,6 +47,7 @@ import { moderationRouter } from "./routes/moderation.js";
+ import { errorsRouter } from "./routes/errors.js";
+ import { adsgramRouter } from "./routes/adsgram.js";
+ import { adminRouter } from "./routes/admin.js";
++import { liveRouter } from "./routes/live.js";
+ import { apiNotFound, apiErrorHandler } from "./http/middleware.js";
+ 
+ const app = express();
+@@ -118,6 +119,7 @@ app.use(moderationRouter);
+ app.use(errorsRouter);
+ app.use(adsgramRouter);
+ app.use(adminRouter);
++app.use(liveRouter);
+ 
+ // Any /api path that matched no route answers JSON, whatever the method —
+ // before the static/SPA handlers can turn it into an HTML page.
+diff --git a/server/live/sse.ts b/server/live/sse.ts
+new file mode 100644
+index 0000000..9a8e081
+--- /dev/null
++++ b/server/live/sse.ts
+@@ -0,0 +1,26 @@
++import type { Response } from "express";
++
++const clients = new Set<Response>();
++
++export function addClient(res: Response): void {
++  clients.add(res);
++}
++
++export function removeClient(res: Response): void {
++  clients.delete(res);
++}
++
++export function broadcast(event: string, data: unknown): void {
++  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
++  for (const res of clients) {
++    try {
++      res.write(payload);
++    } catch {
++      clients.delete(res);
++    }
++  }
++}
++
++export function clientCount(): number {
++  return clients.size;
++}
+diff --git a/server/routes/live.ts b/server/routes/live.ts
+new file mode 100644
+index 0000000..8417b91
+--- /dev/null
++++ b/server/routes/live.ts
+@@ -0,0 +1,28 @@
++import express from "express";
++import { addClient, removeClient } from "../live/sse.js";
++
++export const liveRouter = express.Router();
++
++liveRouter.get("/api/live", (req, res) => {
++  res.writeHead(200, {
++    "Content-Type": "text/event-stream",
++    "Cache-Control": "no-cache",
++    Connection: "keep-alive",
++  });
++  res.write("retry: 3000\n\n");
++
++  addClient(res);
++
++  const keepAlive = setInterval(() => {
++    try {
++      res.write(": keepalive\n\n");
++    } catch {
++      clearInterval(keepAlive);
++    }
++  }, 25_000);
++
++  req.on("close", () => {
++    clearInterval(keepAlive);
++    removeClient(res);
++  });
++});
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index 3b3250e..8937386 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -6,6 +6,7 @@ import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAl
+ import { onMatchFinished } from "../predictions/resolver.js";
+ import { syncAllFavoriteTeamsUnderstat, syncLeagueUnderstatTables } from "./understat.js";
+ import { queueGoalAlerts, queueMatchdayAlerts } from "../notifications.js";
++import { broadcast } from "../live/sse.js";
+ 
+ const db = getDb();
+ 
+@@ -351,6 +352,9 @@ export function startSyncLoop(): void {
+         try {
+           const goals = await syncSummaries();
+           queueGoalAlerts(db, goals);
++          for (const g of goals) {
++            broadcast("update", { matchId: g.matchId, type: "goal" });
++          }
+           // Matchday reminders read the statuses and formations the summary
+           // pass just refreshed — but they only need to run about once a
+           // minute even when the live loop is much faster.
+@@ -378,7 +382,12 @@ export function startSyncLoop(): void {
+       if (pulseRunning) return;
+       pulseRunning = true;
+       void syncScoreboards()
+-        .then((goals) => queueGoalAlerts(db, goals))
++        .then((goals) => {
++          queueGoalAlerts(db, goals);
++          for (const g of goals) {
++            broadcast("update", { matchId: g.matchId, type: "goal" });
++          }
++        })
+         .catch((err) => console.error("[sync] live pulse error:", err))
+         .finally(() => {
+           pulseRunning = false;
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index a3dce26..3276bba 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -85,14 +85,10 @@ export function useMatches(
+     queryKey: ["matches", query],
+     queryFn: () => api.getMatches(query),
+     select: (data) => data.matches.map(matchFromApi),
+-    // Poll on a clock that notices liveness. The server's own pulse hits ESPN
+-    // every 15s, so a flat 60s client poll made a goal take up to a minute to
+-    // reach the one screen that exists to show goals — while with nothing live
+-    // there is nothing worth refetching at all.
+     refetchInterval: (q) => {
+       const live =
+         q.state.data?.matches?.some((m) => m.status === "live" || m.status === "halftime") ?? false;
+-      return live ? 20_000 : 60_000;
++      return live ? 300_000 : 60_000;
+     },
+   });
+ }
+diff --git a/src/hooks/useLiveUpdates.ts b/src/hooks/useLiveUpdates.ts
+new file mode 100644
+index 0000000..f9949fa
+--- /dev/null
++++ b/src/hooks/useLiveUpdates.ts
+@@ -0,0 +1,29 @@
++import { useEffect } from "react";
++import { useQueryClient } from "@tanstack/react-query";
++
++export function useLiveUpdates() {
++  const queryClient = useQueryClient();
++
++  useEffect(() => {
++    const es = new EventSource("/api/live");
++
++    es.addEventListener("update", (event) => {
++      try {
++        const data = JSON.parse((event as MessageEvent).data) as {
++          matchId?: string;
++          type?: string;
++        };
++        if (data.matchId) {
++          queryClient.invalidateQueries({ queryKey: ["matches"] });
++          queryClient.invalidateQueries({ queryKey: ["match", data.matchId] });
++        }
++      } catch {
++        // ignore malformed events
++      }
++    });
++
++    return () => {
++      es.close();
++    };
++  }, [queryClient]);
++}
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 3a42c54..bb98f98 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -43,6 +43,7 @@ import { formatKickoff, formatKickoffDate } from "../lib/format";
+ import { useNow } from "../hooks/useNow";
+ import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
+ import { haptic, notifyHaptic } from "../lib/telegram";
++import { useLiveUpdates } from "../hooks/useLiveUpdates";
+ import type { Team } from "../types";
+ import type { StringKey } from "../i18n/strings";
+ 
+@@ -54,16 +55,14 @@ export default function MatchDetail() {
+   const { t, lang, localize } = useI18n();
+   const { user } = useAuth();
+   const locale = lang === "fa" ? "fa-IR" : undefined;
++  useLiveUpdates();
+ 
+   const matchQuery = useQuery({
+     queryKey: ["match", id],
+     queryFn: () => api.getMatch(id),
+     enabled: Boolean(id),
+-    // 15s for live scores; 60s otherwise. Halting when the tab is hidden (the
+-    // refetchInterval function form) keeps a backgrounded webview from
+-    // polling forever — reopening the tab refetches immediately.
+     refetchInterval: (query) =>
+-      query.state.data?.match.status === "live" && !document.hidden ? 15_000 : false,
++      query.state.data?.match.status === "live" && !document.hidden ? 300_000 : false,
+     refetchIntervalInBackground: false,
+   });
+   const match = matchQuery.data?.match;
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index dbaa683..a659096 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -36,6 +36,7 @@ import {
+ } from "../components/icons";
+ import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
+ import { usePullToRefresh } from "../hooks/usePullToRefresh";
++import { useLiveUpdates } from "../hooks/useLiveUpdates";
+ import { PullIndicator } from "../components/PullToRefresh";
+ import type { Match, Team } from "../types";
+ 
+@@ -49,6 +50,7 @@ export default function Matches() {
+   const navigate = useNavigate();
+   const locale = lang === "fa" ? "fa-IR" : undefined;
+   const queryClient = useQueryClient();
++  useLiveUpdates();
+ 
+   // Deep link from Browse: /matches?league=eng.1 narrows the feed to one
+   // competition. Absent param = the followed-leagues feed (or everything).
+-- 
+2.54.0.windows.1
+

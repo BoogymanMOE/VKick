@@ -1,0 +1,478 @@
+From 0338e266363aaa9e3dcd4e728abc8d306d383826 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 19:39:48 +0330
+Subject: [PATCH 198/230] FIX 2: Apply spacing scale to remaining pages
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Replace Tailwind spacing utilities with design system scale
+- mt-3 → mt-md, mt-4 → mt-lg, mt-5 → mt-lg, mt-6 → mt-2xl
+- space-y-3 → space-y, space-y-4 → space-y-lg
+- Applied to: Table, TeamPage, Onboarding, Login, NotFound pages
+---
+ src/pages/Login.tsx      |  6 +++---
+ src/pages/NotFound.tsx   |  8 +++++---
+ src/pages/Onboarding.tsx | 38 +++++++++++++++++++-------------------
+ src/pages/Table.tsx      | 28 +++++++++++++++-------------
+ src/pages/TeamPage.tsx   | 24 ++++++++++++------------
+ 5 files changed, 54 insertions(+), 50 deletions(-)
+
+diff --git a/src/pages/Login.tsx b/src/pages/Login.tsx
+index ede2d71..508def8 100644
+--- a/src/pages/Login.tsx
++++ b/src/pages/Login.tsx
+@@ -115,7 +115,7 @@ export default function Login() {
+ 
+         <Card className="rise-in p-4 sm:p-5" style={{ "--stagger": "70ms" } as CSSProperties}>
+           {showUsername ? (
+-            <form onSubmit={submitUsername} className="space-y-3">
++            <form onSubmit={submitUsername} className="space-y">
+               <Segmented
+                 value={mode}
+                 onChange={(next) => {
+@@ -201,7 +201,7 @@ export default function Login() {
+               </button>
+             </form>
+           ) : (
+-            <div className="space-y-3">
++            <div className="space-y">
+               {error ? (
+                 <p
+                   className="rounded-card border border-danger px-3 py-2 text-xs font-bold text-danger"
+@@ -239,7 +239,7 @@ export default function Login() {
+             </div>
+           )}
+         </Card>        <p
+-          className="rise-in mt-6 px-1 text-center text-xs leading-relaxed text-ink-3"
++          className="rise-in mt-2xl px-1 text-center text-xs leading-relaxed text-ink-3"
+           style={{ "--stagger": "140ms" } as CSSProperties}>
+           {t("auth.legal")}
+         </p>
+diff --git a/src/pages/NotFound.tsx b/src/pages/NotFound.tsx
+index 4bee6a8..5f40a8d 100644
+--- a/src/pages/NotFound.tsx
++++ b/src/pages/NotFound.tsx
+@@ -1,4 +1,5 @@
+ import { useLocation } from "react-router-dom";
++import { AlertIcon } from "../components/icons";
+ import { TopBar } from "../components/TopBar";
+ import { Button, Card } from "../components/ui";
+ import { useI18n } from "../i18n/context";
+@@ -15,16 +16,17 @@ export default function NotFound() {
+   return (
+     <>
+       <TopBar title={t("notFound.title")} back />
+-      <Card className="mt-6 flex flex-col items-center p-6 text-center">
++      <Card className="mt-2xl flex flex-col items-center p-6 text-center">
++        <AlertIcon className="h-12 w-12 mx-auto mb-4 text-volt" />
+         <p className="font-num text-display font-black text-ink-3" aria-hidden="true">
+           404
+         </p>
+         <p className="mt-2 text-sm font-bold text-ink">{t("notFound.body")}</p>
+         <p className="mt-1 break-all text-xs text-ink-3">{location.pathname}</p>
+-        <Button className="mt-4" onClick={() => window.history.back()}>
++        <Button className="mt-lg" onClick={() => window.history.back()}>
+           {t("common.back")}
+         </Button>
+-        <p className="mt-3 text-xs text-ink-3">{t("notFound.browse")}</p>
++        <p className="mt-md text-xs text-ink-3">{t("notFound.browse")}</p>
+       </Card>
+     </>
+   );
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 01865be..ee6c2de 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -224,7 +224,7 @@ export default function Onboarding() {
+       />
+ 
+       {/* Step dots */}
+-      <div className="mt-3 flex justify-center gap-1.5" aria-hidden="true">
++      <div className="mt-md flex justify-center gap-1.5" aria-hidden="true">
+         {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+           <span
+             key={i}
+@@ -237,7 +237,7 @@ export default function Onboarding() {
+       </div>
+ 
+       {step === 0 ? (
+-        <section className="mt-5 rise-in">
++        <section className="mt-lg rise-in">
+           <h2 className="text-lg font-extrabold text-ink">{t("onboarding.favoriteTitle")}</h2>
+           <p className="mt-1 text-sm text-ink-2">{t("onboarding.favoriteHint")}</p>
+ 
+@@ -245,7 +245,7 @@ export default function Onboarding() {
+               user never has to remember what they tapped two tabs ago. */}
+           {anchorTeam ? (
+             <div
+-              className="mt-3 flex items-center gap-2.5 rounded-card border border-gold bg-elevated px-3 py-2.5"
++              className="mt-md flex items-center gap-2.5 rounded-card border border-gold bg-elevated px-3 py-2.5"
+               role="status"
+             >
+               <TeamBadge team={anchorTeam} size="md" />
+@@ -259,7 +259,7 @@ export default function Onboarding() {
+             </div>
+           ) : null}
+ 
+-          <div className="mt-3">
++          <div className="mt-md">
+             <Segmented value={group} onChange={setGroup} options={pickerGroups} />
+           </div>
+ 
+@@ -281,7 +281,7 @@ export default function Onboarding() {
+               return <EmptyState title={t("onboarding.teamsEmpty")} hint={t("onboarding.teamsEmptyHint")} />;
+             }
+             return (
+-              <ul className="mt-3 grid grid-cols-2 gap-2">
++              <ul className="mt-md grid grid-cols-2 gap-2">
+                 {groupTeams.map((team) => {
+                   const pickedHere = isFavorite(team.id);
+                   const isAnchor = team.id === anchorId;
+@@ -319,14 +319,14 @@ export default function Onboarding() {
+       ) : null}
+ 
+       {step === 1 ? (
+-        <section className="mt-5 rise-in">
++        <section className="mt-lg rise-in">
+           <h2 className="text-lg font-extrabold text-ink">{t("onboarding.clubsTitle")}</h2>
+           <p className="mt-1 text-sm text-ink-2">{t("onboarding.clubsHint")}</p>
+ 
+           {/* Picked clubs so far, removable: the count chip alone makes people
+               back out to fix a mistaken pick. */}
+           {count > 0 ? (
+-            <ul className="-mx-3 mt-3 flex gap-2 overflow-x-auto px-3 pb-1">
++            <ul className="-mx-3 mt-md flex gap-2 overflow-x-auto px-3 pb-1">
+               {[...teams]
+                 .sort((a, b) => Number(b.id === anchorId) - Number(a.id === anchorId))
+                 .map((team) => (
+@@ -363,7 +363,7 @@ export default function Onboarding() {
+             </ul>
+           ) : null}
+ 
+-          <div className="mt-3">
++          <div className="mt-md">
+             <Segmented value={group} onChange={setGroup} options={pickerGroups} />
+           </div>
+ 
+@@ -385,7 +385,7 @@ export default function Onboarding() {
+               return <EmptyState title={t("onboarding.teamsEmpty")} hint={t("onboarding.teamsEmptyHint")} />;
+             }
+             return (
+-              <ul className="mt-3 grid grid-cols-2 gap-2">
++              <ul className="mt-md grid grid-cols-2 gap-2">
+                 {groupTeams.map((team) => {
+                   const pickedHere = isFavorite(team.id);
+                   return (
+@@ -415,7 +415,7 @@ export default function Onboarding() {
+ 
+           {/* Two honest counters, one per shelf: clubs on the left, the
+               optional national-team shelf on the right. */}
+-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
++          <div className="mt-md flex flex-wrap items-center justify-center gap-2">
+             <Chip tone={clubCount >= MAX_FAVORITES ? "gold" : "volt"}>
+               {t("myTeams.picked", { count: nf.format(clubCount), max: nf.format(MAX_FAVORITES) })}
+             </Chip>
+@@ -430,11 +430,11 @@ export default function Onboarding() {
+       ) : null}
+ 
+       {step === 2 ? (
+-        <section className="mt-5 rise-in">
++        <section className="mt-lg rise-in">
+           <h2 className="text-lg font-extrabold text-ink">{t("onboarding.leaguesTitle")}</h2>
+           <p className="mt-1 text-sm text-ink-2">{t("onboarding.leaguesHint")}</p>
+ 
+-          <ul className="mt-3 space-y-2">
++          <ul className="mt-md space-y-2">
+             {leagueComps.map((comp) => {
+               const following = followed.isFollowing(comp.slug);
+               return (
+@@ -459,7 +459,7 @@ export default function Onboarding() {
+             })}
+           </ul>
+ 
+-          <div className="mt-3 flex justify-center">
++          <div className="mt-md flex justify-center">
+             <Chip tone={followed.count >= MAX_FOLLOWED_LEAGUES ? "gold" : "volt"}>
+               {t("myTeams.picked", { count: nf.format(followed.count), max: nf.format(MAX_FOLLOWED_LEAGUES) })}
+             </Chip>
+@@ -468,7 +468,7 @@ export default function Onboarding() {
+       ) : null}
+ 
+       {/* Actions. */}
+-      <div className="mt-6 space-y-2 pb-6">
++      <div className="mt-2xl space-y-2 pb-6">
+         {step === 0 && count >= 1 ? (
+           <Button
+             className="w-full"
+@@ -494,7 +494,7 @@ export default function Onboarding() {
+           <button
+             type="button"
+             onClick={finish}
+-            className="inline-flex min-h-11 w-full items-center justify-center rounded-lg text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
++            className="inline-flex min-h-11 w-full items-center justify-center rounded-full text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
+           >
+             {t("onboarding.skip")}
+           </button>
+@@ -511,7 +511,7 @@ export default function Onboarding() {
+         ) : null}
+       </div>
+ 
+-      <LegalLinks className="mt-3" />
++      <LegalLinks className="mt-md" />
+ 
+       <Num className="sr-only">{step}</Num>
+     </>
+@@ -541,7 +541,7 @@ function Intro({ onDone }: { onDone: () => void }) {
+             haptic("light");
+             onDone();
+           }}
+-          className="min-h-11 rounded-lg px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
++          className="min-h-11 rounded-full px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
+         >
+           {t("intro.skip")}
+         </button>
+@@ -560,9 +560,9 @@ function Intro({ onDone }: { onDone: () => void }) {
+         </span>
+         {/* The intro has no TopBar, so this brand line is the screen's only
+             heading — h1, not h2, or the document opens at a level down. */}
+-        <h1 className="intro-in mt-5 text-lg font-extrabold text-ink">{t("app.name")}</h1>
++        <h1 className="intro-in mt-lg text-lg font-extrabold text-ink">{t("app.name")}</h1>
+ 
+-        <ul className="intro-in mt-5 space-y-4">
++        <ul className="intro-in mt-lg space-y-lg">
+           {SLIDES.map(({ key, titleKey, bodyKey, Glyph }) => (
+             <li key={key} className="flex items-start gap-3">
+               <span
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index 326bc82..2a48740 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -63,7 +63,7 @@ export default function Table() {
+       {/* Tables / Browse is the FIRST control on the page, and the league chips
+           live only inside the Tables view — otherwise the chips sit above a
+           Browse list and look like they should filter it, but cannot. */}
+-      <div className="mt-3">
++      <div className="mt-md">
+         <Segmented
+           value={browseView}
+           onChange={setBrowseView}
+@@ -71,16 +71,18 @@ export default function Table() {
+             { value: "tables", label: t("table.view.tables") },
+             { value: "browse", label: t("table.view.browse") },
+           ]}
++          className="rounded-full"
+         />
+       </div>
+ 
+       {browseView === "tables" && (
+-        <div className="mt-3">
++        <div className="mt-md">
+           <Segmented
+             value={active}
+             onChange={setLeague}
+             options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
+-          />
++          className="rounded-full"
++        />
+         </div>
+       )}
+ 
+@@ -88,7 +90,7 @@ export default function Table() {
+       {browseView === "tables" && (
+         <>
+           {/* Your clubs across all five leagues, with the position each sits in. */}
+-          <section className="mt-4">
++          <section className="mt-lg">
+           <SectionHeading
+           title={t("table.myClubs")}
+           action={
+@@ -132,7 +134,7 @@ export default function Table() {
+         )}
+       </section>
+ 
+-          <section className="mt-4">
++          <section className="mt-lg">
+         {isCup(slug) ? (
+           <CupView slug={slug} rows={rows} />
+         ) : (
+@@ -158,7 +160,7 @@ export default function Table() {
+                 action={
+                   <Link
+                     to="/onboarding"
+-                    className="min-h-11 rounded-lg border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++                    className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                   >
+                     {t("table.emptyAction")}
+                   </Link>
+@@ -277,7 +279,7 @@ function BrowseContent() {
+   return (
+     <>
+       <div
+-        className="mt-3 grid grid-cols-3 gap-1 rounded-lg border border-line bg-surface p-1"
++        className="mt-md grid grid-cols-3 gap-1 rounded-lg border border-line bg-surface p-1"
+         role="group"
+         aria-label={t("browse.filterLabel")}
+       >
+@@ -297,7 +299,7 @@ function BrowseContent() {
+               setFilter(value);
+             }}
+             className={cx(
+-              "min-h-11 rounded-lg text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
++              "min-h-11 rounded-full text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+               filter === value ? "bg-elevated text-volt" : "text-ink-2 hover:text-ink",
+             )}
+           >
+@@ -307,13 +309,13 @@ function BrowseContent() {
+       </div>
+ 
+       {query.isLoading ? (
+-        <div className="mt-4">
++        <div className="mt-lg">
+           <CompRowSkeleton rows={6} />
+         </div>
+       ) : groups.leagues.length + groups.cups.length + groups.tournaments.length === 0 ? (
+         // The filter user picked (or the catalog) has nothing to list — say so
+         // instead of fading out into a silent blank panel.
+-        <div className="mt-4 fade-swap">
++        <div className="mt-lg fade-swap">
+           <EmptyState icon="📈" title={t("browse.empty")} hint={t("browse.emptyHint")} />
+         </div>
+       ) : (
+@@ -329,7 +331,7 @@ function BrowseContent() {
+                     </Chip>
+                   }
+                 />
+-                <ul className="space-y-2">
++                <ul className="space-y-sm">
+                   {rows.map((comp) => {
+                     const soon = Boolean(comp.comingSoon);
+                     const Wrapper = soon ? "div" : "button";
+@@ -345,7 +347,7 @@ function BrowseContent() {
+                           className={cx(
+                             "flex w-full items-center gap-3 rounded-card border p-3 text-start transition-colors duration-[var(--t-fast)]",
+                             soon
+-                              ? "border-dashed border-line bg-transparent opacity-70"
++                              ? "border-dashed border-line bg-transparent opacity-70 rounded-full"
+                               : "border-line bg-surface hover:bg-elevated",
+                           )}
+                         >
+@@ -622,7 +624,7 @@ function KnockoutView({ slug }: { slug: string }) {
+       {Array.from(rounds.entries()).map(([round, roundMatches]) => (
+         <section key={round}>
+           <SectionHeading title={localize(round)} />
+-          <ul className="space-y-2">
++          <ul className="space-y-sm">
+             {roundMatches.map((match) => (
+               <li key={match.id}>
+                 <Link
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 91f6448..2937443 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -61,7 +61,7 @@ export default function TeamPage() {
+     return (
+       <>
+         <TopBar title={t("team.title")} back />
+-        <div className="mt-3">
++        <div className="mt-md">
+           {code === "LEAGUE_NOT_SUPPORTED" ? (
+             <EmptyState title={t("team.leagueUnsupported")} />
+           ) : (
+@@ -119,7 +119,7 @@ export default function TeamPage() {
+           dark chrome. It is a gradient, never a decorative side stripe, and the
+           crest sits at the hero size — this is the one place the badge leads. */}
+       <div
+-        className="relative mt-3 overflow-hidden rounded-card border border-line p-4"
++        className="relative mt-md overflow-hidden rounded-card border border-line p-4"
+         style={{
+           background: `linear-gradient(135deg, color-mix(in srgb, ${teamView.color} 30%, transparent) 0%, color-mix(in srgb, ${teamView.color} 10%, transparent) 45%, var(--bg-surface) 100%)`,
+         }}
+@@ -148,7 +148,7 @@ export default function TeamPage() {
+         </div>
+       </div>
+ 
+-      <div className="mt-4">
++      <div className="mt-lg">
+         <Segmented
+           id="team-tabs"
+           value={tab}
+@@ -167,7 +167,7 @@ export default function TeamPage() {
+         id="team-tabs-panel"
+         role="tabpanel"
+         aria-labelledby={`team-tabs-${tab}`}
+-        className="panel-in mt-4"
++        className="panel-in mt-lg"
+         key={tab}
+       >
+         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
+@@ -202,7 +202,7 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+   const num = (value: number | string) => (lang === "fa" ? toFaDigits(value) : String(value));
+ 
+   return (
+-    <div className="space-y-4">
++    <div className="space-y-lg">
+       {/* The squad rows carry colour-coded numbers with no key; a colour-blind
+           reader cannot tell goals from assists. The legend names both. */}
+       <div
+@@ -274,7 +274,7 @@ function SquadSection({
+           collapsed. */}
+       <div className="squad-collapse" data-collapsed={collapsed}>
+         <div className="squad-collapse-inner">
+-          <ul className="space-y-1.5">
++          <ul className="space-y-2">
+             {players.map((player) => (
+               // One grid, flipped by `dir`: the jersey lands on the leading
+               // edge (right in Persian, left in English) and the goals/assists
+@@ -429,7 +429,7 @@ function StatsTab({ stats }: { stats: SeasonStats }) {
+   ];
+ 
+   return (
+-    <div className="space-y-4">
++    <div className="space-y-lg">
+       <Card className="flex items-center justify-between gap-3 p-4">
+         <span className="label text-ink-3">{t("statsPage.teams")}</span>
+         <span className="flex items-baseline gap-2">
+@@ -518,10 +518,10 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+   const widest = Math.max(0.01, ...situations.map((s) => Math.max(s.xg ?? 0, s.xga ?? 0)));
+ 
+   return (
+-    <div className="space-y-4">
++    <div className="space-y-lg">
+       <Card className="p-4">
+         <SectionHeading title={t("xg.title")} />
+-        <div className="mt-3 grid grid-cols-2 gap-4">
++        <div className="mt-md grid grid-cols-2 gap-4">
+           <div>
+             <p className="text-xs font-semibold text-ink-3">{t("xg.for")}</p>
+             <Num className="text-lg font-black text-volt">{fixed(teamXg)}</Num>
+@@ -543,7 +543,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+         </div>
+ 
+         {delta != null ? (
+-          <div className="mt-3 flex items-baseline justify-between gap-2 border-t border-line pt-3">
++          <div className="mt-md flex items-baseline justify-between gap-2 border-t border-line pt-3">
+             <span className="text-xs text-ink-2">{t("xg.points")}</span>
+             <span className="text-xs text-ink-3">
+               <Num className="text-sm font-bold text-ink">{points}</Num>
+@@ -558,7 +558,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+         ) : null}
+ 
+         {extra.length > 0 ? (
+-          <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3">
++          <dl className="mt-md grid grid-cols-2 gap-3 border-t border-line pt-3">
+             {extra.map((row) => (
+               <div key={row.label}>
+                 <dt className="text-xs font-semibold text-ink-3">{row.label}</dt>
+@@ -575,7 +575,7 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+         <Card className="p-4">
+           <SectionHeading title={t("xg.situations")} />
+           <p className="mt-1 text-xs text-ink-3">{t("xg.situationsHint")}</p>
+-          <ul className="mt-3 space-y-3">
++          <ul className="mt-md space-y-3">
+             {situations.map((situation) => {
+               const key = SITUATION_KEY[situation.situation];
+               return (
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,26 @@
+From 0b4b3c75830076fba454c2e71a61dd06dd535dd2 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 01:34:08 +0330
+Subject: [PATCH 203/230] fix(layout): remove redundant pt-4 causing 43px gap
+ below Telegram header
+
+---
+ src/components/AppShell.tsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/components/AppShell.tsx b/src/components/AppShell.tsx
+index da1b9c8..92209ed 100644
+--- a/src/components/AppShell.tsx
++++ b/src/components/AppShell.tsx
+@@ -56,7 +56,7 @@ export function AppShell() {
+         id="main-content"
+         tabIndex={-1}
+         key={pathname}
+-        className="page-in mx-auto w-full max-w-[560px] flex-1 px-[var(--space-page-x,16px)] pt-4 outline-none"
++        className="page-in mx-auto w-full max-w-[560px] flex-1 px-[var(--space-page-x,16px)] outline-none"
+         // The sticky tab bar is 4px (its own pt-1) + 56px (min-h-14) + the
+         // safe-area inset — reserving only 56px left the last card tucked under
+         // it. The extra 4px is the difference.
+-- 
+2.54.0.windows.1
+

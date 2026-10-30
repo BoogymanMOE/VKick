@@ -1,0 +1,122 @@
+From 94f405123cdc46b18ce6b708a07f0163e6a2837e Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 16:01:36 +0330
+Subject: [PATCH 196/230] =?UTF-8?q?fix(dateStrip):=20calendar=20button=20p?=
+ =?UTF-8?q?inned=20outside=20scroll=20=E2=80=94=20always=20visible?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/DateStrip.tsx            | 45 +++++++++++++------------
+ src/components/panels/CalendarSheet.tsx | 12 +++++--
+ 2 files changed, 33 insertions(+), 24 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index a93c437..0256370 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -99,22 +99,25 @@ export function DateStrip({
+     // A group of pressable day buttons, not a tablist: they are toggles with an
+     // explicit pressed state, and role=tab would promise arrow-key semantics
+     // this row does not implement.
+-    <div
+-      ref={containerRef}
+-      className="date-strip mt-4 flex items-center gap-1 overflow-x-auto px-[var(--space-page-x,16px)] pb-1"
+-      role="group"
+-      aria-label={t("dateStrip.label")}
+-    >
+-      {days.map((day) => {
+-        const key = dayKey(day);
+-        const isToday = key === todayKey;
+-        const isSelected = key === selectedKey;
+-        const hasMatches = daysWithMatches?.has(key) ?? false;
+-        return (
+-          <button
+-            key={key}
+-            type="button"
+-            aria-pressed={isSelected}
++    <div className="flex items-center gap-1">
++      {/* Scrollable day chips */}
++      <div
++        ref={containerRef}
++        className="date-strip flex flex-1 items-center gap-1 overflow-x-auto px-[var(--space-page-x,16px)] pb-1"
++        style={{ scrollbarWidth: "none" }}
++        role="group"
++        aria-label={t("dateStrip.label")}
++      >
++        {days.map((day) => {
++          const key = dayKey(day);
++          const isToday = key === todayKey;
++          const isSelected = key === selectedKey;
++          const hasMatches = daysWithMatches?.has(key) ?? false;
++          return (
++            <button
++              key={key}
++              type="button"
++              aria-pressed={isSelected}
+             // "Today" keeps its own marker even when another day is selected,
+             // so the user always knows where they are in the week.
+             aria-current={isToday ? "date" : undefined}
+@@ -146,9 +149,9 @@ export function DateStrip({
+             ) : null}
+           </button>
+         );
+-      })}
+-      {/* Calendar button — the days the strip cannot reach (anything older
+-          than two weeks back, or further ahead than a week). */}
++        })}
++      </div>
++      {/* Calendar button — OUTSIDE the scroll container, always visible at the end */}
+       {onOpenCalendar ? (
+         <button
+           type="button"
+@@ -157,9 +160,9 @@ export function DateStrip({
+             onOpenCalendar();
+           }}
+           aria-label={t("calendar.open")}
+-          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96]"
++          className="flex-none grid h-11 w-11 place-items-center rounded-lg border border-line bg-surface text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.96] me-[var(--space-page-x,16px)]"
+         >
+-          <CalendarIcon />
++          <CalendarIcon className="h-5 w-5" />
+         </button>
+       ) : null}
+       {/* Trailing spacer: a scroll container's end padding is not part of its
+diff --git a/src/components/panels/CalendarSheet.tsx b/src/components/panels/CalendarSheet.tsx
+index 6a2d482..a5d2f48 100644
+--- a/src/components/panels/CalendarSheet.tsx
++++ b/src/components/panels/CalendarSheet.tsx
+@@ -46,7 +46,7 @@ const MONTH_NAMES_FA = [
+  * only the names flip, so the two languages read the same grid.
+  */
+ const DOW_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+-const DOW_FA = ["یک", "دو", "سه", "چه", "پن", "جمع", "شن"];
++const DOW_FA = ["شن", "یک", "دو", "سه", "چه", "پن", "جمع"];
+ 
+ /**
+  * Month-view date picker — the jump-to-any-day escape hatch at the end of the
+@@ -105,12 +105,18 @@ export function CalendarSheet({
+     const out: Array<Date | null> = [];
+     // Leading blanks: the first day of the month sits in its own weekday
+     // column.
+-    for (let i = 0; i < first.getDay(); i++) out.push(null);
++    // In FA mode, the week starts on Saturday (day 6 in JS getDay()),
++    // so we shift by 1: Saturday (6) becomes 0, Sunday (0) becomes 1, etc.
++    // In EN mode, the week starts on Sunday, so getDay() is used as-is.
++    const startDow = lang === "fa"
++      ? (first.getDay() + 1) % 7   // Sat=0, Sun=1, Mon=2, Tue=3, Wed=4, Thu=5, Fri=6
++      : first.getDay();            // Sun=0, Mon=1, ... (unchanged)
++    for (let i = 0; i < startDow; i++) out.push(null);
+     for (let d = 1; d <= last.getDate(); d++) out.push(new Date(view.year, view.month, d));
+     // Trailing blanks fill the last row.
+     while (out.length % 7 !== 0) out.push(null);
+     return out;
+-  }, [view.year, view.month]);
++  }, [view.year, view.month, lang]);
+ 
+   const todayKey = dayKey(new Date());
+   const selectedKey = dayKey(selected);
+-- 
+2.54.0.windows.1
+

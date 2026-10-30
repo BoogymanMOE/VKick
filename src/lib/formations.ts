@@ -12,10 +12,11 @@
  * DEF/MID/MID/FWD.
  */
 
-export type Unit = "GK" | "DEF" | "MID" | "FWD";
+export type Unit = "GK" | "DEF" | "MID" | "FWD" | "OTHER";
 
 /** Units in the order the pitch draws them, back to front. */
 export const UNITS: Unit[] = ["GK", "DEF", "MID", "FWD"];
+const ALL_UNITS: Unit[] = [...UNITS, "OTHER"];
 
 /**
  * Where a player sits across the pitch. The coarse unit alone can't place
@@ -75,7 +76,7 @@ export function lineUnits(lines: number[]): Unit[] {
 export function requiredUnits(formationId: string): Record<Unit, number> {
   const { lines } = getFormation(formationId);
   const units = lineUnits(lines);
-  const counts: Record<Unit, number> = { GK: 1, DEF: 0, MID: 0, FWD: 0 };
+  const counts: Record<Unit, number> = { GK: 1, DEF: 0, MID: 0, FWD: 0, OTHER: 0 };
   lines.forEach((size, index) => {
     counts[units[index + 1]] += size;
   });
@@ -107,7 +108,7 @@ for (const abbr of ["ST", "CF", "F", "FWD", "SS", "FW", "F-C"])
 for (const abbr of ["G", "GK", "GDP"]) GRANULAR[abbr] = { unit: "GK", side: "center" };
 
 const SIDE_ORDER: Record<SlotSide, number> = { left: 0, center: 1, right: 2 };
-const UNIT_ORDER: Record<Unit, number> = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
+const UNIT_ORDER: Record<Unit, number> = { GK: 0, DEF: 1, MID: 2, FWD: 3, OTHER: 4 };
 
 /**
  * Granular position first, coarse unit as the fallback. A "SUB" or unknown
@@ -244,7 +245,7 @@ export function fillFormation<T extends SlotCandidate>(
 export function fillRows<T extends SlotCandidate>(rows: PitchRow[], candidates: T[]): Array<Array<T | null>> {
   const slots: Array<Array<T | null>> = rows.map((row) => new Array(row.size).fill(null));
 
-  for (const unit of UNITS) {
+  for (const unit of ALL_UNITS) {
     const rowIndexes = rows.map((row, index) => (row.unit === unit ? index : -1)).filter((i) => i >= 0);
     if (rowIndexes.length === 0) continue;
 
@@ -302,7 +303,7 @@ export function pitchRows(formationId: string): PitchRow[] {
 
 /** How many players a squad has in each unit. */
 export function unitCounts(candidates: SlotCandidate[]): Record<Unit, number> {
-  const counts: Record<Unit, number> = { GK: 0, DEF: 0, MID: 0, FWD: 0 };
+  const counts: Record<Unit, number> = { GK: 0, DEF: 0, MID: 0, FWD: 0, OTHER: 0 };
   for (const c of candidates) counts[c.unit] += 1;
   return counts;
 }
@@ -374,7 +375,7 @@ export function placePublishedXI<T extends SlotCandidate>(formationId: string, c
   const counts = unitCounts(squad);
   const required = known ? requiredUnits(formationId) : null;
   const rows =
-    required && UNITS.every((unit) => counts[unit] === required[unit])
+    required && ALL_UNITS.every((unit) => counts[unit] === required[unit])
       ? pitchRows(formationId)
       : pitchRowsFromUnits(counts);
   return { rows, slots: fillRows(rows, squad) };
@@ -389,7 +390,7 @@ export function placePublishedXI<T extends SlotCandidate>(formationId: string, c
  */
 export function pitchRowsFromUnits(counts: Record<Unit, number>): PitchRow[] {
   const rows: PitchRow[] = [];
-  for (const unit of ["FWD", "MID", "DEF"] as Unit[]) {
+  for (const unit of ["FWD", "MID", "DEF", "OTHER"] as Unit[]) {
     const size = Math.max(0, counts[unit]);
     if (size > 0) rows.push({ unit, size, goal: false });
   }

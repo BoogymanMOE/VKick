@@ -1,0 +1,578 @@
+From 967b5896379dc8c50c7ba425dd3b78ba1a200efc Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 7 Oct 2026 16:39:54 +0330
+Subject: [PATCH 029/230] Order the onboarding anchor after the follow and
+ repair its victims
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The first pick fired the follow POST and the anchor PUT concurrently, so
+the anchor 404'd NOT_FOLLOWING before the follow row existed — silently,
+since the mutation had no onError. New users ended up with zero anchors,
+breaking the schema's "exactly one anchor" rule (12 users at audit time).
+
+- src/lib/favoriteAnchor.ts owns the ordering: the anchor never fires
+  before the follow settles, transient anchor failures (network/5xx/429)
+  retry once, terminal 4xxs do not, and failures propagate.
+- useFavorites gains toggleAndAnchor (cap checks unchanged); Onboarding's
+  first-pick branch uses it instead of the racing pair.
+- setAnchor now surfaces errors through the shared toast instead of
+  vanishing.
+- tests/anchorRace.test.ts pins the ordering, the never-on-follow-failure
+  rule, the bounded retry and the retry classification.
+- server/dev/repairAnchors.ts (npm run repair:anchors) fixes existing
+  zero-anchor users by anchoring their earliest follow; dry-run by
+  default, --apply writes and then re-verifies. Run against a DB copy:
+  12 repairable → 0 left, idempotent on re-run.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ package.json                |   1 +
+ server/dev/repairAnchors.ts | 161 ++++++++++++++++++++++++++++++++++++
+ src/hooks/useApi.ts         |   6 ++
+ src/hooks/useFavorites.ts   |  40 ++++++++-
+ src/lib/favoriteAnchor.ts   |  74 +++++++++++++++++
+ src/pages/Onboarding.tsx    |  10 ++-
+ tests/anchorRace.test.ts    | 144 ++++++++++++++++++++++++++++++++
+ tests/run.ts                |   2 +
+ 8 files changed, 433 insertions(+), 5 deletions(-)
+ create mode 100644 server/dev/repairAnchors.ts
+ create mode 100644 src/lib/favoriteAnchor.ts
+ create mode 100644 tests/anchorRace.test.ts
+
+diff --git a/package.json b/package.json
+index d819493..f48ce97 100644
+--- a/package.json
++++ b/package.json
+@@ -20,6 +20,7 @@
+     "format:check": "prettier --check .",
+     "sync": "tsx server/cli.ts",
+     "seed:demo": "tsx server/dev/seed-demo.ts",
++    "repair:anchors": "tsx server/dev/repairAnchors.ts",
+     "sync:dry": "tsx server/cli.ts --dry-run",
+     "fetch-logos": "node scripts/fetch-logos.mjs",
+     "import-logos": "node scripts/import-logos.mjs"
+diff --git a/server/dev/repairAnchors.ts b/server/dev/repairAnchors.ts
+new file mode 100644
+index 0000000..01ba890
+--- /dev/null
++++ b/server/dev/repairAnchors.ts
+@@ -0,0 +1,161 @@
++/**
++ * One-time repair for users who follow clubs but have NO anchor club — the
++ * rows the onboarding anchor race left behind (the anchor PUT 404'd before
++ * the follow landed, silently). The invariant is "exactly one anchor per
++ * user"; this sets the EARLIEST followed club (`created_at` ASC, `rowid` as
++ * the tiebreak) as the anchor for every user missing one.
++ *
++ *   npm run repair:anchors              # DRY RUN — prints what it would do
++ *   npm run repair:anchors -- --apply   # write the fix
++ *
++ * Dry-run is the default on purpose: a repair script that writes on its first
++ * invocation is a foot-gun. Safe on production data when run with the real
++ * SQLITE_PATH — it only flips `favorite_teams.is_favorite` on users that have
++ * zero anchors, and never touches anyone already healthy.
++ */
++import { getDb, all, get, run, tx, type DB } from "../db/index.js";
++
++export interface RepairReport {
++  apply: boolean;
++  /** Users with at least one followed team. */
++  scanned: number;
++  /** Healthy: exactly one anchor already. */
++  healthy: number;
++  /** Zero anchors but ≥1 follow — the race's victims, the repair target. */
++  repairable: number;
++  /** Fixed in this run (0 in dry-run). */
++  repaired: number;
++  /** Anomaly: more than one anchor row. Reported, never touched. */
++  multiAnchor: number;
++  /** Users who follow nothing — nothing to anchor, skipped. */
++  noFavorites: number;
++  /** user_id → team_id chosen (earliest follow) for every repairable user. */
++  picks: Array<{ userId: number; teamId: string }>;
++}
++
++interface UserRow {
++  user_id: number;
++  n: number;
++  anchors: number;
++}
++
++/** Find and (optionally) repair zero-anchor users. Pure SQL, no network. */
++export function repairAnchors(db: DB, options: { apply?: boolean } = {}): RepairReport {
++  const apply = options.apply ?? false;
++
++  const rows = all<UserRow>(
++    db,
++    `SELECT user_id, COUNT(*) AS n, COALESCE(SUM(is_favorite), 0) AS anchors
++       FROM favorite_teams
++      GROUP BY user_id`,
++  );
++
++  const report: RepairReport = {
++    apply,
++    scanned: rows.length,
++    healthy: 0,
++    repairable: 0,
++    repaired: 0,
++    multiAnchor: 0,
++    noFavorites: 0,
++    picks: [],
++  };
++
++  for (const row of rows) {
++    if (row.anchors === 1) {
++      report.healthy += 1;
++      continue;
++    }
++    if (row.anchors > 1) {
++      // The PUT clears every row before setting one, so this should not
++      // exist; report it, but don't silently rewrite data nobody asked for.
++      report.multiAnchor += 1;
++      continue;
++    }
++
++    // Zero anchors: the earliest follow becomes the anchor.
++    const earliest = get<{ team_id: string }>(
++      db,
++      `SELECT team_id FROM favorite_teams
++        WHERE user_id = ?
++        ORDER BY created_at ASC, rowid ASC
++        LIMIT 1`,
++      [row.user_id],
++    );
++    if (!earliest) continue; // unreachable (COUNT(*) > 0), belt and braces
++
++    report.repairable += 1;
++    report.picks.push({ userId: row.user_id, teamId: earliest.team_id });
++
++    if (apply) {
++      tx(db, () => {
++        run(db, "UPDATE favorite_teams SET is_favorite = 0 WHERE user_id = ?", [row.user_id]);
++        run(db, "UPDATE favorite_teams SET is_favorite = 1 WHERE user_id = ? AND team_id = ?", [
++          row.user_id,
++          earliest.team_id,
++        ]);
++      });
++      report.repaired += 1;
++    }
++  }
++
++  report.noFavorites = get<{ n: number }>(
++    db,
++    `SELECT COUNT(*) AS n FROM users u
++      WHERE NOT EXISTS (SELECT 1 FROM favorite_teams f WHERE f.user_id = u.id)`,
++  )!.n;
++
++  return report;
++}
++
++function main(): void {
++  const apply = process.argv.slice(2).includes("--apply");
++  const db = getDb();
++  const report = repairAnchors(db, { apply });
++
++  console.log(`[repair-anchors] ${apply ? "APPLY" : "DRY RUN"} (SQLITE_PATH=${process.env.SQLITE_PATH ?? "./data/matchday.db"})`);
++  console.log(`  users with follows scanned : ${report.scanned}`);
++  console.log(`  healthy (exactly 1 anchor) : ${report.healthy}`);
++  console.log(`  no anchor, repairable      : ${report.repairable}`);
++  console.log(`  no follows, skipped        : ${report.noFavorites}`);
++  console.log(`  multi-anchor anomalies     : ${report.multiAnchor} (reported only, untouched)`);
++
++  if (!apply) {
++    if (report.repairable > 0) {
++      console.log("\n  would set the earliest followed club as anchor for:");
++      for (const pick of report.picks.slice(0, 10)) {
++        console.log(`    user ${pick.userId} → team ${pick.teamId}`);
++      }
++      if (report.picks.length > 10) console.log(`    …and ${report.picks.length - 10} more`);
++      console.log("\n  re-run with --apply to write.");
++    }
++    return;
++  }
++
++  console.log(`  repaired                  : ${report.repaired}`);
++
++  // Verify against the database, not against our own bookkeeping.
++  const stillBroken = get<{ n: number }>(
++    db,
++    `SELECT COUNT(*) AS n FROM (
++        SELECT user_id FROM favorite_teams
++         GROUP BY user_id
++        HAVING COALESCE(SUM(is_favorite), 0) = 0
++     )`,
++  )!.n;
++  const healthyNow = get<{ n: number }>(
++    db,
++    `SELECT COUNT(*) AS n FROM (
++        SELECT user_id FROM favorite_teams
++         GROUP BY user_id
++        HAVING COALESCE(SUM(is_favorite), 0) = 1
++     )`,
++  )!.n;
++  console.log(`  verify — zero-anchor users left: ${stillBroken} · healthy users now: ${healthyNow}`);
++  if (stillBroken !== 0) {
++    console.error("[repair-anchors] FAILED verification: zero-anchor users remain");
++    process.exit(1);
++  }
++}
++
++main();
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index f4bc11d..6dd6d09 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -240,6 +240,12 @@ export function useFavorites() {
+ 
+   const setAnchor = useMutation({
+     mutationFn: (teamId: string) => api.setAnchor(teamId),
++    // Never silent: the pre-fix anchor call had no error handler, so a failed
++    // anchor vanished without a trace (the zero-anchor bug's cover). The
++    // transient-failure retry lives in followThenAnchor, which owns the
++    // follow→anchor ordering — a retry here would also re-run on terminal
++    // 4xxs like NOT_FOLLOWING.
++    onError: (err) => notifyError(err),
+     onSettled: () => qc.invalidateQueries({ queryKey: ["favorites"] }),
+   });
+ 
+diff --git a/src/hooks/useFavorites.ts b/src/hooks/useFavorites.ts
+index f142e8f..7b171d1 100644
+--- a/src/hooks/useFavorites.ts
++++ b/src/hooks/useFavorites.ts
+@@ -1,5 +1,6 @@
+ import { useMemo } from "react";
+ import { useFavorites as useFavoritesQuery, useFollowedLeagues } from "./useApi";
++import { followThenAnchor } from "../lib/favoriteAnchor";
+ import type { Team } from "../types";
+ 
+ /**
+@@ -48,7 +49,44 @@ export function useFavorites() {
+     return { ok: true, added: true, team };
+   };
+ 
+-  return { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, setAnchor, loading };
++  /**
++   * First pick: follow the team, then set it as the anchor — strictly in
++   * that order (the anchor endpoint 404s NOT_FOLLOWING before the follow row
++   * exists; see src/lib/favoriteAnchor.ts for the race this replaced).
++   * Cap checks match `toggle`, so a full shelf still answers here too.
++   *
++   * Failures are NOT swallowed: each mutation's own onError runs before the
++   * mutateAsync promise settles — `add` rolls back the optimistic row and
++   * toasts, `setAnchor` toasts — and this catch runs after those handlers
++   * have already surfaced the same error to the user.
++   */
++  const toggleAndAnchor = (team: Team): FavoriteResult => {
++    if (isFavorite(team.id)) return { ok: true, added: false, team };
++    const intl = isInternational(team);
++    const full = intl ? intlCount >= MAX_INTERNATIONALS : clubCount >= MAX_FAVORITES;
++    if (full) return { ok: false, reason: intl ? "intlCap" : "cap" };
++    void followThenAnchor(
++      team.id,
++      (id) => add.mutateAsync(id),
++      (id) => setAnchor.mutateAsync(id),
++    ).catch(() => {
++      /* surfaced by the mutations' onError handlers (see doc block) */
++    });
++    return { ok: true, added: true, team };
++  };
++
++  return {
++    teams,
++    anchorId,
++    count,
++    clubCount,
++    intlCount,
++    isFavorite,
++    toggle,
++    toggleAndAnchor,
++    setAnchor,
++    loading,
++  };
+ }
+ 
+ export { useFollowedLeagues };
+diff --git a/src/lib/favoriteAnchor.ts b/src/lib/favoriteAnchor.ts
+new file mode 100644
+index 0000000..8e2ef0e
+--- /dev/null
++++ b/src/lib/favoriteAnchor.ts
+@@ -0,0 +1,74 @@
++/**
++ * Follow-then-anchor ordering for a user's FIRST club pick.
++ *
++ * The anchor endpoint (`PUT /api/me/favorites/:teamId/anchor`) answers 404
++ * NOT_FOLLOWING unless the follow row already exists, so the two writes must
++ * never race. Onboarding used to fire them concurrently (`toggle(team)` then
++ * `setAnchor.mutate` immediately) and the anchor lost — silently, because the
++ * mutation had no onError — leaving brand-new users with zero anchors and
++ * violating the schema's "exactly one anchor" invariant (12 users had hit it
++ * by audit time).
++ *
++ * This helper owns the ordering so it can be regression-tested without a DOM:
++ *   - `follow` must settle successfully before `anchor` is called AT ALL; if
++ *     it rejects, the error propagates and the anchor never fires.
++ *   - a TRANSIENT anchor failure (network error, 5xx, 429) is retried once;
++ *     a terminal 4xx (e.g. 404) is not — it will not fix itself.
++ *   - the final failure is rethrown; the caller's error handler surfaces it.
++ */
++
++export interface FollowThenAnchorOptions {
++  /** Retry attempts after the first anchor failure. Default 1. */
++  anchorRetries?: number;
++  /** Delay before each retry. Default 300ms. */
++  retryDelayMs?: number;
++  /** Injectable clock for tests; default is a real setTimeout. */
++  sleep?: (ms: number) => Promise<void>;
++  /** Which anchor failures are worth retrying. Default: `isRetryableAnchorError`. */
++  isRetryable?: (err: unknown) => boolean;
++}
++
++const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
++
++/**
++ * Retry classification: a failure with NO status is a network layer error
++ * (fetch TypeError), 5xx is the server having a moment, 429 is the write
++ * rate limiter — all transient. Every other 4xx is a decision the server
++ * already made (NOT_FOLLOWING, MAX_CLUBS…) and retrying it wastes a request.
++ */
++export function isRetryableAnchorError(err: unknown): boolean {
++  const status = (err as { status?: number } | null | undefined)?.status;
++  return status === undefined || status >= 500 || status === 429;
++}
++
++/**
++ * Follow `teamId`, then set it as the anchor club — strictly in that order,
++ * with one bounded retry on the anchor step. See module doc for the bug this
++ * exists to prevent.
++ */
++export async function followThenAnchor(
++  teamId: string,
++  follow: (teamId: string) => Promise<unknown>,
++  anchor: (teamId: string) => Promise<unknown>,
++  options: FollowThenAnchorOptions = {},
++): Promise<void> {
++  const sleep = options.sleep ?? defaultSleep;
++  const retryable = options.isRetryable ?? isRetryableAnchorError;
++  const retries = options.anchorRetries ?? 1;
++
++  // The follow MUST land first. A rejection here propagates untouched and the
++  // anchor never fires — the caller's follow-error handler owns the toast.
++  await follow(teamId);
++
++  let failures = 0;
++  for (;;) {
++    try {
++      await anchor(teamId);
++      return;
++    } catch (err) {
++      failures += 1;
++      if (failures > retries || !retryable(err)) throw err;
++      await sleep(options.retryDelayMs ?? 300);
++    }
++  }
++}
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 6c6676b..3def89c 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -44,7 +44,8 @@ export default function Onboarding() {
+   const { t, localize } = useI18n();
+   const { push } = useToast();
+   const navigate = useNavigate();
+-  const { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, setAnchor } = useFavorites();
++  const { teams, anchorId, count, clubCount, intlCount, isFavorite, toggle, toggleAndAnchor } =
++    useFavorites();
+   const followed = useFollowedLeagues();
+   const [intro, setIntro] = useState(() => !introSeen());
+   const [step, setStep] = useState(0);
+@@ -82,9 +83,10 @@ export default function Onboarding() {
+     // written confirmation never names a team the user just swapped out.
+     setSaved(false);
+     if (count === 0) {
+-      // First pick becomes the anchor automatically.
+-      toggle(team);
+-      setAnchor.mutate(team.id);
++      // First pick becomes the anchor automatically — but only AFTER the
++      // follow has persisted (the anchor endpoint 404s otherwise). The
++      // ordering + retry live in toggleAndAnchor / lib/favoriteAnchor.ts.
++      toggleAndAnchor(team);
+       return;
+     }
+     // The caps are per bucket — five clubs plus, separately, five national
+diff --git a/tests/anchorRace.test.ts b/tests/anchorRace.test.ts
+new file mode 100644
+index 0000000..6ff5878
+--- /dev/null
++++ b/tests/anchorRace.test.ts
+@@ -0,0 +1,144 @@
++/**
++ * Regression for the onboarding anchor race.
++ *
++ * The bug: `pickClub` fired the follow POST and the anchor PUT concurrently,
++ * so the anchor reached the server before the follow row existed and 404'd —
++ * with no onError, so nothing visible happened and new users ended up with
++ * zero anchors (the schema promises exactly one).
++ *
++ * These tests pin the helper that now owns the ordering (`followThenAnchor`):
++ * the anchor must never be attempted before the follow has succeeded, a
++ * transient anchor failure gets exactly one retry, a terminal 4xx does not,
++ * and failures propagate so the UI can surface them.
++ */
++import { strict as assert } from "node:assert";
++import { followThenAnchor, isRetryableAnchorError } from "../src/lib/favoriteAnchor.js";
++
++/** An ApiRequestError-shaped failure (src/lib/api.ts attaches `status`). */
++function httpError(status: number): Error & { status: number } {
++  const err = new Error(`HTTP ${status}`) as Error & { status: number };
++  err.status = status;
++  return err;
++}
++
++export async function runAnchorRaceTests(): Promise<void> {
++  const noSleep = async (): Promise<void> => {};
++
++  // 1. Ordering: follow first, anchor strictly after — never interleaved.
++  {
++    const calls: string[] = [];
++    await followThenAnchor(
++      "359",
++      async (id) => {
++        calls.push(`follow:${id}`);
++      },
++      async (id) => {
++        calls.push(`anchor:${id}`);
++      },
++      { sleep: noSleep },
++    );
++    assert.deepEqual(calls, ["follow:359", "anchor:359"], "anchor must fire only after the follow");
++  }
++
++  // 2. The race itself: follow rejects → the anchor is NEVER attempted and
++  //    the original error propagates for the caller's handler.
++  {
++    const boom = new Error("MAX_CLUBS");
++    const calls: string[] = [];
++    await assert.rejects(
++      followThenAnchor(
++        "359",
++        async () => {
++          calls.push("follow");
++          throw boom;
++        },
++        async () => {
++          calls.push("anchor");
++        },
++        { sleep: noSleep },
++      ),
++      (err: unknown) => err === boom,
++      "the follow's error must propagate unchanged",
++    );
++    assert.deepEqual(calls, ["follow"], "anchor must never fire when the follow failed");
++  }
++
++  // 3. Transient anchor failure (5xx / network) → retried once, then succeeds.
++  {
++    const calls: string[] = [];
++    let anchorAttempts = 0;
++    await followThenAnchor(
++      "359",
++      async () => {
++        calls.push("follow");
++      },
++      async () => {
++        anchorAttempts += 1;
++        calls.push(`anchor:${anchorAttempts}`);
++        if (anchorAttempts === 1) throw httpError(503);
++      },
++      { sleep: noSleep },
++    );
++    assert.deepEqual(
++      calls,
++      ["follow", "anchor:1", "anchor:2"],
++      "a transient anchor failure must be retried after the follow",
++    );
++  }
++
++  // 4. Terminal 4xx (NOT_FOLLOWING) → no retry, error propagates.
++  {
++    let anchorAttempts = 0;
++    const notFollowing = httpError(404);
++    await assert.rejects(
++      followThenAnchor(
++        "359",
++        async () => {},
++        async () => {
++          anchorAttempts += 1;
++          throw notFollowing;
++        },
++        { sleep: noSleep },
++      ),
++      (err: unknown) => err === notFollowing,
++    );
++    assert.equal(anchorAttempts, 1, "a terminal 4xx must not be retried");
++  }
++
++  // 5. Retries are bounded: still failing after the retry → propagate.
++  {
++    let anchorAttempts = 0;
++    let sleeps = 0;
++    await assert.rejects(
++      followThenAnchor(
++        "359",
++        async () => {},
++        async () => {
++          anchorAttempts += 1;
++          throw httpError(500);
++        },
++        {
++          sleep: async () => {
++            sleeps += 1;
++          },
++        },
++      ),
++      (err: unknown) => (err as { status?: number }).status === 500,
++    );
++    assert.equal(anchorAttempts, 2, "exactly one retry after the first failure");
++    assert.equal(sleeps, 1, "exactly one backoff wait between the attempts");
++  }
++
++  // 6. Retry classification: transient (no status / 5xx / 429) vs terminal 4xx.
++  {
++    assert.equal(isRetryableAnchorError(Object.assign(new Error("fetch failed"), { status: undefined })), true);
++    assert.equal(isRetryableAnchorError(httpError(500)), true);
++    assert.equal(isRetryableAnchorError(httpError(502)), true);
++    assert.equal(isRetryableAnchorError(httpError(429)), true);
++    assert.equal(isRetryableAnchorError(httpError(404)), false);
++    assert.equal(isRetryableAnchorError(httpError(400)), false);
++    assert.equal(isRetryableAnchorError(httpError(403)), false);
++  }
++
++  console.log("  anchor ordering + retry OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 14b4f75..747b803 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -29,6 +29,7 @@ import { runPickSummaryTests } from "./pickSummary.test.js";
+ import { runPredictionWindowTests } from "./predictionWindow.test.js";
+ import { runOptimisticTests } from "./optimistic.test.js";
+ import { runCompetitionsTests } from "./competitions.test.js";
++import { runAnchorRaceTests } from "./anchorRace.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -60,6 +61,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["predictionWindow", runPredictionWindowTests],
+   ["optimistic", runOptimisticTests],
+   ["competitions", runCompetitionsTests],
++  ["anchorRace", runAnchorRaceTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

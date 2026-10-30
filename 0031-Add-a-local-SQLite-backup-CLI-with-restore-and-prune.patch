@@ -1,0 +1,342 @@
+From 8875d69645c918dca9d29907f2e61e988cf25c4e Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 9 Oct 2026 02:20:57 +0330
+Subject: [PATCH 031/230] Add a local SQLite backup CLI with restore and prune
+
+Snapshot the live database through VACUUM INTO (an online, point-in-time
+backup) and restore it to a fresh file, with a strict name-scoped prune.
+Wires `npm run backup` / `backup:restore` and a round-trip test suite.
+---
+ package.json         |  2 +
+ server/backup.ts     | 98 ++++++++++++++++++++++++++++++++++++++++++++
+ server/backupCli.ts  | 76 ++++++++++++++++++++++++++++++++++
+ tests/backup.test.ts | 95 ++++++++++++++++++++++++++++++++++++++++++
+ tests/run.ts         |  2 +
+ 5 files changed, 273 insertions(+)
+ create mode 100644 server/backup.ts
+ create mode 100644 server/backupCli.ts
+ create mode 100644 tests/backup.test.ts
+
+diff --git a/package.json b/package.json
+index f48ce97..219aecb 100644
+--- a/package.json
++++ b/package.json
+@@ -21,6 +21,8 @@
+     "sync": "tsx server/cli.ts",
+     "seed:demo": "tsx server/dev/seed-demo.ts",
+     "repair:anchors": "tsx server/dev/repairAnchors.ts",
++    "backup": "tsx server/backupCli.ts",
++    "backup:restore": "tsx server/backupCli.ts restore",
+     "sync:dry": "tsx server/cli.ts --dry-run",
+     "fetch-logos": "node scripts/fetch-logos.mjs",
+     "import-logos": "node scripts/import-logos.mjs"
+diff --git a/server/backup.ts b/server/backup.ts
+new file mode 100644
+index 0000000..d380b04
+--- /dev/null
++++ b/server/backup.ts
+@@ -0,0 +1,98 @@
++/**
++ * Local SQLite backups — snapshot, prune, restore. No cloud wiring.
++ *
++ * The snapshot uses `VACUUM INTO`, which SQLite executes as an ONLINE backup:
++ * it reads a transactionally consistent snapshot of a live database (WAL and
++ * all) and writes a fresh, defragmented file — unlike `cp matchday.db`, which
++ * can capture a torn page set while the server is mid-write. It is chosen
++ * over node:sqlite's async `backup()` helper because it exists on every
++ * node:sqlite version this app supports (22.5+), it is one synchronous call,
++ * and the resulting file has no WAL left to recover.
++ *
++ * Nothing here uploads anywhere: scheduling (nightly cron / Render cron job)
++ * and off-site storage are ops decisions made in server/backupCli.ts and
++ * outside the repo. A backup is only a backup if it lives on another disk —
++ * treat BACKUP_DIR as staging, not as safety.
++ */
++import fs from "node:fs";
++import path from "node:path";
++import { DatabaseSync } from "node:sqlite";
++
++/** Every managed backup starts with this; prune only ever touches these. */
++export const BACKUP_PREFIX = "matchday-";
++/** Fixed-width UTC stamp so plain name sort == chronological sort. */
++const NAME_RE = /^matchday-\d{8}-\d{6}\.db$/;
++
++/** `matchday-20261007-153012.db` (UTC, sortable, Windows-safe — no colons). */
++export function backupFileName(now: Date = new Date()): string {
++  const iso = now.toISOString(); // 2026-10-07T15:30:12.345Z
++  const date = iso.slice(0, 10).replace(/-/g, "");
++  const time = iso.slice(11, 19).replace(/:/g, "");
++  return `${BACKUP_PREFIX}${date}-${time}.db`;
++}
++
++/**
++ * Copy `sourcePath` to `destPath` through VACUUM INTO — the online-backup
++ * path. Refuses to clobber an existing file, and refuses a missing source
++ * (a bare `new DatabaseSync(path)` would silently CREATE an empty database).
++ */
++function vacuumInto(sourcePath: string, destPath: string): { bytes: number } {
++  if (!fs.existsSync(sourcePath)) throw new Error(`database file not found: ${sourcePath}`);
++  if (fs.existsSync(destPath)) throw new Error(`destination already exists: ${destPath}`);
++  fs.mkdirSync(path.dirname(path.resolve(destPath)), { recursive: true });
++
++  const db = new DatabaseSync(sourcePath, { readOnly: true });
++  try {
++    db.prepare("VACUUM INTO ?").run(destPath);
++  } catch (err) {
++    // A failed VACUUM may have left a 0-byte dest behind — never leave a
++    // file that looks like a backup but isn't.
++    try {
++      if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
++    } catch {
++      /* best effort */
++    }
++    throw err;
++  } finally {
++    db.close();
++  }
++  return { bytes: fs.statSync(destPath).size };
++}
++
++/** Snapshot the (possibly live) database at `sourcePath` into `destPath`. */
++export function backupTo(sourcePath: string, destPath: string): { bytes: number } {
++  return vacuumInto(sourcePath, destPath);
++}
++
++/**
++ * Restore a snapshot to `destPath` (fresh file — refuses to exist, so a
++ * restore can never overwrite a live database by accident). Materialising
++ * through VACUUM INTO also validates the backup: a corrupt file fails here
++ * instead of being copied into production.
++ */
++export function restoreBackup(backupPath: string, destPath: string): { bytes: number } {
++  return vacuumInto(backupPath, destPath);
++}
++
++/** Managed backups in `dir`, newest first (fixed-width names sort by time). */
++export function listBackups(dir: string): string[] {
++  if (!fs.existsSync(dir)) return [];
++  return fs
++    .readdirSync(dir)
++    .filter((f) => NAME_RE.test(f))
++    .sort()
++    .reverse();
++}
++
++/**
++ * Keep the newest `keep` managed backups; delete the rest. Only files
++ * matching the strict `matchday-<stamp>.db` name are ever touched — a
++ * hand-placed file, the live database or anything else in the directory is
++ * invisible to the prune. Returns the deleted paths.
++ */
++export function pruneBackups(dir: string, keep: number): string[] {
++  if (!Number.isInteger(keep) || keep < 1) throw new Error(`keep must be a positive integer, got ${keep}`);
++  const doomed = listBackups(dir).slice(keep); // list is newest-first
++  for (const file of doomed) fs.unlinkSync(path.join(dir, file));
++  return doomed;
++}
+diff --git a/server/backupCli.ts b/server/backupCli.ts
+new file mode 100644
+index 0000000..b23bbd3
+--- /dev/null
++++ b/server/backupCli.ts
+@@ -0,0 +1,76 @@
++/**
++ * Backup CLI — nightly snapshot of SQLITE_PATH, keep the newest BACKUP_KEEP.
++ *
++ *   npm run backup                          # snapshot + prune to the newest 7
++ *   npm run backup:restore -- <file> [dest] # restore a snapshot (stop the server first!)
++ *
++ * Env: SQLITE_PATH (default ./data/matchday.db), BACKUP_DIR (default
++ * ./backups), BACKUP_KEEP (default 7).
++ *
++ * Scheduling (nothing runs automatically — pick one):
++ *   - Render: a second service of `type: cron` running
++ *     `npm ci && npm run backup` on a `0 3 * * *` schedule, sharing the same
++ *     persistent disk (mount it at the same path in both services).
++ *   - Any box with the repo: `30 2 * * * cd /srv/vkick && npm run backup`.
++ *   - Inside the server process: not done on purpose — a backup tied to the
++ *     app's lifetime dies with the app.
++ *
++ * Off-site (NOT wired yet, deliberately): upload BACKUP_DIR after the
++ * snapshot — rclone/cron to any S3-compatible store, `restic`/`borg` for
++ * encrypted dedup, or a managed DB product if you ever leave SQLite. Local
++ * copies survive a bad deploy; only an off-site copy survives the disk.
++ */
++import fs from "node:fs";
++import path from "node:path";
++import { backupFileName, backupTo, listBackups, pruneBackups, restoreBackup } from "./backup.js";
++
++const SQLITE_PATH = process.env.SQLITE_PATH ?? "./data/matchday.db";
++const BACKUP_DIR = process.env.BACKUP_DIR ?? "./backups";
++const KEEP = Number(process.env.BACKUP_KEEP ?? "7");
++
++function fail(message: string): never {
++  console.error(`[backup] ${message}`);
++  process.exit(1);
++}
++
++function main(): void {
++  const [command, ...rest] = process.argv.slice(2);
++  const action = command && !command.startsWith("-") ? command : "backup";
++
++  if (action === "restore") {
++    const [backupPath, destPath] = rest;
++    if (!backupPath) {
++      fail("restore needs a snapshot file: npm run backup:restore -- <file> [dest]");
++    }
++    const dest = destPath ?? SQLITE_PATH;
++    if (fs.existsSync(dest)) {
++      fail(
++        `refusing to overwrite an existing file: ${dest}\n` +
++          `        stop the server, move the current database aside, then re-run`,
++      );
++    }
++    const { bytes } = restoreBackup(backupPath, dest);
++    console.log(`[backup] restored ${backupPath} → ${dest} (${bytes} bytes)`);
++    console.log(`[backup] start the server and check /health before trusting it`);
++    return;
++  }
++
++  if (action !== "backup") fail(`unknown command "${action}" — use "backup" or "restore"`);
++
++  if (!Number.isInteger(KEEP) || KEEP < 1) fail(`BACKUP_KEEP must be a positive integer, got ${KEEP}`);
++
++  const dest = path.join(BACKUP_DIR, backupFileName());
++  const { bytes } = backupTo(SQLITE_PATH, dest);
++  console.log(`[backup] ${SQLITE_PATH} → ${dest} (${bytes} bytes, VACUUM INTO online snapshot)`);
++
++  const pruned = pruneBackups(BACKUP_DIR, KEEP);
++  const remaining = listBackups(BACKUP_DIR);
++  console.log(`[backup] kept newest ${KEEP}: ${remaining.length} on disk, pruned ${pruned.length}`);
++  for (const file of pruned) console.log(`  - pruned ${file}`);
++}
++
++try {
++  main();
++} catch (err) {
++  fail(err instanceof Error ? err.message : String(err));
++}
+diff --git a/tests/backup.test.ts b/tests/backup.test.ts
+new file mode 100644
+index 0000000..c42e31c
+--- /dev/null
++++ b/tests/backup.test.ts
+@@ -0,0 +1,95 @@
++/**
++ * Backup/restore round-trip.
++ *
++ * Pins the three promises of the nightly backup:
++ *  1. the snapshot is taken with VACUUM INTO against a LIVE, open database
++ *     (online backup — not `cp` under the writer's feet) and is point-in-time:
++ *     writes landing after the snapshot stay out of it;
++ *  2. restore materialises a fresh file whose row counts match the snapshot
++ *     exactly, never touching the live source, and refuses to clobber an
++ *     existing file;
++ *  3. prune keeps the newest BACKUP managed backups and deletes nothing else —
++ *     hand-placed files with other names survive.
++ */
++import { strict as assert } from "node:assert";
++import { DatabaseSync } from "node:sqlite";
++import fs from "node:fs";
++import os from "node:os";
++import path from "node:path";
++import { migrate } from "../server/db/schema.js";
++import { backupFileName, backupTo, listBackups, pruneBackups, restoreBackup } from "../server/backup.js";
++
++function countUsers(db: DatabaseSync): number {
++  return (db.prepare("SELECT COUNT(*) AS n FROM users").get() as { n: number }).n;
++}
++
++export async function runBackupTests(): Promise<void> {
++  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "verdikick-backup-"));
++  try {
++    // --- a live source: real schema, WAL (migrate sets it), held open ---
++    const srcPath = path.join(dir, "source.db");
++    const src = new DatabaseSync(srcPath);
++    migrate(src);
++    const insert = src.prepare("INSERT INTO users (telegram_id, display_name, created_at) VALUES (?, ?, ?)");
++    for (let i = 0; i < 25; i += 1) insert.run(`t${i}`, `User ${i}`, "2026-10-07T00:00:00.000Z");
++
++    // Snapshot WHILE the source connection is open and WAL is active.
++    const backupDir = path.join(dir, "backups");
++    const backupPath = path.join(backupDir, backupFileName(new Date("2026-10-07T02:00:00Z")));
++    const { bytes } = backupTo(srcPath, backupPath);
++    assert.ok(bytes > 0, "the snapshot file has content");
++
++    // Writes after the snapshot must NOT leak into it — point-in-time.
++    for (let i = 25; i < 35; i += 1) insert.run(`t${i}`, `User ${i}`, "2026-10-07T00:00:00.000Z");
++    assert.equal(countUsers(src), 35, "the live source keeps accepting writes");
++
++    const snapshot = new DatabaseSync(backupPath, { readOnly: true });
++    assert.equal(countUsers(snapshot), 25, "snapshot is point-in-time: 25 rows as of backup");
++    snapshot.close();
++
++    // --- restore into a fresh file; row counts match the SNAPSHOT ---
++    const restoredPath = path.join(dir, "restored.db");
++    restoreBackup(backupPath, restoredPath);
++    const restored = new DatabaseSync(restoredPath, { readOnly: true });
++    assert.equal(countUsers(restored), 25, "restore reproduces the snapshot's row count");
++    restored.close();
++    assert.equal(countUsers(src), 35, "restore never modified the live source");
++
++    // Safety rails: never clobber, never invent a source.
++    assert.throws(() => restoreBackup(backupPath, restoredPath), /already exists/);
++    assert.throws(() => backupTo(srcPath, backupPath), /already exists/);
++    assert.throws(() => backupTo(path.join(dir, "missing.db"), path.join(dir, "x.db")), /not found/);
++    // A corrupt backup fails the restore instead of being copied into place.
++    const corrupt = path.join(dir, "corrupt.db");
++    fs.writeFileSync(corrupt, "this is not a database");
++    assert.throws(() => restoreBackup(corrupt, path.join(dir, "from-corrupt.db")));
++    assert.ok(!fs.existsSync(path.join(dir, "from-corrupt.db")), "no partial file left behind");
++
++    // --- prune: newest 7 of 9 kept, strangers untouched ---
++    const pdir = path.join(dir, "prune");
++    fs.mkdirSync(pdir);
++    const names: string[] = [];
++    for (let i = 0; i < 9; i += 1) {
++      const name = backupFileName(new Date(Date.UTC(2026, 0, 1 + i, 2, 0, 0)));
++      fs.writeFileSync(path.join(pdir, name), "x");
++      names.push(name);
++    }
++    fs.writeFileSync(path.join(pdir, "matchday-manual-copy.db"), "hand-placed, no timestamp");
++    fs.writeFileSync(path.join(pdir, "unrelated.db"), "stranger");
++
++    const pruned = pruneBackups(pdir, 7);
++    assert.equal(pruned.length, 2, "exactly the two oldest are pruned");
++    assert.equal(listBackups(pdir).length, 7, "seven managed backups remain");
++    assert.ok(!fs.existsSync(path.join(pdir, names[0]!)), "oldest (Jan 1) deleted");
++    assert.ok(!fs.existsSync(path.join(pdir, names[1]!)), "second oldest (Jan 2) deleted");
++    assert.ok(fs.existsSync(path.join(pdir, names[8]!)), "newest (Jan 9) kept");
++    assert.ok(fs.existsSync(path.join(pdir, "matchday-manual-copy.db")), "prune ignores non-matching names");
++    assert.ok(fs.existsSync(path.join(pdir, "unrelated.db")), "prune ignores strangers");
++    assert.throws(() => pruneBackups(pdir, 0), /positive integer/);
++
++    src.close();
++    console.log("  backup: live snapshot, restore row counts, prune safety OK");
++  } finally {
++    fs.rmSync(dir, { recursive: true, force: true });
++  }
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 6051815..f0212ec 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -31,6 +31,7 @@ import { runOptimisticTests } from "./optimistic.test.js";
+ import { runCompetitionsTests } from "./competitions.test.js";
+ import { runAnchorRaceTests } from "./anchorRace.test.js";
+ import { runLeaderboardTests } from "./leaderboard.test.js";
++import { runBackupTests } from "./backup.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -64,6 +65,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["competitions", runCompetitionsTests],
+   ["anchorRace", runAnchorRaceTests],
+   ["leaderboard", runLeaderboardTests],
++  ["backup", runBackupTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

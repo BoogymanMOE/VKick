@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { PanelSkeleton } from "../components/Skeletons";
 import { NewsCard } from "../components/panels/NewsCard";
-import { FormStrip } from "./Table";
+import { LineupPitch } from "../components/panels/LineupsPanel";
 import {
   Card,
   Chip,
@@ -37,7 +37,20 @@ import { competitionName } from "../lib/leagues";
 
 type Tab = "squad" | "fixtures" | "season" | "lineup" | "news";
 
-const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
+const AVAILABILITY_TONE = { injured: "danger", suspended: "gold", doubtful: "muted" } as const;
+
+function AvailabilityBadge({ status, reason }: { status: "injured" | "suspended" | "doubtful"; reason?: string | null }) {
+  const { t, localize } = useI18n();
+  const label = t(`team.availability.${status}`);
+  const title = reason ? `${label}: ${localize(reason)}` : label;
+  return (
+    <Chip tone={AVAILABILITY_TONE[status]} className="max-w-full" normalCase>
+      <span className="truncate" title={title}>{label}{reason ? ` · ${localize(reason)}` : ""}</span>
+    </Chip>
+  );
+}
+
+const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD", "OTHER"];
 
 /** English ordinal suffix: 1st, 2nd, 3rd, 4th … 11th/12th/13th … 21st. */
 function ordinal(rank: number): string {
@@ -51,11 +64,15 @@ function ordinal(rank: number): string {
  * recent fixtures. Reached by tapping any team in the table or a match card.
  */
 export default function TeamPage() {
-  const { id = "" } = useParams();  const { t, lang, localize } = useI18n();
+  const { id = "" } = useParams();
+  const { t, lang, localize } = useI18n();
   const detailQuery = useTeamDetail(id);
   const squadQuery = useSquad(id);
 
   const [tab, setTab] = useState<Tab>("squad");
+  // Which form badge the reader last tapped: its opponent + score is spelled
+  // out under the strip (mobile taps have no hover tooltip).
+  const [formDetail, setFormDetail] = useState<string | null>(null);
 
   // Error BEFORE the loading check: `data` is undefined when the request
   // fails, so a `isLoading || !data` branch placed first would swallow the error
@@ -115,27 +132,27 @@ export default function TeamPage() {
 
   const teamLeagueLabel = leagueId ? t(`league.${leagueId}`) : competitionName(team.league, lang);
 
-  // The club's last five results, oldest first, folded here from the same
-  // stored finished matches the standings strip folds on the server
-  // (server/standings/form.ts) — scoped to this club's own league so the two
-  // strips can never disagree about a club's form. Fewer than five finished
-  // matches simply means a shorter strip.
-  const form = fixtures
-    .filter(
-      (m) =>
-        m.status === "finished" &&
-        (!team.league || m.league === team.league) &&
-        m.home_score != null &&
-        m.away_score != null,
-    )
-    .slice(-5)
-    .map((m) => {
-      const forHome = m.home_team_id === team.id;
-      const goalsFor = (forHome ? m.home_score : m.away_score) ?? 0;
-      const goalsAgainst = (forHome ? m.away_score : m.home_score) ?? 0;
-      return goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "D";
-    })
-    .join("");
+  // The club's last five finished results, newest first (the server serves the
+  // finished segment newest-first too). Kept as full match records — not a
+  // letters string — so each badge can name its opponent and score. Fewer than
+  // five finished matches simply means a shorter strip: nothing is padded.
+  const formMatches = fixtures
+    .filter((match) => match.status === "finished" && match.home_score != null && match.away_score != null)
+    .slice(0, 5);
+  const formResult = (match: ApiMatch) => {
+    const forHome = match.home_team_id === team.id;
+    const goalsFor = (forHome ? match.home_score : match.away_score) ?? 0;
+    const goalsAgainst = (forHome ? match.away_score : match.home_score) ?? 0;
+    return goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "D";
+  };
+  const formTooltip = (match: ApiMatch) => {
+    const forHome = match.home_team_id === team.id;
+    const opponent = forHome ? match.away_short ?? match.away_name : match.home_short ?? match.home_name;
+    const score = forHome
+      ? `${match.home_score}–${match.away_score}`
+      : `${match.away_score}–${match.home_score}`;
+    return `${localize(opponent)} · ${lang === "fa" ? toFaDigits(score) : score}`;
+  };
 
   return (
     <>
@@ -160,33 +177,53 @@ export default function TeamPage() {
           {/* The club's name stays in the top bar; this card is the league line —
               competition, matches played, position and points. */}
           <div className="min-w-0">
-            <p className="text-xs text-ink-3">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-3">
               <span className="font-bold text-ink">{teamLeagueLabel}</span>
-              {seasonStats
-                ? ` · ${t(
-                    seasonStats.played === 1
-                      ? "team.matchesPlayedOne"
-                      : "team.matchesPlayedMany",
-                    { played: num(seasonStats.played) },
-                  )}`
-                : ""}
-              {standing?.rank ? ` · ${positionLabel(standing.rank)}` : ""}
-              {standing?.points != null
-                ? ` · ${t("team.points", { points: num(standing.points) })}`
-                : ""}
+              {standing?.played != null ? (
+                <span>{t(standing.played === 1 ? "team.matchesPlayedOne" : "team.matchesPlayedMany", { played: num(standing.played) })}</span>
+              ) : null}
+              {standing?.rank ? <span>{positionLabel(standing.rank)}</span> : null}
+              {standing?.points != null ? <span>{t("team.points", { points: num(standing.points) })}</span> : null}
             </p>
           </div>
         </div>
 
-        {/* Form: the last five, same strip the table and the match page show.
-            The visible label is aria-hidden because the strip already announces
-            itself as "Form: win, win, draw…" — reading both would say it twice. */}
-        {form ? (
-          <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-3">
-            <span aria-hidden="true" className="text-xs font-bold text-ink-3">
-              {t("table.form")}
-            </span>
-            <FormStrip form={form} />
+        {/* Form: the club's last five results, newest first, each badge naming
+            its opponent and score on tap (title covers desktop hover). The
+            detail line has a reserved height, so tapping never shifts the
+            layout below. */}
+        {formMatches.length > 0 ? (
+          <div className="mt-3 border-t border-line pt-3">
+            <div className="flex items-center justify-between gap-3">
+              <span aria-hidden="true" className="text-xs font-bold text-ink-3">{t("table.form")}</span>
+              <div className="flex items-center gap-2">
+                {formMatches.map((match) => {
+                  const result = formResult(match);
+                  const title = formTooltip(match);
+                  const selected = formDetail === match.id;
+                  return (
+                    <button
+                      key={match.id}
+                      type="button"
+                      title={title}
+                      aria-pressed={selected}
+                      aria-label={`${result === "W" ? t("table.formW") : result === "L" ? t("table.formL") : t("table.formD")}: ${title}`}
+                      onClick={() => setFormDetail(selected ? null : match.id)}
+                      className={cx(
+                        "grid h-6 w-6 place-items-center rounded text-[10px] font-bold transition-colors duration-[var(--t-fast)]",
+                        selected ? "ring-1 ring-current" : "",
+                        result === "W" ? "bg-pitch/20 text-pitch" : result === "L" ? "bg-danger/20 text-danger" : "bg-ink-3/15 text-ink-3",
+                      )}
+                    >
+                      {result === "W" ? t("table.formWShort") : result === "L" ? t("table.formLShort") : t("table.formDShort")}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <p className="mt-1 min-h-4 text-end text-[10px] text-ink-3">
+              {formTooltip((fixtures.find((match) => match.id === formDetail) ?? formMatches[0]) as ApiMatch)}
+            </p>
           </div>
         ) : null}
       </div>
@@ -214,10 +251,10 @@ export default function TeamPage() {
         className="panel-in mt-lg"
         key={tab}
       >
-        {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
+        {tab === "squad" ? <SquadTab squadQuery={squadQuery} teamColor={teamView.color} /> : null}
         {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
         {tab === "season" ? <StatsTab stats={seasonStats} fixtures={fixtures} teamId={team.id} /> : null}
-        {tab === "lineup" ? <RecentLineupTab teamId={team.id} /> : null}
+        {tab === "lineup" ? <RecentLineupTab teamId={team.id} teamColor={teamView.color} /> : null}
         {tab === "news" ? <NewsTab teamId={team.id} league={team.league ?? ""} /> : null}
       </section>
     </>
@@ -226,7 +263,13 @@ export default function TeamPage() {
 
 /* ------------------------------------------------------------ squad */
 
-function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+function SquadTab({
+  squadQuery,
+  teamColor,
+}: {
+  squadQuery: ReturnType<typeof useSquad>;
+  teamColor: string;
+}) {
   const { t, lang } = useI18n();
   if (squadQuery.isLoading) return <PanelSkeleton height={192} />;
   if (squadQuery.isError) return <ErrorState onRetry={() => squadQuery.refetch()} />;
@@ -260,7 +303,7 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
       {POS_ORDER.map((pos) => {
         const group = squad.players.filter((p) => p.position === pos);
         if (group.length === 0) return null;
-        return <SquadSection key={pos} pos={pos} players={group} num={num} />;
+        return <SquadSection key={pos} pos={pos} players={group} num={num} teamColor={teamColor} />;
       })}
     </div>
   );
@@ -276,10 +319,12 @@ function SquadSection({
   pos,
   players,
   num,
+  teamColor,
 }: {
   pos: Position;
   players: SquadRow[];
   num: (value: number | string) => string;
+  teamColor: string;
 }) {
   const { t, dir, localize } = useI18n();
   const [collapsed, setCollapsed] = useLocalState<boolean>(
@@ -329,7 +374,12 @@ function SquadSection({
                 {/* A face for every squad member: the ESPN headshot where the
                     feed has one, the player's initials where it doesn't, on
                     the same footprint either way. */}
-                <PlayerAvatar name={localize(player.name)} src={player.headshot} size="sm" />
+                <PlayerAvatar
+                  name={localize(player.name)}
+                  src={player.avatarUrl}
+                  teamColor={teamColor}
+                  size="sm"
+                />
                 <span className="player-name min-w-0">
                   <span className="block truncate text-sm font-bold text-ink">
                     {/* <bdi> isolates a Latin name so it cannot drift the row's
@@ -342,6 +392,9 @@ function SquadSection({
                       ? ` · ${t("team.appearances", { count: num(player.appearances) })}`
                       : ""}
                   </span>
+                  {player.availability ? (
+                    <span className="mt-1 block"><AvailabilityBadge status={player.availability.status} reason={player.availability.reason ?? player.availability.expected_return} /></span>
+                  ) : null}
                 </span>
                 <span className="player-stats flex-none">
                   <Num className={cx("text-sm", (player.goals ?? 0) > 0 ? "text-volt" : "text-ink-3")}>
@@ -399,10 +452,25 @@ function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: strin
                 <Num>
                   {match.home_score ?? 0}–{match.away_score ?? 0}
                 </Num>
+                {match.home_pens != null && match.away_pens != null ? (
+                  <Num dir="ltr" className="text-[10px] font-bold text-ink-3">
+                    ({match.home_pens}–{match.away_pens})
+                  </Num>
+                ) : null}
               </Chip>
             ) : match.status === "live" ? (
               <Chip tone="live">
                 <Num>{match.minute_display ?? ""}</Num>
+              </Chip>
+            ) : match.status !== "scheduled" ? (
+              // Postponed / abandoned / cancelled: a fixture with no result yet
+              // must not advertise a countdown before one.
+              <Chip tone="muted">
+                {match.status === "postponed"
+                  ? t("status.postponed")
+                  : match.status === "cancelled"
+                    ? t("status.cancelled")
+                    : t("status.abandoned")}
               </Chip>
             ) : (
               <Chip tone="volt">
@@ -462,7 +530,7 @@ function StatsTab({
   const { t, lang, localize } = useI18n();
   const locale = lang === "fa" ? "fa-IR" : undefined;
   const dateFmt = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" });
-  const recentResults = fixtures.filter((match) => match.status === "finished").slice(-5);
+  const recentResults = fixtures.filter((match) => match.status === "finished").slice(0, 5);
   if (!stats && recentResults.length === 0) {
     return <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />;
   }
@@ -591,25 +659,32 @@ function StatCard({ title, rows }: { title: string; rows: Array<{ label: string;
 
 /* ------------------------------------------------------------ recent lineup */
 
-function RecentLineupTab({ teamId }: { teamId: string }) {
+function RecentLineupTab({ teamId, teamColor }: { teamId: string; teamColor: string }) {
   const { t, lang, localize } = useI18n();
   const query = useRecentLineup(teamId);
   if (query.isLoading) return <PanelSkeleton height={192} />;
   if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
   const data = query.data;
   if (!data?.match) return <EmptyState title={t("team.lineupEmpty")} hint={t("team.lineupEmptyHint")} />;
-
   const locale = lang === "fa" ? "fa-IR" : undefined;
   const dateFmt = new Intl.DateTimeFormat(locale, { weekday: "short", month: "short", day: "numeric" });
   const number = (value: number) => (lang === "fa" ? toFaDigits(value) : value);
   const playerRows = (players: LineupPlayer[]) =>
     players.map((player) => (
-      <li key={player.id} className="flex items-center gap-2 py-2">
+      <li key={player.id} className="flex flex-wrap items-center gap-2 py-2">
         <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-xs font-bold text-ink-2">
           {player.number > 0 ? number(player.number) : "–"}
         </span>
+        <PlayerAvatar
+          name={localize(player.name)}
+          src={player.avatarUrl}
+          fallbackSrc={player.headshot ?? player.headshotUrl}
+          teamColor={teamColor}
+          size="sm"
+        />
         <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>
         <span className="text-xs text-ink-3">{t(`pos.${player.position}`)}</span>
+        {player.availability ? <AvailabilityBadge status={player.availability.status} reason={player.availability.reason ?? player.availability.expected_return} /> : null}
       </li>
     ));
 
@@ -623,19 +698,40 @@ function RecentLineupTab({ teamId }: { teamId: string }) {
       </Card>
       <Card className="p-3">
         <SectionHeading title={t("team.lineupStarters")} />
-        <ul className="divide-y divide-line">{playerRows(data.starters)}</ul>
+        {data.starters.length > 0 ? (
+          <>
+            <LineupPitch
+              lineup={{
+                formation: data.match.formation ?? "",
+                coach: "",
+                starters: data.starters,
+                subs: [],
+              }}
+              teamColor={teamColor}
+            />
+            <ul className="divide-y divide-line">{playerRows(data.starters)}</ul>
+          </>
+        ) : <EmptyState title={t("team.lineupUnavailable")} />}
       </Card>
-      {data.subs.length > 0 ? (
+      {data.bench.length + data.subs.length > 0 ? (
         <Card className="p-3">
           <SectionHeading title={t("team.lineupSubs")} />
           <ul className="divide-y divide-line">
-            {data.subs.map((player) => (
-              <li key={player.id} className="flex items-center gap-2 py-2">
+            {[...data.subs, ...data.bench].map((player) => (
+              <li key={player.id} className="flex flex-wrap items-center gap-2 py-2">
                 <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-xs font-bold text-ink-2">
                   {player.number > 0 ? number(player.number) : "–"}
                 </span>
+                <PlayerAvatar
+                  name={localize(player.name)}
+                  src={player.avatarUrl}
+                  fallbackSrc={player.headshot ?? player.headshotUrl}
+                  teamColor={teamColor}
+                  size="sm"
+                />
                 <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>
-                <span className="flex-none text-xs font-bold text-pitch">↑</span>
+                {player.availability ? <AvailabilityBadge status={player.availability.status} reason={player.availability.reason ?? player.availability.expected_return} /> : null}
+                {player.minutesPlayed ? <span className="flex-none text-xs font-bold text-pitch">↑</span> : null}
               </li>
             ))}
           </ul>

@@ -1,0 +1,411 @@
+From 7ffe8559a87130edff28e797cc2a1be938d19c6d Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 17 Oct 2026 23:18:06 +0330
+Subject: [PATCH 117/230] fix(server): gate prediction notifications behind
+ PREDICTIONS_ENABLED
+
+---
+ .env.example                |  7 +++
+ README.md                   |  1 +
+ server/bot/index.ts         | 22 +++++++--
+ server/features.ts          | 20 ++++++++
+ server/messages.ts          | 35 +++++++++-----
+ server/notifications.ts     | 25 ++++++++++
+ tests/botMenu.test.ts       | 22 +++++++++
+ tests/notifications.test.ts | 91 ++++++++++++++++++++++++++++++++++++-
+ 8 files changed, 205 insertions(+), 18 deletions(-)
+ create mode 100644 server/features.ts
+
+diff --git a/.env.example b/.env.example
+index 21782ce..f20e921 100644
+--- a/.env.example
++++ b/.env.example
+@@ -20,6 +20,13 @@ NEAR_KICKOFF_SECONDS=150
+ # the resolver cron, the bot or the retention sweep (local fixtures stay put).
+ # Leave empty in production.
+ SKIP_CRON=
++# Prediction system (lineups, subs, shots, player-to-watch, versus). The client
++# has its own switch in src/lib/features.ts; this one stops the SERVER queueing
++# or sending the prediction-lifecycle pushes (official-lineup drop, pre-kickoff
++# lock, half-time sub lock) and drops the leaderboards command/copy from the bot.
++# Goals, ratings and everything else keep working. Default false: the prediction
++# UI is currently hidden in the app.
++PREDICTIONS_ENABLED=false
+ # Comma-separated Telegram user ids that may call admin endpoints (manual sync trigger, single-recipient push); leave empty to disable
+ ADMIN_TELEGRAM_IDS=
+ # Optional: fixed secret for dev testing; when set, /api/auth/login accepts "dev:<any-id>" tokens (DO NOT set in production)
+diff --git a/README.md b/README.md
+index fa6f789..5af3f0f 100644
+--- a/README.md
++++ b/README.md
+@@ -204,6 +204,7 @@ build either way, only distribution differs.
+ - **Health check** is `GET /health` (503 if the DB stops answering, so the check can actually fail).
+ - **Secrets live in the dashboard**, not in `render.yaml`: `TELEGRAM_BOT_TOKEN`, `MINI_APP_URL`, optionally `ADMIN_TELEGRAM_IDS`.
+ - **`NODE_ENV=production` refuses to boot while `DEV_AUTH_SECRET` is set** — that key turns `dev:<id>` tokens into any user's identity. Unset it before deploying.
++- **`PREDICTIONS_ENABLED` is off by default.** The prediction UI is hidden in the app (its own switch is `PREDICTIONS_ENABLED` in `src/lib/features.ts`); the server-side twin in `server/features.ts` reads this env var and stops the prediction-lifecycle pushes (lineup drop, pre-kickoff lock, half-time lock) being queued or sent, and hides the leaderboards command and welcome copy that promise predictions. Set `PREDICTIONS_ENABLED=true` to bring all of it back.
+ - After the first deploy, point BotFather's Mini App URL (and `MINI_APP_URL`) at the service's `https://` URL.
+ 
+ ## Backups
+diff --git a/server/bot/index.ts b/server/bot/index.ts
+index f395864..89c43a0 100644
+--- a/server/bot/index.ts
++++ b/server/bot/index.ts
+@@ -3,7 +3,7 @@ import path from "node:path";
+ import { fileURLToPath } from "node:url";
+ import { Bot, InlineKeyboard, InputFile } from "grammy";
+ import { getDb, all, run, get } from "../db/index.js";
+-import { asPushKind, isOptedOut } from "../notifications.js";
++import { asPushKind, isOptedOut, shouldSkipPredictionPush } from "../notifications.js";
+ import {
+   asPushLang,
+   botCommandMenu,
+@@ -15,6 +15,7 @@ import {
+   type BotPage,
+   type PushLang,
+ } from "../messages.js";
++import { predictionsEnabled } from "../features.js";
+ import type { GoalAlert } from "../sync/upserts.js";
+ 
+ let bot: Bot | null = null;
+@@ -41,7 +42,14 @@ const TELEGRAM_ICON = path.join(
+  * list, the deep links and the router cannot disagree about where a button
+  * lands.
+  */
+-const BOT_PAGES: BotPage[] = ["matches", "profile", "leaderboards"];
++/**
++ * The deep-link pages behind the command menu, in menu order. A function, not a
++ * constant: the leaderboards screen is a prediction surface, so the list has to
++ * follow the flag rather than the moment this module was imported.
++ */
++function botPages(): BotPage[] {
++  return predictionsEnabled() ? ["matches", "profile", "leaderboards"] : ["matches", "profile"];
++}
+ 
+ /**
+  * Every command handler, registered on a bot that is not polling yet.
+@@ -96,7 +104,7 @@ export function registerHandlers(bot: Bot): void {
+   // Command-menu entries. Each one answers with a single button that opens the
+   // Mini App straight on that screen: tapping /matches in Telegram's menu and
+   // landing on the feed instead would make the menu worse than useless.
+-  for (const page of BOT_PAGES) {
++  for (const page of botPages()) {
+     bot.command(page, async (ctx) => {
+       const copy = botPageCopy(userLang(ctx.from?.id), page);
+       await ctx.reply(copy.text, {
+@@ -293,7 +301,13 @@ async function drainPushes(): Promise<void> {
+       // still stops the send. Each kind is checked against its own Profile
+       // switch, so muting goal alerts leaves lock reminders intact. Opt-outs are
+       // skipped, not failed.
+-      if (isOptedOut(db, row.telegram_id, asPushKind(row.kind))) {
++      //
++      // The flag gate comes first: with predictions off there is no screen to
++      // act on a lineup/lock/half-time reminder, and the switch that used to
++      // mute it is hidden — those rows are retired as sent-without-delivery
++      // rather than delivered late if the flag ever comes back.
++      const kind = asPushKind(row.kind);
++      if (shouldSkipPredictionPush(kind) || isOptedOut(db, row.telegram_id, kind)) {
+         run(db, "UPDATE bot_push_queue SET sent_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
+         continue;
+       }
+diff --git a/server/features.ts b/server/features.ts
+new file mode 100644
+index 0000000..807cd83
+--- /dev/null
++++ b/server/features.ts
+@@ -0,0 +1,20 @@
++/** Server-side twin of the client PREDICTIONS_ENABLED flag. Off unless explicitly enabled. */
++export const PREDICTIONS_ENABLED = process.env.PREDICTIONS_ENABLED === "true";
++
++/**
++ * The value the producers and the bot copy actually read.
++ *
++ * A function rather than the bare constant so the flag is consulted at call
++ * time (a test can flip it for one scenario, and a future admin toggle has
++ * somewhere to live) while production behaviour stays "env at boot".
++ */
++let override: boolean | null = null;
++
++export function predictionsEnabled(): boolean {
++  return override ?? PREDICTIONS_ENABLED;
++}
++
++/** Test seam: force the flag on/off, or pass null to go back to the env value. */
++export function setPredictionsEnabledForTest(value: boolean | null): void {
++  override = value;
++}
+diff --git a/server/messages.ts b/server/messages.ts
+index d06a0e5..defc927 100644
+--- a/server/messages.ts
++++ b/server/messages.ts
+@@ -18,6 +18,7 @@
+  * it here would mean two tables drifting apart. Numbers in interpolated values
+  * (scores, minutes) stay Latin too, matching how the app renders scorelines.
+  */
++import { predictionsEnabled } from "./features.js";
+ export type PushLang = "en" | "fa";
+ 
+ /** Anything that isn't `fa` is English — same default as the `users` column. */
+@@ -99,6 +100,13 @@ export function ratingsPush(lang: PushLang, v: MatchPushVars): string {
+  */
+ 
+ export function botStartText(lang: PushLang): string {
++  // With predictions gated off the welcome must not promise them: the buttons,
++  // tabs and leaderboards it names no longer exist in the app.
++  if (!predictionsEnabled()) {
++    return lang === "fa"
++      ? "به Vkick خوش آمدی! ⚽\n\nباشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، نتایج زنده را ببین، جدول‌ها را نگاه کن و به بازیکنان تأثیرگذار امتیاز بده.\n\nبرای شروع دکمه زیر را بزن."
++      : "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, follow live scores, check every table, and rate the players who mattered most.\n\nTap below to get started.";
++  }
+   return lang === "fa"
+     ? "به Vkick خوش آمدی! ⚽\n\nباشگاه‌ها و لیگ‌های موردعلاقه‌ات را دنبال کن، ترکیب و تعویض و شوت و بازیکن برتر هر بازی را پیش‌بینی کن، در جدول امتیازهای فصل بالا برو و به بازیکنان تأثیرگذار امتیاز بده.\n\nبرای شروع دکمه زیر را بزن."
+     : "Welcome to Vkick! ⚽\n\nFollow your favorite clubs and leagues, predict lineups, subs, shots and standout players, climb the season leaderboards, and rate the players who mattered most.\n\nTap below to get started.";
+@@ -147,18 +155,21 @@ export interface BotCommandSpec {
+  * Telegram truncates the menu, and it is a menu, not a pitch.
+  */
+ export function botCommandMenu(lang: PushLang): BotCommandSpec[] {
+-  if (lang === "fa") {
+-    return [
+-      { command: "matches", description: "بازی‌های امروز" },
+-      { command: "profile", description: "پروفایل شما" },
+-      { command: "leaderboards", description: "جدول امتیازها" },
+-    ];
+-  }
+-  return [
+-    { command: "matches", description: "View today's fixtures" },
+-    { command: "profile", description: "View your profile" },
+-    { command: "leaderboards", description: "View the leaderboards" },
+-  ];
++  const menu =
++    lang === "fa"
++      ? [
++          { command: "matches", description: "بازی‌های امروز" },
++          { command: "profile", description: "پروفایل شما" },
++          { command: "leaderboards", description: "جدول امتیازها" },
++        ]
++      : [
++          { command: "matches", description: "View today's fixtures" },
++          { command: "profile", description: "View your profile" },
++          { command: "leaderboards", description: "View the leaderboards" },
++        ];
++  // The leaderboards are a prediction surface: with the flag off the command
++  // would open a screen the app no longer routes.
++  return predictionsEnabled() ? menu : menu.filter((c) => c.command !== "leaderboards");
+ }
+ 
+ export interface BotPageCopy {
+diff --git a/server/notifications.ts b/server/notifications.ts
+index 8b6ab58..492d586 100644
+--- a/server/notifications.ts
++++ b/server/notifications.ts
+@@ -36,10 +36,34 @@ import {
+   type PushLang,
+ } from "./messages.js";
+ import { lineupPublished } from "./predictions/window.js";
++import { predictionsEnabled } from "./features.js";
+ 
+ /** Every kind of push the app sends. Also the dedupe stage for matchday pushes. */
+ export type PushKind = "goal" | "lineup" | "lock" | "halftime" | "ratings";
+ 
++/**
++ * The prediction-lifecycle stages: the lineup drop, the last call before the
++ * picks lock, and the half-time sub-board lock. With `PREDICTIONS_ENABLED` off
++ * there is no prediction UI, so these pushes would be instructions for
++ * something the user cannot do — and the deadline switch that muted them is
++ * hidden too, making them unstoppable. Gated at BOTH ends: nothing new is
++ * queued, and rows queued before the deploy are dropped at send time.
++ */
++const PREDICTION_KINDS = new Set<PushKind>(["lineup", "lock", "halftime"]);
++
++/** True when this kind is part of the (currently hidden) prediction lifecycle. */
++export function isPredictionPush(kind: PushKind): boolean {
++  return PREDICTION_KINDS.has(kind);
++}
++
++/**
++ * Send-time gate for one queued row. Mirrors the emit-time gate so a row
++ * written before the flag was turned off never goes out.
++ */
++export function shouldSkipPredictionPush(kind: PushKind): boolean {
++  return !predictionsEnabled() && PREDICTION_KINDS.has(kind);
++}
++
+ /**
+  * Which Profile switch owns each kind. `deadline` covers the whole prediction
+  * lifecycle (the sub board opening on the lineup drop, locking at half-time,
+@@ -353,6 +377,7 @@ export function queueMatchdayAlerts(db: DB, now: Date = new Date()): number {
+  * same club each get their own wording.
+  */
+ function emit(db: DB, matchId: string, stage: PushKind, copy: (lang: PushLang) => string): number {
++  if (shouldSkipPredictionPush(stage)) return 0;
+   let sent = 0;
+   for (const r of matchRecipients(db, matchId, stage)) {
+     if (!claimNotification(db, r.telegramId, matchId, stage)) continue;
+diff --git a/tests/botMenu.test.ts b/tests/botMenu.test.ts
+index 50eb5ee..2ca87bc 100644
+--- a/tests/botMenu.test.ts
++++ b/tests/botMenu.test.ts
+@@ -17,6 +17,7 @@ import { strict as assert } from "node:assert";
+ import { Bot } from "grammy";
+ import { deepLink, registerCommands, registerHandlers } from "../server/bot/index.js";
+ import { botCommandMenu, botPageCopy, type BotPage } from "../server/messages.js";
++import { setPredictionsEnabledForTest } from "../server/features.js";
+ 
+ const PAGES: BotPage[] = ["matches", "profile", "leaderboards"];
+ const LANGS = ["en", "fa"] as const;
+@@ -107,6 +108,11 @@ async function withMiniAppUrl(url: string | undefined, fn: () => void | Promise<
+ }
+ 
+ export async function runBotMenuTests(): Promise<void> {
++  // The prediction surfaces are feature-flagged off in the product right now;
++  // this suite exercises the full menu, so it runs with the flag on and checks
++  // the off state separately at the end.
++  setPredictionsEnabledForTest(true);
++
+   // The menu Telegram shows: exactly the three commands, described for a user
+   // reading the "/" list.
+   assert.deepEqual(
+@@ -211,5 +217,21 @@ export async function runBotMenuTests(): Promise<void> {
+     }
+   });
+ 
++  // With predictions off, the leaderboards command is not registered at all —
++  // its screen is a prediction surface and the app no longer routes it.
++  setPredictionsEnabledForTest(false);
++  assert.deepEqual(
++    botCommandMenu("en").map((c) => c.command),
++    ["matches", "profile"],
++    "leaderboards command is hidden while predictions are off",
++  );
++  assert.deepEqual(
++    botCommandMenu("fa").map((c) => c.command),
++    ["matches", "profile"],
++    "Persian menu hides it too",
++  );
++  setPredictionsEnabledForTest(null);
++
+   console.log("  botMenu: /matches /profile /leaderboards menu + hash deep links OK");
++  console.log("  botMenu: leaderboards hidden while PREDICTIONS_ENABLED is off OK");
+ }
+diff --git a/tests/notifications.test.ts b/tests/notifications.test.ts
+index 7f253da..72cb900 100644
+--- a/tests/notifications.test.ts
++++ b/tests/notifications.test.ts
+@@ -16,8 +16,15 @@ import fs from "node:fs";
+ import os from "node:os";
+ import path from "node:path";
+ import { migrate } from "../server/db/schema.js";
+-import { asPushKind, isOptedOut, queueGoalAlerts, queueMatchdayAlerts } from "../server/notifications.js";
+-import { asPushLang } from "../server/messages.js";
++import {
++  asPushKind,
++  isOptedOut,
++  queueGoalAlerts,
++  queueMatchdayAlerts,
++  shouldSkipPredictionPush,
++} from "../server/notifications.js";
++import { predictionsEnabled, setPredictionsEnabledForTest } from "../server/features.js";
++import { asPushLang, botCommandMenu, botStartText } from "../server/messages.js";
+ 
+ /** Fixed clock: the producers take `now`, so every window is deterministic. */
+ const NOW = new Date("2026-09-29T18:00:00.000Z");
+@@ -530,7 +537,85 @@ function testDeliverabilityFilter() {
+   db.close();
+ }
+ 
++/**
++ * PREDICTIONS_ENABLED=false retires the prediction lifecycle entirely: no
++ * lineup/lock/half-time push is queued, a row already in the queue is skipped
++ * at send time, and goal + ratings pushes keep working. Turning the flag back on
++ * restores the old behaviour, which the tests above run under.
++ */
++function testPredictionPushesGatedOff() {
++  const db = tempDb();
++  seed(db);
++  // One match in each prediction window: lineup published ~90 min out, lock
++  // window at 30 min, and a match at half-time (the sub-board lock).
++  addMatch(db, "m_lu", "scheduled", minutesFromNow(90), { lineup: true });
++  addMatch(db, "m_lock", "scheduled", minutesFromNow(30));
++  addMatch(db, "m_ht", "halftime", minutesFromNow(-50), { home: 1, away: 0 });
++  // …plus a finished match for ratings and a scorer for goals.
++  addMatch(db, "m_ft", "finished", minutesFromNow(-120), { home: 2, away: 1 });
++
++  setPredictionsEnabledForTest(false);
++  assert.equal(predictionsEnabled(), false, "test seam puts the flag off");
++
++  // The finished fixture still produces its ratings push, so the sweep is not
++  // silent — what must be missing is every prediction-lifecycle kind.
++  assert.equal(queueMatchdayAlerts(db, NOW), 3, "flag off queues only the ratings push");
++  assert.deepEqual(idsOf(db, "lineup"), [], "no lineup pushes");
++  assert.deepEqual(idsOf(db, "lock"), [], "no lock pushes");
++  assert.deepEqual(idsOf(db, "halftime"), [], "no half-time pushes");
++  // Nothing was even claimed, so turning the flag back on can still send them.
++  assert.deepEqual(idsOf(db, "ratings"), ["u1", "u2", "u3"], "ratings pushes still go out");
++
++  const goalsOff = queueGoalAlerts(db, [
++    { matchId: "m_ft", scoringTeamId: "H", scorerName: "Saka", minute: "55", homeScore: 2, awayScore: 1 },
++  ]);
++  assert.equal(goalsOff, 3, "goal alerts still deliver with predictions off");
++  assert.deepEqual(idsOf(db, "goal"), ["u1", "u2", "u3"]);
++
++  // Send-time gate: rows queued BEFORE the flag flipped (a previous deploy, or
++  // the queue being filled while the flag was on) must not be delivered.
++  assert.equal(shouldSkipPredictionPush("lineup"), true, "queued lineup rows are skipped when off");
++  assert.equal(shouldSkipPredictionPush("lock"), true, "queued lock rows are skipped when off");
++  assert.equal(shouldSkipPredictionPush("halftime"), true, "queued half-time rows are skipped when off");
++  assert.equal(shouldSkipPredictionPush("goal"), false, "goal rows are never skipped");
++  assert.equal(shouldSkipPredictionPush("ratings"), false, "ratings rows are never skipped");
++
++  // Bot copy: no leaderboards command, and the welcome stops promising predictions.
++  assert.deepEqual(
++    botCommandMenu("en").map((c) => c.command),
++    ["matches", "profile"],
++    "leaderboards command hidden while predictions are off",
++  );
++  assert.ok(
++    !/predict|leaderboard/i.test(botStartText("en")),
++    `welcome must not promise predictions: ${botStartText("en")}`,
++  );
++  assert.ok(
++    botStartText("fa").includes("نتایج زنده"),
++    "Persian welcome reworded too",
++  );
++
++  // Flag on: the old behaviour returns for the same fixtures.
++  setPredictionsEnabledForTest(true);
++  assert.ok(queueMatchdayAlerts(db, NOW) > 0, "flag on queues the prediction lifecycle again");
++  assert.deepEqual(idsOf(db, "lineup"), ["u1", "u2", "u3"], "lineup push is back");
++  assert.deepEqual(idsOf(db, "lock"), ["u1", "u2", "u3"], "lock push is back");
++  assert.deepEqual(idsOf(db, "halftime"), ["u1", "u2", "u3"], "half-time push is back");
++  assert.equal(shouldSkipPredictionPush("lineup"), false, "send-time gate opens with the flag on");
++  assert.ok(
++    botCommandMenu("en").some((c) => c.command === "leaderboards"),
++    "leaderboards command returns",
++  );
++  assert.ok(/predict lineups/.test(botStartText("en")), "original welcome returns");
++
++  setPredictionsEnabledForTest(null);
++  db.close();
++}
++
+ export async function runNotificationTests(): Promise<void> {
++  // The legacy-behaviour tests below assert that prediction pushes fire; they
++  // run with the flag on, and testPredictionPushesGatedOff covers the off state.
++  setPredictionsEnabledForTest(true);
+   testDedupeAndBothClubs();
+   testPreferenceGates();
+   testWindowGates();
+@@ -541,9 +626,11 @@ export async function runNotificationTests(): Promise<void> {
+   testFollowedLeagueGoalAlerts();
+   testKindColumnBackfill();
+   testDeliverabilityFilter();
++  testPredictionPushesGatedOff();
+   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
+   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
+   console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
+   console.log("  notifications: followed leagues deliver stages + goals, deduped against clubs OK");
+   console.log("  notifications: guest/pwd/dev accounts never enter the push queue OK");
++  console.log("  notifications: PREDICTIONS_ENABLED gates lineup/lock/halftime, goals+ratings survive OK");
+ }
+-- 
+2.54.0.windows.1
+

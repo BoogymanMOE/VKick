@@ -1,0 +1,86 @@
+From 2db90bff9e7c0d18b0ffa2c3facac560a8d718f7 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 00:30:10 +0330
+Subject: [PATCH 119/230] chore: add RATINGS_ENABLED client and server flags
+
+Player ratings move behind the same switch as predictions so the feature can be hidden without deleting any code, routes or tables.
+---
+ .env.example        |  5 +++++
+ README.md           |  1 +
+ server/features.ts  | 19 +++++++++++++++++++
+ src/lib/features.ts |  7 +++++++
+ 4 files changed, 32 insertions(+)
+
+diff --git a/.env.example b/.env.example
+index f20e921..ac3eae9 100644
+--- a/.env.example
++++ b/.env.example
+@@ -27,6 +27,11 @@ SKIP_CRON=
+ # Goals, ratings and everything else keep working. Default false: the prediction
+ # UI is currently hidden in the app.
+ PREDICTIONS_ENABLED=false
++# Player-ratings system (crowd ratings, rating cards, rating-window push). The
++# client has its own switch in src/lib/features.ts; this one stops the SERVER
++# queueing or sending the rating-window push and removes the ratings promise
++# from the bot copy. Default false: the ratings UI is currently hidden.
++RATINGS_ENABLED=false
+ # Comma-separated Telegram user ids that may call admin endpoints (manual sync trigger, single-recipient push); leave empty to disable
+ ADMIN_TELEGRAM_IDS=
+ # Optional: fixed secret for dev testing; when set, /api/auth/login accepts "dev:<any-id>" tokens (DO NOT set in production)
+diff --git a/README.md b/README.md
+index 5af3f0f..6822360 100644
+--- a/README.md
++++ b/README.md
+@@ -205,6 +205,7 @@ build either way, only distribution differs.
+ - **Secrets live in the dashboard**, not in `render.yaml`: `TELEGRAM_BOT_TOKEN`, `MINI_APP_URL`, optionally `ADMIN_TELEGRAM_IDS`.
+ - **`NODE_ENV=production` refuses to boot while `DEV_AUTH_SECRET` is set** — that key turns `dev:<id>` tokens into any user's identity. Unset it before deploying.
+ - **`PREDICTIONS_ENABLED` is off by default.** The prediction UI is hidden in the app (its own switch is `PREDICTIONS_ENABLED` in `src/lib/features.ts`); the server-side twin in `server/features.ts` reads this env var and stops the prediction-lifecycle pushes (lineup drop, pre-kickoff lock, half-time lock) being queued or sent, and hides the leaderboards command and welcome copy that promise predictions. Set `PREDICTIONS_ENABLED=true` to bring all of it back.
++- **`RATINGS_ENABLED` is off by default.** Same pattern for player ratings: the client switch is `RATINGS_ENABLED` in `src/lib/features.ts` (hides the Ratings route, intro slide, notification toggle and the stats points column), and the server twin in `server/features.ts` reads this env var to stop the rating-window push being queued or sent and to drop the ratings promise from the bot copy. Set `RATINGS_ENABLED=true` to bring all of it back.
+ - After the first deploy, point BotFather's Mini App URL (and `MINI_APP_URL`) at the service's `https://` URL.
+ 
+ ## Backups
+diff --git a/server/features.ts b/server/features.ts
+index 807cd83..f44dbb8 100644
+--- a/server/features.ts
++++ b/server/features.ts
+@@ -18,3 +18,22 @@ export function predictionsEnabled(): boolean {
+ export function setPredictionsEnabledForTest(value: boolean | null): void {
+   override = value;
+ }
++
++/** Server-side twin of the client RATINGS_ENABLED flag. Off unless explicitly enabled. */
++export const RATINGS_ENABLED = process.env.RATINGS_ENABLED === "true";
++
++/**
++ * The value the ratings producers and the bot copy actually read. Same reason
++ * as predictionsEnabled(): the flag is consulted at call time so a test can
++ * flip it for one scenario while production stays "env at boot".
++ */
++let ratingsOverride: boolean | null = null;
++
++export function ratingsEnabled(): boolean {
++  return ratingsOverride ?? RATINGS_ENABLED;
++}
++
++/** Test seam: force the ratings flag on/off, or pass null for the env value. */
++export function setRatingsEnabledForTest(value: boolean | null): void {
++  ratingsOverride = value;
++}
+diff --git a/src/lib/features.ts b/src/lib/features.ts
+index d0a43b4..4ebeb16 100644
+--- a/src/lib/features.ts
++++ b/src/lib/features.ts
+@@ -4,3 +4,10 @@
+  * the prediction UI back. The prediction code itself stays in the repo.
+  */
+ export const PREDICTIONS_ENABLED = false;
++
++/**
++ * Master switch for every player-ratings surface (Ratings page, intro slide,
++ * notification toggle, stats "points" column). Set to true to bring them back.
++ * The ratings code stays in the repo.
++ */
++export const RATINGS_ENABLED = false;
+-- 
+2.54.0.windows.1
+

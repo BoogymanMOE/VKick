@@ -1,0 +1,367 @@
+From 13c415992657e6b20071bc44a8d2f7935791a349 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 01:14:08 +0330
+Subject: [PATCH 082/230] Verify both Telegram signature readings so logins
+ stop landing as Guests
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Bot API 8.0's `signature` field is folded into the signed string by live
+Telegram payloads, but the verifier excluded it, so authentic logins were
+rejected with `reason=hash mismatch` and silently downgraded to a guest
+account; both readings are now accepted (each still demands a bot-token HMAC,
+so nothing unsigned gets in). Sign-out also clears the local credential before
+the revoke round trip, so a stalled /auth/logout can no longer strand the user.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/telegram/verify.ts | 95 ++++++++++++++++++++++++---------------
+ src/hooks/useAuth.tsx     | 15 ++++---
+ src/pages/Profile.tsx     | 20 ++++++++-
+ tests/telegramUrl.test.ts | 13 +++---
+ tests/verify.test.ts      | 61 ++++++++++++++-----------
+ 5 files changed, 133 insertions(+), 71 deletions(-)
+
+diff --git a/server/telegram/verify.ts b/server/telegram/verify.ts
+index f8eb448..939dd16 100644
+--- a/server/telegram/verify.ts
++++ b/server/telegram/verify.ts
+@@ -23,31 +23,47 @@ const MAX_AGE_SECONDS = 86_400;
+  * Verify Telegram WebApp initData (official algorithm, Bot API 8.0+):
+  * secret = HMAC_SHA256(key="WebAppData", message=botToken)
+  * hash   = HMAC_SHA256(key=secret,  message=dataCheckString)
+- * where dataCheckString is all fields except `hash` and `signature`, sorted,
+- * "k=v" joined by \n.
++ * where dataCheckString is the received fields, sorted, "k=v" joined by \n,
++ * with `hash` removed.
+  *
+- * `signature` (an Ed25519 signature for third-party verification, added in
+- * Bot API 8.0) is NOT part of the bot-token HMAC check string. Current
+- * Telegram clients attach it to every payload; folding it in makes every
+- * authentic login fail. Excluding it is strictly safe: payloads without the
+- * field hash identically either way. (Spec: core.telegram.org/bots/webapps
+- * "Validating data received via the Mini App"; empirically confirmed against
+- * a live bot token — validators that exclude only `hash` reject authentic
+- * signature-carrying payloads, which is exactly the failure the TEMP probe
+- * was watching for.)
++ * WHICH fields it covers is the one genuinely ambiguous part, because Bot API
++ * 8.0 added `signature` (an Ed25519 signature for third-party verification) to
++ * every payload and the ecosystem split over whether it belongs in the string
++ * that `hash` covers:
++ *
++ *  - Telegram's docs describe the bot-token check as "all received fields"
++ *    minus `hash` — only the THIRD-PARTY Ed25519 path excludes `signature` —
++ *    and a live Desktop payload with a real hash (tdlib/telegram-bot-api#747)
++ *    reproduces only with `signature` INCLUDED. `@tma.js/init-data-node`'s
++ *    validator likewise pops only `hash`.
++ *  - Other validators (and this file, until now) exclude `signature`, and
++ *    reject exactly those payloads.
++ *
++ * Guessing wrong is not a small deal: the payload is authentic either way, the
++ * hash does not match, and the user is silently downgraded to a guest account
++ * with no bot pushes — the "Continue as <Name> lands as Guest" login failure.
++ * So BOTH readings are accepted (see verifyInitData). That is not a weaker
++ * check: each reading still demands an HMAC-SHA256 only the bot token could
++ * produce, so neither can admit a payload Telegram did not sign. It only stops
++ * us disagreeing with a client over which fields Telegram folded in.
+  *
+  * `auth_date` is REQUIRED: its absence is a rejection, not a skip, and the
+  * comparison is constant-time so a probe can't binary-search the digest.
+  */
+ type InitDataVerdict = { ok: true; user: TelegramUser } | { ok: false; reason: string };
+ 
+-/** The HMAC check itself, over one byte-level reading of the payload. */
+-function checkInitData(initData: string, botToken: string): InitDataVerdict {
++/**
++ * The HMAC check itself, over one byte-level reading of the payload.
++ * `excludeSignature` selects the convention for the check string: false folds
++ * `signature` in (Telegram's live behaviour — see the note above), true leaves
++ * it out (the third-party convention some validators copied over).
++ */
++function checkInitData(initData: string, botToken: string, excludeSignature: boolean): InitDataVerdict {
+   const params = new URLSearchParams(initData);
+   const hash = params.get("hash");
+   if (!hash) return { ok: false, reason: "missing hash" };
+   params.delete("hash");
+-  params.delete("signature");
++  if (excludeSignature) params.delete("signature");
+ 
+   const dataCheckString = [...params.entries()]
+     .map(([k, v]) => `${k}=${v}`)
+@@ -99,32 +115,41 @@ function checkInitData(initData: string, botToken: string): InitDataVerdict {
+ }
+ 
+ /**
+- * Verify Telegram WebApp initData, tolerating the one genuine ambiguity in a
+- * query string: `+`.
++ * Verify Telegram WebApp initData, tolerating the two genuine ambiguities in a
++ * query string: which fields `hash` covers, and what `+` means.
++ *
++ * FIELD SET. `signature` may or may not have been folded into the signed string
++ * depending on the client/validator vintage (see the note above), so both
++ * readings are checked. Nothing else is guessed: either one is a byte-for-byte
++ * HMAC that only the bot token could produce.
+  *
+- * Form-encoding says `+` means a space, and `URLSearchParams` applies that rule.
+- * Telegram does not: it encodes each field with `encodeURIComponent`, so a space
+- * travels as `%20` and a real plus as `%2B` — which makes a BARE `+` in
+- * initData a literal `+` (the base64 `signature`, a `start_param`, a name).
+- * A launch URL re-encoded on the way into the webview can hand us exactly that
+- * shape; reading its `+` as a space changes the bytes the HMAC covers and
+- * rejects a genuine login, which is how a signed-in user ends up on a guest
+- * account. (The client side of the same bug lives in src/lib/telegramUrl.ts.)
++ * `+`. Form-encoding says `+` means a space, and `URLSearchParams` applies that
++ * rule. Telegram does not: it encodes each field with `encodeURIComponent`, so
++ * a space travels as `%20` and a real plus as `%2B` — which makes a BARE `+` in
++ * initData a literal `+` (a `start_param`, a name). A launch URL re-encoded on
++ * the way into the webview can hand us exactly that shape; reading its `+` as a
++ * space changes the bytes the HMAC covers and rejects a genuine login, which is
++ * how a signed-in user ends up on a guest account. (The client side of the same
++ * bug lives in src/lib/telegramUrl.ts.) So a payload containing `+` is also
++ * checked under the literal-plus reading, with its `+` rewritten to `%2B`.
+  *
+- * So a payload containing `+` is checked under both readings — literal plus
+- * first, then the legacy form-encoded one. Both still require an HMAC that only
+- * the bot token could produce, so this cannot admit a payload Telegram did not
+- * sign; it only stops us disagreeing with Telegram over what `+` means.
++ * The first failing verdict is what a payload that fails everything reports, so
++ * `missing hash` / `missing auth_date` still surface as themselves.
+  */
+ export function verifyInitData(initData: string, botToken: string): InitDataVerdict {
+-  // No `+`, no ambiguity — one reading, exactly as before.
+-  if (!initData.includes("+")) return checkInitData(initData, botToken);
++  // A `+`-free payload has one byte-level reading; a payload carrying a `+`
++  // gets the literal-plus reading as well.
++  const texts = initData.includes("+") ? [initData.replace(/\+/g, "%2B"), initData] : [initData];
+ 
+-  const literalPlus = checkInitData(initData.replace(/\+/g, "%2B"), botToken);
+-  if (literalPlus.ok) return literalPlus;
+-  // Legacy reading last so its verdict (and its reason string) is what a
+-  // payload that fails BOTH readings reports, as it did before.
+-  return checkInitData(initData, botToken);
++  let firstFailure: InitDataVerdict | null = null;
++  for (const text of texts) {
++    for (const excludeSignature of [false, true]) {
++      const verdict = checkInitData(text, botToken, excludeSignature);
++      if (verdict.ok) return verdict;
++      firstFailure ??= verdict;
++    }
++  }
++  return firstFailure ?? { ok: false, reason: "hash mismatch" };
+ }
+ 
+ /**
+diff --git a/src/hooks/useAuth.tsx b/src/hooks/useAuth.tsx
+index 4ce29f8..3a4186e 100644
+--- a/src/hooks/useAuth.tsx
++++ b/src/hooks/useAuth.tsx
+@@ -175,14 +175,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+   );
+ 
+   const logout = useCallback(async () => {
+-    try {
+-      await api.logout();
+-    } catch {
+-      /* token may already be dead; clearing locally is what matters */
+-    }
++    // Fire the revoke request FIRST, while the token is still stored, so the
++    // session row really is deleted — but never make clearing local state wait
++    // on it. Awaiting it first is what made sign-out feel impossible: a stalled
++    // or failing /auth/logout left the user signed in with no way out.
++    // clearSession() marks the sign-out (nothing can silently re-enter), and
++    // the guard below drops the user on /login the moment qc clears.
++    const revoke = api.logout().catch(() => {
++      /* token may already be dead, or the network is; local clearing is what matters */
++    });
+     clearSession();
+     enteredRef.current = false; // the entry screen must be able to enter again
+     qc.clear();
++    await revoke;
+   }, [qc]);
+ 
+   const user = useMemo<AuthUser | null>(() => {
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 4109614..29a7e2a 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -15,6 +15,20 @@ import { LEGAL_ROUTES } from "../lib/legal";
+ import { useLocalState } from "../lib/useLocalState";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+ 
++/**
++ * Reject after `ms` so a request that never settles cannot pin the UI in a
++ * busy state. The underlying fetch is left alone — it may still complete — but
++ * the caller gets an error and can recover.
++ */
++function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
++  return Promise.race([
++    promise,
++    new Promise<never>((_, reject) => {
++      setTimeout(() => reject(new Error("REQUEST_TIMEOUT")), ms);
++    }),
++  ]);
++}
++
+ export default function Profile() {
+   const { t, lang, setLang } = useI18n();
+   const { push } = useToast();
+@@ -61,13 +75,17 @@ export default function Profile() {
+    * Irreversible: the server removes every row the user owns, then we clear
+    * the local credential. logout()'s own request 401s (its session row is
+    * already gone) and is swallowed — clearing local state is what matters.
++   *
++   * The request is bounded: a stalled DELETE (flaky network, a backend busy
++   * cascading the rows) must not leave the confirm sheet spinning forever with
++   * both of its buttons disabled and no way out.
+    */
+   const confirmDelete = async () => {
+     if (deleteBusy) return;
+     setDeleteBusy(true);
+     setDeleteError(null);
+     try {
+-      await api.deleteAccount();
++      await withTimeout(api.deleteAccount(), 20_000);
+       notifyHaptic("success");
+       await logout();
+     } catch (err) {
+diff --git a/tests/telegramUrl.test.ts b/tests/telegramUrl.test.ts
+index 561604d..7b9468b 100644
+--- a/tests/telegramUrl.test.ts
++++ b/tests/telegramUrl.test.ts
+@@ -124,11 +124,13 @@ function testCanonicalPlusDecodesExactlyOnce(): void {
+ 
+ const BOT_TOKEN = "7000000000:TEST-token-for-the-telegramUrl-suite";
+ 
+-/** Sign a field set the way Telegram documents it (`signature` excluded). */
++/**
++ * Sign a field set the way live Telegram does: `signature` IS part of the
++ * hashed string (see the reading note in server/telegram/verify.ts).
++ */
+ function signInitData(fields: Record<string, string>): string {
+   const secret = crypto.createHmac("sha256", "WebAppData").update(BOT_TOKEN).digest();
+   const dataCheckString = Object.entries(fields)
+-    .filter(([key]) => key !== "signature")
+     .map(([key, value]) => `${key}=${value}`)
+     .sort()
+     .join("\n");
+@@ -139,9 +141,10 @@ function signInitData(fields: Record<string, string>): string {
+ /**
+  * The end the user actually experiences: whatever the URL recovery hands back
+  * has to pass the server's HMAC check. A payload whose base64 signature carries
+- * `+` is signed locally with a throwaway token, then pushed through the exact
+- * launch shapes the Mini App sees. Before the fix the bare-`+` shape failed
+- * here and the user landed on the guest account.
++ * `+` is signed locally with a throwaway token (signature folded in, as live
++ * Telegram does), then pushed through the exact launch shapes the Mini App
++ * sees. Both the canonical and the bare-`+` shape must verify — the bare `+`
++ * one used to fail here and land the user on the guest account.
+  */
+ function testRecoveredPayloadVerifies(): void {
+   const signed = signInitData({
+diff --git a/tests/verify.test.ts b/tests/verify.test.ts
+index 5892142..38d52f8 100644
+--- a/tests/verify.test.ts
++++ b/tests/verify.test.ts
+@@ -6,10 +6,11 @@
+  * Pins: valid payload passes, tampering fails, wrong token fails, auth_date is
+  * required (its age window is TEMP-bypassed for the Guest-login debug — see
+  * testAuthDateRules), non-hex digests fail closed (timing-safe path),
+- * and Bot API 8.0's `signature` field is EXCLUDED from the check string —
+- * payloads signed per the documented algorithm (signature left out of the
+- * hashed fields) verify, while payloads that folded signature in fail, which
+- * is exactly what old validators did to every current Telegram client.
++ * and BOTH readings of the Bot API 8.0 `signature` ambiguity verify — a
++ * payload whose hash covers `signature` (Telegram's live behaviour, and the
++ * shape that used to be rejected here with `hash mismatch`, downgrading the
++ * user to a Guest) and one whose hash leaves it out. Only the token-derived
++ * HMAC is accepted in either case; a tampered payload still fails both.
+  */
+ import { strict as assert } from "node:assert";
+ import crypto from "node:crypto";
+@@ -18,9 +19,10 @@ import { verifyDevToken, verifyInitData } from "../server/telegram/verify.js";
+ const BOT_TOKEN = "7000000000:TEST-token-for-the-verify-suite";
+ 
+ /**
+- * Sign a query-string of key=value pairs exactly like Telegram documents it.
+- * `includeSignatureInCheck` reproduces the old-validator mistake (folding the
+- * signature field into the hashed string) to pin its rejection.
++ * Sign a query-string of key=value pairs exactly like Telegram does.
++ * `includeSignatureInCheck` picks which convention `hash` covers: true folds
++ * `signature` into the hashed string (what a live Telegram payload does — see
++ * verify.ts), false leaves it out (the older/third-party convention).
+  */
+ function sign(
+   fields: Record<string, string>,
+@@ -102,29 +104,38 @@ function testMalformedDigests() {
+   assert.equal(verifyInitData("user=%7B%22id%22%3A1%7D", BOT_TOKEN).ok, false, "no hash at all rejected");
+ }
+ 
+-function testSignatureExcludedFromCheckString() {
++function testSignatureReadings() {
+   const fields = {
+     auth_date: String(Math.floor(Date.now() / 1000) - 30),
+     query_id: "AAHtest",
+     signature: "dGVzdC1zaWduYXR1cmU",
+     user: '{"id":9,"first_name":"Sara"}',
+   };
+-  // Documented algorithm: the client signs all fields EXCEPT hash and
+-  // signature. Our validator must accept exactly that payload.
+-  const authentic = sign(fields);
+-  const ok = verifyInitData(authentic, BOT_TOKEN);
+-  assert.equal(ok.ok, true, "signature-carrying payload (signed per spec) verifies");
+-
+-  // The old-validator mistake: fold signature into the check string. Every
+-  // real Bot API 8.0+ payload would fail that way — pin the rejection.
+-  const legacyHashed = sign(fields, BOT_TOKEN, true);
+-  assert.equal(
+-    verifyInitData(legacyHashed, BOT_TOKEN).ok,
+-    false,
+-    "signature-in-check-string hash mismatches",
+-  );
++  // Telegram's live behaviour: `signature` rides in the signed string. This is
++  // the payload shape that produced `reason=hash mismatch` with all keys
++  // present and quietly turned the login into a guest account.
++  const included = sign(fields, BOT_TOKEN, true);
++  const ok = verifyInitData(included, BOT_TOKEN);
++  assert.ok(ok.ok, `signature-inclusive payload verifies: ${ok.ok ? "" : ok.reason}`);
++  assert.equal(ok.ok ? ok.user.id : 0, 9, "the Telegram user is surfaced");
++  assert.equal(ok.ok ? ok.user.first_name : "", "Sara", "the name is not mangled");
++
++  // The other convention (signature left out of the hashed fields) must keep
++  // working: dropping it would reject every payload some clients produce.
++  const excluded = sign(fields, BOT_TOKEN, false);
++  assert.ok(verifyInitData(excluded, BOT_TOKEN).ok, "signature-exclusive payload still verifies");
++
++  // Tampering is still rejected under BOTH conventions.
++  for (const [name, payload] of [
++    ["inclusive", included],
++    ["exclusive", excluded],
++  ] as const) {
++    const bad = verifyInitData(payload.replace("Sara", "evil"), BOT_TOKEN);
++    assert.equal(bad.ok, false, `edited ${name} payload rejected`);
++    assert.equal(bad.ok ? "" : bad.reason, "hash mismatch", `${name} tamper reason`);
++  }
+ 
+-  // A legacy payload WITHOUT the field is unaffected by the exclusion.
++  // A payload that never had the field is unaffected by either reading.
+   const legacy = sign({
+     auth_date: fields.auth_date,
+     query_id: fields.query_id,
+@@ -197,10 +208,10 @@ export async function runVerifyTests(): Promise<void> {
+   testTampering();
+   testAuthDateRules();
+   testMalformedDigests();
+-  testSignatureExcludedFromCheckString();
++  testSignatureReadings();
+   testBarePlusReadings();
+   testDevToken();
+   console.log(
+-    "  verify: valid/tamper/wrong-token, auth_date required (age window TEMP-bypassed), bad digests closed, signature excluded, bare `+` readings, dev tokens OK",
++    "  verify: valid/tamper/wrong-token, auth_date required (age window TEMP-bypassed), bad digests closed, both signature readings, bare `+` readings, dev tokens OK",
+   );
+ }
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,52 @@
+From 804db3af70bacf5aee5e2c527fc5e15733c4a7a2 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 26 Oct 2026 20:25:45 +0330
+Subject: [PATCH 229/230] fix(feed): half-time matches no longer render as live
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The API adapter folds `halftime` into `status: "live"` with
+`isHalftime: true` (matchFromApi does the fold so the live sections keep
+their bucket), so at runtime `isLive = match.status === "live"` was true
+for halftime matches. The `isLive ?` ternary in MatchRow ran first, and
+since halftime matches carry no minute label, it rendered the coral
+live-dot with no text — visually identical to a live match with no
+minute data. The gold `نیمه‌وقت` branch below it was dead code, and the
+aria-label said "زنده" instead of the break.
+
+Fix: make `isLive` exclusive of halftime:
+  const isLive = match.status === "live" && !isHalftime;
+
+The `isHalftime ?` branch now runs for halftime matches, rendering the
+gold label. The `status` label and `aria-label` (which both branch on
+`isLive` first) also get the correct value.
+
+Audit finding: audit-full.md, row 1 (HIGH).
+File: src/components/LeagueGroup.tsx:89.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/LeagueGroup.tsx | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/components/LeagueGroup.tsx b/src/components/LeagueGroup.tsx
+index 2c9a103..9a841d3 100644
+--- a/src/components/LeagueGroup.tsx
++++ b/src/components/LeagueGroup.tsx
+@@ -86,7 +86,10 @@ export const MatchRow = memo(function MatchRow({
+   const { t, lang, localize } = useI18n();
+   const prefetchMatch = usePrefetchMatch();
+   const isHalftime = match.isHalftime === true;
+-  const isLive = match.status === "live";
++  // Halftime reaches here as status "live" + isHalftime (matchFromApi folds
++  // it), so "live" alone claims a break is running: isLive owns both the coral
++  // minute/dot and the status label, and must lose to the break.
++  const isLive = match.status === "live" && !isHalftime;
+   const isFinished = match.status === "finished";
+   const hasScore = isLive || isHalftime || isFinished;
+   const home = localize(match.home.shortName);
+-- 
+2.54.0.windows.1
+

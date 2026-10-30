@@ -1,0 +1,199 @@
+From afb1b2e8b608e45e551fe9f6c1293e2c37305042 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 9 Oct 2026 02:21:33 +0330
+Subject: [PATCH 032/230] Score every tied top stat line as match MVP
+
+Player to Watch compared the pick against a single LIMIT 1 MVP row, so a
+tie at the top handed the +4 bonus to an arbitrary row and denied the other
+equally valid pick. Gather every player sharing the top stat score instead.
+---
+ server/predictions/resolver.ts    | 29 +++++++++++++--------
+ server/scoring/predictionScore.ts |  9 ++++---
+ tests/predictionScore.test.ts     | 43 +++++++++++++++++++++----------
+ 3 files changed, 53 insertions(+), 28 deletions(-)
+
+diff --git a/server/predictions/resolver.ts b/server/predictions/resolver.ts
+index 6377fa0..e6ab3cd 100644
+--- a/server/predictions/resolver.ts
++++ b/server/predictions/resolver.ts
+@@ -108,17 +108,24 @@ function recordAward(row: PendingRow, points: number): void {
+ 
+ /* ------------------------------------------------------------ shared helpers */
+ 
+-/** Highest single-fixture stat score in the match = the match MVP (concept.md). */
+-function matchMvp(matchId: string): { player_id: string; stat_score: number } | null {
+-  return (
+-    get<{ player_id: string; stat_score: number }>(
+-      db,
+-      `SELECT player_id, stat_score FROM match_player_stats
+-       WHERE match_id = ? AND stat_score IS NOT NULL
+-       ORDER BY stat_score DESC LIMIT 1`,
+-      [matchId],
+-    ) ?? null
++/**
++ * Match MVP = every player sharing the highest single-fixture stat score
++ * (concept.md). Ties at the top are ALL MVP (scoring-rules.md §2) — a
++ * `LIMIT 1` would hand the +4 bonus to an arbitrary tie-broken row while the
++ * other tied scorer (an equally valid pick) missed it.
++ */
++function matchMvpIds(matchId: string): string[] {
++  const top = get<{ mx: number | null }>(
++    db,
++    "SELECT MAX(stat_score) AS mx FROM match_player_stats WHERE match_id = ? AND stat_score IS NOT NULL",
++    [matchId],
+   );
++  if (top?.mx == null) return [];
++  return all<{ player_id: string }>(
++    db,
++    "SELECT player_id FROM match_player_stats WHERE match_id = ? AND stat_score = ?",
++    [matchId, top.mx],
++  ).map((r) => r.player_id);
+ }
+ 
+ /** Per-player crowd rating aggregates for a match (vote floor applied by the scorer). */
+@@ -271,7 +278,7 @@ function resolvePlayerWatch(row: PendingRow, payload: PlayerWatchPayload, force
+     pick: payload,
+     positionRows: positionRows(row.match_id),
+     crowd: crowdBoard(row.match_id),
+-    mvpPlayerId: matchMvp(row.match_id)?.player_id ?? null,
++    mvpPlayerIds: matchMvpIds(row.match_id),
+     // Grace window elapsed → sparse crowd data settles as a failed crowd gate
+     // (MVP bonus can still pay; the 8 cannot) instead of pending forever.
+     force,
+diff --git a/server/scoring/predictionScore.ts b/server/scoring/predictionScore.ts
+index 88de2c1..923bddd 100644
+--- a/server/scoring/predictionScore.ts
++++ b/server/scoring/predictionScore.ts
+@@ -210,8 +210,11 @@ export interface WatchScoringInput {
+   positionRows: PositionStatRow[];
+   /** Crowd entries meeting the minimum-vote floor. */
+   crowd: CrowdEntry[];
+-  /** The match MVP's player id (highest stat score), or null. */
+-  mvpPlayerId: string | null;
++  /**
++   * Every player sharing the top stat score — scoring-rules.md §2: "Ties at
++   * the top: all tied players are MVP" — or null when the match has none.
++   */
++  mvpPlayerIds: string[] | null;
+   /** True after the grace window: sparse crowd data settles as a failed
+    *  crowd gate (MVP bonus can still pay; the 8 cannot) instead of pending. */
+   force?: boolean;
+@@ -311,7 +314,7 @@ export function scorePlayerWatch(input: WatchScoringInput): WatchScoreResult {
+   const statAvg = positionStatAverage(input.positionRows, mine.position, input.pick.playerId);
+   const statPasses = statAvg !== null && mine.stat_score > statAvg;
+ 
+-  const mvpBonus = input.mvpPlayerId === input.pick.playerId ? POINTS.watchMvpBonus : 0;
++  const mvpBonus = input.mvpPlayerIds?.includes(input.pick.playerId) ? POINTS.watchMvpBonus : 0;
+   if (!statPasses) {
+     return {
+       outcome: "wrong",
+diff --git a/tests/predictionScore.test.ts b/tests/predictionScore.test.ts
+index 321b915..c582a8f 100644
+--- a/tests/predictionScore.test.ts
++++ b/tests/predictionScore.test.ts
+@@ -245,13 +245,13 @@ function testWatch() {
+   ];
+ 
+   // Max 12: both gates pass + MVP.
+-  const max = scorePlayerWatch({ pick: WATCH, positionRows, crowd, mvpPlayerId: "9" });
++  const max = scorePlayerWatch({ pick: WATCH, positionRows, crowd, mvpPlayerIds: ["9"] });
+   assert.equal(max.outcome, "correct");
+   assert.equal(max.points, POINTS.watchMax, "watch max = 12");
+ 
+   // Base only: gates pass, no MVP. FWD peer avg = (10+2)/2 = 6 → 10 > 6 passes;
+   // crowd: FWD peer = 5.0 → 7.5 > 5.0 passes.
+-  const base = scorePlayerWatch({ pick: WATCH, positionRows, crowd, mvpPlayerId: "11" });
++  const base = scorePlayerWatch({ pick: WATCH, positionRows, crowd, mvpPlayerIds: ["11"] });
+   assert.equal(base.points, POINTS.watchBase, "both gates pass = 8");
+ 
+   // Zero: stat gate fails (MID pick below MID peers).
+@@ -259,7 +259,7 @@ function testWatch() {
+     pick: { playerId: "8" },
+     positionRows,
+     crowd,
+-    mvpPlayerId: "9",
++    mvpPlayerIds: ["9"],
+   });
+   assert.equal(statFail.outcome, "wrong");
+   assert.equal(statFail.points, 0, "stat gate fail = 0 even with MVP? no: MVP id is 9");
+@@ -278,27 +278,42 @@ function testWatch() {
+     pick: { playerId: "11" },
+     positionRows: crowdFailRows,
+     crowd,
+-    mvpPlayerId: null,
++    mvpPlayerIds: null,
+   });
+   assert.equal(crowdFail.points, 0, "crowd gate fail = 0");
+   assert.equal(crowdFail.outcome, "partial");
+   assert.equal(crowdFail.breakdown.statGate, 1);
+   assert.equal(crowdFail.breakdown.crowdGate, 0);
+ 
+-  // A (tie-broken) MVP whose stat gate fails still scores 0: the strict
+-  // match-MVP always passes the stat gate mathematically, so this case can
+-  // only arise from a top-score tie — no bonus on top of a failed gate.
++  // A tied-for-top MVP whose stat gate fails still scores 0: the match MVP
++  // normally passes the stat gate, so this case only arises from a top-score
++  // tie — no bonus on top of a failed gate.
+   const mvpGateFail = scorePlayerWatch({
+     pick: { playerId: "4" },
+     positionRows,
+     crowd,
+-    mvpPlayerId: "4",
++    mvpPlayerIds: ["4"],
+   });
+-  assert.equal(mvpGateFail.points, 0, "failed stat gate = 0 even for a tie-broken MVP");
++  assert.equal(mvpGateFail.points, 0, "failed stat gate = 0 even for a tied MVP");
+   assert.equal(mvpGateFail.outcome, "wrong");
+ 
+-  // Void: pick didn't feature.
+-  const voided = scorePlayerWatch({ pick: { playerId: "777" }, positionRows, crowd, mvpPlayerId: null });
++  // Ties at the top: ALL tied players are MVP (scoring-rules.md §2) — a pick
++  // on either tied scorer earns the +4, not just an arbitrary first row.
++  const tieRows = rows([
++    ["9", "FWD", 10],
++    ["11", "FWD", 10],
++    ["8", "MID", 4],
++    ["4", "DEF", 2],
++  ]);
++  const tied = scorePlayerWatch({
++    pick: { playerId: "11" },
++    positionRows: tieRows,
++    crowd,
++    mvpPlayerIds: ["9", "11"],
++  });
++  assert.equal(tied.breakdown.mvpBonus, POINTS.watchMvpBonus, "second tied scorer also gets the MVP bonus");
++
++  const voided = scorePlayerWatch({ pick: { playerId: "777" }, positionRows, crowd, mvpPlayerIds: null });
+   assert.equal(voided.outcome, "void");
+   assert.equal(voided.points, 0);
+ 
+@@ -307,7 +322,7 @@ function testWatch() {
+     pick: WATCH,
+     positionRows,
+     crowd: [{ player_id: "9", avg: 7.5, votes: WATCH_MIN_VOTES - 1 }],
+-    mvpPlayerId: null,
++    mvpPlayerIds: null,
+   });
+   assert.equal(pending.outcome, "pending", "sparse crowd stays pending");
+   // ...unless force-settling after the grace window: crowd gate fails, MVP can pay.
+@@ -315,7 +330,7 @@ function testWatch() {
+     pick: WATCH,
+     positionRows,
+     crowd: [{ player_id: "9", avg: 7.5, votes: WATCH_MIN_VOTES - 1 }],
+-    mvpPlayerId: "9",
++    mvpPlayerIds: ["9"],
+     force: true,
+   });
+   assert.equal(forced.points, POINTS.watchMvpBonus, "force-settle pays MVP only");
+@@ -432,7 +447,7 @@ function testNoNegative() {
+         ["11", "FWD", -20],
+       ]),
+       crowd: [],
+-      mvpPlayerId: null,
++      mvpPlayerIds: null,
+     }).points >= 0,
+   );
+   // Streak bonuses are defined positive constants.
+-- 
+2.54.0.windows.1
+

@@ -1,3 +1,14 @@
+import type { MatchStatus } from "../types";
+
+/**
+ * A fixture that was never played. ESPN reports all three under "post", so
+ * without this check a called-off match reads as a 0-0 result on every screen
+ * that prints a score for "not scheduled".
+ */
+export function isNotPlayed(status: MatchStatus): boolean {
+  return status === "postponed" || status === "abandoned" || status === "cancelled";
+}
+
 /** Persian-Indic digit table — FA mode renders every number in this script. */
 const FA_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
 
@@ -7,6 +18,31 @@ const FA_DIGITS = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
  */
 export function toFaDigits(value: number | string): string {
   return String(value).replace(/[0-9]/g, (d) => FA_DIGITS[Number(d)]);
+}
+
+/** A live clock split into its base minute and its added time. */
+export interface MinuteParts {
+  /** The minute as broadcast: 90 in "90'+3'". */
+  base: number;
+  /** Minutes added on top: 3 in "90'+3'"; 0 for a plain "54'". */
+  added: number;
+}
+
+/**
+ * ESPN's live clock as two numbers: "90'+3'" → {base: 90, added: 3},
+ * "45+2" → {45, 2}, "54'" → {54, 0}. Null when there is no leading number
+ * (some feeds send "HT" or an empty displayClock).
+ *
+ * Reading only the first number — the old behaviour — silently dropped the
+ * added time, so a match in the 94th minute showed "90".
+ */
+export function parseMinute(value: string | null | undefined): MinuteParts | null {
+  const match = /^\s*(\d+)\s*(?:['′]?\s*\+\s*(\d+))?/.exec(String(value ?? ""));
+  if (!match) return null;
+  const base = Number(match[1]);
+  if (!Number.isFinite(base)) return null;
+  const added = match[2] ? Number(match[2]) : 0;
+  return { base, added: Number.isFinite(added) ? added : 0 };
 }
 
 /** Wall-clock label for "last synced" affordances. Pass `fa-IR` under Persian. */

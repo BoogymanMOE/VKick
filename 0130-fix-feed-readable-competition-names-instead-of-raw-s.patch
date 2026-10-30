@@ -1,0 +1,426 @@
+From c738a9653adbabbd6a5688e19d66c472216c7d3e Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 15:41:27 +0330
+Subject: [PATCH 130/230] fix(feed): readable competition names instead of raw
+ slugs
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+chore(whatsnew): add 0.3.0 entry without prediction promises
+
+fix(login): drop dead ad padding and stale ad comment
+
+feat(onboarding): single Continue after choosing a favorite club
+
+feat(profile): confirm before resetting local data
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ index.html               | 11 -------
+ package.json             |  2 +-
+ src/hooks/useApi.ts      | 14 +++++----
+ src/i18n/strings.ts      |  2 ++
+ src/index.css            |  3 --
+ src/lib/appInfo.ts       |  9 ++++++
+ src/lib/leagues.ts       | 26 ++++++++++++++++
+ src/pages/Login.tsx      |  5 +--
+ src/pages/Onboarding.tsx | 46 ++++++---------------------
+ src/pages/Profile.tsx    | 67 ++++++++++++++++++++++++++++------------
+ src/pages/TeamPage.tsx   |  7 ++---
+ 11 files changed, 107 insertions(+), 85 deletions(-)
+
+diff --git a/index.html b/index.html
+index c68cdf3..36e5550 100644
+--- a/index.html
++++ b/index.html
+@@ -107,16 +107,5 @@
+       })();
+     </script>
+     <script type="module" src="/src/main.tsx"></script>
+-    <!-- A-ADS (Anonymous Ads) unit, served as RAW HTML on purpose: the A-ADS
+-         verifier does not run JavaScript, so an ad drawn by the SPA is invisible
+-         to it ("Not found"). It is the initial document's own markup, and no
+-         environment switch gates it — editing this block is the only way to turn it off.
+-
+-         The slot is `position: fixed` at the very bottom of the viewport with a
+-         reserved height (see --ad-slot-h in tokens.css). The TabBar sits ABOVE
+-         this slot (its sticky bottom offsets by the same height) and the main
+-         content's bottom padding accounts for both, so the ad never overlaps
+-         content or the tab bar, and A-ADS sees a fully visible unit. -->
+-
+   </body>
+ </html>
+diff --git a/package.json b/package.json
+index 219aecb..2b52625 100644
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "vkick",
+   "private": true,
+-  "version": "0.2.0",
++  "version": "0.3.0",
+   "type": "module",
+   "engines": {
+     "node": ">=22.5"
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index b70c7ea..a532249 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -18,7 +18,7 @@ import { useI18n } from "../i18n/context";
+ import type { StringKey } from "../i18n/strings";
+ import { haptic } from "../lib/telegram";
+ import type { LeagueId, Match, Team } from "../types";
+-import { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE, slugForLeague } from "../lib/leagues";
++import { LEAGUE_BY_SLUG, SLUG_BY_LEAGUE, slugForLeague, competitionName } from "../lib/leagues";
+ 
+ // Public surface preserved: these now live in pure modules so non-React code
+ // (and the node test runner) can use them without this file's imports.
+@@ -462,18 +462,20 @@ export function useKnockoutCompetitions() {
+  * Display name for any competition slug. Big-five slugs keep their short
+  * localized alias; everything else (cups, international tournaments) reads the
+  * catalog's own name through the cached competitions query, falling back to
+- * the slug while that loads. Without this, a cup match page showed the raw
+- * "uefa.champions" / "fifa.world".
++ * a humanized slug (never the raw code) while that loads. Without this, a cup
++ * match page showed the raw "uefa.champions" / "fifa.world".
+  */
+ export function useCompetitionLabel(slug: string): string {
+-  const { t, localize } = useI18n();
++  const { t, localize, lang } = useI18n();
+   const query = useCompetitions();
+   return useMemo(() => {
+     const id = leagueIdOf(slug);
+     if (id) return t(`league.${id}` as never);
+     const comp = query.data?.competitions.find((c) => c.slug === slug);
+-    return comp ? localize(comp.name) : slug;
+-  }, [slug, query.data, t, localize]);
++    if (comp) return localize(comp.name);
++    // Fall back to a localized humanized name, never the raw slug.
++    return competitionName(slug, lang);
++  }, [slug, query.data, t, localize, lang]);
+ }
+ 
+ /* ------------------------------------------------------------ leaderboards */
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index ecf2ace..1f2d5bf 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -337,6 +337,7 @@ export const strings = {
+     "profile.resetLocal": "Reset local settings",
+     "profile.resetDone": "Local data cleared",
+     "profile.resetHint": "Clears pins, comments and saved preferences on this device",
++    "profile.resetConfirm": "Reset",
+     "profile.signedIn": "Signed in via Telegram",
+     "profile.linkTelegram": "Open in Telegram to link your account",
+     "profile.linked": "Linked",
+@@ -947,6 +948,7 @@ export const strings = {
+     "profile.resetLocal": "بازنشانی تنظیمات محلی",
+     "profile.resetDone": "داده‌های محلی پاک شد",
+     "profile.resetHint": "سنجاق‌ها، دیدگاه‌ها و تنظیمات ذخیره‌شده این دستگاه را پاک می‌کند",
++    "profile.resetConfirm": "بازنشانی",
+     "profile.signedIn": "ورود با تلگرام",
+     "profile.linkTelegram": "برای وصل کردن حسابت، برنامه رو توی تلگرام باز کن",
+     "profile.linked": "متصل",
+diff --git a/src/index.css b/src/index.css
+index 20fc46e..258b52e 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -624,9 +624,6 @@
+      tall, vs ~850px portrait), so fixed-height chrome eats the whole screen. Make
+      it usable, not pretty — content can clip, it must not crash the layout. */
+   @media (orientation: landscape) and (max-height: 520px) {
+-    :root {
+-      --ad-slot-h: 60px;
+-    }
+     #boot img {
+       height: 64px;
+     }
+diff --git a/src/lib/appInfo.ts b/src/lib/appInfo.ts
+index be5d85b..a0b71eb 100644
+--- a/src/lib/appInfo.ts
++++ b/src/lib/appInfo.ts
+@@ -14,6 +14,15 @@ export interface ReleaseNote {
+  * endpoint talk. Update together with CHANGELOG.md on each release.
+  */
+ export const WHATS_NEW: ReleaseNote[] = [
++  {
++    version: "0.3.0",
++    date: "2026-10-18",
++    lines: [
++      "Pick any day with the new date strip.",
++      "Calmer match cards with clear live status.",
++      "League tables now fit on your phone.",
++    ],
++  },
+   {
+     version: "0.2.0",
+     date: "2026-09-28",
+diff --git a/src/lib/leagues.ts b/src/lib/leagues.ts
+index 82f9043..35488dd 100644
+--- a/src/lib/leagues.ts
++++ b/src/lib/leagues.ts
+@@ -38,3 +38,29 @@ export function slugForLeague(idOrSlug: string): string {
+ export function isCup(_slug: string): boolean {
+   return false;
+ }
++
++/** Human-readable competition name for any slug, in either language. */
++export const COMPETITION_NAMES: Record<string, { en: string; fa: string }> = {
++  "uefa.champions": { en: "Champions League", fa: "لیگ قهرمانان اروپا" },
++  "uefa.europa": { en: "Europa League", fa: "لیگ اروپا" },
++  "uefa.europa.conf": { en: "Conference League", fa: "لیگ کنفرانس اروپا" },
++  "eng.fa": { en: "FA Cup", fa: "جام حذفی انگلیس" },
++  "eng.league_cup": { en: "EFL Cup", fa: "جام اتحادیه انگلیس" },
++  "esp.copa_del_rey": { en: "Copa del Rey", fa: "کوپا دل ری" },
++  "ger.dfb_pokal": { en: "DFB-Pokal", fa: "جام حذفی آلمان" },
++  "ita.coppa_italia": { en: "Coppa Italia", fa: "کوپا ایتالیا" },
++  "fra.coupe_de_france": { en: "Coupe de France", fa: "جام حذفی فرانسه" },
++  "ned.1": { en: "Eredivisie", fa: "اردیویزی" },
++  "tur.1": { en: "Süper Lig", fa: "سوپرلیگ ترکیه" },
++  "por.1": { en: "Primeira Liga", fa: "لیگ پرتغال" },
++};
++
++/** Last resort for unknown slugs: never show the raw code. */
++export function humanizeSlug(slug: string): string {
++  const parts = slug.split(".").slice(1).join(" ").replace(/[_-]+/g, " ").trim();
++  return parts ? parts.replace(/\b\w/g, (c) => c.toUpperCase()) : slug;
++}
++
++export function competitionName(slug: string, lang: "en" | "fa"): string {
++  return COMPETITION_NAMES[slug]?.[lang] ?? humanizeSlug(slug);
++}
+diff --git a/src/pages/Login.tsx b/src/pages/Login.tsx
+index a005ad3..dc83080 100644
+--- a/src/pages/Login.tsx
++++ b/src/pages/Login.tsx
+@@ -94,12 +94,9 @@ export default function Login() {
+         </div>
+       </header>
+ 
+-      {/* The fixed A-ADS ad slot overlaps this screen too (Login sits outside
+-          AppShell, so there is no TabBar to offset it). The bottom padding reserves
+-          the ad slot height plus safe-area so the legal line stays reachable. */}
+       <main
+         className="mx-auto flex w-full max-w-[560px] flex-1 flex-col justify-center px-5"
+-        style={{ paddingBottom: "calc(40px + var(--ad-slot-h, 100px) + max(env(safe-area-inset-bottom), 8px))" }}
++        style={{ paddingBottom: "calc(40px + max(env(safe-area-inset-bottom), 8px))" }}
+       >
+         {/* Hero: the mark over the wordmark, over the floodlit wash. */}
+         <section className="rise-in px-1 pb-10 text-center">
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index ba2322f..017af74 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -77,7 +77,6 @@ export default function Onboarding() {
+     return false;
+   });
+   const [step, setStep] = useState(0);
+-  const [saved, setSaved] = useState(false);
+ 
+   const teamsQuery = useTeams();
+   // Stable identity: `groupTeams` and the picker memos below depend on it.
+@@ -124,9 +123,6 @@ export default function Onboarding() {
+   function pickClub(team: (typeof allTeams)[number]) {
+     selectionHaptic();
+     if (isFavorite(team.id)) return;
+-    // A changed pick un-saves the step: the Save button comes back so the
+-    // written confirmation never names a team the user just swapped out.
+-    setSaved(false);
+     if (count === 0) {
+       // First pick becomes the anchor automatically — but only AFTER the
+       // follow has persisted (the anchor endpoint 404s otherwise). The
+@@ -173,21 +169,6 @@ export default function Onboarding() {
+     navigate("/matches", { replace: true });
+   }
+ 
+-  /**
+-   * Explicit save on the favorite-club step: persists the gate flag so the
+-   * Matchday feed scopes to the saved club, and confirms the choice in copy —
+-   * the picker alone used to leave “did my pick stick?” unanswered.
+-   */
+-  function saveFavorite() {
+-    try {
+-      localStorage.setItem("verdikick.onboarded", "1");
+-    } catch {
+-      /* private mode */
+-    }
+-    notifyHaptic("success");
+-    setSaved(true);
+-  }
+-
+   /** Advance a step; leaving the favorite step persists the gate flag. */
+   function advance() {
+     haptic("light");
+@@ -465,25 +446,18 @@ export default function Onboarding() {
+         </section>
+       ) : null}
+ 
+-      {/* Actions. The favorite step (the product's anchor) gets a real Save
+-          button with a written confirmation instead of a silent toggle; after
+-          saving, the same button becomes Continue so the flow stays one-tap. */}
++      {/* Actions. */}
+       <div className="mt-6 space-y-2 pb-6">
+         {step === 0 && count >= 1 ? (
+-          <>
+-            {saved ? (
+-              <p
+-                className="rise-in flex items-center justify-center gap-1.5 rounded-card border border-volt px-3 py-2.5 text-xs font-bold text-volt"
+-                role="status"
+-              >
+-                <CheckIcon className="h-4 w-4 flex-none" />
+-                {t("onboarding.favoriteSaved", { team: anchorName })}
+-              </p>
+-            ) : null}
+-            <Button className="w-full" onClick={saved ? advance : saveFavorite}>
+-              {t(saved ? "onboarding.next" : "common.save")}
+-            </Button>
+-          </>
++          <Button
++            className="w-full"
++            onClick={() => {
++              notifyHaptic("success");
++              advance();
++            }}
++          >
++            {t("onboarding.next")}
++          </Button>
+         ) : null}
+         {canAdvance && step > 0 && step < TOTAL_STEPS - 1 ? (
+           <Button className="w-full" onClick={advance}>
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 9e2ed84..8001010 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -50,6 +50,9 @@ export default function Profile() {
+   const [deleteBusy, setDeleteBusy] = useState(false);
+   const [deleteError, setDeleteError] = useState<string | null>(null);
+ 
++  /** Reset local data: a confirm sheet, no silent wipe. */
++  const [resetOpen, setResetOpen] = useState(false);
++
+   // Push preferences live on the SERVER (user_notification_prefs) — the bot
+   // checks them before sending, so these toggles actually gate sends. Only
+   // the haptics switch stays local (it's a device-side concern).
+@@ -96,6 +99,25 @@ export default function Profile() {
+     }
+   };
+ 
++  const confirmReset = () => {
++    haptic("medium");
++    try {
++      const keep = new Set([
++        "verdikick.deviceId",
++        "verdikick.loggedOut",
++        "matchday.deviceId",
++        "matchday.loggedOut",
++      ]);
++      Object.keys(localStorage)
++        .filter((key) => (key.startsWith("verdikick.") || key.startsWith("matchday.")) && !keep.has(key))
++        .forEach((key) => localStorage.removeItem(key));
++    } catch {
++      /* private mode */
++    }
++    setResetOpen(false);
++    push({ text: t("profile.resetDone"), tone: "danger", icon: "⟲" });
++  };
++
+   const openNameEditor = () => {
+     haptic("light");
+     setNameDraft(displayName);
+@@ -228,26 +250,8 @@ export default function Profile() {
+             label={t("profile.resetLocal")}
+             hint={t("profile.resetHint")}
+             onClick={() => {
+-              haptic("medium");
+-              try {
+-                // Wipe local data but keep the auth keys: the device id (so the
+-                // same guest account is waiting when the user comes back) and
+-                // the signed-out flag (so this doesn't silently sign them in).
+-                const keep = new Set([
+-                  "verdikick.deviceId",
+-                  "verdikick.loggedOut",
+-                  "matchday.deviceId",
+-                  "matchday.loggedOut",
+-                ]);
+-                Object.keys(localStorage)
+-                  .filter(
+-                    (key) => (key.startsWith("verdikick.") || key.startsWith("matchday.")) && !keep.has(key),
+-                  )
+-                  .forEach((key) => localStorage.removeItem(key));
+-              } catch {
+-                /* private mode */
+-              }
+-              push({ text: t("profile.resetDone"), tone: "danger", icon: "⟲" });
++              haptic("light");
++              setResetOpen(true);
+             }}
+             right={<ChevronRightIcon className="text-ink-3" />}
+           />
+@@ -458,6 +462,29 @@ export default function Profile() {
+           </p>
+         ) : null}
+       </BottomSheet>
++
++      <BottomSheet
++        open={resetOpen}
++        onClose={() => setResetOpen(false)}
++        title={t("profile.resetLocal")}
++        subtitle={t("profile.resetHint")}
++        footer={
++          <SheetActions>
++            <Button variant="ghost" className="flex-1" onClick={() => setResetOpen(false)}>
++              {t("common.cancel")}
++            </Button>
++            <Button
++              className="flex-1 border border-danger text-danger"
++              variant="ghost"
++              onClick={confirmReset}
++            >
++              {t("profile.resetConfirm")}
++            </Button>
++          </SheetActions>
++        }
++      >
++        <p className="text-sm leading-relaxed text-ink-2">{t("profile.resetHint")}</p>
++      </BottomSheet>
+     </>
+   );
+ }
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index c838878..4e053ef 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -22,6 +22,7 @@ import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+ import type { ApiMatch } from "../lib/api";
+ import type { Position } from "../types";
++import { competitionName } from "../lib/leagues";
+ 
+ type Tab = "squad" | "form" | "stats" | "xg";
+ 
+@@ -32,9 +33,7 @@ const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
+  * recent fixtures. Reached by tapping any team in the table or a match card.
+  */
+ export default function TeamPage() {
+-  const { id = "" } = useParams();
+-  const { t, localize } = useI18n();
+-
++  const { id = "" } = useParams();  const { t, lang, localize } = useI18n();
+   const detailQuery = useTeamDetail(id);
+   const squadQuery = useSquad(id);
+ 
+@@ -89,7 +88,7 @@ export default function TeamPage() {
+     <>
+       <TopBar
+         title={localize(teamView.shortName)}
+-        subtitle={leagueId ? t(`league.${leagueId}`) : team.league}
++        subtitle={leagueId ? t(`league.${leagueId}`) : competitionName(team.league, lang)}
+         back
+       />
+ 
+-- 
+2.54.0.windows.1
+

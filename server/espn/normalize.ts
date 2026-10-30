@@ -101,7 +101,20 @@ interface EspnTeamRef {
 interface EspnCompetitor {
   homeAway?: string;
   score?: unknown;
+  /** Present on a knockout tie that went to a shootout ("4" of 4-3 pens). */
+  shootoutScore?: unknown;
   team?: EspnTeamRef;
+}
+
+interface EspnVenue {
+  fullName?: unknown;
+  address?: { city?: unknown };
+}
+
+interface EspnOfficial {
+  displayName?: unknown;
+  position?: { name?: unknown; displayName?: unknown };
+  type?: unknown;
 }
 
 interface EspnCompetition extends EspnNotes {
@@ -109,6 +122,14 @@ interface EspnCompetition extends EspnNotes {
   date?: string;
   competitors?: EspnCompetitor[];
   status?: EspnStatus;
+  venue?: EspnVenue;
+}
+
+/** The summary's `gameInfo` block: venue, officials, attendance. */
+interface EspnGameInfo {
+  venue?: EspnVenue;
+  officials?: EspnOfficial[];
+  attendance?: unknown;
 }
 
 interface EspnEvent extends EspnNotes {
@@ -254,6 +275,7 @@ interface EspnNewsArticle {
  */
 interface EspnSummary {
   header?: EspnSummaryHeader;
+  gameInfo?: EspnGameInfo;
   boxscore?: { teams?: { team?: EspnTeamRef }[] };
   rosters?: EspnRosterSide[];
   keyEvents?: EspnKeyEvent[];
@@ -274,6 +296,32 @@ interface EspnRosterEndpoint {
   coach?: EspnCoachRow[];
   coaches?: EspnCoachRow[];
   athletes?: EspnAthlete[];
+}
+
+interface EspnAvailabilityRecord {
+  id?: string | number;
+  athleteId?: string | number;
+  playerId?: string | number;
+  fullName?: string;
+  displayName?: string;
+  name?: string;
+  status?: string | { name?: string; type?: string; abbreviation?: string };
+  type?: string;
+  detail?: string;
+  description?: string;
+  reason?: string;
+  expectedReturn?: string;
+  returnDate?: string;
+  date?: string;
+  athlete?: { id?: string | number; fullName?: string; displayName?: string; name?: string };
+  player?: { id?: string | number; fullName?: string; displayName?: string; name?: string };
+  details?: Record<string, unknown>;
+  injuries?: EspnAvailabilityRecord[];
+  items?: EspnAvailabilityRecord[];
+  athletes?: EspnAvailabilityRecord[];
+  players?: EspnAvailabilityRecord[];
+  entries?: EspnAvailabilityRecord[];
+  sidelined?: EspnAvailabilityRecord[];
 }
 
 interface EspnStandingEntry {
@@ -308,19 +356,30 @@ const POS_MAP: Record<string, "GK" | "DEF" | "MID" | "FWD"> = {
   G: "GK",
   GK: "GK",
   GDP: "GK",
+  GOALKEEPER: "GK",
   D: "DEF",
   DEF: "DEF",
+  DEFENDER: "DEF",
   CB: "DEF",
+  CENTERBACK: "DEF",
+  CENTREBACK: "DEF",
   LB: "DEF",
+  LEFTBACK: "DEF",
   RB: "DEF",
+  RIGHTBACK: "DEF",
+  WB: "DEF",
+  WINGBACK: "DEF",
   LWB: "DEF",
   RWB: "DEF",
+  LF: "FWD",
+  RF: "FWD",
   "CD-L": "DEF",
   "CD-R": "DEF",
   "CD-M": "DEF",
   "CD-C": "DEF",
   M: "MID",
   MID: "MID",
+  MIDFIELDER: "MID",
   CM: "MID",
   DM: "MID",
   AM: "MID",
@@ -345,6 +404,9 @@ const POS_MAP: Record<string, "GK" | "DEF" | "MID" | "FWD"> = {
   "W-R": "MID",
   F: "FWD",
   FWD: "FWD",
+  FORWARD: "FWD",
+  ATTACKER: "FWD",
+  ATTACK: "FWD",
   ST: "FWD",
   CF: "FWD",
   SS: "FWD",
@@ -370,18 +432,18 @@ export function isPositional(abbr: string | undefined | null): boolean {
 const NON_POSITIONAL = new Set(["SUB", "N/A", "NA", "-", "--", "NONE", "OUT", "RES"]);
 
 export function normalizePosition(abbr: string | undefined | null): string {
-  if (!abbr) return "MID"; // conservative default
+  if (!abbr) return "OTHER";
   const raw = String(abbr).trim();
   const mapped = POS_MAP[raw.toUpperCase()] ?? POS_MAP[raw];
   if (mapped) return mapped;
   const a = raw.toUpperCase();
-  if (a.includes("GK") || a.includes("GOALKEEPER")) return "GK";
+  if (a.includes("GK") || a.includes("GOALKEEPER") || /GOAL.?KEEPER/.test(a)) return "GK";
   if (a.includes("BACK") || /^(C|L|R)?[DB]/.test(a)) return "DEF";
   if (a.includes("FWD") || a.includes("STRIKER") || a.endsWith("F")) return "FWD";
   if (a.includes("MID") || a.includes("WING")) return "MID";
-  if (a.includes("FORWARD") || a.includes("ATTACK")) return "FWD";
-  if (a.includes("DEF")) return "DEF";
-  return "MID";
+  if (a.includes("FORWARD") || a.includes("ATTACK") || a.startsWith("LF") || a.startsWith("RF")) return "FWD";
+  if (a.includes("DEF") || a.includes("BACK")) return "DEF";
+  return "OTHER";
 }
 
 /** Full name forms ("Goalkeeper", "Centre-Back"), which roster feeds use when
@@ -429,11 +491,50 @@ export function statusDetailSaysHalftime(detail: string | undefined | null): boo
   return s.includes("halftime") || s.includes("half time") || s.includes("half-time") || /\bht\b/.test(s);
 }
 
+/**
+ * The non-played terminal states, in the order ESPN words them. A postponed,
+ * abandoned or cancelled fixture also arrives with state "post", so the wording
+ * has to win over the coarse state — otherwise a called-off game is stored as
+ * finished and every screen renders it as a 0-0 result.
+ */
+export function notPlayedStatus(detail: string | undefined | null): OurStatus | null {
+  const s = String(detail ?? "")
+    .toLowerCase()
+    .trim();
+  if (!s) return null;
+  if (/postpon/.test(s)) return "postponed";
+  if (/cancel/.test(s)) return "cancelled";
+  if (/abandon|suspend/.test(s)) return "abandoned";
+  return null;
+}
+
+/** True for a state that must never be shown with a score or counted as a result. */
+export function isNotPlayedStatus(status: OurStatus): boolean {
+  return status === "postponed" || status === "abandoned" || status === "cancelled";
+}
+
+/**
+ * How a knockout tie was separated. "FT-Pens" and "AET" are ESPN's own
+ * descriptions; a plain league "FT" leaves it null.
+ */
+export function decidedByFromDetail(detail: string | undefined | null): "penalties" | "extra-time" | null {
+  const s = String(detail ?? "")
+    .toLowerCase()
+    .trim();
+  if (!s) return null;
+  // Token, not substring: "pending" must not read as penalties.
+  if (/\bpens?\b|\bpenalties\b|shootout/.test(s)) return "penalties";
+  if (/\baet\b|after extra time|extra time|extra-time/.test(s)) return "extra-time";
+  return null;
+}
+
 export function normalizeStatus(
   state: string | undefined,
   completed: boolean | undefined,
   detail?: string | null,
 ): OurStatus {
+  const notPlayed = notPlayedStatus(detail);
+  if (notPlayed) return notPlayed;
   if (completed || state === "post") return "finished";
   if (state === "in") {
     if (statusDetailSaysHalftime(detail)) return "halftime";
@@ -446,6 +547,49 @@ function parseScore(v: unknown): number | null {
   if (v === undefined || v === null || v === "") return null;
   const n = parseInt(String(v), 10);
   return Number.isNaN(n) ? null : n;
+}
+
+/** Shootout score, which ESPN only sends on a tie that reached a shootout. */
+function parseShootout(comp: EspnCompetitor | undefined): number | null {
+  return parseScore(comp?.shootoutScore);
+}
+
+/** The first official whose role names a referee (not an assistant/VAR/fourth). */
+function refereeFrom(officials: EspnOfficial[] | undefined): string | null {
+  for (const official of officials ?? []) {
+    const role = String(official.position?.name ?? official.position?.displayName ?? official.type ?? "")
+      .toLowerCase();
+    const name = String(official.displayName ?? "").trim();
+    if (!name) continue;
+    if (!role.includes("referee")) continue;
+    if (/assistant|fourth|var|video|reserve/.test(role)) continue;
+    return name;
+  }
+  return null;
+}
+
+/** "Estadio… · Madrid" when the payload carries a city, else just the name. */
+function venueFrom(venue: EspnVenue | undefined): string | null {
+  const name = String(venue?.fullName ?? "").trim();
+  if (!name) return null;
+  const city = String(venue?.address?.city ?? "").trim();
+  return city && !name.toLowerCase().includes(city.toLowerCase()) ? `${name} · ${city}` : name;
+}
+
+/** Facts for a pre-match page, from the summary's gameInfo/competition blocks. */
+export function normalizeSummaryFacts(raw: unknown): {
+  venue: string | null;
+  referee: string | null;
+  attendance: number | null;
+} {
+  const json = raw as EspnSummary;
+  const gameInfo = json.gameInfo;
+  const competition = json.header?.competitions?.[0];
+  return {
+    venue: venueFrom(gameInfo?.venue) ?? venueFrom(competition?.venue),
+    referee: refereeFrom(gameInfo?.officials),
+    attendance: parseScore(gameInfo?.attendance),
+  };
 }
 
 /* ------------------------------------------------------------ scoreboard */
@@ -513,7 +657,9 @@ export function normalizeScoreboard(
     teams.set(ht.id, ht);
     teams.set(at.id, at);
     const type = (competition?.status ?? ev.status)?.type;
-    const status = normalizeStatus(type?.state, type?.completed, type?.description ?? type?.shortDetail);
+    const detail = type?.description ?? type?.shortDetail;
+    const status = normalizeStatus(type?.state, type?.completed, detail);
+    const played = !isNotPlayedStatus(status);
     matches.push({
       id: String(ev.id),
       league,
@@ -521,14 +667,20 @@ export function normalizeScoreboard(
       away_team_id: at.id,
       kickoff_at: ev.date,
       status,
-      home_score: status === "scheduled" ? null : parseScore(home.score),
-      away_score: status === "scheduled" ? null : parseScore(away.score),
+      home_score: played && status !== "scheduled" ? parseScore(home.score) : null,
+      away_score: played && status !== "scheduled" ? parseScore(away.score) : null,
       minute_display:
         status === "live" || status === "halftime" ? (type?.displayClock ?? type?.shortDetail ?? null) : null,
       espn_season: ev.season ? `${ev.season.year}` : null,
       round: roundFromEvent(ev, competition),
       home_formation: null,
       away_formation: null,
+      home_pens: parseShootout(home),
+      away_pens: parseShootout(away),
+      decided_by: decidedByFromDetail(detail),
+      venue: null,
+      referee: null,
+      attendance: null,
     });
   }
   return { teams: [...teams.values()], matches };
@@ -560,7 +712,10 @@ export function normalizeSummaryMatch(raw: unknown): NormMatch {
   const home = comps.find((c) => c.homeAway === "home");
   const away = comps.find((c) => c.homeAway === "away");
   const type = h?.status?.type ?? {};
-  const status = normalizeStatus(type.state, type.completed, type.description ?? type.shortDetail);
+  const detail = type.description ?? type.shortDetail;
+  const status = normalizeStatus(type.state, type.completed, detail);
+  const played = !isNotPlayedStatus(status);
+  const facts = normalizeSummaryFacts(raw);
   const rosters = json.rosters ?? [];
   const homeRoster = rosters.find((r) => r.homeAway === "home");
   const awayRoster = rosters.find((r) => r.homeAway === "away");
@@ -571,14 +726,20 @@ export function normalizeSummaryMatch(raw: unknown): NormMatch {
     away_team_id: String(away?.team?.id ?? ""),
     kickoff_at: h?.date ?? json.header?.gregorianDate ?? new Date().toISOString(),
     status,
-    home_score: status === "scheduled" ? null : parseScore(home?.score),
-    away_score: status === "scheduled" ? null : parseScore(away?.score),
+    home_score: played && status !== "scheduled" ? parseScore(home?.score) : null,
+    away_score: played && status !== "scheduled" ? parseScore(away?.score) : null,
     minute_display:
       status === "live" || status === "halftime" ? (type.displayClock ?? type.shortDetail ?? null) : null,
     home_formation: homeRoster?.formation ?? null,
     away_formation: awayRoster?.formation ?? null,
     espn_season: json.header?.season?.year ? `${json.header.season.year}` : null,
     round: roundFromEvent(json.header, h),
+    home_pens: parseShootout(home),
+    away_pens: parseShootout(away),
+    decided_by: decidedByFromDetail(detail),
+    venue: facts.venue,
+    referee: facts.referee,
+    attendance: facts.attendance,
   };
 }
 
@@ -1000,13 +1161,14 @@ export function normalizeRosterPlayers(raw: unknown): NormPlayer[] {
   const json = raw as EspnRosterEndpoint;
   const teamId = String(json.team?.id ?? "");
   const out: NormPlayer[] = [];
+  const seen = new Set<string>();
   for (const a of json.athletes ?? []) {
     const id = String(a.id ?? "");
-    if (!id) continue;
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
     const abbr = a.position?.abbreviation ?? null;
-    const pos = isPositional(abbr)
-      ? abbr
-      : normalizePositionName(a.position?.name ?? a.position?.displayName);
+    const namedPosition = normalizePositionName(a.position?.name ?? a.position?.displayName);
+    const pos = namedPosition && namedPosition !== "OTHER" ? namedPosition : abbr;
     out.push({
       id,
       team_id: teamId,
@@ -1019,6 +1181,77 @@ export function normalizeRosterPlayers(raw: unknown): NormPlayer[] {
     });
   }
   return out;
+}
+
+/**
+ * ESPN's team injuries feed is sparsely populated and has appeared in multiple
+ * nested forms. Walk its known collection keys and retain only the three
+ * statuses the team page presents; roster-embedded injury rows use the same
+ * shape and can be normalized by this helper too.
+ */
+export interface NormTeamAvailability {
+  player_id: string;
+  player_name: string;
+  status: "injured" | "suspended" | "doubtful";
+  reason: string | null;
+  expected_return: string | null;
+}
+
+function availabilityStatus(value: string): NormTeamAvailability["status"] | null {
+  const text = value.toLowerCase();
+  if (text.includes("suspend") || text.includes("banned")) return "suspended";
+  if (text.includes("doubt") || text.includes("question") || text.includes("uncertain")) return "doubtful";
+  if (text.includes("injur") || text.includes("out") || text.includes("sideline")) return "injured";
+  return null;
+}
+
+export function normalizeTeamAvailability(raw: unknown): NormTeamAvailability[] {
+  const out = new Map<string, NormTeamAvailability>();
+  const seen = new Set<object>();
+  const visit = (value: unknown, inherited?: { id?: string; name?: string }): void => {
+    if (!value || typeof value !== "object") return;
+    if (seen.has(value)) return;
+    seen.add(value);
+    if (Array.isArray(value)) {
+      for (const child of value) visit(child, inherited);
+      return;
+    }
+
+    const row = value as EspnAvailabilityRecord;
+    const athlete = row.athlete ?? row.player;
+    const id = String(athlete?.id ?? row.athleteId ?? row.playerId ?? inherited?.id ?? row.id ?? "");
+    const name = athlete?.displayName ?? athlete?.fullName ?? athlete?.name ?? row.fullName ?? row.displayName ?? row.name ?? inherited?.name;
+    const statusValue = typeof row.status === "string"
+      ? row.status
+      : row.status?.name ?? row.status?.type ?? row.status?.abbreviation ?? "";
+    const status = availabilityStatus(`${statusValue} ${row.type ?? ""}`) ??
+      availabilityStatus(typeof row.details?.type === "string" ? row.details.type : "");
+
+    if (id && status) {
+      const details = row.details ?? {};
+      const reason = row.reason ?? row.detail ?? row.description ??
+        (typeof details.detail === "string" ? details.detail : null) ??
+        (typeof details.type === "string" ? details.type : null);
+      const expectedReturn = row.expectedReturn ?? row.returnDate ??
+        (typeof details.returnDate === "string" ? details.returnDate : null) ??
+        (typeof details.expectedReturn === "string" ? details.expectedReturn : null) ?? null;
+      out.set(id, {
+        player_id: id,
+        player_name: name ?? id,
+        status,
+        reason: reason ? String(reason) : null,
+        expected_return: expectedReturn ? String(expectedReturn) : null,
+      });
+    }
+
+    const next = { id: id || inherited?.id, name: name || inherited?.name };
+    for (const key of ["injuries", "items", "athletes", "players", "entries", "sidelined"] as const) {
+      const nested = row[key];
+      if (nested) visit(nested, next);
+    }
+  };
+  visit(raw);
+  return [...out.values()];
 }
 
 /* ------------------------------------------------------------ standings */

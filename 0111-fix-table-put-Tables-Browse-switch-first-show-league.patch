@@ -1,0 +1,80 @@
+From 28d48020ab4526b43d324ef07cbdb2397a69cd8a Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 17 Oct 2026 22:35:07 +0330
+Subject: [PATCH 111/230] fix(table): put Tables/Browse switch first, show
+ league chips only in Tables
+
+---
+ src/pages/Table.tsx | 50 +++++++++++++++++----------------------------
+ 1 file changed, 19 insertions(+), 31 deletions(-)
+
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index 8350063..9ef0197 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -58,43 +58,31 @@ export default function Table() {
+ 
+   return (
+     <>
+-      <TopBar title={t("table.title")} subtitle={t("table.subtitle")} back />
++      <TopBar title={t("table.title")} subtitle={t("table.subtitle")} />
+ 
++      {/* Tables / Browse is the FIRST control on the page, and the league chips
++          live only inside the Tables view — otherwise the chips sit above a
++          Browse list and look like they should filter it, but cannot. */}
+       <div className="mt-3">
+         <Segmented
+-          value={active}
+-          onChange={setLeague}
+-          options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
++          value={browseView}
++          onChange={setBrowseView}
++          options={[
++            { value: "tables", label: t("table.view.tables") },
++            { value: "browse", label: t("table.view.browse") },
++          ]}
+         />
+       </div>
+ 
+-      {/* Tables / Browse switch */}
+-      <div className="mt-3 flex gap-2">
+-        <button
+-          type="button"
+-          onClick={() => setBrowseView("tables")}
+-          className={cx(
+-            "min-h-11 rounded-full border px-4 text-sm font-bold transition-colors duration-[var(--t-fast)] active:scale-[0.97]",
+-            browseView === "tables"
+-              ? "border-volt bg-volt/15 text-volt"
+-              : "border-line text-ink-3 hover:bg-elevated",
+-          )}
+-        >
+-          {t("table.view.tables")}
+-        </button>
+-        <button
+-          type="button"
+-          onClick={() => setBrowseView("browse")}
+-          className={cx(
+-            "min-h-11 rounded-full border px-4 text-sm font-bold transition-colors duration-[var(--t-fast)] active:scale-[0.97]",
+-            browseView === "browse"
+-              ? "border-volt bg-volt/15 text-volt"
+-              : "border-line text-ink-3 hover:bg-elevated",
+-          )}
+-        >
+-          {t("table.view.browse")}
+-        </button>
+-      </div>
++      {browseView === "tables" && (
++        <div className="mt-3">
++          <Segmented
++            value={active}
++            onChange={setLeague}
++            options={tabs.map((tab) => ({ value: tab.value, label: tab.label }))}
++          />
++        </div>
++      )}
+ 
+       {/* Tables view: standings + your clubs */}
+       {browseView === "tables" && (
+-- 
+2.54.0.windows.1
+

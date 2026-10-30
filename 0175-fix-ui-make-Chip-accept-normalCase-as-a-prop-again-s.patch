@@ -1,0 +1,41 @@
+From 0426ff2e3e3fd30ef61862f460ea81e60dee5c2e Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 19:58:12 +0330
+Subject: [PATCH 175/230] fix(ui): make Chip accept normalCase as a prop again
+ so chip labels render normally
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Restore the Chip component’s normalCase handling as a real prop default
+instead of a local constant, so inline chip labels keep their normal
+case where callers expect it.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/ui.tsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index 8bf0b8a..b2c584c 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -275,6 +275,7 @@ export function Chip({
+   children,
+   tone = "muted",
+   className,
++  normalCase = false,
+ }: {
+   children: ReactNode;
+   tone?: ChipTone;
+@@ -282,7 +283,6 @@ export function Chip({
+   /** Opt out of the badge default for inline labels (names, positions). */
+   normalCase?: boolean;
+ }) {
+-  const normalCase = false;
+   const { className: toneClass, style } = chipStyles[tone];
+   return (
+     <span
+-- 
+2.54.0.windows.1
+

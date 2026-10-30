@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { api, serverErrorKey, type ApiMatch, type ApiTeam } from "../lib/api";
+import {
+  api,
+  serverErrorKey,
+  type ApiMatch,
+  type ApiScorer,
+  type ApiTeam,
+  type ApiTeamAvailability,
+  type ApiTeamSplits,
+} from "../lib/api";
 import type { PredictionWindow } from "../lib/predictionWindow";
 import { TEAM_FALLBACK } from "../lib/colors";
 import { buildLeagueTabs, type LeagueTab } from "../lib/pickerGroups";
@@ -70,6 +78,12 @@ export function matchFromApi(m: ApiMatch): Match {
     minute: m.minute_display,
     predictions: [],
     round: m.round ?? null,
+    homePens: m.home_pens ?? null,
+    awayPens: m.away_pens ?? null,
+    decidedBy: m.decided_by ?? null,
+    venue: m.venue ?? null,
+    referee: m.referee ?? null,
+    attendance: m.attendance ?? null,
   };
 }
 
@@ -132,14 +146,25 @@ export interface StandingRow {
   form: string | null;
   /** Cup group name (e.g. "Group A"); null for league tables. */
   groupName: string | null;
+  /** Home and away records; null for a club with no finished match yet. */
+  splits: ApiTeamSplits | null;
+}
+
+export interface StandingsPayload {
+  season: string;
+  rows: StandingRow[];
+  /** Leading scorers, 0–5. Empty outside the competitions the stat sync covers. */
+  scorers: ApiScorer[];
 }
 
 export function useStandings(league: string) {
   return useQuery({
     queryKey: ["standings", league],
     queryFn: () => api.getStandings(league),
-    select: (data): StandingRow[] =>
-      data.standings.map((row) => ({
+    select: (data): StandingsPayload => ({
+      season: data.season,
+      scorers: data.scorers ?? [],
+      rows: data.standings.map((row) => ({
         // A standings row is not an ApiTeam: it carries `team_id`, not `id`.
         // Building the team explicitly instead of casting the row is what keeps
         // `/team/:id` links, React keys, isFavorite() and the bundled-crest
@@ -168,10 +193,18 @@ export function useStandings(league: string) {
         xga: row.xga ?? null,
         form: row.form ?? null,
         groupName: row.group_name ?? null,
-      })),
+        splits: row.splits ?? null,
+        })),
+    }),
     enabled: Boolean(league),
     staleTime: 5 * 60_000,
   });
+}
+
+/** The leading-scorer card data for a league, from the standings payload. */
+export function useStandingsScorers(league: string): ApiScorer[] {
+  const { data } = useStandings(league);
+  return data?.scorers ?? [];
 }
 
 /* ------------------------------------------------------------ favorites */
@@ -512,6 +545,7 @@ export interface LeaderPlayerRow {
   teamShort: string | null;
   teamColor: string | null;
   headshot: string | null;
+  avatarUrl: string | null;
   jersey: number | null;
   appearances: number;
   goals: number;
@@ -559,6 +593,7 @@ export function useLeaguePlayers(league: string, sort: LeaderSort = "goals", lim
         teamShort: p.team_short,
         teamColor: p.team_color,
         headshot: p.headshot_url,
+        avatarUrl: p.avatar_url ?? null,
         jersey: p.jersey_number,
         appearances: p.appearances ?? 0,
         goals: p.goals ?? 0,
@@ -640,6 +675,17 @@ export function useRecentLineup(teamId: string) {
   });
 }
 
+export function useTeamAvailability(teamId: string) {
+  return useQuery({
+    queryKey: ["team-availability", teamId],
+    queryFn: () => api.getTeamAvailability(teamId),
+    enabled: Boolean(teamId),
+    staleTime: 30 * 60_000,
+    select: (data): Map<string, ApiTeamAvailability> =>
+      new Map(data.players.map((player) => [player.player_id, player])),
+  });
+}
+
 export function useTeamDetail(teamId: string) {
   return useQuery({
     queryKey: ["team", teamId],
@@ -669,9 +715,12 @@ export function useTeamUnderstat(teamId: string) {
  * off the network.
  */
 export function useLeagueNews(league: string, teamId: string) {
+  const { lang } = useI18n();
   return useQuery({
-    queryKey: ["league-news", league, teamId],
-    queryFn: () => api.getLeagueNews(league, teamId),
+    // The language is part of the key: switching to Persian must refetch, or the
+    // cached English payload would keep serving an RTL page.
+    queryKey: ["league-news", league, teamId, lang],
+    queryFn: () => api.getLeagueNews(league, teamId, lang),
     enabled: Boolean(league && teamId),
     staleTime: 5 * 60_000,
   });
@@ -704,9 +753,10 @@ export function useMatchForm(matchId: string) {
 
 /** Articles tagged to this match's clubs; news turns over a few times a day. */
 export function useMatchNews(matchId: string) {
+  const { lang } = useI18n();
   return useQuery({
-    queryKey: ["match-news", matchId],
-    queryFn: () => api.getMatchNews(matchId),
+    queryKey: ["match-news", matchId, lang],
+    queryFn: () => api.getMatchNews(matchId, lang),
     enabled: Boolean(matchId),
     staleTime: 5 * 60_000,
   });
@@ -718,10 +768,12 @@ export interface SquadRow {
   id: string;
   name: string;
   shortName: string | null;
-  position: "GK" | "DEF" | "MID" | "FWD";
+  position: "GK" | "DEF" | "MID" | "FWD" | "OTHER";
   espnPosition: string | null;
+  availability: ApiTeamAvailability | null;
   jersey: number | null;
   headshot: string | null;
+  avatarUrl?: string | null;
   appearances: number | null;
   goals: number | null;
   assists: number | null;
@@ -740,10 +792,12 @@ export function useSquad(teamId: string) {
         id: p.id,
         name: p.full_name,
         shortName: p.short_name,
-        position: (p.position ?? "MID") as SquadRow["position"],
+        position: (p.position ?? "OTHER") as SquadRow["position"],
         espnPosition: p.espn_position,
+        availability: p.availability ?? null,
         jersey: p.jersey_number,
         headshot: p.headshot_url,
+        avatarUrl: p.avatar_url ?? null,
         appearances: p.appearances,
         goals: p.season_goals,
         assists: p.season_assists,

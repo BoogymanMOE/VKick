@@ -1,0 +1,127 @@
+From e227e83307d0123612cee97d2f79c68bf1fa4b29 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 25 Oct 2026 17:34:54 +0330
+Subject: [PATCH 224/230] bottom nav dynamic height
+
+---
+ src/components/AppShell.tsx | 38 +++++++++++++++++++++++++++++++------
+ src/components/TabBar.tsx   |  6 ++++--
+ src/index.css               |  1 -
+ 3 files changed, 36 insertions(+), 9 deletions(-)
+
+diff --git a/src/components/AppShell.tsx b/src/components/AppShell.tsx
+index 5431804..6d8682a 100644
+--- a/src/components/AppShell.tsx
++++ b/src/components/AppShell.tsx
+@@ -1,4 +1,4 @@
+-import { Suspense, useEffect } from "react";
++import { Suspense, useEffect, useRef, useLayoutEffect } from "react";
+ import { Outlet, useLocation } from "react-router-dom";
+ import { initTelegram } from "../lib/telegram";
+ import { useBackNavigation } from "../hooks/useBackNavigation";
+@@ -26,6 +26,33 @@ export function AppShell() {
+     initTelegram();
+   }, []);
+ 
++  // Measure the bottom tab bar height dynamically and set the CSS variable.
++  const tabBarRef = useRef<HTMLDivElement>(null);
++  useLayoutEffect(() => {
++    // Measure synchronously on mount so --bottom-nav-h is set before first paint.
++    if (tabBarRef.current) {
++      const h = tabBarRef.current.offsetHeight;
++      document.documentElement.style.setProperty('--bottom-nav-h', h + 'px');
++    }
++    if (!tabBarRef.current) return;
++    const observer = new ResizeObserver((entries) => {
++      const height = entries[0].borderBoxSize?.[0]?.blockSize ?? entries[0].contentRect.height;
++      document.documentElement.style.setProperty('--bottom-nav-h', height + 'px');
++    });
++    observer.observe(tabBarRef.current);
++    // Also listen for orientation / window resize changes.
++    const handleResize = () => {
++      if (tabBarRef.current) observer.observe(tabBarRef.current);
++    };
++    window.addEventListener('resize', handleResize);
++    window.addEventListener('orientationchange', handleResize);
++    return () => {
++      window.removeEventListener('resize', handleResize);
++      window.removeEventListener('orientationchange', handleResize);
++      observer.disconnect();
++    };
++  }, [tabBarRef]);
++
+   // Android's hardware back inside Telegram: pop in-app history on detail
+   // routes instead of closing the mini app.
+   useBackNavigation();
+@@ -57,11 +84,10 @@ export function AppShell() {
+         tabIndex={-1}
+         key={pathname}
+         className="page-in mx-auto w-full max-w-[var(--app-max-width,768px)] flex-1 px-[var(--space-page-x,16px)] outline-none"
+-        // The sticky tab bar is 4px (its own pt-1) + 56px (min-h-14) + the
+-        // safe-area inset — reserving only 56px left the last card tucked under
+-        // it. The extra 4px is the difference.
++        // The sticky tab bar height is measured dynamically via ResizeObserver
++        // and set as --bottom-nav-h on the root element.
+         style={{
+-          paddingBottom: "calc(var(--bottom-nav-h) + 16px + env(safe-area-inset-bottom))",
++          paddingBottom: "calc(var(--bottom-nav-h, 60px) + 16px)",
+         }}
+       >
+         <Suspense
+@@ -74,7 +100,7 @@ export function AppShell() {
+           <Outlet />
+         </Suspense>
+       </main>
+-      <TabBar />
++      <TabBar ref={tabBarRef} />
+     </div>
+   );
+ }
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index 78dbd40..174ce8b 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -1,4 +1,5 @@
+ import { NavLink, useLocation } from "react-router-dom";
++import { forwardRef } from "react";
+ import { useI18n } from "../i18n/context";
+ import { haptic } from "../lib/telegram";
+ import { BallIcon, ListIcon, UserIcon } from "./icons";
+@@ -14,7 +15,7 @@ const tabs: Array<{ to: string; key: StringKey; Icon: typeof BallIcon }> = [
+   { to: "/profile", key: "nav.profile", Icon: UserIcon },
+ ];
+ 
+-export function TabBar() {
++export const TabBar = forwardRef<HTMLElement, {}>((_, ref) => {
+   const { t } = useI18n();
+   const { pathname } = useLocation();
+   // A team sub-page belongs to no top-level tab: highlighting one would claim a
+@@ -25,6 +26,7 @@ export function TabBar() {
+     // imperceptible but ran on every scroll frame.
+     // Ad is now inline and scrolls with content, so TabBar sits at the very bottom.
+     <nav
++      ref={ref}
+       className="pad-safe-bottom fixed bottom-0 left-0 right-0 z-20 border-t border-line bg-base/95"
+     >
+       <ul className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] items-stretch justify-between px-2 pt-1">
+@@ -76,4 +78,4 @@ export function TabBar() {
+       </ul>
+     </nav>
+   );
+-}
++});
+diff --git a/src/index.css b/src/index.css
+index 9fa4856..91ebe1d 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -157,7 +157,6 @@
+   /* Shared constants — nav height is derived from the fixed sticky header     height (≈69px on real devices); use var() so a single source of truth
+      feeds all spacing rules and avoids hardcoded 56px assumptions. */
+   :root {
+-    --bottom-nav-h: 56px;
+   }
+ 
+   /* Safe-area padding helpers — Telegram headers, iPhone home indicator, etc.     The var indirection only exists for share mode: /frame.html embeds the app     in an iframe, and an iframe has no real safe-area insets, so the frame     page supplies --safe-top/--safe-bottom itself (see html[data-embed] below).     Without the variables — every real user, everywhere — the fallback resolves     to exactly the env() value this rule had before. */
+-- 
+2.54.0.windows.1
+

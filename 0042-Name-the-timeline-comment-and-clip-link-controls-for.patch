@@ -1,0 +1,67 @@
+From 4cf873839e5974916664b8af9caad8f6a2feffdc Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 9 Oct 2026 21:11:24 +0330
+Subject: [PATCH 042/230] Name the timeline comment and clip-link controls for
+ screen readers
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The comment textarea and the clip-link input relied on placeholder text alone,
+so both were announced as unlabelled controls (the audit's two unnamed
+interactive elements on the match timeline). Each now carries an aria-label,
+localized in EN and FA. Verified headless: zero unnamed controls on the
+timeline tab in either language.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/panels/CommentsPanel.tsx | 2 ++
+ src/i18n/strings.ts                     | 4 ++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/src/components/panels/CommentsPanel.tsx b/src/components/panels/CommentsPanel.tsx
+index 86b286b..e8e7972 100644
+--- a/src/components/panels/CommentsPanel.tsx
++++ b/src/components/panels/CommentsPanel.tsx
+@@ -210,6 +210,7 @@ export function CommentsSection({
+           onChange={(e) => setText(e.target.value)}
+           rows={2}
+           maxLength={500}
++          aria-label={t("comments.textAria")}
+           placeholder={t("comments.placeholder")}
+           className="mt-2 w-full resize-none rounded-card border border-line bg-elevated p-3 text-sm text-ink placeholder:text-ink-3 focus-visible:outline-2 focus-visible:outline-volt"
+         />
+@@ -224,6 +225,7 @@ export function CommentsSection({
+           onChange={(e) => setMediaLink(e.target.value)}
+           type="url"
+           dir="ltr"
++          aria-label={t("comments.mediaAria")}
+           placeholder="https://…"
+           className="mt-1 min-h-11 w-full rounded-card border border-line bg-elevated px-3 text-sm text-ink placeholder:text-ink-3 focus-visible:outline-2 focus-visible:outline-volt"
+         />
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index bc2a964..80fd2e1 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -170,6 +170,8 @@ export const strings = {
+     "comments.placeholder": "What did you see?",
+     "comments.media": "Clip link (optional)",
+     "comments.mediaHint": "YouTube or Instagram URL",
++    "comments.textAria": "Comment text",
++    "comments.mediaAria": "Clip link",
+     "comments.post": "Post",
+     "report.button": "Report",
+     "report.done": "Reported",
+@@ -696,6 +698,8 @@ export const strings = {
+     "comments.placeholder": "چه دیدی؟",
+     "comments.media": "لینک کلیپ (اختیاری)",
+     "comments.mediaHint": "نشانی یوتیوب یا اینستاگرام",
++    "comments.textAria": "متن دیدگاه",
++    "comments.mediaAria": "نشانی کلیپ",
+     "comments.post": "ارسال",
+     "report.button": "گزارش",
+     "report.done": "گزارش شد",
+-- 
+2.54.0.windows.1
+

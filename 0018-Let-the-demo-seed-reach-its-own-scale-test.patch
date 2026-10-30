@@ -1,0 +1,196 @@
+From 50fdeaad8959ca4871c6bd0739e47af7e454391b Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 15:53:29 +0330
+Subject: [PATCH 018/230] Let the demo seed reach its own scale test
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Seeding 120 users was impossible, so two behaviours could not be checked:
+own-rank beyond the top 100 needs a board longer than the page limit,
+and the rating histogram needs enough votes to clear MIN_VOTES_TO_SHOW.
+`npm run seed:demo -- --users 120` silently produced 20 — the cohort was
+clamped at 20 and the demo id range only spanned 100 ids, both now
+raised.
+
+Ratings were picked with finished.slice(idx, idx+2), which indexes by
+user: past user 12 the slice was empty and 63 of 120 users rated nothing,
+leaving no player above the vote floor on any match. They now go
+round-robin over the fixture list (660 rows instead of 63) and the rating
+draw is a bell over the full 1..10 scale rather than a flat 6..9, so all
+ten histogram bins have a realistic chance of being populated.
+---
+ server/dev/seedDemoData.ts | 41 ++++++++++++++++++++++++++++-----
+ tests/seedDemo.test.ts     | 46 ++++++++++++++++++++++++++++++++++++--
+ 2 files changed, 79 insertions(+), 8 deletions(-)
+
+diff --git a/server/dev/seedDemoData.ts b/server/dev/seedDemoData.ts
+index a17d60a..d2813f4 100644
+--- a/server/dev/seedDemoData.ts
++++ b/server/dev/seedDemoData.ts
+@@ -64,8 +64,16 @@ export function assertNotProduction(env: Record<string, string | undefined>): vo
+ 
+ /** Demo telegram ids start here — the `--reset` sweep keys off this range. */
+ export const DEMO_TELEGRAM_ID_BASE = 900001;
+-/** Upper bound of the demo id range, exclusive. */
+-export const DEMO_TELEGRAM_ID_END = DEMO_TELEGRAM_ID_BASE + 100;
++/**
++ * Upper bound of the demo id range, exclusive.
++ *
++ * Wide enough that the cohort can exceed 100 users: own-rank-beyond-the-page
++ * only means anything on a board longer than the page limit, and a 100-id range
++ * made `--users 120` impossible to test.
++ */
++export const DEMO_TELEGRAM_ID_END = DEMO_TELEGRAM_ID_BASE + 1000;
++/** Cohort ceiling. Generous, but bounded so a typo cannot write 10k rows. */
++export const DEMO_USER_MAX = 500;
+ 
+ /**
+  * The synthetic cohort. Ids are consecutive so `--reset` can find them with one
+@@ -76,7 +84,7 @@ export const DEMO_TELEGRAM_ID_END = DEMO_TELEGRAM_ID_BASE + 100;
+  * real traffic in a screenshot, and the point of the seed is to be obviously fake.
+  */
+ export function planDemoUsers(count: number): Array<{ telegramId: string; displayName: string }> {
+-  const n = Math.max(1, Math.min(20, Math.trunc(Number.isFinite(count) ? count : 1)));
++  const n = Math.max(1, Math.min(DEMO_USER_MAX, Math.trunc(Number.isFinite(count) ? count : 1)));
+   return Array.from({ length: n }, (_, i) => ({
+     telegramId: String(DEMO_TELEGRAM_ID_BASE + i),
+     displayName: `Demo User ${i + 1}`,
+@@ -143,6 +151,21 @@ function mulberry32(seed: number): () => number {
+   };
+ }
+ 
++/**
++ * A crowd rating drawn from a bell around 7, over the full 1..10 range.
++ *
++ * The rating histogram is grouped into 10 integer buckets and rendered as a
++ * real distribution, so a seed that only ever emits 6..9 leaves four buckets
++ * permanently empty and the chart looks broken. This one gives every bucket a
++ * realistic chance of being hit while still clustering the way real fan
++ * ratings do.
++ */
++const RATING_POOL = [2, 3, 4, 4, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 9, 9, 10];
++
++export function demoRating(rng: () => number): number {
++  return RATING_POOL[Math.min(RATING_POOL.length - 1, Math.floor(rng() * RATING_POOL.length))] as number;
++}
++
+ /* ------------------------------------------------------------ db helpers */
+ 
+ interface MatchRow {
+@@ -443,9 +466,15 @@ export function seedDemoData(db: DatabaseSync, opts: SeedOptions = {}): SeedRepo
+         }
+       }
+ 
+-      // Crowd ratings on real players of a real finished match — cosmetic, so
++      // Crowd ratings on real players of real finished matches — cosmetic, so
+       // they never reach the ledger (scoring-rules.md §8 firewall).
+-      for (const match of finished.slice(idx, idx + 2)) {
++      //
++      // Round-robin rather than slice(idx, idx+2): with a cohort larger than
++      // the match list, indexing by user left every user past the end with
++      // nothing, and the rating distribution — which is grouped PER MATCH and
++      // hidden below MIN_VOTES_TO_SHOW — stayed too sparse to render at all.
++      for (let k = 0; k < 2; k++) {
++        const match = finished[(idx + k) % finished.length]!;
+         const players = all<PlayerRow>(
+           db,
+           `SELECT p.id FROM match_player_stats s
+@@ -461,7 +490,7 @@ export function seedDemoData(db: DatabaseSync, opts: SeedOptions = {}): SeedRepo
+               `INSERT INTO crowd_ratings (user_id, player_id, match_id, rating, comment, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, player_id, match_id) DO NOTHING`,
+-              [userId, p.id, match.id, 6 + Math.floor(rng() * 4), "Held his shape all afternoon.", match.kickoff_at],
++              [userId, p.id, match.id, demoRating(rng), "Held his shape all afternoon.", match.kickoff_at],
+             )
+           ) {
+             report.ratings++;
+diff --git a/tests/seedDemo.test.ts b/tests/seedDemo.test.ts
+index 2874c12..67c2064 100644
+--- a/tests/seedDemo.test.ts
++++ b/tests/seedDemo.test.ts
+@@ -14,8 +14,11 @@ import { DatabaseSync } from "node:sqlite";
+ import { migrate } from "../server/db/schema.js";
+ import {
+   DEMO_TELEGRAM_ID_BASE,
++  DEMO_TELEGRAM_ID_END,
++  DEMO_USER_MAX,
+   assertNotProduction,
+   correctStarterCount,
++  demoRating,
+   mixLineup,
+   planDemoUsers,
+   seedDemoData,
+@@ -47,14 +50,21 @@ export function runSeedDemoTests(): void {
+   for (const u of cohort) {
+     const n = Number(u.telegramId);
+     assert.ok(Number.isInteger(n));
+-    assert.ok(n >= DEMO_TELEGRAM_ID_BASE && n < DEMO_TELEGRAM_ID_BASE + 100);
++    assert.ok(n >= DEMO_TELEGRAM_ID_BASE && n < DEMO_TELEGRAM_ID_END);
+     assert.match(u.displayName, /^Demo User \d+$/, "demo names must be obviously fake");
+   }
+   // Clamped, and rubbish input does not produce an empty or infinite cohort.
+   assert.equal(planDemoUsers(0).length, 1);
+   assert.equal(planDemoUsers(-5).length, 1);
+-  assert.equal(planDemoUsers(999).length, 20);
++  assert.equal(planDemoUsers(99999).length, DEMO_USER_MAX);
+   assert.equal(planDemoUsers(Number.NaN).length, 1);
++  // A cohort must be able to exceed one leaderboard page, or own-rank beyond
++  // the top 100 can never be exercised with demo data.
++  assert.ok(planDemoUsers(120).length === 120, "120 users must be seedable");
++  assert.ok(
++    Number(planDemoUsers(120).at(-1)!.telegramId) < DEMO_TELEGRAM_ID_END,
++    "every demo id must fall inside the --reset range",
++  );
+ 
+   /* ---------------------------------------------------- lineup mixing */
+ 
+@@ -97,6 +107,23 @@ export function runSeedDemoTests(): void {
+   assert.equal(correctStarterCount(Number.NaN, () => 0), 2);
+   assert.equal(correctStarterCount(99, () => 1), 11);
+ 
++  /* ---------------------------------------------------- rating histogram shape */
++
++{
++    // The seed exists to make the rating histogram renderable, so it must not
++    // collapse into a handful of buckets: the chart groups 1..10 and a seed
++    // emitting only 6..9 leaves most of it permanently flat.
++    const seen = new Set<number>();
++    for (let i = 0; i < 4000; i++) seen.add(demoRating(mulberry(i)));
++    assert.ok(seen.size >= 7, `rating pool too narrow: ${[...seen].sort((a, b) => a - b).join(",")}`);
++    for (const v of seen) assert.ok(v >= 1 && v <= 10, `rating out of range: ${v}`);
++    // Still bell-shaped: the middle of the scale must dominate.
++    const mid = [...seen].filter((v) => v >= 6 && v <= 8).length;
++    assert.ok(mid >= 3, "ratings should cluster in the middle of the scale");
++    // Deterministic: the same seed reproduces the same board.
++    assert.equal(demoRating(mulberry(7)), demoRating(mulberry(7)));
++  }
++
+   /* ---------------------------------------------------- end-to-end (temp db) */
+ 
+   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-seed-"));
+@@ -166,6 +193,21 @@ export function runSeedDemoTests(): void {
+     db2.close();
+     fs.rmSync(dir2, { recursive: true, force: true });
+   }
++
++  console.log(
++    "  seedDemo: production refusal, cohort clamps, lineups, ledger reconciliation, rating histogram, reset safety OK",
++  );
++}
++
++/** Tiny deterministic RNG so the histogram assertions are reproducible. */
++function mulberry(i: number): () => number {
++  let a = i >>> 0;
++  return () => {
++    a = (a + 0x6d2b79f5) >>> 0;
++    let t = Math.imul(a ^ (a >>> 15), 1 | a);
++    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
++    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
++  };
+ }
+ 
+ /* ------------------------------------------------------------ fixtures */
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,831 @@
+From 41d6e66ce436c359bf6272d5eeff07a7f4ec85a9 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 9 Oct 2026 02:44:05 +0330
+Subject: [PATCH 037/230] Add comment reporting and an admin moderation queue
+
+Users can report timeline and rating comments (one per user per comment,
+rate-limited); admins can list the queue, delete a comment, or hide a user's
+comments. Hiding is non-destructive: hidden comments vanish from the public
+reads while the rating value survives. The suite drives the whole loop and
+proves a non-admin gets 403 on every admin endpoint.
+---
+ server/auth/rateLimit.ts                |  10 +
+ server/db/schema.ts                     |  33 +++
+ server/index.ts                         |   2 +
+ server/routes/moderation.ts             | 129 ++++++++++
+ server/routes/ratings.ts                |  16 +-
+ src/components/RatingRow.tsx            |  12 +-
+ src/components/ReportButton.tsx         |  58 +++++
+ src/components/panels/CommentsPanel.tsx |   8 +-
+ src/i18n/strings.ts                     |   6 +
+ src/lib/api.ts                          |   9 +
+ src/pages/Ratings.tsx                   |   1 +
+ src/types.ts                            |   2 +
+ tests/moderation.test.ts                | 315 ++++++++++++++++++++++++
+ tests/run.ts                            |   2 +
+ 14 files changed, 595 insertions(+), 8 deletions(-)
+ create mode 100644 server/routes/moderation.ts
+ create mode 100644 src/components/ReportButton.tsx
+ create mode 100644 tests/moderation.test.ts
+
+diff --git a/server/auth/rateLimit.ts b/server/auth/rateLimit.ts
+index 422fee4..242ab5f 100644
+--- a/server/auth/rateLimit.ts
++++ b/server/auth/rateLimit.ts
+@@ -94,3 +94,13 @@ export const writeLimiter = rateLimit({
+   windowMs: 60_000,
+   max: 60,
+ });
++
++/**
++ * Content reports: a write, but with a tighter budget than a normal post —
++ * reporting is rare, so a burst is either a mistake or abuse.
++ */
++export const reportLimiter = rateLimit({
++  name: "report",
++  windowMs: 60_000,
++  max: 20,
++});
+diff --git a/server/db/schema.ts b/server/db/schema.ts
+index 84a5543..81346c9 100644
+--- a/server/db/schema.ts
++++ b/server/db/schema.ts
+@@ -549,6 +549,22 @@ export function migrate(db: DatabaseSync): void {
+       created_at       TEXT NOT NULL
+     );
+     CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referral_redemptions(referrer_user_id);
++
++    -- Moderation: user-filed reports against a timeline comment or a rating
++    -- comment. comment_type + comment_id name the row in the respective table;
++    -- UNIQUE keeps it to one report per user per comment. Reports are an admin
++    -- queue, never shown to the reported user.
++    CREATE TABLE IF NOT EXISTS comment_reports (
++      id               INTEGER PRIMARY KEY AUTOINCREMENT,
++      comment_type     TEXT NOT NULL CHECK (comment_type IN ('timeline', 'rating')),
++      comment_id       INTEGER NOT NULL,
++      reporter_user_id INTEGER NOT NULL REFERENCES users(id),
++      reason           TEXT,
++      created_at       TEXT NOT NULL,
++      UNIQUE(reporter_user_id, comment_type, comment_id)
++    );
++    CREATE INDEX IF NOT EXISTS idx_reports_created ON comment_reports(created_at DESC);
++    CREATE INDEX IF NOT EXISTS idx_reports_comment ON comment_reports(comment_type, comment_id);
+   `);
+ 
+   // The shot-coordinate columns (field_x, field_y, goal_y) were added after
+@@ -716,6 +732,23 @@ export function migrate(db: DatabaseSync): void {
+     db.exec("ALTER TABLE crowd_ratings ADD COLUMN comment TEXT;");
+   }
+ 
++  // Moderation "hidden" flags arrived with the report/hide feature. Hidden
++  // comments disappear from public reads (GET comments / GET ratings) without
++  // destroying the row, so a hide is reversible and the rating value survives.
++  // Fresh DBs get both columns via CREATE TABLE; older ones here.
++  const commentCols = db.prepare("SELECT name FROM pragma_table_info('timeline_comments')").all() as Array<{
++    name: string;
++  }>;
++  if (!commentCols.some((c) => c.name === "hidden")) {
++    db.exec("ALTER TABLE timeline_comments ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;");
++  }
++  const ratingModCols = db.prepare("SELECT name FROM pragma_table_info('crowd_ratings')").all() as Array<{
++    name: string;
++  }>;
++  if (!ratingModCols.some((c) => c.name === "comment_hidden")) {
++    db.exec("ALTER TABLE crowd_ratings ADD COLUMN comment_hidden INTEGER NOT NULL DEFAULT 0;");
++  }
++
+   // Streak state gained an explicit season column after v1 of the table so a
+   // season rollover can reset it; fresh DBs get it via CREATE TABLE.
+   const streakCols = db.prepare("SELECT name FROM pragma_table_info('user_streaks')").all() as Array<{
+diff --git a/server/index.ts b/server/index.ts
+index fb15676..f4f1937 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -42,6 +42,7 @@ import { matchesRouter } from "./routes/football.js";
+ import { predictionsRouter } from "./routes/predictions.js";
+ import { ratingsRouter } from "./routes/ratings.js";
+ import { leaderboardsRouter } from "./routes/leaderboards.js";
++import { moderationRouter } from "./routes/moderation.js";
+ import { adminRouter } from "./routes/admin.js";
+ 
+ const app = express();
+@@ -109,6 +110,7 @@ app.use(matchesRouter);
+ app.use(predictionsRouter);
+ app.use(ratingsRouter);
+ app.use(leaderboardsRouter);
++app.use(moderationRouter);
+ app.use(adminRouter);
+ 
+ /* ------------------------------------------------------------ static frontend */
+diff --git a/server/routes/moderation.ts b/server/routes/moderation.ts
+new file mode 100644
+index 0000000..d3b5b81
+--- /dev/null
++++ b/server/routes/moderation.ts
+@@ -0,0 +1,129 @@
++/**
++ * Moderation: user-filed reports and the admin queue that acts on them.
++ *
++ *   POST   /api/reports                       report a timeline or rating comment
++ *   GET    /api/admin/reports                 list the queue (admin only)
++ *   DELETE /api/admin/comments/:type/:id       remove a comment (admin only)
++ *   POST   /api/admin/users/:id/hide-comments  hide/unhide a user's comments
++ *
++ * Reports are one-per-user-per-comment (the UNIQUE index is the enforcement —
++ * INSERT … ON CONFLICT DO NOTHING), rate-limited like other writes. Admin
++ * endpoints share the ADMIN_TELEGRAM_IDS gate every /api/admin route uses and
++ * answer 403 for anyone else.
++ *
++ * "Hiding" is non-destructive on purpose: hidden comments keep their row, they
++ * just stop appearing in the public reads (GET comments / GET ratings both
++ * filter them). A rating comment hides the COMMENT only — the rating number
++ * stays part of the crowd average, because a report is about the words.
++ */
++import express from "express";
++import { getDb, all, get } from "../db/index.js";
++import { reportLimiter } from "../auth/rateLimit.js";
++import { bad, currentUser, isAdmin, requireUser } from "./shared.js";
++
++const db = getDb();
++
++export const moderationRouter = express.Router();
++
++const COMMENT_TYPES = new Set(["timeline", "rating"]);
++
++/** Does the referenced comment exist? (A rating only counts when it has text.) */
++function commentExists(type: string, id: number): boolean {
++  if (type === "timeline") {
++    return Boolean(get(db, "SELECT 1 FROM timeline_comments WHERE id = ?", [id]));
++  }
++  return Boolean(get(db, "SELECT 1 FROM crowd_ratings WHERE id = ? AND comment IS NOT NULL", [id]));
++}
++
++/* ------------------------------------------------------------ reports */
++
++moderationRouter.post("/api/reports", requireUser, reportLimiter, (req, res) => {
++  const commentType = String(req.body?.commentType ?? "");
++  const commentId = Number(req.body?.commentId);
++  if (!COMMENT_TYPES.has(commentType) || !Number.isInteger(commentId) || commentId <= 0) {
++    return bad(res, "commentType and commentId required");
++  }
++  if (!commentExists(commentType, commentId)) return bad(res, "unknown comment", 404);
++  const reason = String(req.body?.reason ?? "")
++    .trim()
++    .slice(0, 280);
++  const info = db
++    .prepare(
++      `INSERT INTO comment_reports (comment_type, comment_id, reporter_user_id, reason, created_at)
++       VALUES (?, ?, ?, ?, ?)
++       ON CONFLICT(reporter_user_id, comment_type, comment_id) DO NOTHING`,
++    )
++    .run(commentType, commentId, currentUser(req).id, reason || null, new Date().toISOString());
++  // A repeat report is a no-op, not an error: the second tap means "still bad".
++  res.json({ ok: true, duplicate: Number(info.changes ?? 0) === 0 });
++});
++
++/* ------------------------------------------------------------ admin queue */
++
++moderationRouter.get("/api/admin/reports", requireUser, (req, res) => {
++  if (!isAdmin(req)) return bad(res, "admin only", 403);
++  const reports = all(
++    db,
++    `SELECT r.id, r.comment_type, r.comment_id, r.reason, r.created_at,
++            u.display_name AS reporter,
++            CASE r.comment_type
++              WHEN 'timeline' THEN (SELECT t.text FROM timeline_comments t WHERE t.id = r.comment_id)
++              ELSE (SELECT c.comment FROM crowd_ratings c WHERE c.id = r.comment_id)
++            END AS content,
++            CASE r.comment_type
++              WHEN 'timeline' THEN (SELECT t.user_id FROM timeline_comments t WHERE t.id = r.comment_id)
++              ELSE (SELECT c.user_id FROM crowd_ratings c WHERE c.id = r.comment_id)
++            END AS content_user_id,
++            CASE r.comment_type
++              WHEN 'timeline' THEN (SELECT t.hidden FROM timeline_comments t WHERE t.id = r.comment_id)
++              ELSE (SELECT c.comment_hidden FROM crowd_ratings c WHERE c.id = r.comment_id)
++            END AS content_hidden
++       FROM comment_reports r
++       JOIN users u ON u.id = r.reporter_user_id
++      ORDER BY r.created_at DESC
++      LIMIT 200`,
++  );
++  res.json({ reports });
++});
++
++/** Remove a reported comment and clear its queue entries. */
++moderationRouter.delete("/api/admin/comments/:type/:id", requireUser, (req, res) => {
++  if (!isAdmin(req)) return bad(res, "admin only", 403);
++  const type = String(req.params.type);
++  const id = Number(req.params.id);
++  if (!COMMENT_TYPES.has(type) || !Number.isInteger(id)) return bad(res, "bad comment reference");
++
++  let deleted = 0;
++  if (type === "timeline") {
++    deleted = Number(db.prepare("DELETE FROM timeline_comments WHERE id = ?").run(id).changes ?? 0);
++  } else {
++    deleted = Number(
++      db
++        .prepare(
++          "UPDATE crowd_ratings SET comment = NULL, comment_hidden = 0 WHERE id = ? AND comment IS NOT NULL",
++        )
++        .run(id).changes ?? 0,
++    );
++  }
++  db.prepare("DELETE FROM comment_reports WHERE comment_type = ? AND comment_id = ?").run(type, id);
++  res.json({ ok: true, deleted });
++});
++
++/** Hide (or unhide) every comment a user has posted. Reversible. */
++moderationRouter.post("/api/admin/users/:id/hide-comments", requireUser, (req, res) => {
++  if (!isAdmin(req)) return bad(res, "admin only", 403);
++  const userId = Number(req.params.id);
++  if (!Number.isInteger(userId)) return bad(res, "bad user id");
++  const hidden = req.body?.hidden === undefined ? true : Boolean(req.body.hidden);
++  const flag = hidden ? 1 : 0;
++  const comments = db.prepare("UPDATE timeline_comments SET hidden = ? WHERE user_id = ?").run(flag, userId);
++  const ratings = db
++    .prepare("UPDATE crowd_ratings SET comment_hidden = ? WHERE user_id = ?")
++    .run(flag, userId);
++  res.json({
++    ok: true,
++    hidden,
++    comments: Number(comments.changes ?? 0),
++    ratings: Number(ratings.changes ?? 0),
++  });
++});
+diff --git a/server/routes/ratings.ts b/server/routes/ratings.ts
+index 9688c48..30cee35 100644
+--- a/server/routes/ratings.ts
++++ b/server/routes/ratings.ts
+@@ -34,10 +34,17 @@ ratingsRouter.get("/api/matches/:id/ratings", requireUser, (req, res) => {
+             s.stat_score, s.stat_breakdown, s.started, s.minutes_played,
+             AVG(r.rating) AS avg_rating, COUNT(r.rating) AS votes,
+             (SELECT rating FROM crowd_ratings WHERE user_id = ? AND player_id = s.player_id AND match_id = s.match_id) AS my_rating,
+-            (SELECT comment FROM crowd_ratings WHERE user_id = ? AND player_id = s.player_id AND match_id = s.match_id) AS my_comment,
+             (SELECT rc.comment FROM crowd_ratings rc
++              WHERE rc.user_id = ? AND rc.player_id = s.player_id AND rc.match_id = s.match_id
++                AND rc.comment_hidden = 0) AS my_comment,
++            (SELECT rc.comment FROM crowd_ratings rc
++              WHERE rc.player_id = s.player_id AND rc.match_id = s.match_id AND rc.comment IS NOT NULL
++                AND rc.comment_hidden = 0
++              ORDER BY rc.created_at DESC LIMIT 1) AS latest_comment,
++            (SELECT rc.id FROM crowd_ratings rc
+               WHERE rc.player_id = s.player_id AND rc.match_id = s.match_id AND rc.comment IS NOT NULL
+-              ORDER BY rc.created_at DESC LIMIT 1) AS latest_comment
++                AND rc.comment_hidden = 0
++              ORDER BY rc.created_at DESC LIMIT 1) AS latest_comment_id
+      FROM match_player_stats s
+      JOIN players p ON p.id = s.player_id
+      LEFT JOIN crowd_ratings r ON r.player_id = s.player_id AND r.match_id = s.match_id
+@@ -132,9 +139,10 @@ ratingsRouter.get("/api/matches/:id/comments", requireUser, (req, res) => {
+   const matchId = String(req.params.id);
+   const rows = all(
+     db,
+-    `SELECT c.*, u.display_name AS author
++    `     SELECT c.*, u.display_name AS author
+      FROM timeline_comments c JOIN users u ON u.id = c.user_id
+-     WHERE c.match_id = ? ORDER BY c.minute_seconds ASC, c.created_at ASC`,
++     WHERE c.match_id = ? AND c.hidden = 0
++     ORDER BY c.minute_seconds ASC, c.created_at ASC`,
+     [matchId],
+   );
+   res.json({ comments: rows });
+diff --git a/src/components/RatingRow.tsx b/src/components/RatingRow.tsx
+index cd447cb..958b437 100644
+--- a/src/components/RatingRow.tsx
++++ b/src/components/RatingRow.tsx
+@@ -4,6 +4,7 @@ import { useI18n } from "../i18n/context";
+ import { haptic, selectionHaptic } from "../lib/telegram";
+ import { cx } from "../lib/cx";
+ import { Chip, Num, TeamBadge } from "./ui";
++import { ReportButton } from "./ReportButton";
+ 
+ /**
+  * The differentiator in one row: the stat score on one side, the crowd's
+@@ -64,9 +65,14 @@ export function RatingRow({
+           </div>
+           {/* The eye-test comment — the crowd's why, not just its number. */}
+           {(rating.myComment || rating.latestComment) && onTap ? (
+-            <p className="mt-1 line-clamp-2 text-[11px] italic text-ink-3">
+-              “{rating.myComment || rating.latestComment}”
+-            </p>
++            <div className="mt-1 flex items-start gap-2">
++              <p className="min-w-0 flex-1 line-clamp-2 text-[11px] italic text-ink-3">
++                “{rating.myComment || rating.latestComment}”
++              </p>
++              {!rating.myComment && rating.latestCommentId ? (
++                <ReportButton commentType="rating" commentId={rating.latestCommentId} />
++              ) : null}
++            </div>
+           ) : null}
+         </div>
+ 
+diff --git a/src/components/ReportButton.tsx b/src/components/ReportButton.tsx
+new file mode 100644
+index 0000000..d29e932
+--- /dev/null
++++ b/src/components/ReportButton.tsx
+@@ -0,0 +1,58 @@
++import { useState } from "react";
++import { api } from "../lib/api";
++import { useI18n } from "../i18n/context";
++import { useToast } from "./toastContext";
++import { cx } from "../lib/cx";
++
++/**
++ * One-tap "report" on someone else's comment. The server keeps it to one
++ * report per user per comment (a second tap is a no-op), and rate-limits it.
++ * Once filed the control latches, so the user gets a clear terminal state.
++ */
++export function ReportButton({
++  commentType,
++  commentId,
++  className,
++}: {
++  commentType: "timeline" | "rating";
++  commentId: number;
++  className?: string;
++}) {
++  const { t } = useI18n();
++  const { push } = useToast();
++  const [busy, setBusy] = useState(false);
++  const [done, setDone] = useState(false);
++
++  const submit = async () => {
++    if (busy || done) return;
++    setBusy(true);
++    try {
++      await api.reportComment(commentType, commentId);
++      setDone(true);
++      push({ text: t("report.done"), tone: "volt", icon: "✓" });
++    } catch {
++      push({ text: t("report.failed"), tone: "danger", icon: "✕" });
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  return (
++    <button
++      type="button"
++      onClick={(e) => {
++        // Rows are sometimes tappable containers; a report must not open them.
++        e.preventDefault();
++        e.stopPropagation();
++        void submit();
++      }}
++      disabled={busy || done}
++      className={cx(
++        "flex-none text-[10px] font-bold text-ink-3 underline-offset-2 transition-colors hover:text-danger hover:underline disabled:opacity-60",
++        className,
++      )}
++    >
++      {done ? t("report.done") : t("report.button")}
++    </button>
++  );
++}
+diff --git a/src/components/panels/CommentsPanel.tsx b/src/components/panels/CommentsPanel.tsx
+index 35ba9e6..86b286b 100644
+--- a/src/components/panels/CommentsPanel.tsx
++++ b/src/components/panels/CommentsPanel.tsx
+@@ -7,6 +7,7 @@ import { haptic, notifyHaptic } from "../../lib/telegram";
+ import { useToast } from "../toastContext";
+ import { cx } from "../../lib/cx";
+ import { Button, Chip, EmptyState, Num } from "../ui";
++import { ReportButton } from "../ReportButton";
+ import type { Comment } from "../../types";
+ import { adaptComments } from "../../lib/adaptComments";
+ 
+@@ -160,7 +161,12 @@ export function CommentsSection({
+                   </button>
+                 ) : null}
+               </div>
+-              <p className="mt-1.5 text-sm text-ink">{localize(comment.text)}</p>
++              <div className="mt-1.5 flex items-start gap-2">
++                <p className="min-w-0 flex-1 text-sm text-ink">{localize(comment.text)}</p>
++                {!comment.isMine ? (
++                  <ReportButton commentType="timeline" commentId={Number(comment.id)} />
++                ) : null}
++              </div>
+             </li>
+           ))}
+         </ul>
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 7b0048c..bc2a964 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -171,6 +171,9 @@ export const strings = {
+     "comments.media": "Clip link (optional)",
+     "comments.mediaHint": "YouTube or Instagram URL",
+     "comments.post": "Post",
++    "report.button": "Report",
++    "report.done": "Reported",
++    "report.failed": "Couldn't report",
+     "commentary.empty": "No commentary yet",
+     "commentary.title": "Commentary",
+     "team.title": "Team",
+@@ -694,6 +697,9 @@ export const strings = {
+     "comments.media": "لینک کلیپ (اختیاری)",
+     "comments.mediaHint": "نشانی یوتیوب یا اینستاگرام",
+     "comments.post": "ارسال",
++    "report.button": "گزارش",
++    "report.done": "گزارش شد",
++    "report.failed": "گزارش نشد",
+     "commentary.empty": "هنوز گزارش زنده‌ای نیست",
+     "commentary.title": "گزارش زنده",
+     "team.title": "تیم",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index f9cce17..187d2ba 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -400,6 +400,8 @@ export interface ApiPlayerRating {
+   my_rating: number | null;
+   my_comment: string | null;
+   latest_comment: string | null;
++  /** crowd_ratings.id of latest_comment, for reporting it. */
++  latest_comment_id: number | null;
+   crowd_rating: number | null;
+   team_name?: string | null;
+   team_short?: string | null;
+@@ -694,6 +696,13 @@ export const api = {
+ 
+   getComments: (matchId: string) => request<{ comments: ApiComment[] }>(`/matches/${matchId}/comments`),
+ 
++  /** File a moderation report against a timeline or rating comment. */
++  reportComment: (commentType: "timeline" | "rating", commentId: number, reason?: string) =>
++    request<{ ok: boolean; duplicate?: boolean }>("/reports", {
++      method: "POST",
++      body: JSON.stringify({ commentType, commentId, reason }),
++    }),
++
+   addComment: (
+     matchId: string,
+     input: { text: string; eventId?: number; minuteDisplay?: string; mediaLink?: string },
+diff --git a/src/pages/Ratings.tsx b/src/pages/Ratings.tsx
+index 1527c9a..7648bf5 100644
+--- a/src/pages/Ratings.tsx
++++ b/src/pages/Ratings.tsx
+@@ -262,6 +262,7 @@ function adapt(p: import("../lib/api").ApiPlayerRating, league: string): PlayerR
+     myRating: p.my_rating ?? null,
+     myComment: p.my_comment ?? null,
+     latestComment: p.latest_comment ?? null,
++    latestCommentId: p.latest_comment_id ?? null,
+     _team: {
+       id: p.team_id,
+       name: p.team_name ?? "",
+diff --git a/src/types.ts b/src/types.ts
+index d04c02b..46843f7 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -82,6 +82,8 @@ export interface PlayerRating {
+   myComment?: string | null;
+   /** A recent crowd comment on this player (any user). */
+   latestComment?: string | null;
++  /** crowd_ratings.id behind latestComment, so it can be reported. */
++  latestCommentId?: number | null;
+ }
+ 
+ export interface SquadPlayer {
+diff --git a/tests/moderation.test.ts b/tests/moderation.test.ts
+new file mode 100644
+index 0000000..9d95bdb
+--- /dev/null
++++ b/tests/moderation.test.ts
+@@ -0,0 +1,315 @@
++/**
++ * Moderation, driven over real HTTP against a throwaway database.
++ *
++ * Covers the whole loop: a user reports a comment (once — a second report is a
++ * no-op), the admin queue lists it, an admin removes it or hides the author's
++ * comments, and hidden comments vanish from the PUBLIC reads while the rating
++ * value itself survives. A non-admin gets 403 on every admin endpoint.
++ *
++ * WHY A CHILD PROCESS: route modules call `getDb()` at module scope and ESM
++ * caches modules per process, so router-driving suites cannot share one (see
++ * tests/guestMerge.test.ts).
++ */
++import { strict as assert } from "node:assert";
++import fs from "node:fs";
++import http from "node:http";
++import os from "node:os";
++import path from "node:path";
++import { spawnSync } from "node:child_process";
++import { fileURLToPath, pathToFileURL } from "node:url";
++import type { AddressInfo } from "node:net";
++import express from "express";
++import { closeDb, getDb, run } from "../server/db/index.js";
++
++const CHILD_FLAG = "VKICK_MODERATION_CHILD";
++const SUMMARY =
++  "  moderation: one report per user, admin queue/list/delete/hide, hidden comments gone from public reads, non-admin 403 OK";
++
++interface Res {
++  status: number;
++  body: Record<string, unknown> | null;
++}
++
++function listen(app: express.Express): Promise<{ port: number; close: () => Promise<void> }> {
++  const server = app.listen(0);
++  return new Promise((resolve) => {
++    server.once("listening", () => {
++      const port = (server.address() as AddressInfo).port;
++      resolve({ port, close: () => new Promise<void>((r) => server.close(() => r())) });
++    });
++  });
++}
++
++function parseBody(buf: string): Record<string, unknown> | null {
++  if (!buf) return null;
++  try {
++    return JSON.parse(buf) as Record<string, unknown>;
++  } catch {
++    return { raw: buf.slice(0, 120) };
++  }
++}
++
++function call(
++  port: number,
++  method: string,
++  url: string,
++  headers: Record<string, string> = {},
++  body?: unknown,
++): Promise<Res> {
++  const raw = body === undefined ? undefined : JSON.stringify(body);
++  return new Promise((resolve, reject) => {
++    const req = http.request(
++      {
++        host: "127.0.0.1",
++        port,
++        path: url,
++        method,
++        headers: {
++          ...(raw ? { "content-type": "application/json", "content-length": Buffer.byteLength(raw) } : {}),
++          ...headers,
++        },
++      },
++      (res) => {
++        let buf = "";
++        res.on("data", (c) => (buf += c));
++        res.on("end", () => resolve({ status: res.statusCode ?? 0, body: parseBody(buf) }));
++      },
++    );
++    req.on("error", reject);
++    req.end(raw);
++  });
++}
++
++async function suite(): Promise<void> {
++  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vkick-mod-"));
++  const previousDb = process.env.SQLITE_PATH;
++  const previousAdmins = process.env.ADMIN_TELEGRAM_IDS;
++  closeDb();
++  process.env.SQLITE_PATH = path.join(dir, "mod.db");
++  process.env.ADMIN_TELEGRAM_IDS = "777";
++  try {
++    const { moderationRouter } = await import("../server/routes/moderation.js");
++    const { ratingsRouter } = await import("../server/routes/ratings.js");
++    const db = getDb();
++    const now = new Date().toISOString();
++
++    run(db, "INSERT INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
++    run(db, "INSERT INTO teams (id, name, league) VALUES ('364', 'Other FC', 'eng.1')");
++    run(
++      db,
++      "INSERT INTO players (id, team_id, full_name, position) VALUES ('1001', '359', 'Test Player', 'FWD')",
++    );
++    run(
++      db,
++      "INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status) VALUES ('m1', 'eng.1', '359', '364', ?, 'finished')",
++      [now],
++    );
++    run(
++      db,
++      "INSERT INTO timeline_events (match_id, minute_display, minute_seconds, type, description) VALUES ('m1', '12''', 720, 'goal', 'Test goal')",
++    );
++    const eventId = (
++      db.prepare("SELECT id FROM timeline_events WHERE match_id = 'm1'").get() as { id: number }
++    ).id;
++    run(
++      db,
++      "INSERT INTO match_player_stats (match_id, player_id, team_id, started, minutes_played) VALUES ('m1', '1001', '359', 1, 90)",
++    );
++
++    const mkUser = (telegramId: string, name: string): number => {
++      run(db, "INSERT INTO users (telegram_id, display_name, created_at) VALUES (?, ?, ?)", [
++        telegramId,
++        name,
++        now,
++      ]);
++      return (db.prepare("SELECT id FROM users WHERE telegram_id = ?").get(telegramId) as { id: number }).id;
++    };
++    const mkSession = (userId: number, token: string): void =>
++      run(db, "INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES (?, ?, ?, ?)", [
++        token,
++        userId,
++        now,
++        now,
++      ]);
++
++    const authorId = mkUser("700010", "Author");
++    const reporterId = mkUser("700011", "Reporter");
++    const adminId = mkUser("777", "Admin");
++    mkSession(authorId, "mg_mod_author");
++    mkSession(reporterId, "mg_mod_reporter");
++    mkSession(adminId, "mg_mod_admin");
++    const reporter = { authorization: "Bearer mg_mod_reporter" };
++    const admin = { authorization: "Bearer mg_mod_admin" };
++
++    // Two timeline comments by the author, and one rating comment.
++    const addComment = (text: string): number => {
++      const info = db
++        .prepare(
++          "INSERT INTO timeline_comments (event_id, match_id, minute_display, minute_seconds, user_id, text, created_at) VALUES (?, 'm1', '12''', 720, ?, ?, ?)",
++        )
++        .run(eventId, authorId, text, now);
++      return Number(info.lastInsertRowid);
++    };
++    const c1 = addComment("first comment");
++    addComment("second comment");
++    const ratingInfo = db
++      .prepare(
++        "INSERT INTO crowd_ratings (user_id, player_id, match_id, rating, comment, created_at) VALUES (?, '1001', 'm1', 9, 'rating comment', ?)",
++      )
++      .run(authorId, now);
++    const ratingId = Number(ratingInfo.lastInsertRowid);
++
++    const app = express();
++    app.use(express.json());
++    app.use(moderationRouter);
++    app.use(ratingsRouter);
++    const { port, close } = await listen(app);
++    const publicComments = async (): Promise<Array<{ id: number; text: string }>> => {
++      const res = await call(port, "GET", "/api/matches/m1/comments", reporter);
++      return (res.body?.comments as Array<{ id: number; text: string }>) ?? [];
++    };
++    const ratingsBody = async (): Promise<Record<string, unknown>> =>
++      (await call(port, "GET", "/api/matches/m1/ratings", reporter)).body ?? {};
++
++    try {
++      /* ---------------------------------------------------- reporting */
++      const first = await call(port, "POST", "/api/reports", reporter, {
++        commentType: "timeline",
++        commentId: c1,
++        reason: "spam",
++      });
++      assert.equal(first.status, 200, `report accepted (got ${JSON.stringify(first.body)})`);
++      assert.equal(first.body?.duplicate, false);
++
++      const second = await call(port, "POST", "/api/reports", reporter, {
++        commentType: "timeline",
++        commentId: c1,
++      });
++      assert.equal(second.status, 200);
++      assert.equal(second.body?.duplicate, true, "a repeat report is a no-op");
++      const reportRows = db
++        .prepare("SELECT COUNT(*) AS n FROM comment_reports WHERE comment_id = ?")
++        .get(c1) as {
++        n: number;
++      };
++      assert.equal(reportRows.n, 1, "one report per user per comment");
++
++      const unknown = await call(port, "POST", "/api/reports", reporter, {
++        commentType: "timeline",
++        commentId: 999999,
++      });
++      assert.equal(unknown.status, 404, "reporting a nonexistent comment is refused");
++
++      /* ---------------------------------------------------- admin gate */
++      assert.equal((await call(port, "GET", "/api/admin/reports", reporter)).status, 403);
++      assert.equal(
++        (await call(port, "POST", `/api/admin/users/${authorId}/hide-comments`, reporter)).status,
++        403,
++      );
++      assert.equal((await call(port, "DELETE", `/api/admin/comments/timeline/${c1}`, reporter)).status, 403);
++
++      /* ---------------------------------------------------- the queue */
++      const queue = await call(port, "GET", "/api/admin/reports", admin);
++      assert.equal(queue.status, 200);
++      const reports = queue.body?.reports as Array<Record<string, unknown>>;
++      assert.ok(Array.isArray(reports) && reports.length >= 1, "the admin sees the report");
++      const row = reports.find((r) => r.comment_id === c1);
++      assert.ok(row, "the reported comment is listed");
++      assert.equal(row.content, "first comment", "the queue carries the content");
++      assert.equal(row.reporter, "Reporter", "and the reporter");
++
++      /* ---------------------------------------------------- delete */
++      assert.ok(
++        (await publicComments()).some((c) => c.id === c1),
++        "the comment is public before moderation",
++      );
++      const del = await call(port, "DELETE", `/api/admin/comments/timeline/${c1}`, admin);
++      assert.equal(del.status, 200);
++      assert.equal(del.body?.deleted, 1);
++      assert.ok(
++        !(await publicComments()).some((c) => c.id === c1),
++        "a deleted comment is gone from the public feed",
++      );
++      const cleared = db
++        .prepare("SELECT COUNT(*) AS n FROM comment_reports WHERE comment_id = ?")
++        .get(c1) as {
++        n: number;
++      };
++      assert.equal(cleared.n, 0, "the queue entry is cleared with the comment");
++
++      /* ---------------------------------------------------- hide a user */
++      const ratingBefore = (await ratingsBody()) as { players: Array<Record<string, unknown>> };
++      const playerBefore = ratingBefore.players.find((p) => p.player_id === "1001");
++      assert.equal(playerBefore?.latest_comment, "rating comment", "the rating comment is public first");
++
++      const hide = await call(port, "POST", `/api/admin/users/${authorId}/hide-comments`, admin, {});
++      assert.equal(hide.status, 200);
++      assert.ok(Number(hide.body?.comments) >= 1, "timeline comments hidden");
++
++      const afterComments = await publicComments();
++      assert.equal(afterComments.length, 0, "every comment by the hidden user disappeared");
++
++      const ratingAfter = (await ratingsBody()) as { players: Array<Record<string, unknown>> };
++      const playerAfter = ratingAfter.players.find((p) => p.player_id === "1001");
++      assert.equal(playerAfter?.latest_comment, null, "the hidden rating comment is not returned");
++      assert.equal(playerAfter?.latest_comment_id, null, "nor is its id");
++      const hiddenRow = db
++        .prepare("SELECT rating, comment, comment_hidden FROM crowd_ratings WHERE id = ?")
++        .get(ratingId) as { rating: number; comment: string | null; comment_hidden: number };
++      assert.equal(hiddenRow.rating, 9, "the rating VALUE still stands");
++      assert.equal(hiddenRow.comment, "rating comment", "hiding keeps the text (reversible)");
++      assert.equal(hiddenRow.comment_hidden, 1);
++
++      // Reversible: unhiding brings the author's comments back.
++      const unhide = await call(port, "POST", `/api/admin/users/${authorId}/hide-comments`, admin, {
++        hidden: false,
++      });
++      assert.equal(unhide.status, 200);
++      assert.equal((await publicComments()).length, 1, "unhiding restores the remaining comment");
++
++      /* ---------------------------------------------------- delete a rating comment */
++      const delRating = await call(port, "DELETE", `/api/admin/comments/rating/${ratingId}`, admin);
++      assert.equal(delRating.status, 200);
++      const ratingGone = (await ratingsBody()) as { players: Array<Record<string, unknown>> };
++      const playerGone = ratingGone.players.find((p) => p.player_id === "1001");
++      assert.equal(playerGone?.latest_comment, null, "a deleted rating comment is gone");
++      const goneRow = db.prepare("SELECT rating, comment FROM crowd_ratings WHERE id = ?").get(ratingId) as {
++        rating: number;
++        comment: string | null;
++      };
++      assert.equal(goneRow.rating, 9, "but the rating itself remains");
++      assert.equal(goneRow.comment, null, "the text is gone");
++    } finally {
++      await close();
++    }
++  } finally {
++    if (previousDb === undefined) delete process.env.SQLITE_PATH;
++    else process.env.SQLITE_PATH = previousDb;
++    if (previousAdmins === undefined) delete process.env.ADMIN_TELEGRAM_IDS;
++    else process.env.ADMIN_TELEGRAM_IDS = previousAdmins;
++    closeDb();
++    try {
++      fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
++    } catch {
++      /* a leftover temp dir must not fail a passing suite */
++    }
++  }
++}
++
++export async function runModerationTests(): Promise<void> {
++  if (process.env[CHILD_FLAG] === "1") {
++    await suite();
++    return;
++  }
++  const result = spawnSync(process.execPath, ["--import", "tsx", fileURLToPath(import.meta.url)], {
++    stdio: "inherit",
++    env: { ...process.env, [CHILD_FLAG]: "1" },
++  });
++  if (result.error) throw result.error;
++  assert.equal(result.status, 0, `moderation child process failed (exit ${result.status})`);
++  console.log(SUMMARY);
++}
++
++if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
++  await runModerationTests();
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index a29cf3e..e918994 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -34,6 +34,7 @@ import { runLeaderboardTests } from "./leaderboard.test.js";
+ import { runBackupTests } from "./backup.test.js";
+ import { runAccountDeletionTests } from "./accountDeletion.test.js";
+ import { runLegalTests } from "./legal.test.js";
++import { runModerationTests } from "./moderation.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -70,6 +71,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["backup", runBackupTests],
+   ["accountDeletion", runAccountDeletionTests],
+   ["legal", runLegalTests],
++  ["moderation", runModerationTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

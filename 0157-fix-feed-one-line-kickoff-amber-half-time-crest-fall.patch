@@ -1,0 +1,149 @@
+From be3b083f72a0e8844029083e0fca589fd60af162 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 02:22:11 +0330
+Subject: [PATCH 157/230] fix(feed): one-line kickoff, amber half-time, crest
+ fallback to abbreviation
+
+---
+ src/components/MatchCard.tsx | 34 ++++++++++++++++++++++++----------
+ src/components/ui.tsx        |  5 ++++-
+ src/hooks/useApi.ts          |  2 ++
+ src/types.ts                 |  6 ++++++
+ 4 files changed, 36 insertions(+), 11 deletions(-)
+
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index 266569c..e474cb8 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -4,7 +4,7 @@ import type { Match } from "../types";
+ import { useI18n } from "../i18n/context";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { useCompetitionLabel } from "../hooks/useApi";
+-import { formatKickoff } from "../lib/format";
++import { formatClock, formatKickoff } from "../lib/format";
+ import { LiveDot, Num, TeamBadge } from "./ui";
+ 
+ /**
+@@ -28,10 +28,12 @@ export const MatchCard = memo(function MatchCard({
+   // labelled every Champions League card "Premier League".
+   const competition = useCompetitionLabel(match.league);
+ 
+-  const isHalftime = match.status === "halftime";
++  // The adapter folds `halftime` into `live` for the feed's sections, so the
++  // raw status can no longer tell a break from a running match — `isHalftime`
++  // carries the real value through.
++  const isHalftime = match.isHalftime === true;
+   // Half-time is a neutral pause, not a running match: only `live` gets the red
+-  // dot and live tint. (The adapter folds halftime into "live" for the feed, so
+-  // this is the defensive branch for data that still carries the real status.)
++  // dot and live tint.
+   const isLive = match.status === "live";
+   const isFinished = match.status === "finished";
+   const hasScore = isLive || isHalftime || isFinished;
+@@ -83,15 +85,23 @@ export const MatchCard = memo(function MatchCard({
+         dir={lang === "fa" ? "rtl" : "ltr"}
+         className="block rounded-card border bg-surface p-3 transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated focus-visible:outline-2 focus-visible:outline-volt focus-visible:outline-offset-2"
+         style={{
+-          borderColor: isLive ? "color-mix(in srgb, var(--live) 60%, transparent)" : "var(--line)",
++          // Red for a running match, amber for the break, neutral otherwise —
++          // a feed of a dozen half-time cards must not read as a dozen alarms.
++          borderColor: isLive
++            ? "color-mix(in srgb, var(--live) 60%, transparent)"
++            : isHalftime
++              ? "color-mix(in srgb, var(--gold) 50%, transparent)"
++              : "var(--line)",
+           backgroundImage: isLive
+             ? "linear-gradient(180deg, color-mix(in srgb, var(--live) 8%, transparent) 0%, transparent 50%)"
+-            : undefined,
++            : isHalftime
++              ? "linear-gradient(180deg, color-mix(in srgb, var(--gold) 8%, transparent) 0%, transparent 50%)"
++              : undefined,
+         }}
+       >
+         <p className="mb-2 truncate text-xs font-bold text-ink-3">{meta}</p>
+ 
+-        <div className="grid grid-cols-[minmax(0,1fr)_72px_minmax(0,1fr)] items-center gap-2">
++        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+           <div className="flex min-w-0 flex-col items-start gap-1.5">
+             <TeamBadge team={match.home} />
+             <span className="line-clamp-2 break-words text-sm font-bold leading-tight text-ink">{home}</span>
+@@ -104,7 +114,11 @@ export const MatchCard = memo(function MatchCard({
+                 {homeScore}–{awayScore}
+               </span>
+             ) : (
+-              <span className="text-xl font-bold text-ink-2">{kickoff}</span>
++              // Time only: the date strip above already names the day, and a
++              // weekday+time in a fixed column wraps to three lines.
++              <span className="whitespace-nowrap text-xl font-bold text-ink-2">
++                {formatClock(new Date(match.kickoffAt), locale)}
++              </span>
+             )}
+             {isLive ? (
+               <span className="flex items-center gap-1 text-xs font-bold text-[color:var(--live)]">
+@@ -112,8 +126,8 @@ export const MatchCard = memo(function MatchCard({
+                 <Num>{minuteLabel}</Num>
+               </span>
+             ) : isHalftime ? (
+-              // Neutral (muted), not the live red: a break is not a goal.
+-              <span className="text-xs font-bold text-ink-3">{minuteLabel}</span>
++              // Half-time is a neutral pause, not a live goal — amber, no dot.
++              <span className="text-xs font-bold text-gold">{minuteLabel}</span>
+             ) : isFinished ? (
+               <span className="text-xs text-ink-3">{t("status.finished")}</span>
+             ) : null}
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index f38305e..f8b1adc 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -188,6 +188,9 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
+   const crest = broken ? null : crestSources(team.id);
+   const remote = !crest && !remoteBroken ? (team.logoUrl ?? null) : null;
+   const hasArt = Boolean(crest || remote);
++  // The abbreviation is the last resort, so it must never itself be blank — a
++  // team with no ESPN abbreviation falls back to the first letters of its name.
++  const abbreviation = team.abbreviation?.trim() || team.shortName.slice(0, 3).toUpperCase();
+   return (
+     <span
+       className={cx(
+@@ -231,7 +234,7 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
+           className={crestImgClass}
+         />
+       ) : (
+-        team.abbreviation
++        abbreviation
+       )}
+     </span>
+   );
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 0e2618e..a7b650b 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -63,6 +63,8 @@ export function matchFromApi(m: ApiMatch): Match {
+     kickoffAt: m.kickoff_at,
+     league: m.league,
+     status,
++    // Preserve the real half-time flag: the status is folded into "live" below.
++    isHalftime: m.status === "halftime",
+     homeScore: m.home_score,
+     awayScore: m.away_score,
+     minute: m.minute_display,
+diff --git a/src/types.ts b/src/types.ts
+index 26b754c..b8d0cb6 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -45,6 +45,12 @@ export interface Match {
+    *  source. `home.league` is only a big-five alias and says "PL" for cups. */
+   league: string;
+   status: MatchStatus;
++  /**
++   * True when the real server status was `halftime`. The adapter folds that
++   * into `live` for the feed's sections, so screens that must distinguish a
++   * break from a running match read this flag instead of `status`.
++   */
++  isHalftime?: boolean;
+   homeScore: number | null;
+   awayScore: number | null;
+   minute: string | null;
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,156 @@
+From b41a7161f67a910b7beeadcfec231d7541d45417 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 20:05:35 +0330
+Subject: [PATCH 140/230] perf(feed): skip offscreen card work; hard bundle
+ budget in CI
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The feed renders every matchday card eagerly even on a 360px phone:
+content-visibility:auto with a reserved footprint (contain-intrinsic-
+size) defers layout and paint of cards below the fold without moving
+scrollbars, which is the free version of virtualization for a list of
+uniform-height rows.
+
+And because desktop dev hides what the fleet feels like, a budget
+gate now runs after every build: gzip'd JS total <=200KB, biggest
+chunk <=60KB, CSS total <=20KB (baseline ~146KB/50.8KB/10.9KB, so
+real headroom before CI starts blocking rather than nagging).
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ .github/workflows/ci.yml     |  5 +++
+ package.json                 |  1 +
+ scripts/bundle-budget.mjs    | 68 ++++++++++++++++++++++++++++++++++++
+ src/components/MatchCard.tsx | 13 ++++++-
+ 4 files changed, 86 insertions(+), 1 deletion(-)
+ create mode 100644 scripts/bundle-budget.mjs
+
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 2f1d417..e75e53e 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -37,3 +37,8 @@ jobs:
+ 
+       - name: Build
+         run: npm run build
++
++      # The built bundle ships to 360px phones on 3G — a size regression is a
++      # user-facing performance regression even when every test stays green.
++      - name: Bundle budget
++        run: npm run budget
+diff --git a/package.json b/package.json
+index 2b52625..0266237 100644
+--- a/package.json
++++ b/package.json
+@@ -12,6 +12,7 @@
+     "start": "node dist-server/server/index.js",
+     "dev:all": "start cmd /k npm run server && start cmd /k npm run dev",
+     "build": "tsc -b && tsc -p tsconfig.server.json && vite build",
++    "budget": "node scripts/bundle-budget.mjs",
+     "preview": "vite preview --host",
+     "test": "tsx tests/run.ts",
+     "typecheck": "tsc -b --noEmit && tsc -p tsconfig.server.json --noEmit",
+diff --git a/scripts/bundle-budget.mjs b/scripts/bundle-budget.mjs
+new file mode 100644
+index 0000000..a585328
+--- /dev/null
++++ b/scripts/bundle-budget.mjs
+@@ -0,0 +1,68 @@
++/**
++ * Performance budget for the production bundle.
++ *
++ * Desktop dev hides what a 360px phone on 3G feels like; the cheapest guard
++ * is a hard ceiling on what ships. Vite already prints gzip sizes — this
++ * script re-derives them from dist/ after a build and FAILS (exit 1) when
++ * the budget is blown, so CI stops a size regression instead of shipping it.
++ *
++ * Run via `npm run budget` (wired into CI right after `npm run build`).
++ * Current baseline (~151KB gzipped JS) leaves real headroom before 200KB.
++ */
++import { readdirSync, statSync, readFileSync } from "fs";
++import { join } from "path";
++import { gzipSync } from "zlib";
++
++const DIST = "dist/assets";
++
++/** Max TOTAL gzip bytes of shipped JS. */
++const TOTAL_JS_BUDGET = 200 * 1024;
++/** Max gzip bytes of any single JS chunk — keeps lazy routes honest. */
++const CHUNK_JS_BUDGET = 60 * 1024;
++/** Max TOTAL gzip bytes of shipped CSS. */
++const TOTAL_CSS_BUDGET = 20 * 1024;
++
++const bytes = (buf) => gzipSync(buf).length;
++
++const entries = [];
++for (const name of readdirSync(DIST)) {
++  const p = join(DIST, name);
++  if (!statSync(p).isFile()) continue;
++  let gz;
++  try {
++    gz = bytes(readFileSync(p));
++  } catch {
++    gz = 0; // unfindable file: stat said file, read failed — treat as 0
++  }
++  if (name.endsWith(".js")) entries.push({ name, gz, kind: "js" });
++  else if (name.endsWith(".css")) entries.push({ name, gz, kind: "css" });
++}
++
++const js = entries.filter((e) => e.kind === "js");
++const css = entries.filter((e) => e.kind === "css");
++const totalJs = js.reduce((s, e) => s + e.gz, 0);
++const totalCss = css.reduce((s, e) => s + e.gz, 0);
++const biggest = js.reduce((max, e) => (e.gz > max.gz ? e : max), { name: "-", gz: 0, kind: "js" });
++
++const kb = (n) => `${(n / 1024).toFixed(1)}KB`;
++console.log(`bundle budget: JS total ${kb(totalJs)} / ${kb(TOTAL_JS_BUDGET)} · biggest ${biggest.name} ${kb(biggest.gz)} / ${kb(CHUNK_JS_BUDGET)} · CSS total ${kb(totalCss)} / ${kb(TOTAL_CSS_BUDGET)}`);
++
++let failed = false;
++if (totalJs > TOTAL_JS_BUDGET) {
++  console.error(`  ✗ JS total ${kb(totalJs)} exceeds the ${kb(TOTAL_JS_BUDGET)} gzip budget`);
++  failed = true;
++}
++if (biggest.gz > CHUNK_JS_BUDGET) {
++  console.error(`  ✗ ${biggest.name} is ${kb(biggest.gz)} — over the ${kb(CHUNK_JS_BUDGET)} per-chunk budget`);
++  failed = true;
++}
++if (totalCss > TOTAL_CSS_BUDGET) {
++  console.error(`  ✗ CSS total ${kb(totalCss)} exceeds the ${kb(TOTAL_CSS_BUDGET)} gzip budget`);
++  failed = true;
++}
++if (js.length === 0) {
++  console.error("  ✗ no JS assets found under dist/assets — run npm run build first");
++  failed = true;
++}
++if (failed) process.exit(1);
++console.log("bundle budget: OK");
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index 561e874..ae3be6d 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -57,7 +57,18 @@ export const MatchCard = memo(function MatchCard({
+     match.gameweek > 0 ? t("matches.cardMeta", { league: competition, gw: match.gameweek }) : competition;
+ 
+   return (
+-    <li className="list-in" style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}>
++    <li
++      className="list-in"
++      style={{
++        "--stagger": `${Math.min(index, 8) * 40}ms`,
++        // Skip the off-screen render work for long matchdays: the browser still
++        // reserves the card's footprint (contain-intrinsic-size ≈ one card),
++        // so scrollbars and scroll anchoring don't shift, but layout/paint of
++        // cards below the fold is deferred until they approach the viewport.
++        contentVisibility: "auto",
++        containIntrinsicSize: "auto 96px",
++      } as CSSProperties}
++    >
+       <Link
+         to={`/match/${match.id}`}
+         onPointerDown={() => prefetchMatch(match.id)}
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,154 @@
+From 83b1406ad840e4dbca01b15936432082299bcc49 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 13 Oct 2026 12:58:58 +0330
+Subject: [PATCH 075/230] Move A-ADS banner back into React app, remove fixed
+ overlay from index.html
+
+---
+ index.html                  | 32 --------------------------------
+ src/components/AdBanner.tsx | 20 ++++++++++++++++++++
+ src/pages/Login.tsx         | 11 +++++++----
+ src/pages/MatchDetail.tsx   |  3 +++
+ src/pages/Matches.tsx       |  3 +++
+ 5 files changed, 33 insertions(+), 36 deletions(-)
+ create mode 100644 src/components/AdBanner.tsx
+
+diff --git a/index.html b/index.html
+index 39366e4..30be596 100644
+--- a/index.html
++++ b/index.html
+@@ -107,37 +107,5 @@
+       })();
+     </script>
+     <script type="module" src="/src/main.tsx"></script>
+-    <!-- BEGIN AADS AD UNIT 2458182 -->
+-    <div
+-      id="aads-frame"
+-      style="
+-        position: fixed;
+-        bottom: 0;
+-        left: 50%;
+-        transform: translateX(-50%);
+-        width: 100%;
+-        max-width: 468px;
+-        z-index: 9999;
+-        background: transparent;
+-        padding: 8px 0;
+-      "
+-    >
+-      <iframe
+-        data-aa="2458182"
+-        src="//acceptable.a-ads.com/2458182/?size=Adaptive"
+-        style="
+-          border: 0;
+-          padding: 0;
+-          width: 70%;
+-          height: auto;
+-          overflow: hidden;
+-          display: block;
+-          margin: auto;
+-        "
+-      ></iframe>
+-    </div>
+-    <!-- Spacer so the app's content doesn't hide behind the fixed ad. -->
+-    <div style="height: 80px; width: 100%"></div>
+-    <!-- END AADS AD UNIT 2458182 -->
+   </body>
+ </html>
+diff --git a/src/components/AdBanner.tsx b/src/components/AdBanner.tsx
+new file mode 100644
+index 0000000..5c8c20b
+--- /dev/null
++++ b/src/components/AdBanner.tsx
+@@ -0,0 +1,20 @@
++export default function AdBanner() {
++  return (
++    <div className="mx-auto my-6 max-w-[468px] min-h-[100px]">
++      <iframe
++        data-aa="2458182"
++        src="//acceptable.a-ads.com/2458182/?size=Adaptive"
++        style={{
++          border: 0,
++          padding: 0,
++          overflow: "hidden",
++          display: "block",
++          margin: "auto",
++        }}
++        width="100%"
++        height="auto"
++        title="Advertisement"
++      ></iframe>
++    </div>
++  );
++}
+diff --git a/src/pages/Login.tsx b/src/pages/Login.tsx
+index 4e63e0d..2a1f2ea 100644
+--- a/src/pages/Login.tsx
++++ b/src/pages/Login.tsx
+@@ -37,14 +37,17 @@ function TelegramDebugDump() {
+       style={{
+         margin: 0,
+         padding: 12,
+-        background: "#ff0000",
+-        color: "#ffff00",
++        background: "#ffffff",
++        color: "#111111",
+         fontSize: 12,
+         fontWeight: "bold",
+         whiteSpace: "pre-wrap",
+         wordBreak: "break-all",
+-        zIndex: 99999,
+-        position: "relative",
++        zIndex: 50,
++        position: "fixed",
++        top: 0,
++        left: 0,
++        right: 0,
+       }}
+     >
+       {"TELEGRAM DEBUG\n" + dump}
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 61c0c71..376cd16 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
+ import { Link, useParams, useSearchParams } from "react-router-dom";
+ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+ import { ConfettiBurst } from "../components/Confetti";
++import AdBanner from "../components/AdBanner";
+ import {
+   LineupsSkeleton,
+   RatingsSkeleton,
+@@ -300,6 +301,8 @@ export default function MatchDetail() {
+       ) : null}
+ 
+       {/* The Shot Predictor lives in the Predict tab now (concept v2). */}
++
++      <AdBanner />
+     </>
+   );
+ }
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 8fc6872..0e415f4 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+ import { Link, useNavigate, useSearchParams } from "react-router-dom";
+ import { useQueryClient } from "@tanstack/react-query";
+ import { ConfettiBurst } from "../components/Confetti";
++import AdBanner from "../components/AdBanner";
+ import { clubContext, opponentOf } from "../lib/clubContext";
+ import { MatchCard } from "../components/MatchCard";
+ import { MatchCardSkeleton } from "../components/Skeletons";
+@@ -507,6 +508,8 @@ export default function Matches() {
+               )}
+             </CollapsibleSection>
+ 
++            <AdBanner />
++
+             {/* Previous results beneath the feed: folded away by default so the
+               matchday page leads with what's next; open when the score is
+               wanted. Rendered whenever the feed has data so a quiet history is
+-- 
+2.54.0.windows.1
+

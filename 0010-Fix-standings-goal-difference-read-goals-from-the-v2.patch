@@ -1,0 +1,497 @@
+From 45c5a72f4d125788cdf4c4045f6063dc04133f69 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 15:18:50 +0330
+Subject: [PATCH 010/230] Fix standings goal difference: read goals from the v2
+ standings feed
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The daily standings sync pulled ESPN's per-match summary feed, whose
+standings block only publishes games played / W / D / L / points / rank.
+pointsFor and pointsAgainst never arrive, so goals_for and goals_against
+stayed NULL and the GD column rendered as 0 for every club.
+
+Switch the sync, the CLI backfill and the normalizer to ESPN's v2
+/api/v2/sports/soccer/{league}/standings?season=YYYY endpoint, which
+publishes the full stat set. All ESPN shape knowledge stays in
+normalize.ts: it now accepts both the v2 children[].standings.entries
+shape and the legacy summary groups[] shape, since entry.team is a real
+object on one and a bare name string on the other.
+
+Re-syncing clears the nulls (96 → 0 across 11 domestic leagues) and the
+GD column now matches ESPN exactly.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/cli.ts            |  41 ++++++----
+ server/espn/client.ts    |  20 +++++
+ server/espn/normalize.ts |  50 +++++++++---
+ server/sync/service.ts   |  32 ++++----
+ server/sync/upserts.ts   |   4 +-
+ tests/normalize.test.ts  | 166 ++++++++++++++++++++++++++++++++++++++-
+ 6 files changed, 271 insertions(+), 42 deletions(-)
+
+diff --git a/server/cli.ts b/server/cli.ts
+index a7b8902..31f48ce 100644
+--- a/server/cli.ts
++++ b/server/cli.ts
+@@ -10,8 +10,8 @@
+  *   npm run sync -- --dry-run             # fetch + normalize, print, write nothing
+  */
+ import { getDb } from "./db/index.js";
+-import { fetchScoreboard, fetchSummary } from "./espn/client.js";
+-import { LEAGUES, LEAGUES_ALL, type LeagueSlug } from "./espn/types.js";
++import { fetchScoreboard, fetchStandings, fetchSummary } from "./espn/client.js";
++import { ALL_DOMESTIC, LEAGUES_ALL, type LeagueSlug } from "./espn/types.js";
+ import {
+   normalizeScoreboard,
+   normalizeSummaryMatch,
+@@ -118,24 +118,21 @@ async function main(): Promise<void> {
+   }
+ }
+ 
++/**
++ * Manual standings backfill. Uses the same v2 `/standings` feed as the daily
++ * cron (hence the same full stat set incl. goals for/against) over every
++ * domestic league in the catalog, not just the big five.
++ */
+ async function standings(): Promise<void> {
+-  for (const league of LEAGUES) {
++  for (const league of ALL_DOMESTIC) {
+     try {
+-      const sb = await fetchScoreboard(league);
+-      const eventId = sb.events?.[0]?.id;
+-      if (!eventId) {
+-        log(`${league}: no events, skipping standings`);
+-        continue;
+-      }
+-      const json = await fetchSummary(league, String(eventId));
++      const json = await fetchStandings(league, seasonStartYear());
++      const { rows } = normalizeStandings(json, league);
+       if (dryRun) {
+-        log(`${league}:`, JSON.stringify(normalizeStandings(json).rows.slice(0, 5), null, 2));
++        log(`${league}:`, JSON.stringify(rows.slice(0, 5), null, 2));
+       } else {
+-        const season = json.header?.season?.year
+-          ? `${json.header.season.year}-${String(json.header.season.year + 1).slice(2)}`
+-          : `${new Date().getUTCFullYear()}-${String(new Date().getUTCFullYear() + 1).slice(2)}`;
+-        applyStandings(db, json, league, season);
+-        log(`${league}: standings applied (${normalizeStandings(json).rows.length} rows)`);
++        applyStandings(db, json, league, seasonLabel());
++        log(`${league}: standings applied (${rows.length} rows)`);
+       }
+     } catch (err) {
+       console.error(`${league}: standings failed:`, String(err));
+@@ -143,6 +140,18 @@ async function standings(): Promise<void> {
+   }
+ }
+ 
++/** "2026-27" — European season spans Aug-May. */
++function seasonLabel(): string {
++  const y = new Date().getUTCFullYear();
++  const start = new Date().getUTCMonth() >= 7 ? y : y - 1;
++  return `${start}-${String(start + 1).slice(2)}`;
++}
++
++/** ESPN's standings endpoint wants the season START year. */
++function seasonStartYear(): number {
++  return Number.parseInt(seasonLabel().slice(0, 4), 10);
++}
++
+ main()
+   .then(() => process.exit(0))
+   .catch((err) => {
+diff --git a/server/espn/client.ts b/server/espn/client.ts
+index b177d47..dc6b0c8 100644
+--- a/server/espn/client.ts
++++ b/server/espn/client.ts
+@@ -2,6 +2,16 @@ import { LEAGUES_ALL, type LeagueSlug } from "./types.js";
+ 
+ const BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+ 
++/**
++ * The standings feed lives on a DIFFERENT API version than the rest of the app
++ * (`/apis/v2/…`, not `/apis/site/v2/…`). It matters: the per-match summary
++ * endpoint also returns a standings block, but it publishes only
++ * gamesPlayed/wins/ties/losses/points/rank — no goals for or against — so a
++ * table built from it shows a goal-difference column of zeros. The v2 endpoint
++ * carries the full set (pointsFor/pointsAgainst/pointDifferential).
++ */
++const BASE_V2 = "https://site.api.espn.com/apis/v2/sports/soccer";
++
+ export class EspnError extends Error {
+   constructor(
+     message: string,
+@@ -41,6 +51,16 @@ export async function fetchSummary(league: LeagueSlug, eventId: string): Promise
+   return fetchJson(`${BASE}/${league}/summary?event=${encodeURIComponent(eventId)}`);
+ }
+ 
++/**
++ * Season standings for a whole league table (`season` = the START year, e.g.
++ * 2026 for 2026-27). Returns the v2 payload: `children[].standings.entries[]`,
++ * each with a real `team` object (so `team.id` is available) and the full stat
++ * set including pointsFor/pointsAgainst.
++ */
++export async function fetchStandings(league: LeagueSlug, season: number): Promise<any> {
++  return fetchJson(`${BASE_V2}/${league}/standings?season=${encodeURIComponent(String(season))}`);
++}
++
+ /** Full squad for one club (site API roster endpoint, season included). */
+ export async function fetchTeamRoster(league: LeagueSlug, teamId: string): Promise<any> {
+   return fetchJson(`${BASE}/${league}/teams/${encodeURIComponent(teamId)}/roster`);
+diff --git a/server/espn/normalize.ts b/server/espn/normalize.ts
+index 9bdd184..e762b7d 100644
+--- a/server/espn/normalize.ts
++++ b/server/espn/normalize.ts
+@@ -8,7 +8,8 @@
+  * ESPN quirks confirmed from samples:
+  * - `rosters[]` (not `boxscore.teams[].roster[]`) carries per-player stats
+  * - roster stats have no minutes; derive from starter/sub flags + sub events
+- * - summary standings carry GP/W/D/L/points/rank only (no goals for/against)
++ * - summary standings carry GP/W/D/L/points/rank only (no goals for/against);
++ *   league TABLES come from the v2 `/standings` endpoint instead, which does
+  * - `header.competitions[0].details[]` are goals/cards; keyEvents[] is the curated timeline
+  */
+ import type {
+@@ -564,28 +565,59 @@ export function normalizeRosterPlayers(json: any): NormPlayer[] {
+ 
+ /* ------------------------------------------------------------ standings */
+ 
+-export function normalizeStandings(json: any): {
++/**
++ * Season standings for a league table.
++ *
++ * Handles BOTH shapes ESPN serves, because they are not interchangeable:
++ *
++ *  - **v2** (`/apis/v2/.../standings`) — the one the sync uses. Payload is
++ *    `children[].standings.entries[]`, `entry.team` is a real object (so
++ *    `team.id` gives the true team id), and the stats include
++ *    `pointsFor`/`pointsAgainst`, which is what the goal-difference column
++ *    needs. `children[]` can hold more than one group (relegation/promotion
++ *    splits), so every group is walked.
++ *  - **summary** (`/apis/site/v2/.../summary`) — kept for the manual
++ *    `sync-match` path and any payload that still arrives that way. It nests
++ *    under `standings.groups[].standings.entries[]`, `entry.team` is a plain
++ *    NAME string, and it publishes NO goals for/against. Those rows land with
++ *    null GD rather than a fabricated zero.
++ *
++ * `leagueSlug` is passed in rather than read off the payload: the v2 response
++ * has no `header.league.slug`, and the caller always knows which catalog entry
++ * it asked for.
++ */
++export function normalizeStandings(json: any, leagueSlug = ""): {
+   teams: NormTeam[];
+   rows: NormStandingRow[];
+ } {
+   const teams: NormTeam[] = [];
+   const rows: NormStandingRow[] = [];
+-  const groups: any[] = json.standings?.groups ?? (json.standings ? [json.standings] : []);
++
++  // v2: children[].standings.entries — summary: standings.groups[].standings.entries.
++  const groups: any[] = Array.isArray(json?.children)
++    ? json.children
++    : (json?.standings?.groups ?? (json?.standings ? [json.standings] : []));
++
+   for (const g of groups) {
+-    for (const entry of g.standings?.entries ?? []) {
++    for (const entry of g?.standings?.entries ?? []) {
+       const byName: Record<string, number | null> = {};
+       for (const s of entry.stats ?? []) {
+         byName[s.name] = s.value !== undefined && s.value !== null ? Number(s.value) : null;
+       }
+-      const teamId = String(entry.id ?? entry.team?.id ?? "");
+-      // entry.team is a plain string in summary standings ("Manchester City")
++      // v2 puts the id on the team object; summary has it on the entry.
+       const teamObj = typeof entry.team === "object" && entry.team ? entry.team : {};
++      const teamId = String(teamObj.id ?? entry.id ?? "");
++      if (!teamId) continue;
++      // entry.team is a plain string in summary standings ("Manchester City")
+       const teamName =
+         typeof entry.team === "string" && entry.team
+           ? entry.team
+-          : (teamObj.displayName ?? teamObj.name ?? null);
++          : (teamObj.displayName ?? teamObj.name ?? teamObj.location ?? null);
+       const logo =
+-        (Array.isArray(entry.logo) ? entry.logo?.[0]?.href : entry.logo) ?? teamObj.logos?.[0]?.href ?? null;
++        (Array.isArray(entry.logo) ? entry.logo?.[0]?.href : entry.logo) ??
++        teamObj.logos?.[0]?.href ??
++        teamObj.logo ??
++        null;
+       teams.push({
+         id: teamId,
+         name: teamName ?? `Team ${teamId}`,
+@@ -593,7 +625,7 @@ export function normalizeStandings(json: any): {
+         abbreviation: teamObj.abbreviation ?? null,
+         logo_url: logo,
+         color: teamObj.color ? `#${String(teamObj.color).replace("#", "")}` : null,
+-        league: json.header?.league?.slug ?? "",
++        league: leagueSlug || json.header?.league?.slug || "",
+       });
+       rows.push({
+         team_id: teamId,
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index c820d9e..3ecdc2b 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -1,7 +1,7 @@
+ import cron from "node-cron";
+-import { fetchScoreboard, fetchSummary, fetchTeamRoster } from "../espn/client.js";
++import { fetchScoreboard, fetchStandings, fetchSummary, fetchTeamRoster } from "../espn/client.js";
+ import { LEAGUES_ALL, ALL_DOMESTIC, pollWindow, type LeagueSlug } from "../espn/types.js";
+-import { getDb, all, get } from "../db/index.js";
++import { getDb, all } from "../db/index.js";
+ import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
+ import { onMatchFinished } from "../predictions/resolver.js";
+ import { syncAllFavoriteTeamsUnderstat, syncLeagueUnderstatTables } from "./understat.js";
+@@ -182,12 +182,20 @@ export async function syncRosters(): Promise<void> {
+ /**
+  * Season standings for every domestic league in the catalog (big five + the
+  * wider domestic set) — cups and internationals correctly have no table.
++ *
++ * Pulls the v2 `/standings` endpoint, one call per league, rather than digging
++ * a standings block out of a per-match summary. The summary block omits goals
++ * for/against entirely, which is what left every league table's goal-difference
++ * column reading zero; v2 carries the full stat set. It is also one request per
++ * league instead of a summary fetch, and it doesn't depend on a fixture
++ * existing for the league first.
+  */
+ export async function syncStandings(): Promise<void> {
++  const season = currentSeason();
+   for (const league of ALL_DOMESTIC) {
+     try {
+-      const json = await fetchSummary(league, await firstEventId(league));
+-      applyStandings(db, json, league, currentSeason());
++      const json = await fetchStandings(league, seasonStartYear(season));
++      applyStandings(db, json, league, season);
+       log(`standings ${league}: ok`);
+     } catch (err) {
+       console.error(`[sync] standings ${league} FAILED:`, String(err));
+@@ -195,19 +203,13 @@ export async function syncStandings(): Promise<void> {
+   }
+ }
+ 
+-async function firstEventId(league: LeagueSlug): Promise<string> {
+-  const row = get<{ id: string }>(
+-    db,
+-    "SELECT id FROM matches WHERE league = ? ORDER BY kickoff_at DESC LIMIT 1",
+-    [league],
+-  );
+-  if (row) return row.id;
+-  const json = await fetchScoreboard(league);
+-  const ev = json.events?.[0];
+-  if (!ev) throw new Error(`no events for ${league}`);
+-  return String(ev.id);
++/** "2026-27" -> 2026. ESPN's standings endpoint wants the season START year. */
++function seasonStartYear(season: string): number {
++  return Number.parseInt(season.slice(0, 4), 10) || new Date().getUTCFullYear();
+ }
+ 
++
++
+ /**
+  * Goal-alert fan-out lives in server/notifications.ts (queueGoalAlerts), which
+  * takes the db handle as an argument and serves the international favorites
+diff --git a/server/sync/upserts.ts b/server/sync/upserts.ts
+index 3337e55..e24fdd1 100644
+--- a/server/sync/upserts.ts
++++ b/server/sync/upserts.ts
+@@ -341,7 +341,9 @@ export function applyRoster(db: DB, json: any, _league: string): void {
+ }
+ 
+ export function applyStandings(db: DB, json: any, league: string, season: string): void {
+-  const { teams, rows } = normalizeStandings(json);
++  // `league` is passed in explicitly: the v2 standings payload carries no
++  // header identifying the competition, so normalizeStandings can't infer it.
++  const { teams, rows } = normalizeStandings(json, league);
+   tx(db, () => {
+     for (const t of teams) {
+       upsertCoalesce(
+diff --git a/tests/normalize.test.ts b/tests/normalize.test.ts
+index a85ec87..0730c39 100644
+--- a/tests/normalize.test.ts
++++ b/tests/normalize.test.ts
+@@ -17,6 +17,7 @@ import {
+   normalizeScoreboard,
+   normalizeTimeline,
+   normalizeRosters,
++  normalizeStandings,
+   deriveMinutes,
+ } from "../server/espn/normalize.js";
+ 
+@@ -239,7 +240,170 @@ export function runNormalizeTests(): void {
+   testRoundExtraction();
+   testTimeline();
+   testRosters();
+-  console.log("  normalize: status, positions, clock, event types, scoreboard, rounds, timeline, rosters OK");
++  testStandingsV2();
++  console.log(
++    "  normalize: status, positions, clock, event types, scoreboard, rounds, timeline, rosters, standings OK",
++  );
++}
++
++/**
++ * League TABLES come from the v2 `/standings` feed, which nests under
++ * `children[].standings.entries` and — unlike the per-match summary's standings
++ * block — publishes pointsFor/pointsAgainst. The summary shape omits them
++ * entirely, which is what previously left every league table's goal-difference
++ * column reading zero.
++ */
++function testStandingsV2() {
++  const v2 = {
++    uid: "s:600~l:23",
++    id: "23",
++    name: "English Premier League",
++    children: [
++      {
++        standings: {
++          entries: [
++            {
++              team: {
++                id: "382",
++                displayName: "Manchester City",
++                shortDisplayName: "Man City",
++                abbreviation: "MNC",
++                color: "99c5ea",
++                logos: [{ href: "https://a.espncdn.com/i/teamlogos/soccer/500/382.png" }],
++              },
++              stats: [
++                { name: "gamesPlayed", value: 5 },
++                { name: "wins", value: 5 },
++                { name: "ties", value: 0 },
++                { name: "losses", value: 0 },
++                { name: "points", value: 15 },
++                { name: "pointsFor", value: 13 },
++                { name: "pointsAgainst", value: 5 },
++                { name: "rank", value: 1 },
++              ],
++            },
++            {
++              team: {
++                id: "364",
++                displayName: "Liverpool",
++                shortDisplayName: "Liverpool",
++                abbreviation: "LIV",
++                color: "c8102e",
++                logos: [{ href: "https://a.espncdn.com/i/teamlogos/soccer/500/364.png" }],
++              },
++              stats: [
++                { name: "gamesPlayed", value: 5 },
++                { name: "wins", value: 3 },
++                { name: "ties", value: 1 },
++                { name: "losses", value: 1 },
++                { name: "points", value: 10 },
++                { name: "pointsFor", value: 9 },
++                { name: "pointsAgainst", value: 7 },
++                { name: "rank", value: 2 },
++              ],
++            },
++          ],
++        },
++      },
++      // A second child group (promotion/relegation splits) must be walked too.
++      {
++        standings: {
++          entries: [
++            {
++              team: { id: "999", displayName: "Some Other Club", abbreviation: "SOC" },
++              stats: [
++                { name: "gamesPlayed", value: 5 },
++                { name: "points", value: 4 },
++                { name: "pointsFor", value: 4 },
++                { name: "pointsAgainst", value: 14 },
++                { name: "rank", value: 20 },
++              ],
++            },
++          ],
++        },
++      },
++    ],
++  };
++
++  const { teams, rows } = normalizeStandings(v2, "eng.1");
++  assert.equal(rows.length, 3, "every child group is walked");
++  assert.equal(teams.length, 3);
++
++  const city = rows.find((r) => r.team_id === "382")!;
++  assert.equal(city.played, 5);
++  assert.equal(city.wins, 5);
++  assert.equal(city.draws, 0);
++  assert.equal(city.losses, 0);
++  assert.equal(city.points, 15);
++  assert.equal(city.rank, 1);
++  assert.equal(city.goals_for, 13, "pointsFor maps to goals_for");
++  assert.equal(city.goals_against, 5, "pointsAgainst maps to goals_against");
++
++  const t = teams.find((x) => x.id === "382")!;
++  assert.equal(t.name, "Manchester City");
++  assert.equal(t.short_name, "Man City");
++  assert.equal(t.abbreviation, "MNC");
++  assert.equal(t.color, "#99c5ea");
++  assert.equal(t.logo_url, "https://a.espncdn.com/i/teamlogos/soccer/500/382.png");
++  assert.equal(t.league, "eng.1", "league comes from the caller, not the payload");
++
++  // The regression that started all this: GD must be computable.
++  assert.equal(city.goals_for! - city.goals_against!, 8, "GD column is real, not zero");
++
++  // The summary shape still parses — team id off the entry, name off the string,
++  // and goals for/against honestly null (ESPN does not publish them there).
++  const summary = {
++    header: { league: { slug: "eng.1" } },
++    standings: {
++      groups: [
++        {
++          standings: {
++            entries: [
++              {
++                id: "382",
++                team: "Manchester City",
++                logo: [{ href: "https://a.espncdn.com/i/teamlogos/soccer/500/382.png" }],
++                stats: [
++                  { name: "gamesPlayed", value: 5 },
++                  { name: "wins", value: 5 },
++                  { name: "ties", value: 0 },
++                  { name: "losses", value: 0 },
++                  { name: "points", value: 15 },
++                  { name: "rank", value: 1 },
++                ],
++              },
++            ],
++          },
++        },
++      ],
++    },
++  };
++  const s = normalizeStandings(summary).rows[0]!;
++  assert.equal(s.team_id, "382");
++  assert.equal(s.points, 15);
++  assert.equal(s.goals_for, null, "summary has no goals-for; null beats a fake 0");
++  assert.equal(s.goals_against, null);
++
++  // A stats entry with a null/undefined value must not become NaN.
++  const withNull = normalizeStandings({
++    children: [
++      {
++        standings: {
++          entries: [
++            {
++              team: { id: "1", displayName: "X" },
++              stats: [
++                { name: "pointsFor", value: null },
++                { name: "points", value: undefined },
++              ],
++            },
++          ],
++        },
++      },
++    ],
++  }).rows[0]!;
++  assert.equal(withNull.goals_for, null);
++  assert.equal(withNull.points, null);
+ }
+ 
+ function testTimeline() {
+-- 
+2.54.0.windows.1
+

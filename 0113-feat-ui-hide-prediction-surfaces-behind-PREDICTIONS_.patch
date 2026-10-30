@@ -1,0 +1,207 @@
+From efbd14c6e575291b08eb0fc7c32154b167f6d4b0 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 17 Oct 2026 22:38:02 +0330
+Subject: [PATCH 113/230] feat(ui): hide prediction surfaces behind
+ PREDICTIONS_ENABLED, fix legacy redirect, drop duplicate intro Skip
+
+---
+ src/App.tsx              | 13 ++++++++-----
+ src/pages/Admin.tsx      |  5 ++++-
+ src/pages/Onboarding.tsx | 30 +++++++++++++++---------------
+ src/pages/Profile.tsx    | 31 ++++++++++++++++++-------------
+ 4 files changed, 45 insertions(+), 34 deletions(-)
+
+diff --git a/src/App.tsx b/src/App.tsx
+index 14ed86b..75628dd 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -48,9 +48,10 @@ export default function App() {
+             <Route path="/my-teams" element={<Navigate to="/onboarding" replace />} />
+             <Route path="/draft" element={<Navigate to="/onboarding" replace />} />
+             {/* Legacy deep link: the Shot Plotter used to be its own route, then
+-                moved into the Predict tab. It rendered MatchDetail bare, which
+-                silently opened the Timeline instead — so point it at the tab
+-                that actually holds the Shot Predictor. */}
++                moved into the Predict tab, and predictions are off for now. The
++                old redirect target (?tab=predict) no longer exists in
++                MatchDetail, so it silently landed on Timeline — legacy links
++                now open the match summary itself. */}
+             <Route path="/match/:id/shot-plotter" element={<ShotPlotterRedirect />} />
+             <Route path="/ratings" element={<Ratings />} />
+             <Route path="/table" element={<Table />} />
+@@ -70,7 +71,9 @@ export default function App() {
+ }
+ 
+ /**
+- * Legacy `/match/:id/shot-plotter` → `/match/:id?tab=predict`.
++ * Legacy `/match/:id/shot-plotter` → `/match/:id` (the match summary).
++ * The Shot Plotter has no tab of its own while predictions are gated off, so
++ * the old deep link opens the match on its default Timeline tab.
+  *
+  * `Navigate` does not interpolate route params (its `to` is a literal string,
+  * so `"/match/:id"` would navigate to a URL containing the characters ":id"),
+@@ -78,7 +81,7 @@ export default function App() {
+  */
+ function ShotPlotterRedirect() {
+   const { id } = useParams();
+-  return <Navigate to={`/match/${id}?tab=predict`} replace />;
++  return <Navigate to={`/match/${id}`} replace />;
+ }
+ 
+ /**
+diff --git a/src/pages/Admin.tsx b/src/pages/Admin.tsx
+index e36b064..9917fc8 100644
+--- a/src/pages/Admin.tsx
++++ b/src/pages/Admin.tsx
+@@ -4,6 +4,7 @@ import { TopBar } from "../components/TopBar";
+ import { useToast } from "../components/toastContext";
+ import { useAuth } from "../hooks/authContext";
+ import { api } from "../lib/api";
++import { PREDICTIONS_ENABLED } from "../lib/features";
+ import { Button, Card, Num, SectionHeading } from "../components/ui";
+ import { haptic } from "../lib/telegram";
+ 
+@@ -69,7 +70,9 @@ export default function Admin() {
+           <div className="grid grid-cols-2 gap-2">
+             <StatCard label="Total Users" value={stats?.totalUsers} />
+             <StatCard label="Total Matches" value={stats?.totalMatches} />
+-            <StatCard label="Total Predictions" value={stats?.totalPredictions} />
++            {PREDICTIONS_ENABLED ? (
++              <StatCard label="Total Predictions" value={stats?.totalPredictions} />
++            ) : null}
+             <StatCard label="Total Favorites" value={stats?.totalFavorites} />
+           </div>
+         </section>
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 9f2bd01..0b2b816 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -21,6 +21,7 @@ import type { StringKey } from "../i18n/strings";
+ import { serverErrorKey } from "../lib/api";
+ import { haptic, selectionHaptic, notifyHaptic } from "../lib/telegram";
+ import { buildPickerGroups, teamsInGroup } from "../lib/pickerGroups";
++import { PREDICTIONS_ENABLED } from "../lib/features";
+ 
+ const TOTAL_STEPS = 3;
+ 
+@@ -35,13 +36,17 @@ function introSeen() {
+   }
+ }
+ 
+-/** The three ideas, in the order the product teaches them. */
+-const SLIDES = [
++/** The ideas, in the order the product teaches them. */
++const ALL_SLIDES = [
+   { key: "follow", titleKey: "intro.follow.title", bodyKey: "intro.follow.body", Glyph: StarFilledIcon },
+   { key: "predict", titleKey: "intro.predict.title", bodyKey: "intro.predict.body", Glyph: TargetIcon },
+   { key: "rate", titleKey: "intro.rate.title", bodyKey: "intro.rate.body", Glyph: PencilIcon },
+ ] as const;
+ 
++// Predictions are off for now: the slide stays in the repo and comes back with
++// the flag. Only the list is filtered — its copy and glyph are untouched.
++const SLIDES = ALL_SLIDES.filter((slide) => PREDICTIONS_ENABLED || slide.key !== "predict");
++
+ /**
+  * First-run onboarding in the concept's order:
+  *   1. pick the favorite club (the anchor)
+@@ -510,8 +515,9 @@ export default function Onboarding() {
+  * The first-launch intro, now one screen instead of three slides. A first-timer
+  * used to pay six screens (three intro slides, then three picker steps) before
+  * seeing a fixture — on the one app whose whole promise is "open it because a
+- * match is on". The three ideas still get explained, as a single scannable
+- * list, with one "Get started" tap into the picker. Shown once ever (its flag is
++ * match is on". The ideas still get explained, as a single scannable list, with
++ * one "Get started" tap into the picker (the top-right Skip is the only other
++ * exit; the duplicate bottom Skip is gone). Shown once ever (its flag is
+  * separate from the picker's own gate).
+  */
+ function Intro({ onDone }: { onDone: () => void }) {
+@@ -537,7 +543,11 @@ function Intro({ onDone }: { onDone: () => void }) {
+           className="intro-glyph grid h-20 w-20 place-items-center rounded-card border border-volt/50 bg-elevated text-volt"
+           aria-hidden="true"
+         >
+-          <TargetIcon className="h-9 w-9" />
++          {PREDICTIONS_ENABLED ? (
++            <TargetIcon className="h-9 w-9" />
++          ) : (
++            <StarFilledIcon className="h-9 w-9" />
++          )}
+         </span>
+         {/* The intro has no TopBar, so this brand line is the screen's only
+             heading — h1, not h2, or the document opens at a level down. */}
+@@ -571,16 +581,6 @@ function Intro({ onDone }: { onDone: () => void }) {
+         >
+           {t("onboarding.next")}
+         </Button>
+-        <button
+-          type="button"
+-          onClick={() => {
+-            haptic("light");
+-            onDone();
+-          }}
+-          className="min-h-11 w-full rounded-full text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
+-        >
+-          {t("intro.skip")}
+-        </button>
+         <LegalLinks className="mt-2" />
+       </div>
+     </div>
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index ca005e2..69fcdcc 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -11,6 +11,7 @@ import { useNotificationPrefs, useReferral } from "../hooks/useApi";
+ import { useI18n } from "../i18n/context";
+ import { api, serverErrorKey } from "../lib/api";
+ import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
++import { PREDICTIONS_ENABLED } from "../lib/features";
+ import { LEGAL_ROUTES } from "../lib/legal";
+ import { useLocalState } from "../lib/useLocalState";
+ import { haptic, notifyHaptic, shareToTelegram } from "../lib/telegram";
+@@ -182,7 +183,9 @@ export default function Profile() {
+           <ListRow
+             label={t("profile.notifications")}
+             hint={
+-              serverPrefs.goals || serverPrefs.deadline
++              serverPrefs.goals ||
++              serverPrefs.ratings ||
++              (PREDICTIONS_ENABLED && serverPrefs.deadline)
+                 ? t("profile.notificationsOn")
+                 : t("profile.notificationsOff")
+             }
+@@ -340,18 +343,20 @@ export default function Profile() {
+               />
+             }
+           />
+-          <ListRow
+-            label={t("profile.notifDeadline")}
+-            hint={t("profile.notifDeadlineHint")}
+-            onToggle={() => setPref("deadline")(!serverPrefs.deadline)}
+-            right={
+-              <Switch
+-                checked={serverPrefs.deadline}
+-                label={t("profile.notifDeadline")}
+-                onChange={setPref("deadline")}
+-              />
+-            }
+-          />
++          {PREDICTIONS_ENABLED ? (
++            <ListRow
++              label={t("profile.notifDeadline")}
++              hint={t("profile.notifDeadlineHint")}
++              onToggle={() => setPref("deadline")(!serverPrefs.deadline)}
++              right={
++                <Switch
++                  checked={serverPrefs.deadline}
++                  label={t("profile.notifDeadline")}
++                  onChange={setPref("deadline")}
++                />
++              }
++            />
++          ) : null}
+           <ListRow
+             label={t("profile.notifRatings")}
+             hint={t("profile.notifRatingsHint")}
+-- 
+2.54.0.windows.1
+

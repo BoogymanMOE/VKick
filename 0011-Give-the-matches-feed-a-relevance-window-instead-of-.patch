@@ -1,0 +1,554 @@
+From 261b2a55325b790ff2998c497ae8e69ac63be0e3 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 15:19:13 +0330
+Subject: [PATCH 011/230] Give the matches feed a relevance window instead of
+ oldest-first
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+/api/matches ordered by kickoff_at ASC and capped at 300 rows, so on a
+populated database the default feed opened on ancient internationals and
+pushed the fixtures the user actually cared about off the end. The old
+rows were not even the ones we wanted to evict first — they were all
+there was.
+
+Serve a relevance window instead: live and half-time always, finished
+matches from the last 3 days, scheduled matches in the next 14, ordered
+live → soonest → newest so the sections read top to bottom. Adds optional
+from/to (and a date shortcut) for date-range views, and clamps the limit
+instead of trusting it.
+
+Matches.tsx now sorts its upcoming and finished sections explicitly rather
+than inheriting whatever order the server happened to send, so the client
+view does not silently change shape when the query does.
+
+Tests run the generated SQL against a real SQLite file: window boundaries,
+ordering, the filters, limit clamping, and the original regression.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/matches/feed.ts    | 135 +++++++++++++++++++++++++
+ server/routes/football.ts |  31 +++---
+ src/hooks/useApi.ts       |  10 +-
+ src/lib/api.ts            |  10 +-
+ src/pages/Matches.tsx     |  12 ++-
+ tests/feed.test.ts        | 206 ++++++++++++++++++++++++++++++++++++++
+ tests/run.ts              |   2 +
+ 7 files changed, 383 insertions(+), 23 deletions(-)
+ create mode 100644 server/matches/feed.ts
+ create mode 100644 tests/feed.test.ts
+
+diff --git a/server/matches/feed.ts b/server/matches/feed.ts
+new file mode 100644
+index 0000000..e213e79
+--- /dev/null
++++ b/server/matches/feed.ts
+@@ -0,0 +1,135 @@
++/**
++ * The matchday feed's SQL window — extracted from the route so it can be
++ * tested against a real SQLite file instead of only being exercised through
++ * HTTP.
++ *
++ * Why this exists: the feed used to be `ORDER BY kickoff_at ASC LIMIT 300`.
++ * That is not a relevance ordering, it's "the oldest 300 rows in the table" —
++ * fine on day one, and progressively worse as history accumulates. Once the
++ * table outgrew the cap the nearest fixtures were being dropped entirely and
++ * the top of the feed was two-year-old internationals.
++ *
++ * What the matchday screen actually wants is a WINDOW:
++ *   - anything in progress right now (live or half-time), unconditionally;
++ *   - recent finished results, because the club rows fall back to "last
++ *     result" when a club has no live or upcoming fixture;
++ *   - the next fortnight of fixtures, which is the whole point of the screen.
++ *
++ * The client still splits the response into live / upcoming / finished
++ * sections itself, so this only decides WHICH matches are eligible.
++ */
++
++/** Finished results stay eligible this many days back (inclusive). */
++export const FINISHED_LOOKBACK_DAYS = 3;
++/** Upcoming fixtures stay eligible this many days ahead (inclusive). */
++export const UPCOMING_LOOKAHEAD_DAYS = 14;
++/** Default cap on the window. Generous enough for a fortnight of the catalog. */
++export const FEED_LIMIT = 300;
++
++/** Statuses that mean "in progress right now" — always inside the window. */
++const IN_PROGRESS = ["live", "halftime"];
++
++export interface FeedQuery {
++  league?: string | null;
++  /** Exact day, YYYY-MM-DD. Wins over the window when set. */
++  date?: string | null;
++  /** Inclusive lower bound, YYYY-MM-DD. */
++  from?: string | null;
++  /** Inclusive upper bound, YYYY-MM-DD. */
++  to?: string | null;
++  limit?: number | string | null;
++  /** Injectable clock so tests are deterministic. */
++  now?: Date;
++}
++
++export interface FeedSql {
++  /** The WHERE clause, parameters applied in order. */
++  where: string;
++  params: Array<string | number>;
++  /** The ORDER BY tail, describing the ordering chosen. */
++  orderBy: string;
++  limit: number;
++  /** Which shape was used — useful for tests and for logging. */
++  mode: "range" | "day" | "window" | "all";
++  /** The resolved past/future cutoffs (null unless mode === "window"). */
++  past: string | null;
++  future: string | null;
++}
++
++/** `YYYY-MM-DD` for `days` away from `now` (UTC). */
++export function isoDayOffset(now: Date, days: number): string {
++  const d = new Date(now.getTime());
++  d.setUTCDate(d.getUTCDate() + days);
++  return d.toISOString().slice(0, 10);
++}
++
++/** First 10 chars of an ISO timestamp — the day key matches are stored under. */
++function dayOf(iso: string): string {
++  return iso.slice(0, 10);
++}
++
++function clampLimit(raw: number | string | null | undefined): number {
++  const n = Number.parseInt(String(raw ?? ""), 10);
++  if (!Number.isFinite(n) || n <= 0) return FEED_LIMIT;
++  return Math.min(500, n);
++}
++
++/**
++ * Live first, then the next fixtures soonest-first, then results newest-first.
++ * The client re-sorts within each section (favorites float up), so this exists
++ * to make the RAW response sensible — a live match must never be buried under
++ * 300 rows of finished football.
++ */
++const FEED_ORDER = `
++       CASE m.status WHEN 'live' THEN 0 WHEN 'halftime' THEN 0 WHEN 'scheduled' THEN 1 ELSE 2 END,
++       CASE WHEN m.status = 'finished' THEN m.kickoff_at END DESC,
++       m.kickoff_at ASC`;
++
++/**
++ * Build the WHERE clause + params + ordering for the feed.
++ *
++ * Precedence: an explicit `from` AND `to` is an inclusive range; a single `date`
++ * is one day; otherwise the relevance window applies. `league` always composes.
++ */
++export function buildFeedQuery(q: FeedQuery = {}): FeedSql {
++  const clauses: string[] = ["1=1"];
++  const params: Array<string | number> = [];
++  const limit = clampLimit(q.limit);
++
++  if (q.league) {
++    clauses.push("m.league = ?");
++    params.push(q.league);
++  }
++
++  const from = q.from ? dayOf(q.from) : null;
++  const to = q.to ? dayOf(q.to) : null;
++  const date = q.date ? dayOf(q.date) : null;
++
++  if (from && to) {
++    // Explicit range, inclusive of both end days. Deliberately ignores status:
++    // "show me this week's fixtures" should not filter by whether they are done.
++    clauses.push("substr(m.kickoff_at, 1, 10) BETWEEN ? AND ?");
++    params.push(from, to);
++    return { where: clauses.join(" AND "), params, orderBy: FEED_ORDER, limit, mode: "range", past: null, future: null };
++  }
++
++  if (date) {
++    // One specific day, whatever its status.
++    clauses.push("substr(m.kickoff_at, 1, 10) = ?");
++    params.push(date);
++    return { where: clauses.join(" AND "), params, orderBy: FEED_ORDER, limit, mode: "day", past: null, future: null };
++  }
++
++  // Relevance window. `from`/`to` each pin their own end when given alone.
++  const now = q.now ?? new Date();
++  const past = from ?? isoDayOffset(now, -FINISHED_LOOKBACK_DAYS);
++  const future = to ?? isoDayOffset(now, UPCOMING_LOOKAHEAD_DAYS);
++  const placeholders = IN_PROGRESS.map(() => "?").join(", ");
++  clauses.push(`(
++      m.status IN (${placeholders})
++      OR (m.status = 'finished' AND substr(m.kickoff_at, 1, 10) >= ?)
++      OR (m.status = 'scheduled' AND substr(m.kickoff_at, 1, 10) <= ?)
++    )`);
++  params.push(...IN_PROGRESS, past, future);
++  return { where: clauses.join(" AND "), params, orderBy: FEED_ORDER, limit, mode: "window", past, future };
++}
+\ No newline at end of file
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index 850d4d8..590e580 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -5,11 +5,12 @@
+  * Understat read keeps its requireUser gate. Behavior unchanged.
+  */
+ import express from "express";
+-import { getDb, all, get, type BindValue } from "../db/index.js";
++import { getDb, all, get } from "../db/index.js";
+ import { COMPETITIONS, isCup } from "../espn/types.js";
+ import { EXTRA_COMPETITIONS } from "../espn/extra.js";
+ import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
+ import { foldForm, type FormMatchRow } from "../standings/form.js";
++import { buildFeedQuery } from "../matches/feed.js";
+ import { currentSeasonLabel } from "../scoring/ledger.js";
+ import { bad, requireUser } from "./shared.js";
+ 
+@@ -68,18 +69,14 @@ matchesRouter.get("/api/competitions", (_req, res) => {
+ /* ------------------------------------------------------------ matches */
+ 
+ matchesRouter.get("/api/matches", (req, res) => {
+-  const league = req.query.league ? String(req.query.league) : null;
+-  const date = req.query.date ? String(req.query.date) : null; // YYYY-MM-DD
+-  const params: BindValue[] = [];
+-  let where = "1=1";
+-  if (league) {
+-    where += " AND m.league = ?";
+-    params.push(league);
+-  }
+-  if (date) {
+-    where += " AND substr(m.kickoff_at, 1, 10) = ?";
+-    params.push(date);
+-  }
++  // Window semantics live in server/matches/feed.ts (tested against real SQL).
++  const feed = buildFeedQuery({
++    league: req.query.league ? String(req.query.league) : null,
++    date: req.query.date ? String(req.query.date) : null,
++    from: req.query.from ? String(req.query.from) : null,
++    to: req.query.to ? String(req.query.to) : null,
++    limit: req.query.limit ? String(req.query.limit) : null,
++  });
+   const rows = all(
+     db,
+     `SELECT m.*,
+@@ -88,10 +85,10 @@ matchesRouter.get("/api/matches", (req, res) => {
+      FROM matches m
+      JOIN teams th ON th.id = m.home_team_id
+      JOIN teams ta ON ta.id = m.away_team_id
+-     WHERE ${where}
+-     ORDER BY m.kickoff_at ASC
+-     LIMIT 300`,
+-    params,
++     WHERE ${feed.where}
++     ORDER BY ${feed.orderBy}
++     LIMIT ?`,
++    [...feed.params, feed.limit],
+   );
+   res.json({ matches: rows });
+ });
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 9c96113..e71d90e 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -131,7 +131,15 @@ export function matchFromApi(m: ApiMatch): Match {
+ 
+ /* ------------------------------------------------------------ queries */
+ 
+-export function useMatches(query: { league?: string; date?: string } = {}) {
++/**
++ * The matchday feed. Called with no arguments it gets the server's relevance
++ * window (live now, recent results, next fortnight) — which is what keeps the
++ * screen showing THIS week's football rather than the oldest rows in the DB.
++ * Pass `from`/`to` for an explicit fixture range.
++ */
++export function useMatches(
++  query: { league?: string; date?: string; from?: string; to?: string; limit?: number } = {},
++) {
+   return useQuery({
+     queryKey: ["matches", query],
+     queryFn: () => api.getMatches(query),
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index a0ae63c..3f5b354 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -552,10 +552,18 @@ export const api = {
+   getLeaderboard: (board: "global" | `league/${string}` | `club/${string}`) =>
+     request<{ board: ApiLeaderRow[]; you: ApiViewerRank | null }>(`/leaderboards/${board}`),
+ 
+-  getMatches: (query: { league?: string; date?: string } = {}) => {
++  /**
++   * The matchday feed. With no args the server returns a relevance window
++   * (live now + recent results + the next fortnight); pass `from`/`to`
++   * (YYYY-MM-DD) for an explicit fixture range instead.
++   */
++  getMatches: (query: { league?: string; date?: string; from?: string; to?: string; limit?: number } = {}) => {
+     const qs = new URLSearchParams();
+     if (query.league) qs.set("league", query.league);
+     if (query.date) qs.set("date", query.date);
++    if (query.from) qs.set("from", query.from);
++    if (query.to) qs.set("to", query.to);
++    if (query.limit) qs.set("limit", String(query.limit));
+     const suffix = qs.toString() ? `?${qs}` : "";
+     return request<{ matches: ApiMatch[] }>(`/matches${suffix}`);
+   },
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 2b18445..4382812 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -69,16 +69,20 @@ export default function Matches() {
+   const inMyTeams = (match: Match) => isFavorite(match.home.id) || isFavorite(match.away.id);
+   // Favorite clubs sort to the top of each section.
+   const organize = (list: Match[]) => [...list].sort((a, b) => Number(inMyTeams(b)) - Number(inMyTeams(a)));
++  // Soonest / newest kickoff first. The server already returns its window in
++  // that order, but each section re-sorts explicitly so the screen never
++  // depends on the API's ordering (favorites sort stably on top of these).
++  const soonestFirst = (a: Match, b: Match) => +new Date(a.kickoffAt) - +new Date(b.kickoffAt);
++  const newestFirst = (a: Match, b: Match) => +new Date(b.kickoffAt) - +new Date(a.kickoffAt);
+   const live = organize(live0);
+   // With picks saved, discovery shrinks to a window (the heading count shows
+   // the real total); without picks, it stays full so the app is usable
+   // pre-onboarding. Results live in the team rows — no separate FT section.
+   const capGeneral = favCount > 0 && !league && leagueFilter === null;
+-  const upcomingShown = capGeneral ? organize(upcoming0).slice(0, 6) : organize(upcoming0);
++  const upcoming = organize(upcoming0).sort(soonestFirst);
++  const upcomingShown = capGeneral ? upcoming.slice(0, 6) : upcoming;
+   // Recent results, newest kickoff first — the sections above sort favorites up.
+-  const finished = [...finished0]
+-    .sort((a, b) => +new Date(b.kickoffAt) - +new Date(a.kickoffAt))
+-    .slice(0, 12);
++  const finished = organize(finished0).sort(newestFirst).slice(0, 12);
+ 
+   // One context per favorite club: live now, else next kickoff, else last
+   // result. The anchor club leads the rows.
+diff --git a/tests/feed.test.ts b/tests/feed.test.ts
+new file mode 100644
+index 0000000..ab63174
+--- /dev/null
++++ b/tests/feed.test.ts
+@@ -0,0 +1,206 @@
++/**
++ * The matchday feed window. This is the query that decides what a user sees
++ * when they open the app, so it is tested against a REAL SQLite database with
++ * the real schema and real rows — the generated SQL is executed, not just
++ * string-matched.
++ *
++ * The bug it guards: the feed was `ORDER BY kickoff_at ASC LIMIT 300`, which
++ * is not relevance, it is "the oldest 300 rows in the table". Once history
++ * outgrew the cap, 2024 internationals sat at the top of the matchday screen
++ * and the nearest fixtures were dropped entirely.
++ */
++import { strict as assert } from "node:assert";
++import { DatabaseSync } from "node:sqlite";
++import fs from "node:fs";
++import os from "node:os";
++import path from "node:path";
++import { migrate } from "../server/db/schema.js";
++import { buildFeedQuery, isoDayOffset, FEED_LIMIT } from "../server/matches/feed.js";
++
++/** Fixed clock so the window never drifts with the wall clock. */
++const NOW = new Date("2026-10-03T12:00:00.000Z");
++const day = (offsetDays: number) => isoDayOffset(NOW, offsetDays);
++
++function tempDb(): DatabaseSync {
++  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vkick-feed-")), "test.db");
++  const db = new DatabaseSync(file);
++  migrate(db);
++  return db;
++}
++
++function seed(db: DatabaseSync, id: string, kickoff: string, status: string, league = "eng.1"): void {
++  db.prepare(
++    `INSERT INTO teams (id, name, short_name, abbreviation, color, league) VALUES (?, ?, ?, '', '#000000', ?)`,
++  ).run(`${id}h`, `Home ${id}`, id, league);
++  db.prepare(
++    `INSERT INTO teams (id, name, short_name, abbreviation, color, league) VALUES (?, ?, ?, '', '#111111', ?)`,
++  ).run(`${id}a`, `Away ${id}`, id, league);
++  db.prepare(
++    `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
++     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
++  ).run(id, league, `${id}h`, `${id}a`, kickoff, status, status === "scheduled" ? null : 2, status === "scheduled" ? null : 1);
++}
++
++/** Runs the generated feed SQL exactly as the route does. */
++function runFeed(
++  db: DatabaseSync,
++  q: Parameters<typeof buildFeedQuery>[0] = {},
++): Array<{ id: string; status: string; kickoff_at: string }> {
++  const feed = buildFeedQuery({ now: NOW, ...q });
++  return db
++    .prepare(
++      `SELECT m.id, m.status, m.kickoff_at
++       FROM matches m
++       JOIN teams th ON th.id = m.home_team_id
++       JOIN teams ta ON ta.id = m.away_team_id
++       WHERE ${feed.where}
++       ORDER BY ${feed.orderBy}
++       LIMIT ?`,
++    )
++    .all(...feed.params, feed.limit) as Array<{ id: string; status: string; kickoff_at: string }>;
++}
++
++/** The window keeps what matters now and drops the archaeology. */
++function testRelevanceWindow(): void {
++  const db = tempDb();
++  seed(db, "live1", `${day(0)}T15:00Z`, "live");
++  seed(db, "ht1", `${day(0)}T16:00Z`, "halftime");
++  seed(db, "recent", `${day(-1)}T15:00Z`, "finished");
++  seed(db, "edge_old", `${day(-3)}T15:00Z`, "finished"); // exactly on the boundary
++  seed(db, "too_old", `${day(-4)}T15:00Z`, "finished");
++  seed(db, "soon", `${day(2)}T15:00Z`, "scheduled");
++  seed(db, "edge_far", `${day(14)}T15:00Z`, "scheduled"); // exactly on the boundary
++  seed(db, "too_far", `${day(15)}T15:00Z`, "scheduled");
++  seed(db, "ancient", "2024-03-26T17:00Z", "finished"); // the old feed's top row
++
++  const ids = runFeed(db).map((r) => r.id);
++
++  assert.ok(ids.includes("live1"), "a live match is always in the feed");
++  assert.ok(ids.includes("ht1"), "half-time counts as in progress");
++  assert.ok(ids.includes("recent"), "yesterday's result is in the feed");
++  assert.ok(ids.includes("edge_old"), "the lookback boundary day is inclusive");
++  assert.ok(ids.includes("soon"), "the next fixture is in the feed");
++  assert.ok(ids.includes("edge_far"), "the lookahead boundary day is inclusive");
++  assert.ok(!ids.includes("too_old"), "4 days back is outside the window");
++  assert.ok(!ids.includes("too_far"), "15 days ahead is outside the window");
++  assert.ok(
++    !ids.includes("ancient"),
++    "2024 football is NOT at the top of the matchday feed any more — the regression",
++  );
++}
++
++/**
++ * Ordering has to put the live moment first (PRODUCT.md rule 1: the live match
++ * owns the screen) and results newest-first.
++ */
++function testOrdering(): void {
++  const db = tempDb();
++  seed(db, "old_result", `${day(-2)}T15:00Z`, "finished");
++  seed(db, "new_result", `${day(-1)}T15:00Z`, "finished");
++  seed(db, "later_fixture", `${day(9)}T15:00Z`, "scheduled");
++  seed(db, "sooner_fixture", `${day(1)}T15:00Z`, "scheduled");
++  seed(db, "the_live_one", `${day(0)}T15:00Z`, "live");
++
++  const rows = runFeed(db);
++  const order = rows.map((r) => r.id);
++  assert.equal(order[0], "the_live_one", "the live match leads, never buried under results");
++  assert.equal(order[1], "sooner_fixture", "the next fixture is soonest");
++  assert.equal(order[2], "later_fixture", "then the one further out");
++  assert.deepEqual(
++    order.slice(3),
++    ["new_result", "old_result"],
++    "results read newest-first",
++  );
++}
++
++/** An explicit from/to pair is an inclusive range and ignores status. */
++function testExplicitRange(): void {
++  const db = tempDb();
++  seed(db, "before", `${day(-5)}T15:00Z`, "finished"); // outside the range
++  seed(db, "start_day", `${day(-2)}T15:00Z`, "finished");
++  seed(db, "middle", `${day(0)}T15:00Z`, "live");
++  seed(db, "end_day", `${day(3)}T15:00Z`, "scheduled");
++  seed(db, "after", `${day(9)}T15:00Z`, "scheduled"); // outside the range
++
++  const ids = runFeed(db, { from: day(-2), to: day(3) }).map((r) => r.id);
++  assert.deepEqual(ids.sort(), ["end_day", "middle", "start_day"], "both end days included");
++}
++
++/** A single `date` still means one specific day, whatever its status. */
++function testSingleDay(): void {
++  const db = tempDb();
++  seed(db, "d0", `${day(0)}T15:00Z`, "live");
++  seed(db, "d1", `${day(-1)}T15:00Z`, "finished");
++  seed(db, "d2", `${day(-1)}T20:00Z`, "finished"); // same day as d1
++  const ids = runFeed(db, { date: day(-1) }).map((r) => r.id);
++  assert.deepEqual(ids.sort(), ["d1", "d2"], "a day query ignores the window entirely");
++}
++
++/** The league filter composes with the window rather than replacing it. */
++function testLeagueFilter(): void {
++  const db = tempDb();
++  seed(db, "epl", `${day(0)}T15:00Z`, "live", "eng.1");
++  seed(db, "laliga", `${day(0)}T17:00Z`, "live", "esp.1");
++  seed(db, "stale_epl", `${day(-30)}T15:00Z`, "finished", "eng.1");
++  const ids = runFeed(db, { league: "esp.1" }).map((r) => r.id);
++  assert.deepEqual(ids, ["laliga"], "only the requested competition, window still applied");
++}
++
++/** The cap is honoured, clamped, and doesn't silently become unbounded. */
++function testLimit(): void {
++  const db = tempDb();
++  for (let i = 0; i < 12; i += 1) seed(db, `m${i}`, `${day(1)}T1${i}:00Z`, "scheduled");
++  assert.equal(runFeed(db).length, 12, "a small fixture set comes back whole");
++  assert.equal(runFeed(db, { limit: "5" }).length, 5, "an explicit limit is applied");
++  assert.equal(
++    buildFeedQuery({ limit: "0" }).limit,
++    FEED_LIMIT,
++    "0 falls back to the default rather than meaning 'no rows'",
++  );
++  assert.equal(buildFeedQuery({ limit: "-4" }).limit, FEED_LIMIT, "a negative limit falls back too");
++  assert.equal(buildFeedQuery({ limit: "abc" }).limit, FEED_LIMIT, "a non-numeric limit falls back");
++  assert.equal(buildFeedQuery({ limit: "99999" }).limit, 500, "clamped at 500");
++}
++
++/**
++ * The whole point of the fix: with more than the cap in the table, the NEAREST
++ * fixtures must still be present. The old ASC+LIMIT query lost them.
++ */
++function testNearestFixturesSurviveTheCap(): void {
++  const db = tempDb();
++  // 400 results from long ago (as a season's worth of history would be) ...
++  for (let i = 0; i < 400; i += 1) {
++    const d = new Date(NOW.getTime());
++    d.setUTCDate(d.getUTCDate() - (10 + i));
++    seed(db, `hist${i}`, `${d.toISOString().slice(0, 10)}T15:00Z`, "finished");
++  }
++  // ... plus the tail that IS in the window, and tomorrow's fixture, which the
++  // old ASC+LIMIT query pushed out entirely.
++  seed(db, "recent1", `${day(-1)}T15:00Z`, "finished");
++  seed(db, "recent2", `${day(-2)}T15:00Z`, "finished");
++  seed(db, "tomorrow", `${day(1)}T15:00Z`, "scheduled");
++
++  const ids = runFeed(db).map((r) => r.id);
++  assert.ok(ids.includes("tomorrow"), "the next fixture survives 400 rows of history");
++  assert.deepEqual(
++    ids.filter((id) => id.startsWith("hist")),
++    [],
++    "all 400 deep-history results are excluded",
++  );
++  assert.deepEqual(
++    ids.filter((id) => id.startsWith("recent")),
++    ["recent1", "recent2"],
++    "only the in-window tail of history survives",
++  );
++}
++
++export function runFeedTests(): void {
++  testRelevanceWindow();
++  testOrdering();
++  testExplicitRange();
++  testSingleDay();
++  testLeagueFilter();
++  testLimit();
++  testNearestFixturesSurviveTheCap();
++  console.log("  feed: relevance window, ordering, range/day/league filters, cap OK");
++}
+\ No newline at end of file
+diff --git a/tests/run.ts b/tests/run.ts
+index 85d9575..014037e 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -15,6 +15,7 @@ import { runLivePitchTests } from "./livePitch.test.js";
+ import { runPitchArtTests } from "./pitchArt.test.js";
+ import { runUnderstatTests } from "./understat.test.js";
+ import { runStandingsTests } from "./standings.test.js";
++import { runFeedTests } from "./feed.test.js";
+ import { runReplayTests } from "./replay.test.js";
+ import { runSeasonTests } from "./season.test.js";
+ import { runClientTests } from "./client.test.js";
+@@ -38,6 +39,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["pitchArt", runPitchArtTests],
+   ["understat", runUnderstatTests],
+   ["standings", runStandingsTests],
++  ["feed", runFeedTests],
+   ["replay", runReplayTests],
+   ["season", runSeasonTests],
+   ["client", runClientTests],
+-- 
+2.54.0.windows.1
+

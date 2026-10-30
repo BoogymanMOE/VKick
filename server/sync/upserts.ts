@@ -13,6 +13,7 @@ import {
   normalizeHeadToHead,
   normalizeLastFiveGames,
   normalizeSummaryNews,
+  isNotPlayedStatus,
 } from "../espn/normalize.js";
 import { statScore } from "../scoring/statScore.js";
 import {
@@ -24,7 +25,7 @@ import {
   type EspnTeamStatsPayload,
 } from "./teamStats.js";
 import { isBlockedTeam, isBlockedTeamId } from "../db/blockedTeams.js";
-import type { NormMatch, NormTeam } from "../espn/types.js";
+import type { NormMatch, NormTeam, OurStatus } from "../espn/types.js";
 
 export interface GoalAlert {
   matchId: string;
@@ -80,13 +81,15 @@ export function applyScoreboard(db: DB, json: unknown, league: string): void {
         "SELECT status, home_score, away_score FROM matches WHERE id = ?",
         [m.id],
       );
-      // Never regress a finished match to scheduled, or a halftime match to
-      // scheduled (ESPN can drop events from the scoreboard window once they
-      // age out; and a stale pre-match row must not un-break the HT window).
-      const status =
-        (existing?.status === "finished" || existing?.status === "halftime") && m.status === "scheduled"
-          ? existing.status
-          : m.status;
+      // Never regress a finished match to an unplayed state, or a halftime
+      // match to scheduled (ESPN can drop events from the scoreboard window once
+      // they age out; and a stale pre-match row must not un-break the HT window).
+      // A postponed row CAN become scheduled again — that is a rescheduled
+      // fixture, and it must move.
+      const regressedToUnplayed =
+        (existing?.status === "finished" || existing?.status === "halftime") &&
+        (m.status === "scheduled" || isNotPlayedStatus(m.status));
+      const status = regressedToUnplayed ? (existing?.status as OurStatus) : m.status;
       // The scoreboard is the first reliable signal that a fixture is final.
       // Fill an existing fixture row before the upsert flips its status, so
       // form reads do not wait for a later summary sync.
@@ -98,7 +101,7 @@ export function applyScoreboard(db: DB, json: unknown, league: string): void {
           [m.home_score, m.away_score, new Date().toISOString(), m.id],
         );
       }
-      upsert(
+      upsertCoalesce(
         db,
         "matches",
         {
@@ -113,8 +116,14 @@ export function applyScoreboard(db: DB, json: unknown, league: string): void {
           minute_display: m.minute_display,
           espn_season: m.espn_season,
           round: m.round,
+          home_pens: m.home_pens,
+          away_pens: m.away_pens,
+          decided_by: m.decided_by,
         },
         ["id"],
+        // The scoreboard may omit a shootout that the summary already stored;
+        // never let a later, thinner payload erase a result we know.
+        ["home_pens", "away_pens", "decided_by"],
       );
     }
   });
@@ -158,7 +167,7 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
         );
     }
 
-    upsert(
+    upsertCoalesce(
       db,
       "matches",
       {
@@ -175,16 +184,38 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
         home_formation: match.home_formation,
         away_formation: match.away_formation,
         espn_season: match.espn_season,
+        home_pens: match.home_pens,
+        away_pens: match.away_pens,
+        decided_by: match.decided_by,
+        venue: match.venue,
+        referee: match.referee,
+        attendance: match.attendance,
         last_synced_at: new Date().toISOString(),
       },
       ["id"],
+      // A thinner payload (or an older cached summary) must not blank out the
+      // facts or the shootout a previous sync already established.
+      ["home_pens", "away_pens", "decided_by", "venue", "referee", "attendance"],
     );
 
-    // Player stats + stat score
+    // Player stats + stat score. Match summaries can omit/coarsen a player's
+    // roster role, so preserve an existing position and only fill it for new
+    // players until their next complete club-roster refresh.
     const { players, stats } = normalizeRosters(json);
-    // Match-summary rosters omit headshots for many athletes; coalescing stops
-    // a null here from wiping the photo the roster endpoint already stored.
-    for (const p of players) upsertCoalesce(db, "players", { ...p }, ["id"], ["headshot_url"]);
+    for (const p of players) {
+      db.prepare(
+        `INSERT INTO players
+           (id, team_id, full_name, short_name, position, espn_position, jersey_number, headshot_url, active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+         ON CONFLICT(id) DO UPDATE SET
+           team_id=excluded.team_id,
+           full_name=excluded.full_name,
+           short_name=excluded.short_name,
+           jersey_number=excluded.jersey_number,
+           headshot_url=COALESCE(excluded.headshot_url, players.headshot_url),
+           active=1`,
+      ).run(p.id, p.team_id, p.full_name, p.short_name, p.position, p.espn_position, p.jersey_number, p.headshot_url);
+    }
 
     const conceded: Record<string, number> = {};
     if (match.home_score !== null && match.away_score !== null) {
@@ -421,16 +452,34 @@ function safeParseArray(s: string | null): { id: string; name: string }[] {
 }
 
 /**
- * Squad sync: upsert player rows and the coach. Never deactivates players here —
- * transfers are handled by the next match summary that features the new club.
+ * Squad sync: replace the club's current roster membership, then upsert the
+ * coach. Players absent from a complete current roster are retired from this
+ * team, while player records and historical match stats remain intact.
  */
 export function applyRoster(db: DB, json: unknown, _league: string): void {
   const players = normalizeRosterPlayers(json);
   const coach = normalizeCoach(json);
+  const teamId = String((json as { team?: { id?: string | number } } | null)?.team?.id ?? players[0]?.team_id ?? "");
+  if (!teamId || players.length === 0) return;
   tx(db, () => {
-    // Coalesce the headshot: either of the two feeds (match summary or squad
-    // roster) can ship it null, and neither side should erase the other's photo.
-    for (const p of players) upsertCoalesce(db, "players", { ...p }, ["id"], ["headshot_url"]);
+    // Complete roster payloads are authoritative for current membership and
+    // positions. Never allow match-summary rows to replace these positions.
+    run(db, "UPDATE players SET active = 0 WHERE team_id = ?", [teamId]);
+    for (const p of players) {
+      upsertCoalesce(
+        db,
+        "players",
+        { ...p },
+        ["id"],
+        ["headshot_url"],
+      );
+      run(db, "UPDATE players SET active = 1, team_id = ?, position = ?, espn_position = ? WHERE id = ?", [
+        p.team_id,
+        p.position,
+        p.espn_position,
+        p.id,
+      ]);
+    }
     if (coach) {
       run(
         db,

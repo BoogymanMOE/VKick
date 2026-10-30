@@ -1,0 +1,2481 @@
+From 0f2c68e122f45d20189cf937fb732855804f2db6 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 7 Oct 2026 01:31:59 +0330
+Subject: [PATCH 026/230] Harden the API responses and make matchday pushes
+ survive outages
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Transport: gzip the JSON that earns it (server/http/gzip.ts), drop
+X-Powered-By, add nosniff and a strict referrer policy, and type the ESPN
+fetchers as unknown instead of any.
+
+Push queue: a next_attempt_at column (plus a partial index on unsent rows)
+so a Telegram outage no longer burns all five attempts in one drain, and a
+deliverability filter so browser guests, password accounts and dev tokens
+never enter the queue.
+
+Sync: missed-flip repairs now retry behind a30-minute backoff instead of
+every pass, and the boxscore/Understat/ESPN normalisers pick up the shapes
+they were missing.
+
+Reads stay unthrottled while writes keep their limit, and a TEMP AUTH PROBE
+(off unless AUTH_PROBE=1) prints how each guest/Telegram login resolved.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/bot/index.ts             | 132 ++++++++++----
+ server/db/retention.ts          |  35 +++-
+ server/db/schema.ts             |  30 ++-
+ server/dev/seed-demo.ts         |   2 +-
+ server/dev/seedDemoData.ts      |  16 +-
+ server/espn/client.ts           |  12 +-
+ server/espn/normalize.ts        | 312 +++++++++++++++++++++++++++-----
+ server/http/gzip.ts             |  88 +++++++++
+ server/index.ts                 |  44 ++++-
+ server/matches/feed.ts          |  22 ++-
+ server/notifications.ts         |  32 +++-
+ server/predictions/pickNames.ts |   5 +-
+ server/routes/admin.ts          |   7 +-
+ server/routes/auth.ts           |  22 ++-
+ server/routes/me.ts             |  12 +-
+ server/routes/predictions.ts    |   8 +-
+ server/routes/ratings.ts        |  21 ++-
+ server/routes/shared.ts         |  25 ++-
+ server/scoring/referral.ts      |   4 +-
+ server/sync/service.ts          |  29 ++-
+ server/sync/teamStats.ts        |  28 ++-
+ server/sync/understat.ts        |  10 +-
+ server/sync/upserts.ts          |  19 +-
+ server/understat/client.ts      |   8 +-
+ server/understat/normalize.ts   |  27 ++-
+ tests/feed.test.ts              |  19 +-
+ tests/guestMerge.test.ts        |  13 +-
+ tests/notifications.test.ts     |  42 ++++-
+ tests/pickSummary.test.ts       |  40 +++-
+ tests/predictionsGate.test.ts   |   3 +-
+ tests/rateLimit.test.ts         |  46 ++---
+ tests/referral.test.ts          |   9 +-
+ tests/retention.test.ts         |  33 +++-
+ tests/season.test.ts            |   4 +-
+ tests/seedDemo.test.ts          |  77 +++++---
+ tests/teamGroups.test.ts        |  12 +-
+ tests/verify.test.ts            |  10 +-
+ 37 files changed, 992 insertions(+), 266 deletions(-)
+ create mode 100644 server/http/gzip.ts
+
+diff --git a/server/bot/index.ts b/server/bot/index.ts
+index a712acb..1ba7634 100644
+--- a/server/bot/index.ts
++++ b/server/bot/index.ts
+@@ -140,48 +140,102 @@ function startPushDrain(): void {
+   }, 3_000);
+ }
+ 
+-/** Unsendable rows (blocked bot, dead ids) are dropped after this many tries. */
+-const MAX_PUSH_ATTEMPTS = 5;
++/**
++ * Unsendable rows (blocked bot, dead ids) are dropped after this many tries.
++ * Transient failures get exponential backoff between them: at the 3s drain
++ * cadence the old cap of 5 gave Telegram 15 SECONDS to recover before a
++ * matchday push was lost for good.
++ */
++const MAX_PUSH_ATTEMPTS = 8;
++/** Longest wait between retries (also caps a 429's own retry_after). */
++const MAX_BACKOFF_MS = 15 * 60_000;
++const BASE_BACKOFF_MS = 30_000;
+ 
+-async function drainPushes(): Promise<void> {
+-  if (!bot) return;
+-  const db = getDb();
+-  const rows = all<{ id: number; telegram_id: string; text: string; attempts: number; kind: string }>(
+-    db,
+-    "SELECT id, telegram_id, text, attempts, kind FROM bot_push_queue WHERE sent_at IS NULL AND failed_at IS NULL ORDER BY id ASC LIMIT 20",
++/**
++ * One pass at a time. The timer fires every 3s and a full window of 20 sends
++ * takes longer than that, so an unguarded second pass would SELECT the same
++ * unsent rows and deliver them twice — the same overlap rule every sync loop
++ * already follows.
++ */
++let draining = false;
++
++function backoffMs(attempts: number): number {
++  return Math.min(BASE_BACKOFF_MS * 2 ** Math.max(0, attempts - 1), MAX_BACKOFF_MS);
++}
++
++/** 403 (bot blocked) and 400 (chat gone / bad id) can never succeed. */
++function isPermanentPushError(msg: string): boolean {
++  return (
++    /\b40[03]\b/.test(msg) || /chat not found|bot was blocked|user is deactivated|PEER_ID_INVALID/i.test(msg)
+   );
+-  for (const row of rows) {
+-    // Second net behind the queue-time gate in server/notifications.ts: a
+-    // preference set AFTER a row was queued (or by any future queue writer)
+-    // still stops the send. Each kind is checked against its own Profile
+-    // switch, so muting goal alerts leaves lock reminders intact. Opt-outs are
+-    // skipped, not failed.
+-    if (isOptedOut(db, row.telegram_id, asPushKind(row.kind))) {
+-      run(db, "UPDATE bot_push_queue SET sent_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
+-      continue;
+-    }
+-    // Poison-pill guard: a row that keeps failing (blocked bot = 403, chat
+-    // deleted = 400) would retry forever, wedging the 20-row drain window so
+-    // newer pushes starve. Cap attempts, then mark it failed.
+-    if ((row.attempts ?? 0) >= MAX_PUSH_ATTEMPTS) {
+-      run(db, "UPDATE bot_push_queue SET failed_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
+-      continue;
+-    }
+-    try {
+-      await bot.api.sendMessage(row.telegram_id, row.text);
+-      run(db, "UPDATE bot_push_queue SET sent_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
+-    } catch (err) {
+-      const msg = String(err);
+-      console.error(`[bot] push to ${row.telegram_id} failed:`, msg.slice(0, 120));
+-      // Blocked bot (403) / chat not found (400): retrying is pointless.
+-      const dead = msg.includes("403") || msg.includes("400");
+-      const attempts = (row.attempts ?? 0) + 1;
+-      run(db, "UPDATE bot_push_queue SET attempts = ?, failed_at = ? WHERE id = ?", [
+-        attempts,
+-        dead ? new Date().toISOString() : null,
+-        row.id,
+-      ]);
++}
++
++/** Telegram's flood-control wait, when the error carries one. */
++function telegramRetryAfterMs(err: unknown): number | null {
++  const params = (err as { parameters?: { retry_after?: unknown } } | null | undefined)?.parameters;
++  const v = params?.retry_after;
++  return typeof v === "number" && v > 0 ? Math.min(v * 1000, MAX_BACKOFF_MS) : null;
++}
++
++async function drainPushes(): Promise<void> {
++  if (!bot || draining) return;
++  draining = true;
++  try {
++    const db = getDb();
++    const now = Date.now();
++    const rows = all<{ id: number; telegram_id: string; text: string; attempts: number; kind: string }>(
++      db,
++      `SELECT id, telegram_id, text, attempts, kind
++       FROM bot_push_queue
++      WHERE sent_at IS NULL AND failed_at IS NULL AND next_attempt_at <= ?
++      ORDER BY id ASC LIMIT 20`,
++      [now],
++    );
++    for (const row of rows) {
++      // Second net behind the queue-time gate in server/notifications.ts: a
++      // preference set AFTER a row was queued (or by any future queue writer)
++      // still stops the send. Each kind is checked against its own Profile
++      // switch, so muting goal alerts leaves lock reminders intact. Opt-outs are
++      // skipped, not failed.
++      if (isOptedOut(db, row.telegram_id, asPushKind(row.kind))) {
++        run(db, "UPDATE bot_push_queue SET sent_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
++        continue;
++      }
++      try {
++        await bot.api.sendMessage(row.telegram_id, row.text);
++        run(db, "UPDATE bot_push_queue SET sent_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
++      } catch (err) {
++        const msg = String(err);
++        const attempts = (row.attempts ?? 0) + 1;
++        // Permanent (blocked bot, chat gone): drop it now, retrying is waste.
++        // Transient: back off exponentially instead — a Telegram blip now costs
++        // minutes, not the 15 seconds of total budget this used to allow.
++        if (isPermanentPushError(msg) || attempts >= MAX_PUSH_ATTEMPTS) {
++          run(db, "UPDATE bot_push_queue SET attempts = ?, failed_at = ? WHERE id = ?", [
++            attempts,
++            new Date().toISOString(),
++            row.id,
++          ]);
++          console.error(
++            `[bot] push to ${row.telegram_id} dropped after ${attempts} attempt(s):`,
++            msg.slice(0, 120),
++          );
++          continue;
++        }
++        const waitMs = telegramRetryAfterMs(err) ?? backoffMs(attempts);
++        run(db, "UPDATE bot_push_queue SET attempts = ?, next_attempt_at = ? WHERE id = ?", [
++          attempts,
++          now + waitMs,
++          row.id,
++        ]);
++        console.error(
++          `[bot] push to ${row.telegram_id} failed (attempt ${attempts}/${MAX_PUSH_ATTEMPTS}, retry in ${Math.round(waitMs / 1000)}s):`,
++          msg.slice(0, 120),
++        );
++      }
+     }
++  } finally {
++    draining = false;
+   }
+ }
+ 
+diff --git a/server/db/retention.ts b/server/db/retention.ts
+index 7a92d20..2cb7447 100644
+--- a/server/db/retention.ts
++++ b/server/db/retention.ts
+@@ -7,7 +7,8 @@ import type { DB, BindValue } from "./index.js";
+  * standings read them — only the per-match detail tables (timeline events,
+  * commentary, per-team/per-player stat sheets) and notification bookkeeping
+  * grow with every gameweek. Those get pruned once a match is old enough that
+- * nobody replays it: RETENTION_DAYS, default 120 (a full season window).
++ * no screen shows it any more: RETENTION_DAYS, default 120 (a full season
++ * window).
+  *
+  * opt-out: RETENTION_DAYS=0 keeps everything forever.
+  */
+@@ -74,11 +75,27 @@ export function pruneFootballDetail(db: DB, now: number = Date.now()): Retention
+ 
+   const deleted: Record<string, number> = {};
+ 
+-  // Detail tables: the replay payload reads these.
+-  deleted.timeline_events = runCount(db, `DELETE FROM timeline_events WHERE match_id IN (${placeholders})`, ids);
+-  deleted.match_commentary = runCount(db, `DELETE FROM match_commentary WHERE match_id IN (${placeholders})`, ids);
+-  deleted.match_team_stats = runCount(db, `DELETE FROM match_team_stats WHERE match_id IN (${placeholders})`, ids);
+-  deleted.match_player_stats = runCount(db, `DELETE FROM match_player_stats WHERE match_id IN (${placeholders})`, ids);
++  // Detail tables: the match page's timeline, commentary and stat tabs read these.
++  deleted.timeline_events = runCount(
++    db,
++    `DELETE FROM timeline_events WHERE match_id IN (${placeholders})`,
++    ids,
++  );
++  deleted.match_commentary = runCount(
++    db,
++    `DELETE FROM match_commentary WHERE match_id IN (${placeholders})`,
++    ids,
++  );
++  deleted.match_team_stats = runCount(
++    db,
++    `DELETE FROM match_team_stats WHERE match_id IN (${placeholders})`,
++    ids,
++  );
++  deleted.match_player_stats = runCount(
++    db,
++    `DELETE FROM match_player_stats WHERE match_id IN (${placeholders})`,
++    ids,
++  );
+   deleted.match_understat_stats = runCount(
+     db,
+     `DELETE FROM match_understat_stats WHERE match_id IN (${placeholders})`,
+@@ -88,7 +105,11 @@ export function pruneFootballDetail(db: DB, now: number = Date.now()): Retention
+   // Notification bookkeeping: goal-dedupe keys and per-user push audit rows.
+   // Push audit rows are the audit trail of who was told what; after the
+   // window they describe matches nobody can open anymore.
+-  deleted.notified_goals = runCount(db, `DELETE FROM notified_goals WHERE match_id IN (${placeholders})`, ids);
++  deleted.notified_goals = runCount(
++    db,
++    `DELETE FROM notified_goals WHERE match_id IN (${placeholders})`,
++    ids,
++  );
+   deleted.match_notifications = runCount(
+     db,
+     `DELETE FROM match_notifications WHERE match_id IN (${placeholders})`,
+diff --git a/server/db/schema.ts b/server/db/schema.ts
+index 088bcd9..84a5543 100644
+--- a/server/db/schema.ts
++++ b/server/db/schema.ts
+@@ -218,8 +218,17 @@ export function migrate(db: DatabaseSync): void {
+       created_at   TEXT NOT NULL,
+       sent_at      TEXT,
+       attempts     INTEGER NOT NULL DEFAULT 0,
+-      failed_at    TEXT
+-    );
++      failed_at    TEXT,
++      -- Drain backoff: epoch ms before this row may be retried. Without it a
++      -- transient Telegram outage burned all 5 attempts inside 15 seconds and
++      -- dropped the push forever. 0 = eligible now.
++      next_attempt_at INTEGER NOT NULL DEFAULT 0
++    );
++    -- The drain reads pending rows every 3s all season; without this it scans
++    -- the whole (sent + failed) history each time. Partial, so sent rows cost
++    -- nothing to keep.
++    CREATE INDEX IF NOT EXISTS idx_push_pending ON bot_push_queue(id)
++      WHERE sent_at IS NULL AND failed_at IS NULL;
+ 
+     -- full minute-by-minute commentary feed (from summary commentary[])
+     CREATE TABLE IF NOT EXISTS match_commentary (
+@@ -260,7 +269,7 @@ export function migrate(db: DatabaseSync): void {
+     -- the audit trail of who was told what, when — four tiny rows per user per
+     -- match, and retention prunes them alongside the rest of the match detail
+     -- they describe (see pruneFootballDetail), since a claim nobody can re-derive
+-    -- once the match itself is gone is worth no more than the replay data.
++    -- once the match itself is gone is worth no more than the match detail.
+     CREATE TABLE IF NOT EXISTS match_notifications (
+       telegram_id TEXT NOT NULL,
+       match_id    TEXT NOT NULL,
+@@ -318,8 +327,8 @@ export function migrate(db: DatabaseSync): void {
+     );
+ 
+     -- Understat per-match xG/xGA, one row per (match, club). ESPN publishes no
+-    -- expected goals, so this is the only source for the replay pitch's xG
+-    -- read. Rows are matched from the league payload's per-match history by
++    -- expected goals, so this is the only source for per-fixture xG.
++    -- Rows are matched from the league payload's per-match history by
+     -- club + kickoff date + scoreline, never guessed (see matchResultsToMatches).
+     CREATE TABLE IF NOT EXISTS match_understat_stats (
+       match_id      TEXT NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+@@ -542,8 +551,9 @@ export function migrate(db: DatabaseSync): void {
+     CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referral_redemptions(referrer_user_id);
+   `);
+ 
+-  // The replay-pitch columns were added after v1 of this schema; fresh DBs
+-  // already have them via CREATE TABLE, older ones get them here.
++  // The shot-coordinate columns (field_x, field_y, goal_y) were added after
++  // v1 of this schema; fresh DBs already have them via CREATE TABLE, older ones
++  // get them here.
+   // (SQLite has no ADD COLUMN IF NOT EXISTS, hence the pragma check.)
+   for (const col of ["field_x", "field_y", "goal_y"]) {
+     const existing = db
+@@ -662,6 +672,12 @@ export function migrate(db: DatabaseSync): void {
+   if (!pushCols.some((c) => c.name === "kind")) {
+     db.exec("ALTER TABLE bot_push_queue ADD COLUMN kind TEXT NOT NULL DEFAULT 'goal';");
+   }
++  // Backoff column (see the CREATE TABLE comment). Default 0 keeps every
++  // pre-existing row eligible immediately, so the first drain after the
++  // migration behaves exactly as before.
++  if (!pushCols.some((c) => c.name === "next_attempt_at")) {
++    db.exec("ALTER TABLE bot_push_queue ADD COLUMN next_attempt_at INTEGER NOT NULL DEFAULT 0;");
++  }
+ 
+   // users.language arrived with the localized bot pushes. The default is the
+   // whole migration story: every account that predates the column reads
+diff --git a/server/dev/seed-demo.ts b/server/dev/seed-demo.ts
+index 894ffa4..ed4bdca 100644
+--- a/server/dev/seed-demo.ts
++++ b/server/dev/seed-demo.ts
+@@ -52,4 +52,4 @@ function main(): void {
+   );
+ }
+ 
+-main();
+\ No newline at end of file
++main();
+diff --git a/server/dev/seedDemoData.ts b/server/dev/seedDemoData.ts
+index d2813f4..951b5a4 100644
+--- a/server/dev/seedDemoData.ts
++++ b/server/dev/seedDemoData.ts
+@@ -237,8 +237,7 @@ function actualFor(db: DatabaseSync, m: MatchRow): ActualLineup & { squad: strin
+   return { starterIds: new Set(starterIds), formations, squad };
+ }
+ 
+-const MATCH_COLS =
+-  "id, league, home_team_id, away_team_id, kickoff_at, home_formation, away_formation";
++const MATCH_COLS = "id, league, home_team_id, away_team_id, kickoff_at, home_formation, away_formation";
+ 
+ /* ------------------------------------------------------------ the seed */
+ 
+@@ -281,8 +280,7 @@ export function clearDemoData(db: DatabaseSync): number {
+   if (ids.length === 0) return 0;
+ 
+   const slots = ids.map(() => "?").join(", ");
+-  const p = (table: string) =>
+-    run(db, `DELETE FROM ${table} WHERE user_id IN (${slots})`, [...ids]);
++  const p = (table: string) => run(db, `DELETE FROM ${table} WHERE user_id IN (${slots})`, [...ids]);
+ 
+   return tx(db, () => {
+     for (const table of [
+@@ -446,7 +444,13 @@ export function seedDemoData(db: DatabaseSync, opts: SeedOptions = {}): SeedRepo
+           `UPDATE predictions
+            SET status = ?, points_awarded = ?, breakdown = ?, resolved_at = ?
+            WHERE id = ?`,
+-          [points >= 16 ? "correct" : "partial", points, JSON.stringify(breakdown), match.kickoff_at, predictionId],
++          [
++            points >= 16 ? "correct" : "partial",
++            points,
++            JSON.stringify(breakdown),
++            match.kickoff_at,
++            predictionId,
++          ],
+         );
+         report.resolved++;
+ 
+@@ -527,4 +531,4 @@ export function seedDemoData(db: DatabaseSync, opts: SeedOptions = {}): SeedRepo
+   });
+ 
+   return report;
+-}
+\ No newline at end of file
++}
+diff --git a/server/espn/client.ts b/server/espn/client.ts
+index dc6b0c8..5d2860d 100644
+--- a/server/espn/client.ts
++++ b/server/espn/client.ts
+@@ -22,7 +22,7 @@ export class EspnError extends Error {
+   }
+ }
+ 
+-async function fetchJson(url: string, retries = 2): Promise<any> {
++async function fetchJson(url: string, retries = 2): Promise<unknown> {
+   for (let attempt = 0; attempt <= retries; attempt++) {
+     try {
+       const res = await fetch(url, {
+@@ -30,7 +30,7 @@ async function fetchJson(url: string, retries = 2): Promise<any> {
+         headers: { accept: "application/json" },
+       });
+       if (!res.ok) throw new EspnError(`HTTP ${res.status} for ${url}`, res.status);
+-      return (await res.json()) as any;
++      return res.json();
+     } catch (err) {
+       if (attempt === retries) {
+         if (err instanceof EspnError) throw err;
+@@ -42,12 +42,12 @@ async function fetchJson(url: string, retries = 2): Promise<any> {
+   throw new EspnError("unreachable");
+ }
+ 
+-export async function fetchScoreboard(league: LeagueSlug, dates?: string): Promise<any> {
++export async function fetchScoreboard(league: LeagueSlug, dates?: string): Promise<unknown> {
+   const qs = dates ? `?dates=${encodeURIComponent(dates)}` : "";
+   return fetchJson(`${BASE}/${league}/scoreboard${qs}`);
+ }
+ 
+-export async function fetchSummary(league: LeagueSlug, eventId: string): Promise<any> {
++export async function fetchSummary(league: LeagueSlug, eventId: string): Promise<unknown> {
+   return fetchJson(`${BASE}/${league}/summary?event=${encodeURIComponent(eventId)}`);
+ }
+ 
+@@ -57,12 +57,12 @@ export async function fetchSummary(league: LeagueSlug, eventId: string): Promise
+  * each with a real `team` object (so `team.id` is available) and the full stat
+  * set including pointsFor/pointsAgainst.
+  */
+-export async function fetchStandings(league: LeagueSlug, season: number): Promise<any> {
++export async function fetchStandings(league: LeagueSlug, season: number): Promise<unknown> {
+   return fetchJson(`${BASE_V2}/${league}/standings?season=${encodeURIComponent(String(season))}`);
+ }
+ 
+ /** Full squad for one club (site API roster endpoint, season included). */
+-export async function fetchTeamRoster(league: LeagueSlug, teamId: string): Promise<any> {
++export async function fetchTeamRoster(league: LeagueSlug, teamId: string): Promise<unknown> {
+   return fetchJson(`${BASE}/${league}/teams/${encodeURIComponent(teamId)}/roster`);
+ }
+ 
+diff --git a/server/espn/normalize.ts b/server/espn/normalize.ts
+index e762b7d..aae3159 100644
+--- a/server/espn/normalize.ts
++++ b/server/espn/normalize.ts
+@@ -28,6 +28,214 @@ import { isCup } from "./types.js";
+ export type { LeagueSlug } from "./types.js";
+ export { LEAGUES, CUPS, LEAGUES_ALL, isCup } from "./types.js";
+ 
++/* ------------------------------------------------- ESPN payload (structural) */
++
++/**
++ * Structural types for ESPN's JSON. `client.ts` hands every payload over as
++ * `unknown`, and ESPN makes nearly everything optional (and changes it
++ * without notice), so each exported normalizer asserts its argument ONCE
++ * against the types below and reads typed from there — same `?.` fallbacks as
++ * before, no runtime validation added.
++ *
++ * Fields passed straight into a `Norm*` type (event `id`, fixture `date`) are
++ * declared required: that is ESPN's contract for them, and it keeps the
++ * mapping free of `as string` casts. A payload that breaks the contract still
++ * behaves exactly as it does today — an assertion is a claim about ESPN, not
++ * a guard.
++ */
++
++interface EspnLogo {
++  href?: string;
++}
++
++interface EspnPosition {
++  abbreviation?: string;
++  name?: string;
++  displayName?: string;
++}
++
++interface EspnClock {
++  value?: number;
++  displayValue?: string;
++}
++
++interface EspnNote {
++  type?: string;
++  headline?: string;
++}
++
++/** Events and competitions both carry ESPN's round notes (`name` on events). */
++interface EspnNotes {
++  notes?: EspnNote[];
++  name?: string;
++}
++
++interface EspnStatusType {
++  state?: string;
++  completed?: boolean;
++  description?: string;
++  shortDetail?: string;
++  displayClock?: string;
++  type?: string;
++}
++
++interface EspnStatus {
++  type?: EspnStatusType;
++}
++
++/** Team node: scoreboard `comp.team`, summary header team, standings team. */
++interface EspnTeamRef {
++  id?: string | number;
++  name?: string;
++  displayName?: string;
++  shortDisplayName?: string;
++  location?: string;
++  abbreviation?: string;
++  color?: string;
++  logos?: EspnLogo[];
++  /** Some league payloads carry a bare `logo` string instead of `logos[]`. */
++  logo?: string;
++  coach?: EspnCoachRow[];
++}
++
++interface EspnCompetitor {
++  homeAway?: string;
++  score?: unknown;
++  team?: EspnTeamRef;
++}
++
++interface EspnCompetition extends EspnNotes {
++  id?: string | number;
++  date?: string;
++  competitors?: EspnCompetitor[];
++  status?: EspnStatus;
++}
++
++interface EspnEvent extends EspnNotes {
++  id?: string | number;
++  /** Fixture kickoff; passed straight into `NormMatch.kickoff_at`. */
++  date: string;
++  season?: { year?: string | number };
++  status?: EspnStatus;
++  competitions?: EspnCompetition[];
++}
++
++interface EspnScoreboard {
++  events?: EspnEvent[];
++}
++
++interface EspnStat {
++  name?: string;
++  value?: number | string | null;
++  displayValue?: string | number;
++}
++
++interface EspnAthlete {
++  id?: string | number;
++  displayName?: string;
++  fullName?: string;
++  shortName?: string;
++  jersey?: string | number | null;
++  position?: EspnPosition;
++  headshot?: EspnLogo;
++  image?: unknown;
++}
++
++interface EspnRosterEntry {
++  athlete?: EspnAthlete;
++  position?: EspnPosition;
++  jersey?: string | number | null;
++  starter?: boolean;
++  subbedIn?: boolean;
++  subbedOut?: boolean;
++  didNotPlay?: boolean;
++  formationPlace?: string | number | null;
++  stats?: EspnStat[];
++}
++
++interface EspnRosterSide {
++  homeAway?: string;
++  formation?: string | null;
++  team?: { id?: string | number };
++  roster?: EspnRosterEntry[];
++}
++
++interface EspnParticipant {
++  athlete?: { id?: string | number; displayName?: string };
++}
++
++interface EspnKeyEvent {
++  id?: string | number;
++  text?: string;
++  shortText?: string;
++  team?: { id?: string | number };
++  clock?: EspnClock;
++  type?: { type?: string; text?: string };
++  participants?: EspnParticipant[];
++  fieldPositionX?: unknown;
++  fieldPositionY?: unknown;
++  goalPositionY?: unknown;
++}
++
++interface EspnCommentaryLine {
++  text?: unknown;
++  sequence?: unknown;
++  time?: { displayValue?: unknown; value?: unknown };
++}
++
++interface EspnSummaryHeader extends EspnNotes {
++  id?: string | number;
++  gregorianDate?: string;
++  league?: { slug?: string };
++  season?: { year?: string | number };
++  competitions?: EspnCompetition[];
++}
++
++/** The `/summary` endpoint: header, boxscore, rosters, keyEvents, commentary. */
++interface EspnSummary {
++  header?: EspnSummaryHeader;
++  boxscore?: { teams?: { team?: EspnTeamRef }[] };
++  rosters?: EspnRosterSide[];
++  keyEvents?: EspnKeyEvent[];
++  commentary?: EspnCommentaryLine[];
++}
++
++interface EspnCoachRow {
++  firstName?: string;
++  lastName?: string;
++}
++
++/** The `/rosters` endpoint: squad list plus coach. */
++interface EspnRosterEndpoint {
++  team?: EspnTeamRef;
++  coach?: EspnCoachRow[];
++  coaches?: EspnCoachRow[];
++  athletes?: EspnAthlete[];
++}
++
++interface EspnStandingEntry {
++  id?: string | number;
++  /** v2: the team object; summary standings: the team NAME as a plain string. */
++  team?: unknown;
++  /** v2 ships `logos[]`, summary standings a bare string. */
++  logo?: string | EspnLogo[];
++  stats?: EspnStat[];
++}
++
++interface EspnStandingGroup {
++  standings?: { entries?: EspnStandingEntry[] };
++}
++
++interface EspnStandingsSection extends EspnStandingGroup {
++  groups?: EspnStandingGroup[];
++}
++
++interface EspnStandingsPayload {
++  children?: EspnStandingGroup[];
++  standings?: EspnStandingsSection;
++  header?: { league?: { slug?: string } };
++}
++
+ /* ------------------------------------------------------------ positions */
+ 
+ // ESPN uses granular abbreviations (CD-L, AM-R, RM...). Map to the four
+@@ -178,8 +386,8 @@ function parseScore(v: unknown): number | null {
+ 
+ /* ------------------------------------------------------------ scoreboard */
+ 
+-function teamFromCompetitor(comp: any, league: string): NormTeam {
+-  const t = comp.team ?? {};
++function teamFromCompetitor(comp: EspnCompetitor, league: string): NormTeam {
++  const t: EspnTeamRef = comp.team ?? {};
+   const isCupComp = isCup(league);
+   return {
+     id: String(t.id),
+@@ -202,8 +410,11 @@ function teamFromCompetitor(comp: any, league: string): NormTeam {
+  * Tries the event's headline and the competition's notes, since ESPN populates
+  * one or the other depending on the competition.
+  */
+-function roundFromEvent(ev: any, competition: any): string | null {
+-  const note: string | undefined = competition?.notes?.[0]?.headline ?? ev?.notes?.[0]?.headline ?? null;
++function roundFromEvent(
++  ev: EspnNotes | undefined | null,
++  competition: EspnNotes | undefined | null,
++): string | null {
++  const note = competition?.notes?.[0]?.headline ?? ev?.notes?.[0]?.headline ?? null;
+   const source = note ?? ev?.name ?? null;
+   if (!source) return null;
+   const m = source.match(
+@@ -220,12 +431,16 @@ function roundFromEvent(ev: any, competition: any): string | null {
+   return raw.replace(/\b\w/g, (c: string) => c.toUpperCase());
+ }
+ 
+-export function normalizeScoreboard(json: any, league: string): { teams: NormTeam[]; matches: NormMatch[] } {
++export function normalizeScoreboard(
++  raw: unknown,
++  league: string,
++): { teams: NormTeam[]; matches: NormMatch[] } {
++  const json = raw as EspnScoreboard;
+   const teams = new Map<string, NormTeam>();
+   const matches: NormMatch[] = [];
+   for (const ev of json.events ?? []) {
+-    const competition = ev.competitions?.[0] ?? {};
+-    const competitors: any[] = competition.competitors ?? [];
++    const competition = ev.competitions?.[0];
++    const competitors = competition?.competitors ?? [];
+     const home = competitors.find((c) => c.homeAway === "home");
+     const away = competitors.find((c) => c.homeAway === "away");
+     if (!home || !away) continue;
+@@ -233,9 +448,8 @@ export function normalizeScoreboard(json: any, league: string): { teams: NormTea
+     const at = teamFromCompetitor(away, league);
+     teams.set(ht.id, ht);
+     teams.set(at.id, at);
+-    const st = competition.status ?? ev.status ?? {};
+-    const type = st.type ?? {};
+-    const status = normalizeStatus(type.state, type.completed, type.description ?? type.shortDetail);
++    const type = (competition?.status ?? ev.status)?.type;
++    const status = normalizeStatus(type?.state, type?.completed, type?.description ?? type?.shortDetail);
+     matches.push({
+       id: String(ev.id),
+       league,
+@@ -246,7 +460,7 @@ export function normalizeScoreboard(json: any, league: string): { teams: NormTea
+       home_score: status === "scheduled" ? null : parseScore(home.score),
+       away_score: status === "scheduled" ? null : parseScore(away.score),
+       minute_display:
+-        status === "live" || status === "halftime" ? (type.displayClock ?? type.shortDetail ?? null) : null,
++        status === "live" || status === "halftime" ? (type?.displayClock ?? type?.shortDetail ?? null) : null,
+       espn_season: ev.season ? `${ev.season.year}` : null,
+       round: roundFromEvent(ev, competition),
+       home_formation: null,
+@@ -258,14 +472,15 @@ export function normalizeScoreboard(json: any, league: string): { teams: NormTea
+ 
+ /* ------------------------------------------------------------ summary */
+ 
+-export function normalizeSummaryTeams(json: any): { home: NormTeam | null; away: NormTeam | null } {
+-  const comps: any[] = json.header?.competitions?.[0]?.competitors ?? [];
++export function normalizeSummaryTeams(raw: unknown): { home: NormTeam | null; away: NormTeam | null } {
++  const json = raw as EspnSummary;
++  const comps = json.header?.competitions?.[0]?.competitors ?? [];
+   let home: NormTeam | null = null;
+   let away: NormTeam | null = null;
+   for (const c of comps) {
+     const norm = teamFromCompetitor(c, json.header?.league?.slug ?? "");
+     if (!norm.logo_url) {
+-      const box = (json.boxscore?.teams ?? []).find((b: any) => String(b.team?.id) === norm.id);
++      const box = (json.boxscore?.teams ?? []).find((b) => String(b.team?.id) === norm.id);
+       norm.logo_url = box?.team?.logo ?? null;
+     }
+     if (c.homeAway === "home") home = norm;
+@@ -274,14 +489,15 @@ export function normalizeSummaryTeams(json: any): { home: NormTeam | null; away:
+   return { home, away };
+ }
+ 
+-export function normalizeSummaryMatch(json: any): NormMatch {
++export function normalizeSummaryMatch(raw: unknown): NormMatch {
++  const json = raw as EspnSummary;
+   const h = json.header?.competitions?.[0];
+-  const comps: any[] = h?.competitors ?? [];
++  const comps = h?.competitors ?? [];
+   const home = comps.find((c) => c.homeAway === "home");
+   const away = comps.find((c) => c.homeAway === "away");
+   const type = h?.status?.type ?? {};
+   const status = normalizeStatus(type.state, type.completed, type.description ?? type.shortDetail);
+-  const rosters: any[] = json.rosters ?? [];
++  const rosters = json.rosters ?? [];
+   const homeRoster = rosters.find((r) => r.homeAway === "home");
+   const awayRoster = rosters.find((r) => r.homeAway === "away");
+   return {
+@@ -298,7 +514,7 @@ export function normalizeSummaryMatch(json: any): NormMatch {
+     home_formation: homeRoster?.formation ?? null,
+     away_formation: awayRoster?.formation ?? null,
+     espn_season: json.header?.season?.year ? `${json.header.season.year}` : null,
+-    round: roundFromEvent(json.header, h ?? {}),
++    round: roundFromEvent(json.header, h),
+   };
+ }
+ 
+@@ -318,7 +534,7 @@ const STAT_NAMES = {
+   ownGoals: "ownGoals",
+ } as const;
+ 
+-function statValue(stats: any[] | undefined, name: string): number | null {
++function statValue(stats: EspnStat[] | undefined, name: string): number | null {
+   const s = (stats ?? []).find((x) => x.name === name);
+   if (!s || s.value === undefined || s.value === null) return null;
+   const v = typeof s.value === "number" ? s.value : parseFloat(String(s.displayValue ?? s.value));
+@@ -332,7 +548,9 @@ function statValue(stats: any[] | undefined, name: string): number | null {
+  * - sub: 90 minus the minute they came on (fallback 25)
+  * - unused/didNotPlay: 0
+  */
+-export function deriveMinutes(entry: any, json: any): number {
++export function deriveMinutes(rawEntry: unknown, rawJson: unknown): number {
++  const entry = rawEntry as EspnRosterEntry;
++  const json = rawJson as EspnSummary;
+   if (entry.didNotPlay === true || (entry.stats ?? []).length === 0) return 0;
+   const pid = String(entry.athlete?.id ?? "");
+   if (entry.starter) {
+@@ -348,11 +566,11 @@ export function deriveMinutes(entry: any, json: any): number {
+ }
+ 
+ /** ESPN convention on sub keyEvents: participants[0] = on, participants[1] = off. */
+-function findSubMinute(json: any, playerId: string, direction: "in" | "out"): number | null {
++function findSubMinute(json: EspnSummary, playerId: string, direction: "in" | "out"): number | null {
+   for (const ke of json.keyEvents ?? []) {
+     const t = (ke.type?.text ?? "").toLowerCase();
+     if (!t.includes("substitution")) continue;
+-    const parts: any[] = ke.participants ?? [];
++    const parts = ke.participants ?? [];
+     const idx = direction === "in" ? 0 : 1;
+     const p = parts[idx]?.athlete?.id;
+     if (p && String(p) === playerId) {
+@@ -363,10 +581,11 @@ function findSubMinute(json: any, playerId: string, direction: "in" | "out"): nu
+   return null;
+ }
+ 
+-export function normalizeRosters(json: any): {
++export function normalizeRosters(raw: unknown): {
+   players: NormPlayer[];
+   stats: NormPlayerStats[];
+ } {
++  const json = raw as EspnSummary;
+   const players: NormPlayer[] = [];
+   const stats: NormPlayerStats[] = [];
+   for (const side of json.rosters ?? []) {
+@@ -451,8 +670,8 @@ const EVENT_TYPE_MAP: Record<string, string> = {
+ /**
+  * ESPN keyEvent types include goal SUBTYPES ("Goal - Free-kick", "Goal -
+  * Header", "Second Yellow Card"...) that the exact map above misses — a
+- * subtype goal landing in "other" would vanish from goal feeds, the replay
+- * score and the shot plot. Map by substring after the exact lookup.
++ * subtype goal landing in "other" would vanish from goal feeds and the shot
++ * plot. Map by substring after the exact lookup.
+  */
+ export function mapEventType(raw: string): string {
+   const exact = EVENT_TYPE_MAP[raw];
+@@ -469,18 +688,19 @@ export function mapEventType(raw: string): string {
+   return "other";
+ }
+ 
+-export function normalizeTimeline(json: any): NormTimelineEvent[] {
++export function normalizeTimeline(raw: unknown): NormTimelineEvent[] {
++  const json = raw as Pick<EspnSummary, "keyEvents">;
+   const out: NormTimelineEvent[] = [];
+   for (const ke of json.keyEvents ?? []) {
+     const raw = String(ke.type?.text ?? ke.type?.type ?? "other").toLowerCase();
+     const type = mapEventType(raw);
+     if (type === "other" && !ke.text && !ke.shortText) continue;
+-    const participants = (ke.participants ?? []).map((p: any) => ({
++    const participants = (ke.participants ?? []).map((p) => ({
+       id: String(p.athlete?.id ?? ""),
+       name: p.athlete?.displayName ?? "",
+     }));
+     // Shot origin + goal-line position: ESPN only fills these on goal events,
+-    // and only in some leagues. Null elsewhere; the replay pitch copes.
++    // and only in some leagues. Null elsewhere; consumers cope.
+     const num = (v: unknown): number | null => {
+       if (v === undefined || v === null || v === "") return null;
+       const n = Number(v);
+@@ -506,17 +726,20 @@ export function normalizeTimeline(json: any): NormTimelineEvent[] {
+ 
+ /**
+  * The dense minute-by-minute feed (fouls, corners, every shot). Stored per
+- * match so finished matches get a replayable commentary track.
++ * match so finished matches get a full commentary track.
+  */
+-export function normalizeCommentary(json: any): NormCommentaryLine[] {
++export function normalizeCommentary(raw: unknown): NormCommentaryLine[] {
++  const json = raw as Pick<EspnSummary, "commentary">;
+   const out: NormCommentaryLine[] = [];
+   for (const line of json.commentary ?? []) {
+     const text = String(line.text ?? "").trim();
+     if (!text) continue;
++    const time = line.time;
++    const seconds = time?.value;
+     out.push({
+       sequence: Number(line.sequence ?? out.length),
+-      minute_display: line.time?.displayValue ? String(line.time.displayValue) : null,
+-      minute_seconds: typeof line.time?.value === "number" ? line.time.value : null,
++      minute_display: time?.displayValue ? String(time.displayValue) : null,
++      minute_seconds: typeof seconds === "number" ? seconds : null,
+       text,
+     });
+   }
+@@ -526,7 +749,8 @@ export function normalizeCommentary(json: any): NormCommentaryLine[] {
+ /* ------------------------------------------------------------ rosters */
+ 
+ /** Coach entry from the roster endpoint (`coach[]`, first row wins). */
+-export function normalizeCoach(json: any): { team_id: string; name: string } | null {
++export function normalizeCoach(raw: unknown): { team_id: string; name: string } | null {
++  const json = raw as EspnRosterEndpoint;
+   const teamId = String(json.team?.id ?? "");
+   // Some league payloads nest the coach under a different key (or omit it).
+   const first = (json.coach ?? json.coaches ?? json.team?.coach ?? [])[0];
+@@ -539,7 +763,8 @@ export function normalizeCoach(json: any): { team_id: string; name: string } | n
+  * Squad rows from the roster endpoint. Roster positions are granular ("G",
+  * "CD-L"...), so reuse the match-roster mapping for the GK/DEF/MID/FWD buckets.
+  */
+-export function normalizeRosterPlayers(json: any): NormPlayer[] {
++export function normalizeRosterPlayers(raw: unknown): NormPlayer[] {
++  const json = raw as EspnRosterEndpoint;
+   const teamId = String(json.team?.id ?? "");
+   const out: NormPlayer[] = [];
+   for (const a of json.athletes ?? []) {
+@@ -586,26 +811,31 @@ export function normalizeRosterPlayers(json: any): NormPlayer[] {
+  * has no `header.league.slug`, and the caller always knows which catalog entry
+  * it asked for.
+  */
+-export function normalizeStandings(json: any, leagueSlug = ""): {
++export function normalizeStandings(
++  raw: unknown,
++  leagueSlug = "",
++): {
+   teams: NormTeam[];
+   rows: NormStandingRow[];
+ } {
+   const teams: NormTeam[] = [];
+   const rows: NormStandingRow[] = [];
++  const payload = raw as EspnStandingsPayload | null | undefined;
+ 
+   // v2: children[].standings.entries — summary: standings.groups[].standings.entries.
+-  const groups: any[] = Array.isArray(json?.children)
+-    ? json.children
+-    : (json?.standings?.groups ?? (json?.standings ? [json.standings] : []));
++  const children = payload?.children;
++  const groups: EspnStandingGroup[] = Array.isArray(children)
++    ? children
++    : (payload?.standings?.groups ?? (payload?.standings ? [payload.standings] : []));
+ 
+   for (const g of groups) {
+     for (const entry of g?.standings?.entries ?? []) {
+       const byName: Record<string, number | null> = {};
+       for (const s of entry.stats ?? []) {
+-        byName[s.name] = s.value !== undefined && s.value !== null ? Number(s.value) : null;
++        byName[String(s.name)] = s.value !== undefined && s.value !== null ? Number(s.value) : null;
+       }
+       // v2 puts the id on the team object; summary has it on the entry.
+-      const teamObj = typeof entry.team === "object" && entry.team ? entry.team : {};
++      const teamObj = (typeof entry.team === "object" && entry.team ? entry.team : {}) as EspnTeamRef;
+       const teamId = String(teamObj.id ?? entry.id ?? "");
+       if (!teamId) continue;
+       // entry.team is a plain string in summary standings ("Manchester City")
+@@ -625,7 +855,7 @@ export function normalizeStandings(json: any, leagueSlug = ""): {
+         abbreviation: teamObj.abbreviation ?? null,
+         logo_url: logo,
+         color: teamObj.color ? `#${String(teamObj.color).replace("#", "")}` : null,
+-        league: leagueSlug || json.header?.league?.slug || "",
++        league: leagueSlug || payload?.header?.league?.slug || "",
+       });
+       rows.push({
+         team_id: teamId,
+diff --git a/server/http/gzip.ts b/server/http/gzip.ts
+new file mode 100644
+index 0000000..c528653
+--- /dev/null
++++ b/server/http/gzip.ts
+@@ -0,0 +1,88 @@
++/**
++ * Dependency-free gzip for outgoing responses.
++ *
++ * The stack is deliberately zero-cost/zero-dep (no `compression` package), and
++ * the server was sending every bundle raw: `react-*.js` is 158 KB on the wire
++ * where the gzipped copy is 52 KB — tripled bytes on exactly the mobile
++ * Telegram webview this app ships to. This buffers the response, gzips it when
++ * the client asked for gzip and the type is compressible, and otherwise emits
++ * the bytes untouched.
++ *
++ * Buffering (rather than streaming) is a deliberate trade: the largest thing
++ * this server serves is a ~160 KB bundle, and it keeps the `write`/`end`
++ * interception honest — no partial-flush states to get wrong. Responses are
++ * never handed to the client before the headers are final, so `Content-Length`
++ * is always the one that matches the bytes on the wire.
++ */
++import zlib from "node:zlib";
++import type { Request, Response, NextFunction } from "express";
++
++/** Below this the RTT dominates: gzipping 300 bytes saves nothing. */
++const MIN_BYTES = 1024;
++
++const COMPRESSIBLE = /^(text\/|application\/(javascript|json|manifest\+json|xml)|image\/svg\+xml)/i;
++
++function shouldCompress(res: Response, length: number): boolean {
++  if (res.statusCode !== 200 || length < MIN_BYTES) return false;
++  if (res.getHeader("content-encoding")) return false;
++  return COMPRESSIBLE.test(String(res.getHeader("content-type") ?? ""));
++}
++
++export function gzip(req: Request, res: Response, next: NextFunction): void {
++  if (req.method !== "GET" && req.method !== "HEAD") return next();
++
++  // Set even when this response ends up uncompressed: a shared cache must be
++  // told the bytes depend on Accept-Encoding, or it can hand a gzip body to a
++  // client that never asked for one.
++  if (!res.hasHeader("Vary")) res.setHeader("Vary", "Accept-Encoding");
++  if (!/\bgzip\b/i.test(String(req.headers["accept-encoding"] ?? ""))) return next();
++
++  const write = res.write.bind(res) as unknown as (...args: unknown[]) => boolean;
++  const end = res.end.bind(res) as unknown as (...args: unknown[]) => unknown;
++  const chunks: Buffer[] = [];
++
++  // encoding/callback args on write are dropped while buffering: nothing that
++  // calls this server (express, send) passes either.
++  res.write = ((chunk: unknown, ..._rest: unknown[]) => {
++    if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
++    return true; // always "writable": we are buffering, not streaming
++  }) as typeof res.write;
++
++  res.end = ((chunk?: unknown, ...rest: unknown[]) => {
++    const callback = [chunk, ...rest].find((a) => typeof a === "function") as (() => void) | undefined;
++    if (chunk && typeof chunk !== "function") {
++      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
++    }
++    const body = Buffer.concat(chunks);
++    const finish = () => {
++      if (callback) callback();
++    };
++
++    // Someone flushed headers behind our back (writeHead), or this is a 304 /
++    // HEAD / error / non-compressible type: emit exactly what we buffered and
++    // let Node own the framing — Content-Length already matches.
++    if (res.headersSent || !shouldCompress(res, body.length)) {
++      if (body.length > 0) write(body);
++      end(finish);
++      return res;
++    }
++
++    zlib.gzip(body, (err, zipped) => {
++      if (err) {
++        // Compression failed; the client still gets correct bytes, just bigger.
++        write(body);
++        end(finish);
++        return;
++      }
++      res.setHeader("Content-Encoding", "gzip");
++      res.setHeader("Vary", "Accept-Encoding");
++      res.removeHeader("Content-Length");
++      res.setHeader("Content-Length", String(zipped.length));
++      write(zipped);
++      end(finish);
++    });
++    return res;
++  }) as typeof res.end;
++
++  next();
++}
+diff --git a/server/index.ts b/server/index.ts
+index dde7e41..fb15676 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -32,6 +32,7 @@ import { pruneFootballDetail, pruneSessions, logCapKb, RotatingLogger } from "./
+ import { startSyncLoop } from "./sync/service.js";
+ import { startBot } from "./bot/index.js";
+ import { startResolverLoop } from "./predictions/resolver.js";
++import { gzip } from "./http/gzip.js";
+ 
+ // Route modules — one per domain, mounted below. Endpoint paths and behavior
+ // are identical to the pre-split monolith.
+@@ -67,6 +68,19 @@ const apiLog = new RotatingLogger(path.join(ROOT_DIR, "logs", "api.log"), logCap
+ // trusted anything, so a direct connection could spoof its IP past the
+ // rate limiter's IP keys).
+ app.set("trust proxy", 1);
++// Header hygiene: X-Powered-By advertises the stack for nothing, and nosniff
++// stops a browser re-interpreting a response as some other type. Deliberately
++// NO Content-Security-Policy yet: it has to be proven against the Telegram
++// webview (which frames the Mini App), the ESPN logo CDN and the Adsgram SDK
++// first — a wrong CSP bricks the app for every user at once.
++app.disable("x-powered-by");
++app.use((_req, res, next) => {
++  res.setHeader("X-Content-Type-Options", "nosniff");
++  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
++  next();
++});
++// Buffered gzip (see http/gzip.ts): the bundles were going out uncompressed.
++app.use(gzip);
+ // 64KB body cap: far above any legit prediction/comment payload, well below
+ // abuse size. (default was 100KB; explicit + smaller now that payloads are validated)
+ app.use(express.json({ limit: "64kb" }));
+@@ -100,17 +114,33 @@ app.use(adminRouter);
+ /* ------------------------------------------------------------ static frontend */
+ 
+ // Serve the built Vite frontend (dist/) so the React app loads in production.
+-app.use(express.static(path.join(ROOT_DIR, "dist")));
++app.use(
++  express.static(path.join(ROOT_DIR, "dist"), {
++    setHeaders: (res, filePath) => {
++      // Vite fingerprints everything under /assets/, so those bytes cannot
++      // change under the same URL — cache them for a year. Everything else
++      // revalidates, index.html above all: shipping a stale shell after a
++      // deploy is how users end up requesting bundles that no longer exist.
++      const immutable = filePath.includes(`${path.sep}assets${path.sep}`);
++      res.setHeader("Cache-Control", immutable ? "public, max-age=31536000, immutable" : "no-cache");
++    },
++  }),
++);
+ 
+ // SPA fallback: any GET that didn't match an API route or a static file
+ // falls through to index.html so React Router owns client-side routing.
+ app.use((req, res, next) => {
+-  if (req.method === "GET" && !req.path.startsWith("/api")) {
+-    return res.sendFile(path.join(ROOT_DIR, "dist", "index.html"), (err) => {
+-      if (err) next(err);
+-    });
+-  }
+-  next();
++  if (req.method !== "GET") return next();
++  // Unmatched API paths answer in the API's dialect: a JSON client parsing an
++  // HTML 404 turns a typo'd route into an opaque "Unexpected token" failure.
++  if (req.path.startsWith("/api")) return res.status(404).json({ error: "not found" });
++  // A MISS on a real file must 404 rather than fall through to the shell —
++  // returning index.html with 200 for /assets/whatever.js is what turns a
++  // post-deploy stale page into "Unexpected token '<'" instead of a reload.
++  if (/\.[a-z0-9]+$/i.test(req.path)) return res.status(404).type("text/plain").send("Not found");
++  return res.sendFile(path.join(ROOT_DIR, "dist", "index.html"), (err) => {
++    if (err) next(err);
++  });
+ });
+ 
+ /* ------------------------------------------------------------ errors */
+diff --git a/server/matches/feed.ts b/server/matches/feed.ts
+index e213e79..e05197d 100644
+--- a/server/matches/feed.ts
++++ b/server/matches/feed.ts
+@@ -110,14 +110,30 @@ export function buildFeedQuery(q: FeedQuery = {}): FeedSql {
+     // "show me this week's fixtures" should not filter by whether they are done.
+     clauses.push("substr(m.kickoff_at, 1, 10) BETWEEN ? AND ?");
+     params.push(from, to);
+-    return { where: clauses.join(" AND "), params, orderBy: FEED_ORDER, limit, mode: "range", past: null, future: null };
++    return {
++      where: clauses.join(" AND "),
++      params,
++      orderBy: FEED_ORDER,
++      limit,
++      mode: "range",
++      past: null,
++      future: null,
++    };
+   }
+ 
+   if (date) {
+     // One specific day, whatever its status.
+     clauses.push("substr(m.kickoff_at, 1, 10) = ?");
+     params.push(date);
+-    return { where: clauses.join(" AND "), params, orderBy: FEED_ORDER, limit, mode: "day", past: null, future: null };
++    return {
++      where: clauses.join(" AND "),
++      params,
++      orderBy: FEED_ORDER,
++      limit,
++      mode: "day",
++      past: null,
++      future: null,
++    };
+   }
+ 
+   // Relevance window. `from`/`to` each pin their own end when given alone.
+@@ -132,4 +148,4 @@ export function buildFeedQuery(q: FeedQuery = {}): FeedSql {
+     )`);
+   params.push(...IN_PROGRESS, past, future);
+   return { where: clauses.join(" AND "), params, orderBy: FEED_ORDER, limit, mode: "window", past, future };
+-}
+\ No newline at end of file
++}
+diff --git a/server/notifications.ts b/server/notifications.ts
+index 59617e6..26490dd 100644
+--- a/server/notifications.ts
++++ b/server/notifications.ts
+@@ -18,7 +18,15 @@
+  * app in Persian gets Persian pushes (see server/messages.ts for the wording).
+  */
+ import { all, get, type DB } from "./db/index.js";
+-import { asPushLang, goalPush, halftimePush, lineupPush, lockPush, ratingsPush, type PushLang } from "./messages.js";
++import {
++  asPushLang,
++  goalPush,
++  halftimePush,
++  lineupPush,
++  lockPush,
++  ratingsPush,
++  type PushLang,
++} from "./messages.js";
+ import { lineupPublished } from "./predictions/window.js";
+ 
+ /** Every kind of push the app sends. Also the dedupe stage for matchday pushes. */
+@@ -56,7 +64,19 @@ interface PushRecipient {
+  *
+  * `column` comes from PREF_COLUMN, never from request input, so the
+  * interpolation below cannot carry user data into the SQL.
++ *
++ * The deliverability filter matters: browser guests (`guest:<device>`),
++ * username accounts (`pwd:<name>`) and dev-token users (`dev:<id>`) own rows
++ * in `users` and can follow clubs, but no Telegram chat exists behind those
++ * ids. Queueing for them was pure waste — in the dev DB every single row ever
++ * queued targeted a `guest:` id, burned 5 retries and landed in failed_at.
++ * They still get the in-app experience; they simply never enter the queue.
+  */
++const DELIVERABLE = `
++     u.telegram_id NOT LIKE 'guest:%'
++ AND u.telegram_id NOT LIKE 'pwd:%'
++ AND u.telegram_id NOT LIKE 'dev:%'`;
++
+ export function teamFollowers(db: DB, teamId: string, kind: PushKind): PushRecipient[] {
+   if (!teamId) return [];
+   const column = PREF_COLUMN[kind];
+@@ -66,7 +86,8 @@ export function teamFollowers(db: DB, teamId: string, kind: PushKind): PushRecip
+      FROM users u
+      JOIN favorite_teams f ON f.user_id = u.id
+      LEFT JOIN user_notification_prefs p ON p.user_id = u.id
+-     WHERE f.team_id = ? AND (p.user_id IS NULL OR p.${column} = 1)`,
++     WHERE f.team_id = ? AND (p.user_id IS NULL OR p.${column} = 1)
++       AND ${DELIVERABLE}`,
+     [teamId],
+   );
+   return rows.map((r) => ({ telegramId: r.telegram_id, lang: asPushLang(r.language) }));
+@@ -143,7 +164,12 @@ export function queueGoalAlerts(db: DB, goals: GoalAlertInput[]): number {
+     const club = team?.short_name ?? team?.name ?? null;
+     const score = `${g.homeScore}-${g.awayScore}`;
+     for (const r of teamFollowers(db, g.scoringTeamId, "goal")) {
+-      enqueuePush(db, r.telegramId, "goal", goalPush(r.lang, { minute: g.minute, club, scorer: g.scorerName, score }));
++      enqueuePush(
++        db,
++        r.telegramId,
++        "goal",
++        goalPush(r.lang, { minute: g.minute, club, scorer: g.scorerName, score }),
++      );
+       queued++;
+     }
+   }
+diff --git a/server/predictions/pickNames.ts b/server/predictions/pickNames.ts
+index 67c3eb3..deebeef 100644
+--- a/server/predictions/pickNames.ts
++++ b/server/predictions/pickNames.ts
+@@ -40,8 +40,7 @@ export function playerIdsForMechanic(mechanic: string, payload: string | null):
+   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+   const p = parsed as Record<string, unknown>;
+ 
+-  const id = (v: unknown): string | null =>
+-    typeof v === "string" && /^\d{1,15}$/.test(v) ? v : null;
++  const id = (v: unknown): string | null => (typeof v === "string" && /^\d{1,15}$/.test(v) ? v : null);
+ 
+   switch (mechanic) {
+     case "lineup":
+@@ -112,4 +111,4 @@ export function attachPlayerNames<T extends Record<string, unknown>>(
+     }
+     return { ...row, player_names: playerNames };
+   });
+-}
+\ No newline at end of file
++}
+diff --git a/server/routes/admin.ts b/server/routes/admin.ts
+index ad358b7..2f47a20 100644
+--- a/server/routes/admin.ts
++++ b/server/routes/admin.ts
+@@ -13,7 +13,12 @@ export const adminRouter = express.Router();
+ 
+ adminRouter.post("/api/admin/sync", requireUser, (req, res) => {
+   if (!isAdmin(req)) return bad(res, "admin only", 403);
+-  void syncScoreboards().then(() => res.json({ ok: true }));
++  // Must carry a catch: with none, a rejection is an unhandled promise rejection
++  // — Node terminates the process — AND this request would never be answered.
++  // The sync-window route below already had one; this one was missed.
++  void syncScoreboards()
++    .then(() => res.json({ ok: true }))
++    .catch((err) => bad(res, `sync failed: ${String(err).slice(0, 120)}`, 500));
+ });
+ 
+ /** Manually pull a fixture window (days back/forward) — backfills future fixtures. */
+diff --git a/server/routes/auth.ts b/server/routes/auth.ts
+index b09a5c0..6e756e2 100644
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -33,6 +33,9 @@ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
+  * TEMP AUTH PROBE — delete this block and its one call site once a real
+  * Telegram client has been observed on a device.
+  *
++ * Off by default (AUTH_PROBE != "1" prints nothing), so production and the
++ * test suite stay silent; the call site can stay in place until then.
++ *
+  * One line per /api/auth/guest call so a phone test is readable at a glance:
+  * was initData sent, did it verify, and did the user end up Telegram or a
+  * guest.
+@@ -42,10 +45,13 @@ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
+  * names are not secrets and are what actually matter here: whether the
+  * client sent `signature` decides which check-string algorithm is correct.
+  */
+-function authProbeGuest(initData: string, verified: { ok: true } | { ok: false; reason: string } | null, outcome: "telegram" | "guest"): void {
+-  const keys = initData
+-    ? [...new URLSearchParams(initData).keys()].sort().join(",")
+-    : "";
++function authProbeGuest(
++  initData: string,
++  verified: { ok: true } | { ok: false; reason: string } | null,
++  outcome: "telegram" | "guest",
++): void {
++  if (process.env.AUTH_PROBE !== "1") return;
++  const keys = initData ? [...new URLSearchParams(initData).keys()].sort().join(",") : "";
+   const hasSignature = initData ? new URLSearchParams(initData).has("signature") : false;
+   const verdict = !initData
+     ? "no-initData"
+@@ -279,7 +285,13 @@ function mergeGuestIntoUser(deviceId: string, target: AuthedUser): void {
+       if (targetFavs.some((e) => e.team_id === f.team_id)) continue;
+       // continue (not break): one full bucket must not block picks for the
+       // other — same rule the POST endpoint enforces per tap.
+-      if (favoriteCapError(targetFavs.map((e) => e.group_key), f.group_key)) continue;
++      if (
++        favoriteCapError(
++          targetFavs.map((e) => e.group_key),
++          f.group_key,
++        )
++      )
++        continue;
+       run(
+         db,
+         "INSERT OR IGNORE INTO favorite_teams (user_id, team_id, is_favorite, created_at) VALUES (?, ?, ?, ?)",
+diff --git a/server/routes/me.ts b/server/routes/me.ts
+index 34b0bf0..dde8453 100644
+--- a/server/routes/me.ts
++++ b/server/routes/me.ts
+@@ -63,7 +63,7 @@ meRouter.get("/api/me", requireUser, (req, res) => {
+     user: { ...u, username: cred?.username ?? null, language: prefs?.language ?? "en" },
+     favorites: favCount?.n ?? 0,
+     leagues: leagueCount?.n ?? 0,
+-    authMode: (req as any).authMode ?? "telegram",
++    authMode: req.authMode ?? "telegram",
+   });
+ });
+ 
+@@ -125,7 +125,7 @@ meRouter.get("/api/me/favorites", requireUser, (_req, res) => {
+   res.json({ favorites: rows });
+ });
+ 
+-meRouter.post("/api/me/favorites", requireUser, (req, res) => {
++meRouter.post("/api/me/favorites", requireUser, writeLimiter, (req, res) => {
+   const teamId = String(req.body?.teamId ?? "");
+   if (!teamId) return bad(res, "teamId required");
+   const team = get<{ id: string; league: string; name: string; group_key: string }>(
+@@ -186,7 +186,7 @@ meRouter.post("/api/me/favorites", requireUser, (req, res) => {
+   res.json({ ok: true });
+ });
+ 
+-meRouter.delete("/api/me/favorites/:teamId", requireUser, (req, res) => {
++meRouter.delete("/api/me/favorites/:teamId", requireUser, writeLimiter, (req, res) => {
+   run(db, "DELETE FROM favorite_teams WHERE user_id = ? AND team_id = ?", [
+     currentUser(req).id,
+     String(req.params.teamId),
+@@ -195,7 +195,7 @@ meRouter.delete("/api/me/favorites/:teamId", requireUser, (req, res) => {
+ });
+ 
+ /** Set (or move) the anchor club — the one shown first everywhere. */
+-meRouter.put("/api/me/favorites/:teamId/anchor", requireUser, (req, res) => {
++meRouter.put("/api/me/favorites/:teamId/anchor", requireUser, writeLimiter, (req, res) => {
+   const teamId = String(req.params.teamId);
+   const follows = get<{ n: number }>(
+     db,
+@@ -226,7 +226,7 @@ meRouter.get("/api/me/leagues", requireUser, (req, res) => {
+   res.json({ leagues: rows });
+ });
+ 
+-meRouter.post("/api/me/leagues", requireUser, (req, res) => {
++meRouter.post("/api/me/leagues", requireUser, writeLimiter, (req, res) => {
+   const league = String(req.body?.league ?? "");
+   if (!league) return bad(res, "league required");
+   const known = get<{ n: number }>(db, "SELECT COUNT(*) AS n FROM competitions WHERE slug = ?", [league]);
+@@ -261,7 +261,7 @@ meRouter.post("/api/me/leagues", requireUser, (req, res) => {
+   res.json({ ok: true });
+ });
+ 
+-meRouter.delete("/api/me/leagues/:league", requireUser, (req, res) => {
++meRouter.delete("/api/me/leagues/:league", requireUser, writeLimiter, (req, res) => {
+   run(db, "DELETE FROM followed_leagues WHERE user_id = ? AND league = ?", [
+     currentUser(req).id,
+     String(req.params.league),
+diff --git a/server/routes/predictions.ts b/server/routes/predictions.ts
+index 96a0bd1..1693fd6 100644
+--- a/server/routes/predictions.ts
++++ b/server/routes/predictions.ts
+@@ -26,11 +26,9 @@ const MECHANICS: Mechanic[] = ["lineup", "shot_predict", "sub", "player_watch",
+  * so the history route reads the same signal.
+  */
+ export function isLineupPublished(matchId: string): boolean {
+-  const row = get<{ home_formation: string | null }>(
+-    db,
+-    "SELECT home_formation FROM matches WHERE id = ?",
+-    [matchId],
+-  );
++  const row = get<{ home_formation: string | null }>(db, "SELECT home_formation FROM matches WHERE id = ?", [
++    matchId,
++  ]);
+   const starters = get<{ teams: number }>(
+     db,
+     "SELECT COUNT(DISTINCT team_id) AS teams FROM match_player_stats WHERE match_id = ? AND started = 1",
+diff --git a/server/routes/ratings.ts b/server/routes/ratings.ts
+index 7fa934e..9688c48 100644
+--- a/server/routes/ratings.ts
++++ b/server/routes/ratings.ts
+@@ -15,17 +15,27 @@ const MIN_VOTES_TO_SHOW = 3;
+ /** The 3-card rule: each user rates exactly 3 players of their choice per match. */
+ const MAX_RATINGS_PER_MATCH = 3;
+ 
++/**
++ * The two aggregates this query computes. Everything else in the row is a
++ * passthrough column, so the index signature keeps it available downstream
++ * without restating the whole SELECT.
++ */
++type RatingAggRow = Record<string, unknown> & {
++  votes: number;
++  avg_rating: number | null;
++};
++
+ ratingsRouter.get("/api/matches/:id/ratings", requireUser, (req, res) => {
+   const matchId = String(req.params.id);
+   const userId = currentUser(req).id;
+-  const rows = all(
++  const rows = all<RatingAggRow>(
+     db,
+     `SELECT s.player_id, p.full_name AS name, p.short_name, s.team_id, p.position,
+             s.stat_score, s.stat_breakdown, s.started, s.minutes_played,
+             AVG(r.rating) AS avg_rating, COUNT(r.rating) AS votes,
+             (SELECT rating FROM crowd_ratings WHERE user_id = ? AND player_id = s.player_id AND match_id = s.match_id) AS my_rating,
+             (SELECT comment FROM crowd_ratings WHERE user_id = ? AND player_id = s.player_id AND match_id = s.match_id) AS my_comment,
+-            (SELECT c.text FROM crowd_ratings rc JOIN users c ON c.id = rc.user_id
++            (SELECT rc.comment FROM crowd_ratings rc
+               WHERE rc.player_id = s.player_id AND rc.match_id = s.match_id AND rc.comment IS NOT NULL
+               ORDER BY rc.created_at DESC LIMIT 1) AS latest_comment
+      FROM match_player_stats s
+@@ -36,9 +46,12 @@ ratingsRouter.get("/api/matches/:id/ratings", requireUser, (req, res) => {
+      ORDER BY s.team_id, s.started DESC, s.minutes_played DESC`,
+     [userId, userId, matchId],
+   );
+-  const withRatings = rows.map((r: any) => ({
++  const withRatings = rows.map((r) => ({
+     ...r,
+-    crowd_rating: r.votes >= MIN_VOTES_TO_SHOW ? Math.round(r.avg_rating * 10) / 10 : null,
++    // votes >= 3 implies avg_rating is non-null (COUNT and AVG see the same
++    // NOT NULL rating column), so the null check only satisfies the compiler.
++    crowd_rating:
++      r.votes >= MIN_VOTES_TO_SHOW && r.avg_rating != null ? Math.round(r.avg_rating * 10) / 10 : null,
+   }));
+   const used = get<{ n: number }>(
+     db,
+diff --git a/server/routes/shared.ts b/server/routes/shared.ts
+index 95c5c56..d36d121 100644
+--- a/server/routes/shared.ts
++++ b/server/routes/shared.ts
+@@ -32,6 +32,20 @@ export interface AuthedUser {
+ 
+ export type AuthMode = "session" | "telegram" | "dev";
+ 
++/**
++ * `requireUser` attaches these before any handler runs. Declaring them on
++ * Express's own Request interface (rather than casting through `any` at every
++ * use) gives every route module a typed `req.user` / `req.authMode`, and makes
++ * reading them before the gate runs a compile error instead of a silent
++ * `undefined`.
++ */
++declare module "express-serve-static-core" {
++  interface Request {
++    user?: AuthedUser;
++    authMode?: AuthMode;
++  }
++}
++
+ /**
+  * Require a valid identity; attaches req.user + req.authMode.
+  *
+@@ -75,8 +89,8 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
+       return;
+     }
+     run(db, "UPDATE user_sessions SET last_used_at = ? WHERE token = ?", [new Date().toISOString(), token]);
+-    (req as any).user = { id: row.id, telegram_id: row.telegram_id, display_name: row.display_name };
+-    (req as any).authMode = "session" satisfies AuthMode;
++    req.user = { id: row.id, telegram_id: row.telegram_id, display_name: row.display_name };
++    req.authMode = "session";
+     next();
+     return;
+   }
+@@ -105,13 +119,14 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
+   // Upsert (not select-then-insert): two rapid first requests from the same
+   // Telegram client race the SELECT, and the loser used to hit UNIQUE -> 500.
+   const user = upsertUser(telegramId, displayName);
+-  (req as any).user = user;
+-  (req as any).authMode = mode;
++  req.user = user;
++  req.authMode = mode;
+   next();
+ }
+ 
+ export function currentUser(req: Request): AuthedUser {
+-  return (req as any).user as AuthedUser;
++  // Set by requireUser, which every route using this reads behind.
++  return req.user as AuthedUser;
+ }
+ 
+ export function isAdmin(req: Request): boolean {
+diff --git a/server/scoring/referral.ts b/server/scoring/referral.ts
+index 00ba855..4c6323e 100644
+--- a/server/scoring/referral.ts
++++ b/server/scoring/referral.ts
+@@ -47,9 +47,7 @@ export function generateReferralCode(): string {
+  * collision means something is deeply wrong).
+  */
+ export function ensureReferralCode(db: DatabaseSync, userId: number): string {
+-  const existing = get<{ code: string }>(db, "SELECT code FROM referral_codes WHERE user_id = ?", [
+-    userId,
+-  ]);
++  const existing = get<{ code: string }>(db, "SELECT code FROM referral_codes WHERE user_id = ?", [userId]);
+   if (existing) return existing.code;
+   for (let attempt = 0; attempt < 5; attempt += 1) {
+     const code = generateReferralCode();
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index f8cc61a..840b10f 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -85,6 +85,15 @@ export async function syncScoreboardWindow(backDays: number, forwardDays: number
+  */
+ const summariesInFlight = new Set<string>();
+ 
++/**
++ * Missed-flip repairs that were attempted but did not change the row (see the
++ * scheduled branch in `syncSummaries`). In-memory on purpose — same rule as
++ * the rate limiter: this server is one process, and a restart re-trying once
++ * immediately is harmless.
++ */
++const reconcileBackoff = new Map<string, number>();
++const RECONCILE_RETRY_MS = 30 * 60_000;
++
+ /** Pull the full summary for a single match and store it. */
+ export async function syncMatchSummary(league: LeagueSlug, matchId: string): Promise<GoalAlert[]> {
+   // Already being worked by the other loop; it will return this match's goals.
+@@ -110,6 +119,8 @@ export async function syncMatchSummary(league: LeagueSlug, matchId: string): Pro
+  * - live matches: always (this runs every minute from the cron loop)
+  * - recent finishers: once more to lock in final stats
+  * - upcoming within 3h: once, so lineups/formations appear
++ * - past-kickoff fixtures still marked scheduled: the missed-flip repair in the
++ *   scheduled branch below
+  */
+ export async function syncSummaries(): Promise<GoalAlert[]> {
+   const goals: GoalAlert[] = [];
+@@ -147,6 +158,22 @@ export async function syncSummaries(): Promise<GoalAlert[]> {
+       // stretch runs on its own tighter lane.
+       const cadenceHours = hoursToKickoff < 1.5 ? NEAR_KICKOFF_SECONDS / 3_600 : 0.25;
+       should = hoursSinceSync > cadenceHours;
++    } else if (m.status === "scheduled" && hoursToKickoff <= -0.25 && hoursToKickoff > -24 * 7) {
++      // MISSED FLIP: the box was down at kickoff, or ESPN answered with a shape
++      // we could not parse, and this fixture would otherwise read "scheduled"
++      // forever — every sweep looks forward, nothing ever looks back (measured:
++      // 17 international fixtures sat four days past kickoff in that state,
++      // rendering as upcoming fixtures with a countdown into the past).
++      // One summary retry every 30 min repairs the status, runs the final-whistle
++      // settle path for predictions, then stops trying after a week; older rows
++      // are left to `npm run sync -- sync-match <league> <id>`.
++      //
++      // `last_synced_at` only moves when a summary APPLIES, so a fixture ESPN
++      // never answers for (cancelled, pruned) would otherwise be re-polled on
++      // every 60s pass — the per-match backoff caps that at one call / 30 min.
++      const retriedAt = reconcileBackoff.get(m.id) ?? 0;
++      should = hoursSinceSync > 0.5 && retriedAt < now;
++      if (should) reconcileBackoff.set(m.id, now + RECONCILE_RETRY_MS);
+     }
+ 
+     if (!should) continue;
+@@ -229,8 +256,6 @@ function seasonStartYear(season: string): number {
+   return Number.parseInt(season.slice(0, 4), 10) || new Date().getUTCFullYear();
+ }
+ 
+-
+-
+ /**
+  * Goal-alert fan-out lives in server/notifications.ts (queueGoalAlerts), which
+  * takes the db handle as an argument and serves the international favorites
+diff --git a/server/sync/teamStats.ts b/server/sync/teamStats.ts
+index a023fb8..f7f9cbc 100644
+--- a/server/sync/teamStats.ts
++++ b/server/sync/teamStats.ts
+@@ -15,7 +15,7 @@ export interface NormTeamStats {
+   pass_accuracy_pct: number | null;
+ }
+ 
+-function num(stats: any[] | undefined, name: string): number | null {
++function num(stats: EspnStat[] | undefined, name: string): number | null {
+   const s = (stats ?? []).find((x) => x.name === name);
+   if (!s) return null;
+   const raw = s.value ?? s.displayValue;
+@@ -24,8 +24,30 @@ function num(stats: any[] | undefined, name: string): number | null {
+   return Number.isNaN(v) ? null : v;
+ }
+ 
++/** One `boxscore.teams[].statistics[]` entry; ESPN mixes value and display. */
++interface EspnStat {
++  name?: string;
++  value?: number | string | null;
++  displayValue?: number | string | null;
++}
++
++interface EspnBoxTeam {
++  team?: { id?: string | number };
++  statistics?: EspnStat[];
++}
++
++/**
++ * The slice of a match summary this normalizer reads. Declared here — not
++ * accepted as `any` — because this file, not the caller, owns the boxscore
++ * shape (the same rule server/espn/normalize.ts follows for the rest).
++ */
++export interface EspnTeamStatsPayload {
++  header?: { competitions?: Array<{ id?: string | number }> };
++  boxscore?: { teams?: EspnBoxTeam[] };
++}
++
+ /** Team-level stats from `boxscore.teams[].statistics[]` (per-league stat schemas). */
+-export function normalizeTeamStats(json: any, league: string): NormTeamStats[] {
++export function normalizeTeamStats(json: EspnTeamStatsPayload, league: string): NormTeamStats[] {
+   const out: NormTeamStats[] = [];
+   const matchId = String(json.header?.competitions?.[0]?.id ?? "");
+   if (!matchId) return out;
+@@ -39,7 +61,7 @@ export function normalizeTeamStats(json: any, league: string): NormTeamStats[] {
+           shotsOnTarget: "shotsOnTarget",
+           fouls: "foulsCommitted",
+         };
+-  const pct = (stats: any[] | undefined, name: string): number | null => {
++  const pct = (stats: EspnStat[] | undefined, name: string): number | null => {
+     const v = num(stats, name);
+     if (v === null) return null;
+     return v <= 1 ? v * 100 : v; // ESPN mixes fractions and percents
+diff --git a/server/sync/understat.ts b/server/sync/understat.ts
+index 920e3b4..735f7a6 100644
+--- a/server/sync/understat.ts
++++ b/server/sync/understat.ts
+@@ -5,6 +5,8 @@ import {
+   normalizePlayersFromApi,
+   normalizeShotSituationsFromApi,
+   normalizeTeamHistoryFromApi,
++  type UnderstatLeaguePayload,
++  type UnderstatTeamPayload,
+ } from "../understat/normalize.js";
+ import { TEAM_SLUGS, LEAGUE_SLUGS, ABBR_BY_SLUG } from "../understat/ids.js";
+ import { getDb } from "../db/index.js";
+@@ -39,10 +41,14 @@ export async function syncTeamUnderstat(teamAbbr: string, teamId: string, league
+     return;
+   }
+ 
+-  const [teamData, leagueData] = await Promise.all([
++  const [rawTeam, rawLeague] = await Promise.all([
+     fetchTeamData(slug, SEASON),
+     fetchLeagueData(league, SEASON),
+   ]);
++  // The transport hands back `unknown`; this module owns what Understat sends,
++  // so the shape is asserted once, here, instead of spread across the client.
++  const teamData = rawTeam as UnderstatTeamPayload | null;
++  const leagueData = rawLeague as UnderstatLeaguePayload;
+   if (!teamData) {
+     console.warn(`[understat] no data for ${teamAbbr} (${slug})`);
+     return;
+@@ -196,7 +202,7 @@ export async function syncLeagueUnderstatTables(): Promise<void> {
+         ppda: stats.ppda,
+         deep: stats.deep,
+       });
+-      // Per-match xG for the replay pitch: pair this club's Understat history
++      // Per-match xG: pair this club's Understat history
+       // with its finished local matches by side, both goal counts and a
+       // within-a-day kickoff. Ambiguous or unmatchable rows are dropped.
+       const localMatches = matchStmt.all(team_id, team_id, team_id, team_id, team_id) as Array<{
+diff --git a/server/sync/upserts.ts b/server/sync/upserts.ts
+index 60e9ff4..70eb60d 100644
+--- a/server/sync/upserts.ts
++++ b/server/sync/upserts.ts
+@@ -18,6 +18,7 @@ import {
+   recomputeSeasonStats,
+   recomputeSeasonTeamStats,
+   getSeasonKey,
++  type EspnTeamStatsPayload,
+ } from "./teamStats.js";
+ import type { NormMatch, NormTeam } from "../espn/types.js";
+ 
+@@ -49,7 +50,7 @@ function teamRow(t: NormTeam, fallbackLeague: string): Record<string, BindValue>
+ }
+ 
+ /** Upsert normalized teams + matches from a scoreboard payload. */
+-export function applyScoreboard(db: DB, json: any, league: string): void {
++export function applyScoreboard(db: DB, json: unknown, league: string): void {
+   const { teams, matches } = normalizeScoreboard(json, league);
+   tx(db, () => {
+     for (const t of teams) {
+@@ -104,7 +105,7 @@ export interface ApplySummaryResult {
+ }
+ 
+ /** Upsert a summary payload: match state, teams, player stats, timeline. */
+-export function applySummary(db: DB, json: any, league: string): ApplySummaryResult {
++export function applySummary(db: DB, json: unknown, league: string): ApplySummaryResult {
+   const { home, away } = normalizeSummaryTeams(json);
+   const match = normalizeSummaryMatch(json);
+   if (!match.id) return { match, goals: [] };
+@@ -238,7 +239,7 @@ export function applySummary(db: DB, json: any, league: string): ApplySummaryRes
+       }
+     }
+ 
+-    // Full commentary track (replay companion for finished matches).
++    // Full commentary track (the blow-by-blow tab for finished matches).
+     for (const line of normalizeCommentary(json)) {
+       upsert(
+         db,
+@@ -256,7 +257,9 @@ export function applySummary(db: DB, json: any, league: string): ApplySummaryRes
+   });
+ 
+   // Team-level stats (own transaction — never nest inside the one above).
+-  applyTeamStats(db, normalizeTeamStats(json, league));
++  // Every other normalizer absorbs the raw payload itself; this one declares
++  // the summary slice it needs, so the shape is asserted once, by its owner.
++  applyTeamStats(db, normalizeTeamStats(json as EspnTeamStatsPayload, league));
+ 
+   // When a match just finished, refresh the season leaderboards for its league.
+   // Cheap full recompute — see teamStats.ts.
+@@ -332,7 +335,7 @@ function safeParseArray(s: string | null): { id: string; name: string }[] {
+  * Squad sync: upsert player rows and the coach. Never deactivates players here —
+  * transfers are handled by the next match summary that features the new club.
+  */
+-export function applyRoster(db: DB, json: any, _league: string): void {
++export function applyRoster(db: DB, json: unknown, _league: string): void {
+   const players = normalizeRosterPlayers(json);
+   const coach = normalizeCoach(json);
+   tx(db, () => {
+@@ -348,7 +351,7 @@ export function applyRoster(db: DB, json: any, _league: string): void {
+   });
+ }
+ 
+-export function applyStandings(db: DB, json: any, league: string, season: string): void {
++export function applyStandings(db: DB, json: unknown, league: string, season: string): void {
+   // `league` is passed in explicitly: the v2 standings payload carries no
+   // header identifying the competition, so normalizeStandings can't infer it.
+   const { teams, rows } = normalizeStandings(json, league);
+@@ -614,8 +617,8 @@ export function upsertLeagueUnderstatSummary(t: {
+ }
+ 
+ /**
+- * Per-match xG/xGA, one row per (match, club) — the replay pitch's expected
+- * goals. Written by the league Understat walk for every club it can name; a
++ * Per-match xG/xGA, one row per (match, club) — the per-fixture expected-goals
++ * record. Written by the league Understat walk for every club it can name; a
+  * club/date/scoreline that didn't match cleanly simply gets no row.
+  */
+ export function upsertMatchUnderstatXg(
+diff --git a/server/understat/client.ts b/server/understat/client.ts
+index 0a9343b..8c5cdd7 100644
+--- a/server/understat/client.ts
++++ b/server/understat/client.ts
+@@ -15,7 +15,7 @@ async function politeDelay() {
+   lastCallAt = Date.now();
+ }
+ 
+-async function fetchJsonWithRetry(url: string, options: RequestInit = {}, attempts = 3): Promise<any> {
++async function fetchJsonWithRetry(url: string, options: RequestInit = {}, attempts = 3): Promise<unknown> {
+   for (let i = 0; i < attempts; i++) {
+     await politeDelay();
+     const headers = {
+@@ -33,11 +33,11 @@ async function fetchJsonWithRetry(url: string, options: RequestInit = {}, attemp
+   throw new Error(`Understat failed after ${attempts} attempts: ${url}`);
+ }
+ 
+-export async function fetchTeamData(teamSlug: string, season: number): Promise<any> {
++export async function fetchTeamData(teamSlug: string, season: number): Promise<unknown> {
+   return fetchJsonWithRetry(`${BASE}/getTeamData/${teamSlug}/${season}`);
+ }
+ 
+-export async function fetchLeagueData(leagueSlug: string, season: number): Promise<any> {
++export async function fetchLeagueData(leagueSlug: string, season: number): Promise<unknown> {
+   const league = LEAGUE_SLUGS[leagueSlug] || leagueSlug;
+   return fetchJsonWithRetry(`${BASE}/getLeagueData/${league}/${season}`);
+ }
+@@ -46,7 +46,7 @@ export async function fetchPlayerStats(
+   teamSlug: string,
+   season: number,
+   filters?: Record<string, string>,
+-): Promise<any> {
++): Promise<unknown> {
+   const body = new URLSearchParams({ team: teamSlug, season: String(season), ...filters });
+   return fetchJsonWithRetry(`${BASE}/main/getPlayersStats/`, {
+     method: "POST",
+diff --git a/server/understat/normalize.ts b/server/understat/normalize.ts
+index c14e841..144bc7c 100644
+--- a/server/understat/normalize.ts
++++ b/server/understat/normalize.ts
+@@ -11,7 +11,7 @@ interface ApiFixture {
+   result?: "w" | "d" | "l";
+ }
+ 
+-interface ApiPlayer {
++export interface ApiPlayer {
+   id: string;
+   player_name: string;
+   position: string;
+@@ -32,7 +32,7 @@ interface ApiPlayer {
+   red_cards?: string;
+ }
+ 
+-interface ApiStatRow {
++export interface ApiStatRow {
+   shots: string | number;
+   goals: string | number;
+   xG: string | number;
+@@ -43,7 +43,7 @@ interface ApiStatRow {
+   };
+ }
+ 
+-interface ApiTeamHistory {
++export interface ApiTeamHistory {
+   h_a: "h" | "a";
+   xG: number;
+   xGA: number;
+@@ -65,6 +65,25 @@ interface ApiTeamHistory {
+   npxGD: number;
+ }
+ 
++/**
++ * The slice of Understat's `/getTeamData` payload this codebase reads.
++ *
++ * Declared here — rather than accepted as `any` at the fetch layer — because
++ * this module, not the client, owns the shape. That mirrors the rule
++ * server/espn/normalize.ts follows for ESPN: the transport says `unknown`,
++ * the normalizer says what it actually is.
++ */
++export interface UnderstatTeamPayload {
++  players: ApiPlayer[];
++  statistics: { situation: Record<string, ApiStatRow> };
++  dates?: Array<{ side: string; xG: { h: string; a: string } }>;
++}
++
++/** Slice of `/getLeagueData` — only the per-team history walk is consumed. */
++export type UnderstatLeaguePayload = {
++  teams?: Record<string, { id: string; title: string; history: ApiTeamHistory[] }>;
++} | null;
++
+ export interface NormFixture {
+   understat_match_id: string;
+   date_iso: string;
+@@ -310,7 +329,7 @@ export interface MatchXgRow {
+  * the club played and the scoreline — so a fixture earns a match only when the
+  * side (home/away), both goal counts and a within-a-day kickoff all line up,
+  * and exactly one candidate does. Two identical scorelines in the same window
+- * are dropped rather than guessed: a wrong xG on a replay is worse than none.
++ * are dropped rather than guessed: a wrong xG for a fixture is worse than none.
+  * `xg`/`xga` stay in the club's own perspective.
+  */
+ export function matchResultsToMatches(results: NormTeamMatch[], matches: EspnTeamMatch[]): MatchXgRow[] {
+diff --git a/tests/feed.test.ts b/tests/feed.test.ts
+index ab63174..778eff4 100644
+--- a/tests/feed.test.ts
++++ b/tests/feed.test.ts
+@@ -38,7 +38,16 @@ function seed(db: DatabaseSync, id: string, kickoff: string, status: string, lea
+   db.prepare(
+     `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+-  ).run(id, league, `${id}h`, `${id}a`, kickoff, status, status === "scheduled" ? null : 2, status === "scheduled" ? null : 1);
++  ).run(
++    id,
++    league,
++    `${id}h`,
++    `${id}a`,
++    kickoff,
++    status,
++    status === "scheduled" ? null : 2,
++    status === "scheduled" ? null : 1,
++  );
+ }
+ 
+ /** Runs the generated feed SQL exactly as the route does. */
+@@ -106,11 +115,7 @@ function testOrdering(): void {
+   assert.equal(order[0], "the_live_one", "the live match leads, never buried under results");
+   assert.equal(order[1], "sooner_fixture", "the next fixture is soonest");
+   assert.equal(order[2], "later_fixture", "then the one further out");
+-  assert.deepEqual(
+-    order.slice(3),
+-    ["new_result", "old_result"],
+-    "results read newest-first",
+-  );
++  assert.deepEqual(order.slice(3), ["new_result", "old_result"], "results read newest-first");
+ }
+ 
+ /** An explicit from/to pair is an inclusive range and ignores status. */
+@@ -203,4 +208,4 @@ export function runFeedTests(): void {
+   testLimit();
+   testNearestFixturesSurviveTheCap();
+   console.log("  feed: relevance window, ordering, range/day/league filters, cap OK");
+-}
+\ No newline at end of file
++}
+diff --git a/tests/guestMerge.test.ts b/tests/guestMerge.test.ts
+index ef7ddd7..c5a37a9 100644
+--- a/tests/guestMerge.test.ts
++++ b/tests/guestMerge.test.ts
+@@ -154,7 +154,11 @@ async function suite(): Promise<void> {
+         displayName: "Merge User",
+         deviceId: DEVICE,
+       });
+-      assert.equal(reg.status, 200, `register must not 500 on a guest with referrals (got ${JSON.stringify(reg.body)})`);
++      assert.equal(
++        reg.status,
++        200,
++        `register must not 500 on a guest with referrals (got ${JSON.stringify(reg.body)})`,
++      );
+       assert.equal(reg.body?.ok, true);
+ 
+       /* ---- 3. the guest row is gone, its data is not ------------------ */
+@@ -173,9 +177,8 @@ async function suite(): Promise<void> {
+       );
+ 
+       /* ---- 4. the referral graph moved instead of vanishing ----------- */
+-      const code = db
+-        .prepare("SELECT user_id FROM referral_codes WHERE code = ?")
+-        .get(guestCode) as { user_id: number } | undefined;
++      const code = db.prepare("SELECT user_id FROM referral_codes WHERE code = ?").get(guestCode) as
++        { user_id: number } | undefined;
+       assert.ok(code, "the guest's invite code still exists");
+       assert.equal(code.user_id, targetId, "and now belongs to the upgraded account");
+ 
+@@ -238,4 +241,4 @@ export async function runGuestMergeTests(): Promise<void> {
+ // above. Importing it from tests/run.ts must not fire the suite a second time.
+ if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+   await runGuestMergeTests();
+-}
+\ No newline at end of file
++}
+diff --git a/tests/notifications.test.ts b/tests/notifications.test.ts
+index 8ef8e36..2771eac 100644
+--- a/tests/notifications.test.ts
++++ b/tests/notifications.test.ts
+@@ -305,7 +305,9 @@ function testGoalAlertsCoverInternationalFavorites() {
+ 
+   // A vanished team row (retention edge) is skipped without crashing.
+   assert.equal(
+-    queueGoalAlerts(db, [{ matchId: "x", scoringTeamId: "GHOST", scorerName: "?", minute: "1", homeScore: 0, awayScore: 0 }]),
++    queueGoalAlerts(db, [
++      { matchId: "x", scoringTeamId: "GHOST", scorerName: "?", minute: "1", homeScore: 0, awayScore: 0 },
++    ]),
+     0,
+     "no followers of a missing team — no crash",
+   );
+@@ -376,6 +378,42 @@ function testKindColumnBackfill() {
+   db.close();
+ }
+ 
++/**
++ * Accounts with no Telegram chat behind them never enter the queue. Browser
++ * guests (`guest:<device>`), username accounts (`pwd:<name>`) and dev-token
++ * users (`dev:<id>`) all live in `users` and can follow clubs — but a send to
++ * those ids is a guaranteed failure (measured: every row ever queued in the dev
++ * database targeted a guest, burned its retries, and landed in failed_at).
++ */
++function testDeliverabilityFilter() {
++  const db = tempDb();
++  seed(db);
++  db.exec(`
++    INSERT INTO users (id, telegram_id, display_name, created_at) VALUES
++      (10, 'guest:device-a', 'Guest', '2026-01-01T00:00:00.000Z'),
++      (11, 'pwd:alice', 'Alice', '2026-01-01T00:00:00.000Z'),
++      (12, 'dev:900001', 'Dev', '2026-01-01T00:00:00.000Z');
++    INSERT INTO favorite_teams (user_id, team_id, is_favorite, created_at) VALUES
++      (10, 'H', 1, '2026-01-01T00:00:00.000Z'),
++      (11, 'H', 0, '2026-01-01T00:00:00.000Z'),
++      (12, 'H', 0, '2026-01-01T00:00:00.000Z');
++  `);
++
++  const queuedCount = queueGoalAlerts(db, [
++    { matchId: "m_del", scoringTeamId: "H", scorerName: "Saka", minute: "55", homeScore: 2, awayScore: 1 },
++  ]);
++
++  assert.deepEqual(
++    queued(db)
++      .map((r) => r.telegram_id)
++      .sort(),
++    ["u1", "u2", "u3"],
++    "only real Telegram chat ids are queued",
++  );
++  assert.equal(queuedCount, 3, "the count covers deliverable recipients only");
++  db.close();
++}
++
+ export async function runNotificationTests(): Promise<void> {
+   testDedupeAndBothClubs();
+   testPreferenceGates();
+@@ -384,7 +422,9 @@ export async function runNotificationTests(): Promise<void> {
+   testPerRecipientLanguage();
+   testGoalAlertsCoverInternationalFavorites();
+   testKindColumnBackfill();
++  testDeliverabilityFilter();
+   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
+   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
+   console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
++  console.log("  notifications: guest/pwd/dev accounts never enter the push queue OK");
+ }
+diff --git a/tests/pickSummary.test.ts b/tests/pickSummary.test.ts
+index 3ca44ea..0b5540d 100644
+--- a/tests/pickSummary.test.ts
++++ b/tests/pickSummary.test.ts
+@@ -46,7 +46,12 @@ export function runPickSummaryTests(): void {
+   assert.deepEqual(
+     playerIdsForMechanic(
+       "sub",
+-      JSON.stringify({ subs: [{ offId: "101", onId: "102" }, { offId: "103", onId: "104" }] }),
++      JSON.stringify({
++        subs: [
++          { offId: "101", onId: "102" },
++          { offId: "103", onId: "104" },
++        ],
++      }),
+     ),
+     ["101", "102", "103", "104"],
+   );
+@@ -61,7 +66,10 @@ export function runPickSummaryTests(): void {
+   }
+   assert.deepEqual(playerIdsForMechanic("unknown_mechanic", JSON.stringify({ playerId: "101" })), []);
+   // A formation string is not a numeric id, so it can't be mistaken for one.
+-  assert.deepEqual(playerIdsForMechanic("lineup", JSON.stringify({ playerIds: ["4-3-3"], formation: "4-3-3" })), []);
++  assert.deepEqual(
++    playerIdsForMechanic("lineup", JSON.stringify({ playerIds: ["4-3-3"], formation: "4-3-3" })),
++    [],
++  );
+ 
+   /* ------------------------------------------- name attachment (server) */
+ 
+@@ -76,7 +84,10 @@ export function runPickSummaryTests(): void {
+ 
+     const rows = [
+       { mechanic: "versus", payload: JSON.stringify({ playerAId: "101", playerBId: "105" }) },
+-      { mechanic: "shot_predict", payload: JSON.stringify({ playerId: "102", grid: { gridX: 4, gridY: 0 } }) },
++      {
++        mechanic: "shot_predict",
++        payload: JSON.stringify({ playerId: "102", grid: { gridX: 4, gridY: 0 } }),
++      },
+       { mechanic: "lineup", payload: JSON.stringify({ playerIds: ["101", "999"], formation: "4-3-3" }) },
+     ];
+     const out = attachPlayerNames(db, rows as unknown as Array<Record<string, unknown>>);
+@@ -99,7 +110,8 @@ export function runPickSummaryTests(): void {
+ 
+   for (const lang of ["en", "fa"] as const) {
+     const t = (key: string, vars?: Record<string, string | number>): string => {
+-      let out: string = strings[lang][key as keyof typeof strings.en] ?? strings.en[key as keyof typeof strings.en] ?? key;
++      let out: string =
++        strings[lang][key as keyof typeof strings.en] ?? strings.en[key as keyof typeof strings.en] ?? key;
+       if (vars) for (const [n, v] of Object.entries(vars)) out = out.replaceAll(`{${n}}`, String(v));
+       return out;
+     };
+@@ -127,7 +139,12 @@ export function runPickSummaryTests(): void {
+     // Sub: names the pair, collapses the rest.
+     const sub = pickSummary(
+       "sub",
+-      JSON.stringify({ subs: [{ offId: "101", onId: "102" }, { offId: "103", onId: "104" }] }),
++      JSON.stringify({
++        subs: [
++          { offId: "101", onId: "102" },
++          { offId: "103", onId: "104" },
++        ],
++      }),
+       ctx,
+     );
+     assert.ok(sub, `${lang}: sub summarizes`);
+@@ -144,7 +161,11 @@ export function runPickSummaryTests(): void {
+ 
+     // Lineup stays a count + formation: eleven names is a wall of text and the
+     // XI is already on the match page.
+-    const lineup = pickSummary("lineup", JSON.stringify({ playerIds: NAMES ? Object.keys(NAMES) : [], formation: "4-3-3" }), ctx);
++    const lineup = pickSummary(
++      "lineup",
++      JSON.stringify({ playerIds: NAMES ? Object.keys(NAMES) : [], formation: "4-3-3" }),
++      ctx,
++    );
+     assert.equal(lineup, "5 · 4-3-3");
+     assert.ok(!/Saka/.test(lineup ?? ""), `${lang}: lineup does not list names`);
+ 
+@@ -159,7 +180,10 @@ export function runPickSummaryTests(): void {
+       assert.ok(strings.en[key].length > 0, `EN label missing for ${key}`);
+       assert.ok(strings.fa[key].length > 0, `FA label missing for ${key}`);
+     }
+-    assert.ok(strings.en["predict.morePairs"] && strings.fa["predict.morePairs"], "morePairs in both languages");
++    assert.ok(
++      strings.en["predict.morePairs"] && strings.fa["predict.morePairs"],
++      "morePairs in both languages",
++    );
+   }
+ 
+   console.log(
+@@ -169,4 +193,4 @@ export function runPickSummaryTests(): void {
+ 
+ function escapeRe(s: string): string {
+   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+-}
+\ No newline at end of file
++}
+diff --git a/tests/predictionsGate.test.ts b/tests/predictionsGate.test.ts
+index 136d113..fd03fa5 100644
+--- a/tests/predictionsGate.test.ts
++++ b/tests/predictionsGate.test.ts
+@@ -27,8 +27,7 @@ import express from "express";
+ import { closeDb, getDb, run, get } from "../server/db/index.js";
+ 
+ const CHILD_FLAG = "VKICK_PREDICTIONS_GATE_CHILD";
+-const SUMMARY =
+-  "  predictionsGate: shot/watch/versus/sub need the official lineup, lineup exempt OK";
++const SUMMARY = "  predictionsGate: shot/watch/versus/sub need the official lineup, lineup exempt OK";
+ 
+ interface Res {
+   status: number;
+diff --git a/tests/rateLimit.test.ts b/tests/rateLimit.test.ts
+index 3d01eeb..1233da6 100644
+--- a/tests/rateLimit.test.ts
++++ b/tests/rateLimit.test.ts
+@@ -30,20 +30,17 @@ interface Hit {
+ 
+ async function hit(port: number, url: string, headers: Record<string, string> = {}): Promise<Hit> {
+   return new Promise((resolve, reject) => {
+-    const req = http.request(
+-      { host: "127.0.0.1", port, path: url, method: "GET", headers },
+-      (res) => {
+-        let raw = "";
+-        res.on("data", (c) => (raw += c));
+-        res.on("end", () =>
+-          resolve({
+-            status: res.statusCode ?? 0,
+-            body: raw ? (JSON.parse(raw) as Hit["body"]) : null,
+-            retryAfter: res.headers["retry-after"] ?? null,
+-          }),
+-        );
+-      },
+-    );
++    const req = http.request({ host: "127.0.0.1", port, path: url, method: "GET", headers }, (res) => {
++      let raw = "";
++      res.on("data", (c) => (raw += c));
++      res.on("end", () =>
++        resolve({
++          status: res.statusCode ?? 0,
++          body: raw ? (JSON.parse(raw) as Hit["body"]) : null,
++          retryAfter: res.headers["retry-after"] ?? null,
++        }),
++      );
++    });
+     req.on("error", reject);
+     req.end();
+   });
+@@ -62,7 +59,11 @@ async function hitPost(
+         port,
+         path: url,
+         method: "POST",
+-        headers: { "content-type": "application/json", "content-length": Buffer.byteLength(body), ...headers },
++        headers: {
++          "content-type": "application/json",
++          "content-length": Buffer.byteLength(body),
++          ...headers,
++        },
+       },
+       (res) => {
+         let raw = "";
+@@ -111,7 +112,10 @@ export async function runRateLimitTests(): Promise<void> {
+       // Retry-After must exist, be a positive integer number of seconds, and
+       // never exceed the window (a longer hint tells clients to wait too long).
+       const retry = Number(refused.retryAfter);
+-      assert.ok(Number.isInteger(retry) && retry > 0 && retry <= 60, `bad Retry-After: ${refused.retryAfter}`);
++      assert.ok(
++        Number.isInteger(retry) && retry > 0 && retry <= 60,
++        `bad Retry-After: ${refused.retryAfter}`,
++      );
+ 
+       // Still refused while the window is open — one lucky request is not enough.
+       assert.equal((await hit(port, "/x")).status, 429);
+@@ -213,10 +217,7 @@ export async function runRateLimitTests(): Promise<void> {
+       // Both POST routes share ONE writeLimiter instance, so the budget is shared
+       // across them: alternating endpoints is not a way around the cap. Spend
+       // it evenly so neither route is pinned to a single 400-vs-429 verdict.
+-      const urls = [
+-        "/api/matches/401918766/ratings",
+-        "/api/matches/401918766/comments",
+-      ] as const;
++      const urls = ["/api/matches/401918766/ratings", "/api/matches/401918766/comments"] as const;
+       const statuses: number[] = [];
+       for (let i = 0; i < WINDOW_MAX; i++) {
+         statuses.push((await hitPost(port, urls[i % urls.length] as string, auth, "{}")).status);
+@@ -241,7 +242,8 @@ export async function runRateLimitTests(): Promise<void> {
+       // Reads are not rate limited: a profile screen that fetches three lists
+       // in a row must never trip the write budget.
+       const reads = [];
+-      for (let i = 0; i < WINDOW_MAX + 5; i++) reads.push((await hit(port, "/api/matches/401918766/comments", auth)).status);
++      for (let i = 0; i < WINDOW_MAX + 5; i++)
++        reads.push((await hit(port, "/api/matches/401918766/comments", auth)).status);
+       assert.ok(
+         reads.every((s) => s === 200),
+         `reads must stay unthrottled, got ${[...new Set(reads)]}`,
+@@ -265,4 +267,4 @@ export async function runRateLimitTests(): Promise<void> {
+   console.log(
+     "  rateLimit: boundary/reset/namespacing/extraKey, ratings+comments POST 429 after the limit, reads unthrottled OK",
+   );
+-}
+\ No newline at end of file
++}
+diff --git a/tests/referral.test.ts b/tests/referral.test.ts
+index 4665493..36e2e9d 100644
+--- a/tests/referral.test.ts
++++ b/tests/referral.test.ts
+@@ -67,7 +67,8 @@ function globalTotal(db: DatabaseSync, userId: number): number {
+ }
+ 
+ function ledgerCount(db: DatabaseSync, userId: number): number {
+-  return (db.prepare("SELECT COUNT(*) AS n FROM point_ledger WHERE user_id = ?").get(userId) as { n: number }).n;
++  return (db.prepare("SELECT COUNT(*) AS n FROM point_ledger WHERE user_id = ?").get(userId) as { n: number })
++    .n;
+ }
+ 
+ function testCodeGeneration(): void {
+@@ -113,9 +114,9 @@ function testRedeemHappyPath(): void {
+   assert.equal(row.match_id, null, "referrals are not tied to a match");
+ 
+   // Global scope ONLY: no league/club boards were bumped.
+-  const scopes = db
+-    .prepare("SELECT scope FROM user_point_totals WHERE user_id = ?")
+-    .all(referrer) as Array<{ scope: string }>;
++  const scopes = db.prepare("SELECT scope FROM user_point_totals WHERE user_id = ?").all(referrer) as Array<{
++    scope: string;
++  }>;
+   assert.deepEqual(
+     scopes.map((s) => s.scope),
+     ["global"],
+diff --git a/tests/retention.test.ts b/tests/retention.test.ts
+index cf5a860..0adedf7 100644
+--- a/tests/retention.test.ts
++++ b/tests/retention.test.ts
+@@ -10,7 +10,13 @@ import fs from "node:fs";
+ import os from "node:os";
+ import path from "node:path";
+ import { migrate } from "../server/db/schema.js";
+-import { pruneFootballDetail, pruneSessions, SESSION_TTL_MS, RotatingLogger, logCapKb } from "../server/db/retention.js";
++import {
++  pruneFootballDetail,
++  pruneSessions,
++  SESSION_TTL_MS,
++  RotatingLogger,
++  logCapKb,
++} from "../server/db/retention.js";
+ 
+ function tempDb(): { db: DatabaseSync; file: string } {
+   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "vkick-retention-")), "test.db");
+@@ -53,11 +59,14 @@ function testPruneFootballDetail(): void {
+       `INSERT INTO timeline_events (match_id, minute_display, minute_seconds, type, description)
+        VALUES (?, '12:34', 754, 'goal', 'test event')`,
+     ).run(id);
+-    db.prepare(`INSERT INTO match_commentary (match_id, sequence, minute_display, minute_seconds, text)
+-                VALUES (?, 1, '12', 720, 'line')`).run(id);
+     db.prepare(
+-      `INSERT INTO match_team_stats (match_id, team_id, possession_pct) VALUES (?, ?, 55.0)`,
+-    ).run(id, `${id}h`);
++      `INSERT INTO match_commentary (match_id, sequence, minute_display, minute_seconds, text)
++                VALUES (?, 1, '12', 720, 'line')`,
++    ).run(id);
++    db.prepare(`INSERT INTO match_team_stats (match_id, team_id, possession_pct) VALUES (?, ?, 55.0)`).run(
++      id,
++      `${id}h`,
++    );
+     db.prepare(
+       `INSERT INTO match_player_stats (match_id, player_id, team_id, minutes_played) VALUES (?, 'p1', ?, 90)`,
+     ).run(id, `${id}h`);
+@@ -101,13 +110,21 @@ function testPruneSessions(): void {
+   const fresh = new Date(now - 3_600_000).toISOString();
+   db.prepare(`INSERT INTO users (telegram_id, display_name, created_at) VALUES ('u1', 'U1', ?)`).run(stale);
+   db.prepare(`INSERT INTO users (telegram_id, display_name, created_at) VALUES ('u2', 'U2', ?)`).run(fresh);
+-  db.prepare(`INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES ('mg_stale', 1, ?, ?)`).run(stale, stale);
+-  db.prepare(`INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES ('mg_fresh', 2, ?, ?)`).run(fresh, fresh);
++  db.prepare(
++    `INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES ('mg_stale', 1, ?, ?)`,
++  ).run(stale, stale);
++  db.prepare(
++    `INSERT INTO user_sessions (token, user_id, created_at, last_used_at) VALUES ('mg_fresh', 2, ?, ?)`,
++  ).run(fresh, fresh);
+ 
+   const pruned = pruneSessions(db, now);
+   assert.equal(pruned, 1, "only sessions idle past the TTL go");
+   const left = db.prepare(`SELECT token FROM user_sessions`).all() as Array<{ token: string }>;
+-  assert.deepEqual(left.map((r) => r.token), ["mg_fresh"], "the recently-used session survives");
++  assert.deepEqual(
++    left.map((r) => r.token),
++    ["mg_fresh"],
++    "the recently-used session survives",
++  );
+ }
+ 
+ function testRetentionZeroDisables(): void {
+diff --git a/tests/season.test.ts b/tests/season.test.ts
+index c146afc..d249311 100644
+--- a/tests/season.test.ts
++++ b/tests/season.test.ts
+@@ -108,9 +108,7 @@ function addMatch(
+   status = "finished",
+ ): void {
+   // The matches FKs need real team rows; make them idempotent per test.
+-  const team = db.prepare(
+-    "INSERT OR IGNORE INTO teams (id, name, league) VALUES (?, ?, ?)",
+-  );
++  const team = db.prepare("INSERT OR IGNORE INTO teams (id, name, league) VALUES (?, ?, ?)");
+   team.run("57", "Home FC", league === "fifa.world" ? "" : league);
+   team.run("64", "Away FC", league === "fifa.world" ? "" : league);
+   db.prepare(
+diff --git a/tests/seedDemo.test.ts b/tests/seedDemo.test.ts
+index 67c2064..b524a4f 100644
+--- a/tests/seedDemo.test.ts
++++ b/tests/seedDemo.test.ts
+@@ -93,23 +93,41 @@ export function runSeedDemoTests(): void {
+   // Score ladder stays inside the 11 a lineup can be worth.
+   for (let skill = 0; skill <= 1; skill += 0.25) {
+     for (let seed = 0; seed < 50; seed++) {
+-      const rng = () => (seed * 37 % 100) / 100;
++      const rng = () => ((seed * 37) % 100) / 100;
+       const n = correctStarterCount(skill, rng);
+       assert.ok(Number.isInteger(n) && n >= 0 && n <= 11, `correctStarterCount out of range: ${n}`);
+     }
+   }
+   // Endpoints of the ladder: skill sets the band, the rng can move it ±2.
+-  assert.equal(correctStarterCount(0, () => 0), 2); // base 4, worst jitter
+-  assert.equal(correctStarterCount(0, () => 1), 6); // base 4, best jitter
+-  assert.equal(correctStarterCount(1, () => 0), 7); // base 9, worst jitter
+-  assert.equal(correctStarterCount(1, () => 1), 11); // base 9, best jitter — capped
++  assert.equal(
++    correctStarterCount(0, () => 0),
++    2,
++  ); // base 4, worst jitter
++  assert.equal(
++    correctStarterCount(0, () => 1),
++    6,
++  ); // base 4, best jitter
++  assert.equal(
++    correctStarterCount(1, () => 0),
++    7,
++  ); // base 9, worst jitter
++  assert.equal(
++    correctStarterCount(1, () => 1),
++    11,
++  ); // base 9, best jitter — capped
+   // Out-of-range / junk skill degrades to the middle rather than going wild.
+-  assert.equal(correctStarterCount(Number.NaN, () => 0), 2);
+-  assert.equal(correctStarterCount(99, () => 1), 11);
++  assert.equal(
++    correctStarterCount(Number.NaN, () => 0),
++    2,
++  );
++  assert.equal(
++    correctStarterCount(99, () => 1),
++    11,
++  );
+ 
+   /* ---------------------------------------------------- rating histogram shape */
+ 
+-{
++  {
+     // The seed exists to make the rating histogram renderable, so it must not
+     // collapse into a handful of buckets: the chart groups 1..10 and a seed
+     // emitting only 6..9 leaves most of it permanently flat.
+@@ -158,9 +176,9 @@ export function runSeedDemoTests(): void {
+     assert.equal(ledger, report.totalPoints);
+ 
+     // Every prediction round-tripped the real validator.
+-    const bad = db
+-      .prepare("SELECT COUNT(*) FROM predictions WHERE json_valid(payload) = 0")
+-      .get() as { "COUNT(*)": number };
++    const bad = db.prepare("SELECT COUNT(*) FROM predictions WHERE json_valid(payload) = 0").get() as {
++      "COUNT(*)": number;
++    };
+     assert.equal(Number(bad["COUNT(*)"]), 0);
+ 
+     // No demo credentials: demo accounts must not be loggable-in.
+@@ -230,27 +248,25 @@ function seedFixture(db: DatabaseSync): void {
+   `);
+ 
+   for (const match of [
+-    { id: 'm1', ko: "2026-09-01T18:00:00Z", status: 'finished' },
+-    { id: 'm2', ko: "2026-09-08T18:00:00Z", status: 'finished' },
+-    { id: 'm3', ko: "2026-09-15T18:00:00Z", status: 'finished' },
+-    { id: 'm4', ko: "2030-01-01T18:00:00Z", status: 'scheduled' },
++    { id: "m1", ko: "2026-09-01T18:00:00Z", status: "finished" },
++    { id: "m2", ko: "2026-09-08T18:00:00Z", status: "finished" },
++    { id: "m3", ko: "2026-09-15T18:00:00Z", status: "finished" },
++    { id: "m4", ko: "2030-01-01T18:00:00Z", status: "scheduled" },
+   ]) {
+-    db
+-      .prepare(
+-        `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_formation, away_formation)
++    db.prepare(
++      `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_formation, away_formation)
+          VALUES (?, 'eng.1', 't1', 't2', ?, ?, '4-3-3', '4-4-2')`,
+-      )
+-      .run(match.id, match.ko, match.status);
++    ).run(match.id, match.ko, match.status);
+   }
+ 
+   // 22 players a side: 11 starters recorded for the finished matches.
+   for (let team = 1; team <= 2; team++) {
+     for (let p = 1; p <= 22; p++) {
+-      db
+-        .prepare(
+-          `INSERT INTO players (id, team_id, full_name, position) VALUES (?, ?, ?, 'MID')`,
+-        )
+-        .run(`${team}${String(p).padStart(2, "0")}`, `t${team}`, `Player ${team}-${p}`);
++      db.prepare(`INSERT INTO players (id, team_id, full_name, position) VALUES (?, ?, ?, 'MID')`).run(
++        `${team}${String(p).padStart(2, "0")}`,
++        `t${team}`,
++        `Player ${team}-${p}`,
++      );
+     }
+   }
+ 
+@@ -261,8 +277,15 @@ function seedFixture(db: DatabaseSync): void {
+   for (const matchId of ["m1", "m2", "m3"]) {
+     for (let team = 1; team <= 2; team++) {
+       for (let p = 1; p <= 11; p++) {
+-        stmt.run(matchId, `${team}${String(p).padStart(2, "0")}`, `t${team}`, 1, p === 1 ? 1 : 0, p <= 4 ? 2 : 0);
++        stmt.run(
++          matchId,
++          `${team}${String(p).padStart(2, "0")}`,
++          `t${team}`,
++          1,
++          p === 1 ? 1 : 0,
++          p <= 4 ? 2 : 0,
++        );
+       }
+     }
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/tests/teamGroups.test.ts b/tests/teamGroups.test.ts
+index 61cbd23..bac1ac3 100644
+--- a/tests/teamGroups.test.ts
++++ b/tests/teamGroups.test.ts
+@@ -49,8 +49,16 @@ function testCapRules(): void {
+   // matches the picker, where every non-international tab is a club shelf).
+   const junk = [null, undefined, ""] as unknown as string[];
+   assert.equal(favoriteCapError(junk, "eng.1"), null, "three unknown rows leave two club slots");
+-  assert.equal(favoriteCapError([...junk, "eng.1", "esp.1"], "ned.1"), "MAX_CLUBS", "five unknown rows fill the club shelf");
+-  assert.equal(favoriteCapError([...junk, "eng.1", "esp.1"], INTL_GROUP), null, "unknown rows never touch the intl shelf");
++  assert.equal(
++    favoriteCapError([...junk, "eng.1", "esp.1"], "ned.1"),
++    "MAX_CLUBS",
++    "five unknown rows fill the club shelf",
++  );
++  assert.equal(
++    favoriteCapError([...junk, "eng.1", "esp.1"], INTL_GROUP),
++    null,
++    "unknown rows never touch the intl shelf",
++  );
+ }
+ 
+ function tempDb(): { db: DatabaseSync; file: string } {
+diff --git a/tests/verify.test.ts b/tests/verify.test.ts
+index a4cc1be..a9027af 100644
+--- a/tests/verify.test.ts
++++ b/tests/verify.test.ts
+@@ -27,7 +27,9 @@ function sign(
+   includeSignatureInCheck = false,
+ ): string {
+   const secret = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
+-  const checkFields = includeSignatureInCheck ? fields : Object.fromEntries(Object.entries(fields).filter(([k]) => k !== "signature"));
++  const checkFields = includeSignatureInCheck
++    ? fields
++    : Object.fromEntries(Object.entries(fields).filter(([k]) => k !== "signature"));
+   const dataCheckString = Object.entries(checkFields)
+     .map(([k, v]) => `${k}=${v}`)
+     .sort()
+@@ -108,7 +110,11 @@ function testSignatureExcludedFromCheckString() {
+   // The old-validator mistake: fold signature into the check string. Every
+   // real Bot API 8.0+ payload would fail that way — pin the rejection.
+   const legacyHashed = sign(fields, BOT_TOKEN, true);
+-  assert.equal(verifyInitData(legacyHashed, BOT_TOKEN).ok, false, "signature-in-check-string hash mismatches");
++  assert.equal(
++    verifyInitData(legacyHashed, BOT_TOKEN).ok,
++    false,
++    "signature-in-check-string hash mismatches",
++  );
+ 
+   // A legacy payload WITHOUT the field is unaffected by the exclusion.
+   const legacy = sign({
+-- 
+2.54.0.windows.1
+

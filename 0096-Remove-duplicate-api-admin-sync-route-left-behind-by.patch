@@ -1,0 +1,65 @@
+From 63a8abb3489a2c838f92a5733c16e443dc2d5ac8 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 15 Oct 2026 01:06:04 +0330
+Subject: [PATCH 096/230] Remove duplicate /api/admin/sync route left behind by
+ the admin dashboard
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The dashboard work added a second POST /api/admin/sync that runs both
+syncScoreboards() and syncStandings(), but the old single-sync handler
+stayed registered on the same path. Express only ever runs the first
+match, so the leftover was dead code that misrepresented what the route
+does. Also collapse an import in routes/predictions.ts to fix the
+pre-existing Prettier check.
+
+Generated with Codebuff 🤖
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/routes/admin.ts       | 10 ----------
+ server/routes/predictions.ts |  7 +------
+ 2 files changed, 1 insertion(+), 16 deletions(-)
+
+diff --git a/server/routes/admin.ts b/server/routes/admin.ts
+index 278fb38..4357eb9 100644
+--- a/server/routes/admin.ts
++++ b/server/routes/admin.ts
+@@ -59,16 +59,6 @@ adminRouter.post("/api/admin/broadcast", requireUser, async (req, res) => {
+   res.json({ ok: true, sent });
+ });
+ 
+-adminRouter.post("/api/admin/sync", requireUser, (req, res) => {
+-  if (!isAdmin(req)) return bad(res, "admin only", 403);
+-  // Must carry a catch: with none, a rejection is an unhandled promise rejection
+-  // — Node terminates the process — AND this request would never be answered.
+-  // The sync-window route below already had one; this one was missed.
+-  void syncScoreboards()
+-    .then(() => res.json({ ok: true }))
+-    .catch((err) => bad(res, `sync failed: ${String(err).slice(0, 120)}`, 500));
+-});
+-
+ /** Manually pull a fixture window (days back/forward) — backfills future fixtures. */
+ adminRouter.post("/api/admin/sync-window", requireUser, (req, res) => {
+   if (!isAdmin(req)) return bad(res, "admin only", 403);
+diff --git a/server/routes/predictions.ts b/server/routes/predictions.ts
+index ba61543..f60393d 100644
+--- a/server/routes/predictions.ts
++++ b/server/routes/predictions.ts
+@@ -7,12 +7,7 @@ import express from "express";
+ import { getDb, all, get, run } from "../db/index.js";
+ import { writeLimiter } from "../auth/rateLimit.js";
+ import { validatePayload, type Mechanic } from "../predictions/validate.js";
+-import {
+-  LINEUP_GATED,
+-  isLineupGated,
+-  lineupPublished,
+-  windowFor,
+-} from "../predictions/window.js";
++import { LINEUP_GATED, isLineupGated, lineupPublished, windowFor } from "../predictions/window.js";
+ import { bad, currentUser, requireUser } from "./shared.js";
+ 
+ const db = getDb();
+-- 
+2.54.0.windows.1
+

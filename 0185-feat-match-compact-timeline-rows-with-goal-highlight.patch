@@ -1,0 +1,605 @@
+From 563afe910328dd69878c12e13812c2f761dc8424 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 00:20:43 +0330
+Subject: [PATCH 185/230] feat(match): compact timeline rows with goal
+ highlight and half-time divider
+
+---
+ src/components/TimelineList.tsx | 448 +++++++++++++-------------------
+ src/pages/MatchDetail.tsx       |  11 +-
+ 2 files changed, 189 insertions(+), 270 deletions(-)
+
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index b61b0d3..57452fd 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -1,12 +1,12 @@
+-import { Fragment, useMemo } from "react";
+-import type { CSSProperties, ReactNode } from "react";
++import { Fragment, useMemo, useState } from "react";
++import type { ReactNode } from "react";
+ import type { Comment, TimelineEvent } from "../types";
+ import { useI18n } from "../i18n/context";
+ import type { StringKey } from "../i18n/strings";
+ import { BallIcon, CardIcon, SwapIcon } from "./icons";
+ import { cx } from "../lib/cx";
+ import { formatScore, runningScore } from "../lib/timelineScore";
+-import { Chip, Num, type ChipTone } from "./ui";
++import { LiveDot, Num } from "./ui";
+ 
+ const typeKey: Record<TimelineEvent["type"], StringKey> = {
+   goal: "timeline.goal",
+@@ -20,45 +20,34 @@ const typeKey: Record<TimelineEvent["type"], StringKey> = {
+ };
+ 
+ /**
+- * The mark inside an event's marker on the rail — drawn, never emoji. A
+- * full-colour emoji ignores currentColor, renders differently on every
+- * platform and breaks the one-meaning-per-colour rule (design-system.md §3),
+- * so colour does the work the emoji would have: a goal is --volt, a booking
+- * --gold, a sending-off --danger.
++ * The 16px event icon (design-system "drawn, never emoji"): a goal is the ball
++ * in --volt, a booking --gold (or --danger for a sending-off — ESPN folds a
++ * red, including a second yellow, into the `card` type, so the description is
++ * the only signal).
+  */
+-function eventMark(
++function eventIcon(
+   type: TimelineEvent["type"],
+   description: string,
+-): { glyph: ReactNode; tone: string } {
++): { glyph: ReactNode; className: string } {
+   const isRedCard = /\bred card\b|second yellow/i.test(description);
+   switch (type) {
+     case "goal":
+-      return {
+-        glyph: <BallIcon className="h-4 w-4" strokeWidth={2} />,
+-        tone:
+-          "border-volt bg-[color-mix(in_srgb,var(--volt)_18%,var(--bg-elevated))] text-volt",
+-      };
++      return { glyph: <BallIcon className="h-4 w-4" />, className: "text-volt" };
+     case "card":
+-      // ESPN folds a red — including a second yellow — into `card`, so its text
+-      // is the only signal that the booking emptied the pitch.
+       return {
+         glyph: <CardIcon className="h-4 w-4" />,
+-        tone: isRedCard
+-          ? "border-danger bg-[color-mix(in_srgb,var(--live)_18%,var(--bg-elevated))] text-danger"
+-          : "border-gold bg-[color-mix(in_srgb,var(--gold)_18%,var(--bg-elevated))] text-gold",
++        className: isRedCard ? "text-danger" : "text-gold",
+       };
+     case "substitution":
+-      return { glyph: <SwapIcon className="h-4 w-4" />, tone: "border-line bg-elevated text-ink-2" };
++      return { glyph: <SwapIcon className="h-4 w-4" />, className: "text-ink-2" };
+     case "var":
+-      return { glyph: "◇", tone: "border-line bg-elevated text-ink-2" };
++      return { glyph: "◇", className: "text-ink-3" };
+     case "kickoff":
+-      return { glyph: "•", tone: "border-line bg-elevated text-ink-2" };
+-    case "halftime":
+-      return { glyph: "‖", tone: "border-line bg-elevated text-ink-2" };
+-    case "fulltime":
+-      return { glyph: "■", tone: "border-line bg-elevated text-ink-2" };
++      return { glyph: "•", className: "text-ink-3" };
+     case "other":
+-      return { glyph: "·", tone: "border-line bg-elevated text-ink-3" };
++      return { glyph: "·", className: "text-ink-3" };
++    default:
++      return { glyph: "·", className: "text-ink-3" };
+   }
+ }
+ 
+@@ -93,7 +82,7 @@ function PinnedComment({
+   return (
+     <div
+       className={cx(
+-        "mt-2 rounded-card border p-2.5",
++        "mt-1 rounded-card border p-2.5",
+         comment.isMine ? "border-gold/40 bg-elevated" : "border-line bg-base",
+       )}
+     >
+@@ -133,18 +122,18 @@ export function TimelineList({
+   awayTeamId,
+ }: {
+   events: TimelineEvent[];
+-  /** Pinned crowd comments, rendered under their event/minute. */
++  /** Pinned crowd comments, opened from the event row that owns them. */
+   comments?: Comment[];
+   liveMinute?: number;
+   /** Handler for opening a comment's clip link (validated https by the server). */
+   onOpenClip?: (comment: Comment) => void;
+   /**
+-   * teamId → club colour. The marker on the rail is tinted with the side that
+-   * caused the moment, so a two-column read of who did what needs no names.
++   * teamId → club colour. The 8px dot beside the player names the side, so a
++   * two-column read of who did what needs no names.
+    */
+   teamColor?: Record<string, string>;
+   /**
+-   * teamId → localized club name. A card names the player(s) and the side, not
++   * teamId → localized club name. A row names the player(s) and the side, not
+    * the English sentence the feed carries ("… Yellow Card at 12'"), which in a
+    * Persian page scrambles the bidi run and repeats the player name.
+    */
+@@ -153,16 +142,14 @@ export function TimelineList({
+   homeTeamId?: string;
+   awayTeamId?: string;
+ }) {
+-  const { t, localize } = useI18n();
++  const { t, localize, dir } = useI18n();
++  // Which event's comment thread is expanded — only rows with comments carry
++  // the trigger, so only those rows ever grow.
++  const [openCommentsId, setOpenCommentsId] = useState<string | null>(null);
+ 
+-  const latestSeconds =
+-    liveMinute === undefined
+-      ? null
+-      : Math.max(...events.map((e) => e.minuteSeconds), 0);
+   const openClip = (comment: Comment) =>
+     onOpenClip ? onOpenClip(comment) : undefined;
+ 
+-  // "Goal — Cole Palmer" on its own never said what the goal DID to the match.
+   // The score beside each goal is a prefix count of the timeline's own goals,
+   // credited to the side each event names (src/lib/timelineScore.ts), so a
+   // goal reads "1–0" the moment it lands rather than leaving the reader to
+@@ -173,9 +160,6 @@ export function TimelineList({
+   );
+ 
+   // --- pre-pass: find the halftime event + the score at half time ---
+-  // The divider shows the score as it stood at half time (last goal in the
+-  // first half). If there is no halftime event, or no goals before it, the
+-  // label just reads "Half time" with a 0–0 scoreline.
+   const halftimeEvent = events.find((e) => e.type === "halftime") ?? null;
+   const halftimeScore = useMemo(() => {
+     if (!halftimeEvent) return { home: 0, away: 0 };
+@@ -196,44 +180,34 @@ export function TimelineList({
+     return vals.length > 0 ? vals[vals.length - 1]! : { home: 0, away: 0 };
+   }, [byGoal]);
+ 
+-  // --- pre-pass: cluster same-minute events (FIX 9) ---
+-  const currentCluster: Set<string> = new Set();
+-  for (let i = 0; i < events.length; i++) {
+-    const e = events[i]!;
+-    const prev = events[i - 1];
+-    const next = events[i + 1];
+-    if (
+-      (prev && prev.minuteDisplay === e.minuteDisplay) ||
+-      (next && next.minuteDisplay === e.minuteDisplay)
+-    ) {
+-      currentCluster.add(e.id);
+-    }
+-  }
++  // Shared grid for a compact event row: minute | 16px icon | player(s) | right
++  // slot (running score for goals, comment count for rows that have them).
++  const ROW_GRID =
++    "grid min-h-12 grid-cols-[40px_20px_minmax(0,1fr)_auto] items-center gap-2 px-1 py-2";
+ 
+   return (
+-    <ol className="relative space-y-3 ps-10">
+-      {/* Vertical timeline rail, one continuous line the markers sit on. */}
+-      <span
+-        className="absolute inset-y-1 start-[13px] w-0.5"
+-        style={{
+-          background: "linear-gradient(180deg, transparent 0%, var(--border-subtle) 8%, var(--border-subtle) 92%, transparent 100%)",
+-        }}
+-        aria-hidden="true"
+-      />
++    <ol>
++      {/* Live-minute indicator: a slim status row at the top, replaced by real
++          events as they land. The dot is the shared --live pulse. */}
++      {liveMinute !== undefined ? (
++        <li
++          role="status"
++          className="flex items-center gap-2 px-1 py-1 text-xs font-bold text-[color:var(--live)]"
++        >
++          <LiveDot />
++          <span>{t("status.live")}</span>
++          <span dir="ltr">
++            <Num>{liveMinute}'</Num>
++          </span>
++        </li>
++      ) : null}
+ 
+       {events.map((event, index) => {
+         const isGoal = event.type === "goal";
+-        const isStructural =
+-          event.type === "kickoff" ||
+-          event.type === "halftime" ||
+-          event.type === "fulltime";
++        const isSeparator = event.type === "halftime" || event.type === "fulltime";
+         const goalScore = byGoal.get(event.id);
+-        const mark = eventMark(event.type, event.description);
++        const icon = eventIcon(event.type, event.description);
+         const club = event.teamId ? teamColor?.[event.teamId] : undefined;
+-        const isNewestLive =
+-          latestSeconds !== null &&
+-          event.minuteSeconds === latestSeconds &&
+-          liveMinute !== undefined;
+         const next = events[index + 1];
+         // Comments pinned to this event, plus minute-pins falling in this
+         // event's window [event.start, next.start).
+@@ -244,212 +218,148 @@ export function TimelineList({
+           event.id,
+         );
+         const count = event.commentCount + (event.commentCount > 0 ? 0 : pinned.length);
++        const commentsOpen = openCommentsId === event.id;
+ 
+-        // Card type, for both the tint and the accent edge: ESPN folds a red
+-        // (including a second yellow) into `card`, so its text is the signal.
+-        const redCard =
+-          event.type === "card" && /\bred card\b|second yellow/i.test(event.description);
+-        // Subtle fill that lets the timeline read as coloured bands instead of
+-        // a monochrome list: a goal washes volt, a booking washes gold (or the
+-        // sending-off's red), a substitution keeps only its neutral edge, and
+-        // breaks (VAR/halftime/fulltime) stay quiet. The wash is additive —
+-        // icon, minute and text are untouched. `border-s-*` is the logical
+-        // property, so the accent flips to the right side in the FA layout.
+-        const tinted =
+-          event.type === "goal" || event.type === "card" || event.type === "substitution";
+-        const tint =
+-          event.type === "goal"
+-            ? "color-mix(in srgb, var(--volt) 8%, transparent)"
+-            : event.type === "card"
+-              ? `color-mix(in srgb, var(--${redCard ? "live" : "gold"}) 8%, transparent)`
+-              : undefined;
+-
+-        // --- live-edge helpers (FIX 8) ---
+-        // Both the marker `tone` and the card's own `edge` are allowed to keep
+-        // their own colour on a live card. The only thing that has to BE the
+-        // live colour is the persistent ring + glow on the card, plus the pulse
+-        // on the marker.
+-        const edge: string =
+-          event.type === "goal"
+-            ? isNewestLive
+-              ? ""
+-              : "border-s-[3px] border-s-volt"
+-            : event.type === "card"
+-              ? isNewestLive
+-                ? ""
+-                : redCard
+-                  ? "border-s-[3px] border-s-danger"
+-                  : "border-s-[3px] border-s-gold"
+-              : event.type === "substitution"
+-                ? isNewestLive
+-                  ? ""
+-                  : "border-s-[3px] border-s-line"
+-                : "";
+-
+-        // --- cardtone + description (FIX 7 + FIX 5) ---
+-        const chipTone: ChipTone =
+-          isGoal
+-            ? "volt"
+-            : event.type === "card"
+-              ? redCard
+-                ? "live"
+-                : "gold"
+-              : event.type === "substitution"
+-                ? "muted"
+-                : event.type === "var"
+-                  ? "muted"
+-                  : event.type === "kickoff"
+-                    ? "muted"
+-                    : event.type === "halftime"
+-                      ? "muted"
+-                      : event.type === "fulltime"
+-                        ? "muted"
+-                        : "muted";
++        // Half-time and full-time are not rows: a centred divider with the
++        // score as it stood at that moment.
++        if (isSeparator) {
++          const label = t(typeKey[event.type]);
++          const score =
++            event.type === "halftime" ? formatScore(halftimeScore) : formatScore(finalScore);
++          return (
++            <li
++              key={event.id}
++              role="separator"
++              aria-label={
++                count > 0 ? `${label} · ${t("comments.liveThread")}: ${count}` : label
++              }
++              className="my-2 flex items-center gap-3 text-xs font-bold text-ink-3"
++            >
++              <span className="h-px flex-1 bg-line" aria-hidden="true" />
++              <span className="flex items-center gap-2">
++                <span>{label}</span>
++                <span dir="ltr" className="text-ink-2">
++                  <Num>{score}</Num>
++                </span>
++                {count > 0 ? (
++                  <button
++                    type="button"
++                    aria-expanded={commentsOpen}
++                    onClick={() => setOpenCommentsId(commentsOpen ? null : event.id)}
++                    // 36px visual with an invisible 44px+ hit band (the same
++                    // pattern as the feed's league chips): a full 44px visual
++                    // control would balloon the row past the compact band.
++                    className="relative inline-flex h-9 items-center gap-1 rounded-full px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
++                  >
++                    <span aria-hidden="true">💬</span>
++                    <Num>{count}</Num>
++                    <span className="sr-only">{t("comments.liveThread")}</span>
++                  </button>
++                ) : null}
++              </span>
++              <span className="h-px flex-1 bg-line" aria-hidden="true" />
++            </li>
++          );
++        }
+ 
+-        // --- clustering band (FIX 9) ---
+-        // Two (or more) events sharing the same `minute_display` read as "this
+-        // minute was busy". The band is only applied when at least one sibling
+-        // shares the minute — an isolated event stays on the bare rail.
+-        const clustered = currentCluster.has(event.id);
++        const who = event.participants.map(localize).join(" · ");
++        const team = event.teamId ? teamNames?.[event.teamId] : undefined;
+ 
+         return (
+           <Fragment key={event.id}>
+-            {event.type === "halftime" ? (
+-              <li className="relative my-3 text-center">
+-                <span className="relative z-10 inline-block px-3 py-1 rounded-full border border-line bg-base text-[10px] font-bold uppercase tracking-wide text-ink-3">
+-                  {t("timeline.halftime")} · {formatScore(halftimeScore)}
+-                </span>
+-                <span className="absolute inset-y-1/2 left-0 right-0 h-px bg-line" aria-hidden="true" />
+-              </li>
+-            ) : (
+-              <li
+-                className={cx(
+-                  "timeline-in relative",
+-                  clustered && "rounded-e-card bg-[color-mix(in_srgb,var(--bg-surface)_50%,transparent)] ps-2 -me-2",
+-                )}
+-                style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
++            <li
++              className={cx(
++                ROW_GRID,
++                isGoal
++                  ? "my-1 rounded-card border border-volt/30 bg-elevated"
++                  : "border-b border-line",
++              )}
++            >
++              {/* The minute reads LTR everywhere — digits plus an apostrophe
++                  would mirror into Arabic-script order otherwise. */}
++              <span dir="ltr" className="text-center text-sm font-extrabold text-ink-2">
++                <Num>{event.minuteDisplay}</Num>
++              </span>
++              <span
++                aria-hidden="true"
++                className={cx("grid place-items-center", icon.className)}
++                // The substitution arrows read as "off → on" in LTR; mirror
++                // them in RTL so they keep reading against the text flow.
++                style={
++                  event.type === "substitution" && dir === "rtl"
++                    ? { transform: "scaleX(-1)" }
++                    : undefined
++                }
+               >
+-                {/* Marker on the rail: the event's mark over a wash of the club
+-                    that caused it. Halftimes and finals have no club, so they
+-                    keep the quiet elevated fill. */}
+-                <span
+-                  className={cx(
+-                    "absolute -start-10 top-2.5 grid h-8 w-8 place-items-center rounded-full border-2 bg-elevated",
+-                    mark.tone,
+-                    isNewestLive && "timeline-live-pulse",
+-                  )}
+-                  style={
+-                    club
+-                      ? { backgroundColor: `color-mix(in srgb, ${club} 18%, var(--bg-elevated))` }
+-                      : undefined
+-                  }
+-                  aria-hidden="true"
+-                >
+-                  {mark.glyph}
++                {icon.glyph}
++              </span>
++              <span className="min-w-0">
++                <span className="flex items-center gap-1.5">
++                  {club ? (
++                    <span
++                      className="h-2 w-2 flex-none rounded-full ring-1 ring-ink-3"
++                      style={{ backgroundColor: club }}
++                      aria-hidden="true"
++                    />
++                  ) : null}
++                  <span
++                    className="truncate text-sm font-bold text-ink"
++                    dir="auto"
++                    title={count > 0 ? t(typeKey[event.type]) : undefined}
++                  >
++                    {who || <bdi>{event.description}</bdi>}
++                  </span>
+                 </span>
+-
+-                <div
+-                  className={cx(
+-                    "rounded-card border border-line bg-surface p-3",
+-                    isStructural
+-                      ? "border-dashed border-line bg-transparent"
+-                      : "border-line",
+-                    isGoal && "border-s-[3px] border-s-volt",
+-                    tinted && !isGoal && "border-s-[3px]",
+-                    tinted && edge,
+-                    isNewestLive && "live-edge",
+-                  )}
+-                  style={tint ? { background: tint } : undefined}
+-                >
+-                  <div className="flex items-center gap-2">
+-                    <Num className="grid h-6 min-w-[38px] place-items-center rounded-md border border-line bg-elevated px-1 text-[11px] text-ink-2">
+-                      {event.minuteDisplay}
++                {team ? (
++                  <span className="block truncate text-xs text-ink-3">
++                    <bdi>{team}</bdi>
++                  </span>
++                ) : null}
++              </span>
++              <span className="flex items-center justify-end gap-2 text-end">
++                {/* The scoreline this goal produced. Always home–away and LTR,
++                    so the number reads the same whichever side scored it. */}
++                {isGoal && goalScore ? (
++                  <span dir="ltr">
++                    <Num className="text-sm font-extrabold text-volt">
++                      {formatScore(goalScore)}
+                     </Num>
+-                    <Chip tone={chipTone}>{t(typeKey[event.type])}</Chip>
+-                    {/* The scoreline this goal produced. Always home–away, so the
+-                        number reads the same whichever side scored it. */}
+-                    {goalScore ? (
+-                      <Num className="ms-auto rounded-md bg-[color-mix(in_srgb,var(--volt)_12%,transparent)] px-2 py-0.5 text-sm font-black text-volt">
+-                        {formatScore(goalScore)}
+-                      </Num>
+-                    ) : null}
+-                    {/* The crowd thread on this moment — surfaced, not buried. */}
+-                    {count > 0 ? (
+-                      <span className="ms-auto inline-flex items-center gap-1 text-[11px] font-bold text-gold">
+-                        <span aria-hidden="true">💬</span>
+-                        <Num>{count}</Num>
+-                      </span>
+-                    ) : null}
+-                  </div>
+-
+-                  {/* Player(s) and side — never the feed's English sentence. For a
+-                      break (half-time/full-time) with no participants, the chip and
+-                      minute above are the whole card; the raw description is the
+-                      fallback only for a VAR/unknown moment, where it is the sole
+-                      information. */}
+-                  {(() => {
+-                    if (event.type === "kickoff") {
+-                      // Kickoff carries no participants; render the description muted + small,
+-                      // not as the main bold line.
+-                      return (
+-                        <p className="mt-1 text-xs text-ink-2">
+-                          <bdi>{event.description}</bdi>
+-                        </p>
+-                      );
+-                    }
+-                    if (event.type === "fulltime") {
+-                      // Full time pairs the label with the final score when it is easy to
+-                      // derive from the timeline's own goals; otherwise just the label.
+-                      return (
+-                        <p className="mt-1 text-xs text-ink-2">
+-                          {t("timeline.fulltime")} · {formatScore(finalScore)}
+-                        </p>
+-                      );
+-                    }
+-                    const who = event.participants.map(localize).join(" · ");
+-                    const team = event.teamId ? teamNames?.[event.teamId] : undefined;
+-                    const showSentence = !who && event.type === "var";
+-                    return (
+-                      <>
+-                        {who || showSentence ? (
+-                          <p className="mt-2 text-sm font-bold text-ink" dir="auto">
+-                            {who || <bdi>{event.description}</bdi>}
+-                          </p>
+-                        ) : null}
+-                        {team ? (
+-                          <p className="mt-1 text-xs text-ink-2">
+-                            <bdi>{team}</bdi>
+-                          </p>
+-                        ) : null}
+-                      </>
+-                    );
+-                  })()}
+-                </div>
+-
+-                {/* Pinned reactions live INSIDE the event's slot, directly under it. */}
+-                {pinned.map((comment) => (
+-                  <PinnedComment
+-                    key={comment.id}
+-                    comment={comment}
+-                    onOpenClip={openClip}
+-                  />
+-                ))}
+-
+-                {/* Participant row — dot-separated so it reads cleanly in RTL. */}
+-                {event.participants.length > 0 ? (
+-                  <p className="mt-1 text-xs text-ink-2 flex items-center gap-1.5 flex-wrap">
+-                    {event.participants.map((p, i) => (
+-                      <span key={i} className="inline-flex items-center gap-1.5">
+-                        {localize(p)}
+-                        {i < event.participants.length - 1 && (
+-                          <span aria-hidden="true" className="inline-block h-1 w-1 rounded-full bg-ink-3 opacity-50" />
+-                        )}
+-                      </span>
+-                    ))}
+-                  </p>
++                  </span>
+                 ) : null}
++                {/* The crowd thread trigger lives in the same row — 44px tall,
++                    and rendered only on rows that actually have comments. */}
++                {count > 0 ? (
++                  <button
++                    type="button"
++                    aria-expanded={commentsOpen}
++                    onClick={() => setOpenCommentsId(commentsOpen ? null : event.id)}
++                    // 36px visual with an invisible 44px+ hit band (the same
++                    // pattern as the feed's league chips): a full 44px visual
++                    // control would balloon the row past the compact band.
++                    className="relative inline-flex h-9 items-center gap-1 rounded-full px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
++                  >
++                    <span aria-hidden="true">💬</span>
++                    <Num>{count}</Num>
++                    <span className="sr-only">{t("comments.liveThread")}</span>
++                  </button>
++                ) : null}
++              </span>
++            </li>
++
++            {/* The row's comment thread, once opened. Substitution arrows note
++                their direction explicitly in the name pair, so the icon swap is
++                cosmetic-only below. */}
++            {commentsOpen ? (
++              <li className="px-1 pb-2">
++                <ul>
++                  {pinned.map((comment) => (
++                    <li key={comment.id}>
++                      <PinnedComment comment={comment} onOpenClip={openClip} />
++                    </li>
++                  ))}
++                </ul>
+               </li>
+-            )}
++            ) : null}
+           </Fragment>
+         );
+       })}
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 109b2c6..a1a48ad 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -8,6 +8,7 @@ import { LineupsSkeleton,
+   TimelineSkeleton,
+ } from "../components/Skeletons";
+ import { TimelineList } from "../components/TimelineList";
++import { adaptComments } from "../lib/adaptComments";
+ import { TopBar } from "../components/TopBar";
+ import { LineupsPanel } from "../components/panels/LineupsPanel";
+ 
+@@ -320,7 +321,15 @@ function TimelineTab({
+     queryFn: () => api.getTimeline(matchId),
+     refetchInterval: live ? 20_000 : false,
+   });
++  // Pinned minute-comments, for the rows' comment count trigger. Read-only: the
++  // composer was deliberately unmounted by the "core five" trim (8d73687) —
++  // this restores the reading side, not the writing side.
++  const commentsQuery = useQuery({
++    queryKey: ["comments", matchId],
++    queryFn: () => api.getComments(matchId),
++  });
+   const events = query.data?.events ?? [];
++  const pinned = adaptComments(commentsQuery.data?.comments ?? [], undefined);
+   const adapted = events
+     .map(adaptTimelineEvent)
+     .filter((e) => e.type !== "other"); // drop commentary noise; keep kickoff + structured events
+@@ -340,7 +349,7 @@ function TimelineTab({
+   return (
+     <TimelineList
+       events={adapted}
+-      comments={[]}
++      comments={pinned}
+       liveMinute={live ? minute : undefined}
+       teamColor={teamColor}
+       teamNames={teamNames}
+-- 
+2.54.0.windows.1
+

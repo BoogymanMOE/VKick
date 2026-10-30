@@ -1,0 +1,368 @@
+From 978e9dcd93e266493e5b079609c4e445fb817ea3 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 10 Oct 2026 20:58:32 +0330
+Subject: [PATCH 053/230] Fix web login flow and Onboarding UX, tighten test
+ resilience
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Auth: remove the dev:1 fallback in production from currentAuthToken() so a
+fresh browser with no session and no Telegram SDK returns null instead of a
+token the server will 401. hasExternalIdentity() already treats null as
+"no identity", so RequireAuth now redirects to /login instead of stalling on
+a blank loading screen. The dev:1 escape hatch still works in non-production
+for local development.
+
+Onboarding: add loading skeleton, error state with retry, and empty state to
+both team grids (pick-favorite and pick-more-clubs steps). Previously the
+grids silently rendered nothing while teamsQuery was loading, errored, or
+empty — now each state has a visible placeholder and the error state lets the
+user retry.
+
+i18n: add en/fa keys for the new onboarding states.
+
+Tests: update guestMerge, accountDeletion and moderation to use INSERT OR
+REPLACE for their team rows so they survive the new static team seed (which
+inserts those same ESPN ids during migrate). Bare INSERT INTO now throws
+UNIQUE on the seed row.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/hooks/useAuth.tsx         |   2 +-
+ src/i18n/strings.ts           |  14 +++
+ src/lib/auth.ts               |  12 ++-
+ src/pages/Onboarding.tsx      | 167 +++++++++++++++++++++++-----------
+ tests/accountDeletion.test.ts |   4 +-
+ tests/guestMerge.test.ts      |   4 +-
+ tests/moderation.test.ts      |   4 +-
+ 7 files changed, 146 insertions(+), 61 deletions(-)
+
+diff --git a/src/hooks/useAuth.tsx b/src/hooks/useAuth.tsx
+index 52dd2d4..6a26f42 100644
+--- a/src/hooks/useAuth.tsx
++++ b/src/hooks/useAuth.tsx
+@@ -34,7 +34,7 @@ import {
+ 
+ function hasExternalIdentity(): boolean {
+   const token = currentAuthToken();
+-  if (!token) return false; // explicit sign-out — force the Login screen
++  if (!token) return false; // explicit sign-out or production guest — force the Login screen
+   // Session tokens are checked via /api/me below; initData and dev:* count as
+   // direct identities (server validates them on the /me call anyway).
+   return isSessionToken(token) || token.startsWith("dev:") || Boolean(window.Telegram?.WebApp?.initData);
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 8bb7449..6ad8b9b 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -447,6 +447,13 @@ export const strings = {
+     "onboarding.done": "Start watching",
+     "onboarding.makeFavorite": "Set as favorite",
+     "onboarding.isFavorite": "Your favorite",
++    "onboarding.teamsLoading": "Loading teams…",
++    "onboarding.teamsError": "Couldn't load teams",
++    "onboarding.teamsErrorHint":
++      "The connection dropped or the data feed is unavailable. Your picks are safe — tap to retry.",
++    "onboarding.teamsEmpty": "No teams available yet",
++    "onboarding.teamsEmptyHint":
++      "The team list is syncing from the data feed. It should appear here in a moment.",
+     "intro.skip": "Skip",
+     "intro.dots": "Slide {step} of {total}",
+     "intro.follow.title": "Follow your clubs",
+@@ -964,6 +971,13 @@ export const strings = {
+     "onboarding.done": "شروع کن",
+     "onboarding.makeFavorite": "تنظیم به‌عنوان مورد علاقه",
+     "onboarding.isFavorite": "مورد علاقه تو",
++    "onboarding.teamsLoading": "در حال بارگذاری تیم‌ها…",
++    "onboarding.teamsError": "بارگذاری تیم‌ها نشد",
++    "onboarding.teamsErrorHint":
++      "اتصال قطع شد یا منبع داده در دسترس نیست. انتخاب‌هایت سالم است — برای تلاش دوباره بزن.",
++    "onboarding.teamsEmpty": "هنوز تیمی موجود نیست",
++    "onboarding.teamsEmptyHint":
++      "listed تیم‌ها از منبع داده در حال همگام‌سازی است. احتمالاً همین الان اینجا ظاهر می‌شوند.",
+     "intro.skip": "رد شدن",
+     "intro.dots": "اسلاید {step} از {total}",
+     "intro.follow.title": "باشگاه‌هایت را دنبال کن",
+diff --git a/src/lib/auth.ts b/src/lib/auth.ts
+index 8fabaa9..c576e11 100644
+--- a/src/lib/auth.ts
++++ b/src/lib/auth.ts
+@@ -122,8 +122,12 @@ export function telegramInitData(): string | null {
+  * screen result persists even inside Telegram (logout must actually log out).
+  * After an explicit sign-out this returns "" — every call 401s and the guard
+  * keeps the user on the Login screen.
++ *
++ * The `dev:<id>` escape hatch is a development convenience only. In production
++ * it falls back to `null`, so RequireAuth redirects to /login instead of
++ * stalling on a blank screen waiting for a token the server will 401.
+  */
+-export function currentAuthToken(): string {
++export function currentAuthToken(): string | null {
+   const session = getSessionToken();
+   if (isSessionToken(session)) return session as string;
+   if (isLoggedOut()) return "";
+@@ -131,8 +135,12 @@ export function currentAuthToken(): string {
+   const initData = telegramInitData();
+   if (initData) return initData;
+ 
++  if (typeof process !== "undefined" && process.env?.NODE_ENV === "production") {
++    return null;
++  }
++
+   const dev = new URLSearchParams(window.location.search).get("devUser");
+-  return dev ? `dev:${dev}` : "dev:1";
++  return dev ? `dev:${dev}` : `dev:1`;
+ }
+ 
+ /**
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 530e511..34ba242 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
+ import { TopBar } from "../components/TopBar";
+ import { LegalLinks } from "../components/LegalLinks";
+ import { useToast } from "../components/toastContext";
++import { PanelSkeleton } from "../components/Skeletons";
++import { ErrorState, EmptyState } from "../components/ui";
+ import { cx } from "../lib/cx";
+ import { Button, Chip, Num, Segmented, TeamBadge } from "../components/ui";
+ import { ArrowIcon, CheckIcon, CloseIcon, PencilIcon, StarFilledIcon, TargetIcon } from "../components/icons";
+@@ -61,6 +63,25 @@ export default function Onboarding() {
+   // silently make everything else in the catalog unfollowable.
+   const groupTeams = useMemo(() => teamsInGroup(allTeams, group), [allTeams, group]);
+ 
++  // Team-grid states: loading skeleton, error retry, or empty hint — never a
++  // silent blank grid while the data layer is still warming up or has gone
++  // quiet (fresh deploy, ESPN hiccup, cold cache).
++  function teamGridStates() {
++    if (teamsQuery.isLoading) {
++      return { kind: "loading" as const };
++    }
++    if (teamsQuery.isError) {
++      return {
++        kind: "error" as const,
++        retry: () => teamsQuery.refetch(),
++      };
++    }
++    if (allTeams.length === 0) {
++      return { kind: "empty" as const };
++    }
++    return { kind: "content" as const };
++  }
++
+   const compsQuery = useCompetitions();
+   const leagueComps = (compsQuery.data?.competitions ?? []).filter((c) => c.kind === "league");
+ 
+@@ -217,38 +238,58 @@ export default function Onboarding() {
+             <Segmented value={group} onChange={setGroup} options={pickerGroups} />
+           </div>
+ 
+-          <ul className="mt-3 grid grid-cols-2 gap-2">
+-            {groupTeams.map((team) => {
+-              const pickedHere = isFavorite(team.id);
+-              const isAnchor = team.id === anchorId;
++          {(() => {
++            const state = teamGridStates();
++            if (state.kind === "loading") {
++              return <PanelSkeleton height={220} />;
++            }
++            if (state.kind === "error") {
+               return (
+-                <li key={team.id}>
+-                  <button
+-                    type="button"
+-                    onClick={() => pickClub(team)}
+-                    className={cx(
+-                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+-                      pickedHere
+-                        ? isAnchor
+-                          ? "border-gold bg-elevated"
+-                          : "border-volt bg-elevated"
+-                        : "border-line bg-surface hover:bg-elevated",
+-                    )}
+-                  >
+-                    <TeamBadge team={team} size="sm" />
+-                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+-                      {localize(team.shortName)}
+-                    </span>
+-                    {isAnchor ? (
+-                      <StarFilledIcon className="star-pop h-4 w-4 flex-none text-gold" />
+-                    ) : pickedHere ? (
+-                      <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" />
+-                    ) : null}
+-                  </button>
+-                </li>
++                <ErrorState
++                  title={t("onboarding.teamsError")}
++                  hint={t("onboarding.teamsErrorHint")}
++                  onRetry={state.retry}
++                />
+               );
+-            })}
+-          </ul>
++            }
++            if (state.kind === "empty") {
++              return <EmptyState title={t("onboarding.teamsEmpty")} hint={t("onboarding.teamsEmptyHint")} />;
++            }
++            return (
++              <ul className="mt-3 grid grid-cols-2 gap-2">
++                {groupTeams.map((team) => {
++                  const pickedHere = isFavorite(team.id);
++                  const isAnchor = team.id === anchorId;
++                  return (
++                    <li key={team.id}>
++                      <button
++                        type="button"
++                        onClick={() => pickClub(team)}
++                        className={cx(
++                          "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
++                          pickedHere
++                            ? isAnchor
++                              ? "border-gold bg-elevated"
++                              : "border-volt bg-elevated"
++                            : "border-line bg-surface hover:bg-elevated",
++                        )}
++                      >
++                        <TeamBadge team={team} size="sm" />
++                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
++                          {localize(team.shortName)}
++                        </span>
++                        {isAnchor ? (
++                          <StarFilledIcon className="star-pop h-4 w-4 flex-none text-gold" />
++                        ) : pickedHere ? (
++                          <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" />
++                        ) : null}
++                      </button>
++                    </li>
++                  );
++                })}
++              </ul>
++            );
++          })()}
+         </section>
+       ) : null}
+ 
+@@ -301,31 +342,51 @@ export default function Onboarding() {
+             <Segmented value={group} onChange={setGroup} options={pickerGroups} />
+           </div>
+ 
+-          <ul className="mt-3 grid grid-cols-2 gap-2">
+-            {groupTeams.map((team) => {
+-              const pickedHere = isFavorite(team.id);
++          {(() => {
++            const state = teamGridStates();
++            if (state.kind === "loading") {
++              return <PanelSkeleton height={220} />;
++            }
++            if (state.kind === "error") {
+               return (
+-                <li key={team.id}>
+-                  <button
+-                    type="button"
+-                    onClick={() => pickClub(team)}
+-                    className={cx(
+-                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+-                      pickedHere ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
+-                    )}
+-                  >
+-                    <TeamBadge team={team} size="sm" />
+-                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
+-                      {localize(team.shortName)}
+-                    </span>
+-                    {pickedHere ? (
+-                      <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" aria-hidden="true" />
+-                    ) : null}
+-                  </button>
+-                </li>
++                <ErrorState
++                  title={t("onboarding.teamsError")}
++                  hint={t("onboarding.teamsErrorHint")}
++                  onRetry={state.retry}
++                />
+               );
+-            })}
+-          </ul>
++            }
++            if (state.kind === "empty") {
++              return <EmptyState title={t("onboarding.teamsEmpty")} hint={t("onboarding.teamsEmptyHint")} />;
++            }
++            return (
++              <ul className="mt-3 grid grid-cols-2 gap-2">
++                {groupTeams.map((team) => {
++                  const pickedHere = isFavorite(team.id);
++                  return (
++                    <li key={team.id}>
++                      <button
++                        type="button"
++                        onClick={() => pickClub(team)}
++                        className={cx(
++                          "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
++                          pickedHere ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
++                        )}
++                      >
++                        <TeamBadge team={team} size="sm" />
++                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">
++                          {localize(team.shortName)}
++                        </span>
++                        {pickedHere ? (
++                          <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" aria-hidden="true" />
++                        ) : null}
++                      </button>
++                    </li>
++                  );
++                })}
++              </ul>
++            );
++          })()}
+ 
+           {/* Two honest counters, one per shelf: clubs on the left, the
+               optional national-team shelf on the right. */}
+diff --git a/tests/accountDeletion.test.ts b/tests/accountDeletion.test.ts
+index eec4d0d..db938b4 100644
+--- a/tests/accountDeletion.test.ts
++++ b/tests/accountDeletion.test.ts
+@@ -127,8 +127,8 @@ async function suite(): Promise<void> {
+     const now = new Date().toISOString();
+ 
+     // Minimal world: two teams, a player, a match and one timeline event.
+-    run(db, "INSERT INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
+-    run(db, "INSERT INTO teams (id, name, league) VALUES ('364', 'Other FC', 'eng.1')");
++    run(db, "INSERT OR REPLACE INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
++    run(db, "INSERT OR REPLACE INTO teams (id, name, league) VALUES ('364', 'Other FC', 'eng.1')");
+     run(db, "INSERT INTO players (id, team_id, full_name) VALUES ('1001', '359', 'Test Player')");
+     run(
+       db,
+diff --git a/tests/guestMerge.test.ts b/tests/guestMerge.test.ts
+index c5a37a9..61720e6 100644
+--- a/tests/guestMerge.test.ts
++++ b/tests/guestMerge.test.ts
+@@ -111,7 +111,9 @@ async function suite(): Promise<void> {
+     const db = getDb();
+ 
+     // A club the guest follows, so the merge has real rows to move.
+-    run(db, "INSERT INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
++    // INSERT OR REPLACE: the static team seed (migrate) may already have
++    // inserted this id, and a bare INSERT would throw UNIQUE on the seed row.
++    run(db, "INSERT OR REPLACE INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
+     // Someone else with an invite code, for the redemption case.
+     run(db, "INSERT INTO users (telegram_id, display_name, created_at) VALUES ('424242', 'Referrer', ?)", [
+       new Date().toISOString(),
+diff --git a/tests/moderation.test.ts b/tests/moderation.test.ts
+index 9d95bdb..c31aefd 100644
+--- a/tests/moderation.test.ts
++++ b/tests/moderation.test.ts
+@@ -93,8 +93,8 @@ async function suite(): Promise<void> {
+     const db = getDb();
+     const now = new Date().toISOString();
+ 
+-    run(db, "INSERT INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
+-    run(db, "INSERT INTO teams (id, name, league) VALUES ('364', 'Other FC', 'eng.1')");
++    run(db, "INSERT OR REPLACE INTO teams (id, name, league) VALUES ('359', 'Test FC', 'eng.1')");
++    run(db, "INSERT OR REPLACE INTO teams (id, name, league) VALUES ('364', 'Other FC', 'eng.1')");
+     run(
+       db,
+       "INSERT INTO players (id, team_id, full_name, position) VALUES ('1001', '359', 'Test Player', 'FWD')",
+-- 
+2.54.0.windows.1
+

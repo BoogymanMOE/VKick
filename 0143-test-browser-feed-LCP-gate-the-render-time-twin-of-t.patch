@@ -1,0 +1,102 @@
+From dd21b1c5e8f3303167575e0cce584ca8def95226 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 20:19:24 +0330
+Subject: [PATCH 143/230] test(browser): feed LCP gate, the render-time twin of
+ the bundle budget
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The perf suggestion was bundle + LCP in CI; the budget gate shipped
+first, this closes the second half. LCP is registered at document
+start (init script) with the buffered flag — an observer attached
+after a later navigation dies with its old document, which made the
+first attempt a vacuous NaN pass — and gates at a generous 5s: it
+catches pathological regressions (sync floods, a mega-chunk, a render
+loop) without fighting machine-to-machine variance; byte-level blame
+stays with the bundle budget. 24 checks now; green twice locally.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ scripts/browser-smoke.mjs | 44 ++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 41 insertions(+), 3 deletions(-)
+
+diff --git a/scripts/browser-smoke.mjs b/scripts/browser-smoke.mjs
+index 813007a..b09dca0 100644
+--- a/scripts/browser-smoke.mjs
++++ b/scripts/browser-smoke.mjs
+@@ -50,15 +50,32 @@ function appUrl(user, hash) {
+   return `${BASE}/?devUser=${encodeURIComponent(user)}#${hash}`;
+ }
+ 
+-async function newPage(browser, { width, height, lang, loggedOut = false }) {
++async function newPage(browser, { width, height, lang, loggedOut = false, lcp = false }) {
+   const ctx = await browser.newContext({ viewport: { width, height } });
+   await ctx.addInitScript(
+-    ([lang, loggedOut]) => {
++    ([lang, loggedOut, lcp]) => {
+       localStorage.setItem("matchday.lang", lang);
+       if (loggedOut) localStorage.setItem("matchday.loggedOut", "1");
+       else localStorage.removeItem("matchday.loggedOut");
++      // LCP must be registered at document start (init script) with the
++      // buffered flag: an observer attached after a later navigation dies with
++      // its old document, leaving the reader an undefined — a vacuum pass.
++      if (lcp) {
++        window.__smokeLcp = {
++          value: null,
++          support:
++            typeof PerformanceObserver !== "undefined" &&
++            PerformanceObserver.supportedEntryTypes.includes("largest-contentful-paint"),
++        };
++        if (window.__smokeLcp.support) {
++          new PerformanceObserver((list) => {
++            const e = list.getEntries().at(-1);
++            if (e) window.__smokeLcp.value = e.startTime;
++          }).observe({ type: "largest-contentful-paint", buffered: true });
++        }
++      }
+     },
+-    [lang, loggedOut],
++    [lang, loggedOut, lcp],
+   );
+   return ctx.newPage();
+ }
+@@ -116,6 +133,25 @@ async function checkLogin(browser, lang) {
+   }
+ }
+ 
++/**
++ * Render-time gate, the twin of the bundle budget: LCP of the feed under the
++ * CI runner's plain hardware. Generous by design (5s catches pathological
++ * regressions — sync floods, a mega-chunk, a render loop) without fighting
++ * machine-to-machine variance; the bundle budget owns the byte-level gate.
++ */
++const FEED_LCP_BUDGET_MS = 5000;
++
++async function checkFeedLcp(browser, lang) {
++  const page = await newPage(browser, { width: 390, height: 844, lang, lcp: true });
++  await settle(page, appUrl(devUserId(`lcp_${lang}`), "/matches"), 4000);
++  const d = await page.evaluate(() => window.__smokeLcp ?? { support: false, value: null });
++  if (!d.support) console.log(`  ~ feed ${lang} LCP: unsupported in this engine, not gated`);
++  else if (d.value == null) console.log(`  ~ feed ${lang} LCP: no entry observed (empty page?), not gated`);
++  else if (d.value > FEED_LCP_BUDGET_MS) fail(`feed ${lang} LCP`, `${Math.round(d.value)}ms exceeds the ${FEED_LCP_BUDGET_MS}ms budget`);
++  else pass(`feed ${lang} LCP ${Math.round(d.value)}ms <= ${FEED_LCP_BUDGET_MS}ms`);
++  await page.context().close();
++}
++
+ async function checkSlugLeaks(browser, fixtures) {
+   const routes = [
+     ["feed", `/matches`],
+@@ -274,6 +310,8 @@ try {
+   console.log(`SMOKE against ${BASE} (match ${fixtures.match.id}, team ${fixtures.teamId})`);
+   await checkLogin(browserHandle, "en");
+   await checkLogin(browserHandle, "fa");
++  await checkFeedLcp(browserHandle, "en");
++  await checkFeedLcp(browserHandle, "fa");
+   await checkSlugLeaks(browserHandle, fixtures);
+   await checkResetSheet(browserHandle, "en");
+   await checkResetSheet(browserHandle, "fa");
+-- 
+2.54.0.windows.1
+

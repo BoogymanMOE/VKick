@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { migrate } from "../server/db/schema.js";
 import { currentSeasonLabel, rollSeasonIfNeeded, award } from "../server/scoring/ledger.js";
-import { activeSeason, seasonLabelForDate } from "../server/scoring/season.js";
+import { activeSeason, seasonLabelForDate, seasonWindow } from "../server/scoring/season.js";
 
 interface StreakRow {
   current: number;
@@ -202,11 +202,28 @@ function testRollAgainstSyntheticBoundary(): void {
   assert.equal(row.scope_season, "2026-27");
 }
 
+/**
+ * The window a season label covers, used to keep derived tables (form, home and
+ * away records) inside the season the standings row belongs to. A European
+ * season starts on Aug 1; a calendar-year competition starts on Jan 1.
+ */
+function testSeasonWindow(): void {
+  assert.deepEqual(seasonWindow("2026-27"), { from: "2026-08-01", to: "2027-08-01" });
+  assert.deepEqual(seasonWindow("2025-26"), { from: "2025-08-01", to: "2026-08-01" });
+  assert.deepEqual(seasonWindow("2026"), { from: "2026-01-01", to: "2027-01-01" });
+  // A malformed label falls back to the current season rather than an open
+  // window (which would quietly mix seasons together).
+  const fallback = seasonWindow("garbage");
+  assert.match(fallback.from, /^\d{4}-08-01$/);
+  assert.match(fallback.to, /^\d{4}-08-01$/);
+}
+
 export function runSeasonTests(): void {
   testRollsPreviousSeason();
   testCurrentSeasonUntouched();
   testNoRow();
   testSeasonLabelForDate();
+  testSeasonWindow();
   testActiveSeasonIsDataDriven();
   testAwardStampsActiveSeason();
   testRollAgainstSyntheticBoundary();

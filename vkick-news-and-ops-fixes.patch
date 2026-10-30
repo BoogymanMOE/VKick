@@ -1,0 +1,831 @@
+From 7728f8f5bb00d13556c9b3c40e9f9d986cb3fd53 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 13:18:44 +0330
+Subject: [PATCH 1/5] feat(about): show the build commit in Profile and the
+ health route
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Profile's About row and /health both expose the running commit hash
+and a build/boot timestamp, so a "did Telegram reload the new build?"
+check is one curl or a glance at Profile instead of a guess.
+
+vite.config defines __APP_COMMIT__ (RENDER_GIT_COMMIT or git rev-parse
+--short HEAD, else "dev") and __APP_BUILT_AT__ (ISO build time). The
+client reads them via src/lib/appInfo.ts; the server reads them via a
+small server/appInfo.ts (the server is a separate tsc pipeline so the
+client define does not reach it). /health adds commit + builtAt next
+to the existing ok/uptime fields.
+
+The Profile row keeps its single-line, dir=ltr form so the dot order
+never scrambles in Persian.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/appInfo.ts     | 35 +++++++++++++++++++++++++++++++++++
+ server/index.ts       | 11 ++++++++++-
+ src/lib/appInfo.ts    | 10 ++++++++++
+ src/pages/Profile.tsx | 11 +++++++----
+ src/vite-env.d.ts     |  4 ++++
+ vite.config.ts        | 25 +++++++++++++++++++++++++
+ 6 files changed, 91 insertions(+), 5 deletions(-)
+ create mode 100644 server/appInfo.ts
+
+diff --git a/server/appInfo.ts b/server/appInfo.ts
+new file mode 100644
+index 0000000..59c8e5e
+--- /dev/null
++++ b/server/appInfo.ts
+@@ -0,0 +1,35 @@
++import { execSync } from "node:child_process";
++
++/**
++ * Build identity for the API process.
++ *
++ * The server is a separate `tsc -p tsconfig.server.json` pipeline, so Vite's
++ * `define` (which only rewrites the client bundle) reaches nothing here — the
++ * values have to be resolved at runtime instead. `gitCommitShort` is a
++ * deliberate twin of the one in vite.config.ts: same rules, same fallback,
++ * but no shared import, because importing the Vite config from server code
++ * would drag the client build toolchain into the API.
++ *
++ * RENDER_GIT_COMMIT is set by Render on every push deploy and is the exact
++ * answer; otherwise ask git; a git-less checkout still has to boot, so "dev".
++ */
++function gitCommitShort(): string {
++  if (process.env.RENDER_GIT_COMMIT) return process.env.RENDER_GIT_COMMIT.slice(0, 7);
++  try {
++    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
++      .toString()
++      .trim();
++  } catch {
++    return "dev";
++  }
++}
++
++/** Commit the running process was started from. */
++export const APP_COMMIT: string = gitCommitShort();
++
++/**
++ * Boot time, not build time — the server has no build step that could stamp
++ * one in. That is the useful number on this side anyway: it tells you when the
++ * process restarted, which is what a deploy actually changes.
++ */
++export const APP_BUILT_AT: string = new Date().toISOString();
+diff --git a/server/index.ts b/server/index.ts
+index b2b8d39..3a76510 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -28,6 +28,7 @@ function findProjectRoot(start: string): string {
+ 
+ const ROOT_DIR = findProjectRoot(__dirname);
+ import { getDb, get } from "./db/index.js";
++import { APP_BUILT_AT, APP_COMMIT } from "./appInfo.js";
+ import { pruneFootballDetail, pruneSessions, logCapKb, RotatingLogger } from "./db/retention.js";
+ import { startSyncLoop } from "./sync/service.js";
+ import { startBot } from "./bot/index.js";
+@@ -97,11 +98,19 @@ app.use(express.json({ limit: "64kb" }));
+  * Liveness probe. Unauthenticated and dependency-light: it says whether the
+  * process is up and the database answers, which is all an uptime monitor or a
+  * proxy health check needs. 503 on a broken DB so the check can actually fail.
++ *
++ * `commit` and `builtAt` are here so "is production running my push?" is one
++ * curl instead of a Render dashboard round trip.
+  */
+ app.get("/health", (_req, res) => {
+   try {
+     get<{ ok: number }>(db, "SELECT 1 AS ok", []);
+-    res.json({ ok: true, uptime: Math.round(process.uptime()) });
++    res.json({
++      ok: true,
++      uptime: Math.round(process.uptime()),
++      commit: APP_COMMIT,
++      builtAt: APP_BUILT_AT,
++    });
+   } catch (err) {
+     res.status(503).json({ ok: false, error: String(err) });
+   }
+diff --git a/src/lib/appInfo.ts b/src/lib/appInfo.ts
+index 257bd89..7c1d054 100644
+--- a/src/lib/appInfo.ts
++++ b/src/lib/appInfo.ts
+@@ -1,6 +1,16 @@
+ /** Injected at build time by vite.config `define` (package.json version). */
+ export const APP_VERSION: string = __APP_VERSION__;
+ 
++/**
++ * Which build this bundle is, for the "did Telegram actually load the new
++ * deploy?" question. Read from the build, not from the network: a client that
++ * reports a commit older than the one you pushed is a cached bundle, full stop.
++ */
++export const APP_COMMIT: string = __APP_COMMIT__;
++
++/** ISO timestamp of the build. Pairs with APP_COMMIT; not shown to users. */
++export const APP_BUILT_AT: string = __APP_BUILT_AT__;
++
+ export interface ReleaseNote {
+   version: string;
+   date: string;
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index b5ba5b0..20083df 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -13,7 +13,7 @@ import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
+ import { useI18n } from "../i18n/context";
+ import { PanelSkeleton } from "../components/Skeletons";
+ import { api, serverErrorKey } from "../lib/api";
+-import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
++import { APP_COMMIT, APP_VERSION, WHATS_NEW } from "../lib/appInfo";
+ import { PREDICTIONS_ENABLED, RATINGS_ENABLED } from "../lib/features";
+ import { LEGAL_ROUTES } from "../lib/legal";
+ import { useLocalState } from "../lib/useLocalState";
+@@ -254,9 +254,12 @@ export default function Profile() {
+           <GroupRow label={t("legal.termsTitle")} onClick={() => navigate(LEGAL_ROUTES.terms)} />
+         </div>
+         {/* Version line: the About prose card is gone; one muted line under
+-            the group suffices and doesn't compete with the rows. */}
+-        <p className="mt-sm px-1 text-xs text-ink-3">
+-          {t("profile.version")} v{APP_VERSION}
++            the group suffices and doesn't compete with the rows. The commit
++            rides along so a stale webview is visible at a glance, and the
++            line is pinned LTR: in Persian the bidirectional algorithm would
++            otherwise detach the dot from the sha and scramble the order. */}
++        <p className="mt-sm px-1 text-xs text-ink-3" dir="ltr">
++          {t("profile.version")} v{APP_VERSION} · {APP_COMMIT}
+         </p>
+       </section>
+ 
+diff --git a/src/vite-env.d.ts b/src/vite-env.d.ts
+index 5b710f0..9c6544d 100644
+--- a/src/vite-env.d.ts
++++ b/src/vite-env.d.ts
+@@ -4,6 +4,10 @@ export {};
+ declare global {
+   /** Injected by vite.config `define` — the package.json version at build time. */
+   const __APP_VERSION__: string;
++  /** Injected by vite.config `define` — short commit sha this bundle was built from. */
++  const __APP_COMMIT__: string;
++  /** Injected by vite.config `define` — ISO timestamp of this build. */
++  const __APP_BUILT_AT__: string;
+ 
+   interface Window {
+     /**
+diff --git a/vite.config.ts b/vite.config.ts
+index a1abe1a..95a3599 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -1,8 +1,28 @@
++import { execSync } from "node:child_process";
+ import { defineConfig } from "vite";
+ import react from "@vitejs/plugin-react";
+ import tailwindcss from "@tailwindcss/vite";
+ import pkg from "./package.json";
+ 
++/**
++ * The commit this bundle was built from, short form.
++ *
++ * Render exports RENDER_GIT_COMMIT for every push deploy, which is the exact
++ * answer and needs no shell. Elsewhere (local `npm run build`) ask git; a
++ * tarball or a dirty tree without git still has to build, so "dev" is the
++ * honest last resort rather than failing the build over a build stamp.
++ */
++function gitCommitShort(): string {
++  if (process.env.RENDER_GIT_COMMIT) return process.env.RENDER_GIT_COMMIT.slice(0, 7);
++  try {
++    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
++      .toString()
++      .trim();
++  } catch {
++    return "dev";
++  }
++}
++
+ export default defineConfig(() => {
+   return {
+     plugins: [react(), tailwindcss()],
+@@ -10,6 +30,11 @@ export default defineConfig(() => {
+     // Profile and usable anywhere via the global below.
+     define: {
+       __APP_VERSION__: JSON.stringify(pkg.version),
++      // "Which build is this?". A stale Telegram webview and a fresh deploy
++      // look identical from the inside, so Profile states the commit and the
++      // build time outright instead of leaving it to be guessed.
++      __APP_COMMIT__: JSON.stringify(gitCommitShort()),
++      __APP_BUILT_AT__: JSON.stringify(new Date().toISOString()),
+     },
+     build: {
+       // The app runs in Telegram's webview on low-end Android, which can lag the
+-- 
+2.54.0.windows.1
+
+
+From bc6982c9693e342ad25a3ff72718d5938041f6c1 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 13:20:34 +0330
+Subject: [PATCH 2/5] fix(server): never cache index.html, keep hashed assets
+ immutable
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Verifying the cache policy turned up two gaps in the SPA fallback.
+res.sendFile does not inherit express.static's setHeaders callback, so
+the shell went out as "public, max-age=0" — storable by a shared cache,
+and not the no-cache index.html is promised. The header is now set
+explicitly (with cacheControl: false so send() cannot overwrite it).
+
+The fallback also only accepted GET, so every client-side route
+answered a HEAD probe with 404 while the browser loaded it fine. HEAD
+is now served like GET. /assets/* keeps its one-year immutable cache,
+and a genuine asset miss still 404s instead of returning the shell.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/index.ts | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/server/index.ts b/server/index.ts
+index 3a76510..f64dc42 100644
+--- a/server/index.ts
++++ b/server/index.ts
+@@ -153,7 +153,11 @@ app.use(
+ // SPA fallback: any GET that didn't match an API route or a static file
+ // falls through to index.html so React Router owns client-side routing.
+ app.use((req, res, next) => {
+-  if (req.method !== "GET") return next();
++  // HEAD too: a link checker, a CDN prefetch or an uptime monitor probes with
++  // HEAD, and falling through to `next()` answered those with a 404 on routes
++  // the browser happily loads. Express's own static handler serves HEAD, so
++  // the shell should as well.
++  if (req.method !== "GET" && req.method !== "HEAD") return next();
+   // Unmatched API paths answer in the API's dialect: a JSON client parsing an
+   // HTML 404 turns a typo'd route into an opaque "Unexpected token" failure.
+   if (req.path.startsWith("/api")) return res.status(404).json({ error: "not found" });
+@@ -167,7 +171,13 @@ app.use((req, res, next) => {
+   const telegramLaunchPath = req.path.includes("tgWebApp");
+   if (!telegramLaunchPath && /\.[a-z0-9]+$/i.test(req.path))
+     return res.status(404).type("text/plain").send("Not found");
+-  return res.sendFile(path.join(ROOT_DIR, "dist", "index.html"), (err) => {
++  // Explicit, because res.sendFile does NOT inherit express.static's
++  // setHeaders callback above: left to itself the shell went out as
++  // "public, max-age=0", which lets a shared cache store it and is not the
++  // no-cache the static handler promises for index.html. cacheControl: false
++  // stops send() writing its own header over this one.
++  res.setHeader("Cache-Control", "no-cache");
++  return res.sendFile(path.join(ROOT_DIR, "dist", "index.html"), { cacheControl: false }, (err) => {
+     if (err) next(err);
+   });
+ });
+-- 
+2.54.0.windows.1
+
+
+From 0120fd031d06f9661fa49a52741b800269eca4a1 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 13:22:53 +0330
+Subject: [PATCH 3/5] perf(ad): lazy-load the inline ad iframe
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+InlineAd's iframe had no loading attribute, so the A-ADS chain
+(~1.6s on the audit's network trace) fired on every feed mount
+and blocked first paint. loading="lazy" defers it until the slot
+nears the viewport — a user who never scrolls past the first
+matchday never pays the cost.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/InlineAd.tsx | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/components/InlineAd.tsx b/src/components/InlineAd.tsx
+index aee008c..aaf40db 100644
+--- a/src/components/InlineAd.tsx
++++ b/src/components/InlineAd.tsx
+@@ -26,9 +26,14 @@ export function InlineAd() {
+       >
+         {t("ads.label")}
+       </span>
++      {/* loading="lazy": the ad chain is ~1.6s of third-party work and the
++          slot usually sits below the fold. Deferring the iframe keeps that
++          cost off first paint, and a reader who never scrolls past the fold
++          never pays it at all. */}
+       <iframe
+         data-aa="2458182"
+         src="//acceptable.a-ads.com/2458182/?size=Adaptive"
++        loading="lazy"
+         style={{
+           border: "0",
+           padding: "0",
+-- 
+2.54.0.windows.1
+
+
+From 2a568e6d45022b7dc339c229fa6a4645aba73914 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 13:24:18 +0330
+Subject: [PATCH 4/5] =?UTF-8?q?fix(layout):=20opaque=20header=20and=20tab?=
+ =?UTF-8?q?=20bar=20=E2=80=94=20kill=20scrolled-content=20ghosting?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+bg-base/95 was 95% opaque, so scrolled feed content bled through
+the sticky header and fixed tab bar (visible in the audit's EN
+screenshot: "Man City" text ghosted behind the header). Bump
+both to bg-base (100%). Keep the no-blur rule from the original
+comment — the blur was an invisible extra cost on low-end
+Android, and 100% opacity removes both the ghosting and the
+need for a blur.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/TabBar.tsx |  7 ++++---
+ src/components/TopBar.tsx | 10 ++++++----
+ 2 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index 174ce8b..d4d9615 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -22,12 +22,13 @@ export const TabBar = forwardRef<HTMLElement, {}>((_, ref) => {
+   // section the user has drilled out of.
+   const isTeamSubPage = pathname.startsWith("/team/");
+ 
+-  return (      // 95% opaque, so no backdrop blur — same reasoning as TopBar: the blur was
+-    // imperceptible but ran on every scroll frame.
++  return (      // Fully opaque (was 95%, which let scrolled content ghost through), so no
++    // backdrop blur — same reasoning as TopBar: the blur was imperceptible but
++    // ran on every scroll frame.
+     // Ad is now inline and scrolls with content, so TabBar sits at the very bottom.
+     <nav
+       ref={ref}
+-      className="pad-safe-bottom fixed bottom-0 left-0 right-0 z-20 border-t border-line bg-base/95"
++      className="pad-safe-bottom fixed bottom-0 left-0 right-0 z-20 border-t border-line bg-base"
+     >
+       <ul className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] items-stretch justify-between px-2 pt-1">
+         {tabs.map(({ to, key, Icon }) => (
+diff --git a/src/components/TopBar.tsx b/src/components/TopBar.tsx
+index b3d2350..37e6903 100644
+--- a/src/components/TopBar.tsx
++++ b/src/components/TopBar.tsx
+@@ -28,9 +28,11 @@ export function TopBar({
+   };
+ 
+   return (
+-    // No backdrop blur: the bar is 95% opaque, so the blur was invisible while
+-    // still forcing a full-width backdrop read on every scroll frame — exactly
+-    // the cost the low-end Android target can't afford.
++    // No backdrop blur, and now no translucency either: at 95% the scrolled
++    // feed showed through the bar. Fully opaque fixes the ghosting outright,
++    // and a blur would still be invisible while forcing a full-width backdrop
++    // read on every scroll frame — exactly the cost the low-end Android target
++    // can't afford. Opacity is the cheap fix; blur is not.
+     // Full-bleed BAND on phones (<480px): the header renders inside <main>'s
+     // page gutter, whose padding inset the band's background + hairline from
+     // the screen edge — the floating-inset rectangle that read as "cropped
+@@ -38,7 +40,7 @@ export function TopBar({
+     // so the header background and its bottom hairline run full-bleed (left = 0 to
+     // right = viewport width), while the inner row keeps the gutter.
+     // ≥480px keeps today's inset-within-column look.
+-    <header className="pad-safe-top sticky top-0 z-20 border-b border-line bg-base/95 -mx-[var(--space-page-x,16px)]">
++    <header className="pad-safe-top sticky top-0 z-20 border-b border-line bg-base -mx-[var(--space-page-x,16px)]">
+       {/* px-[var(--space-page-x)] aligns the header's gutters with the page below
+           and pb-4 gives more breathing room from the content underneath. */}
+       <div className="mx-auto flex w-full max-w-[var(--app-max-width,768px)] items-center gap-3 px-[var(--space-page-x,16px)] pb-4 pt-2">
+-- 
+2.54.0.windows.1
+
+
+From f2e8254f69025ba21d914d079e5a17aff2cfe3d4 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 27 Oct 2026 13:42:34 +0330
+Subject: [PATCH 5/5] feat(team): news tab on the team page
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+ESPN's site API serves a per-league news feed (~6 articles, refreshed
+throughout the day) at /{league}/news. Each article carries headline,
+description, published, byline, images, a links.web.href URL, and a
+categories[] array where the team entries use the SAME id this app
+already uses for matches and rosters — so per-team news is a client-side
+filter, no mapping.
+
+New /api/leagues/:league/news route (in-memory 60s cache, one league
+fetch shared across all teams in it). TeamPage gains a 5th tab "News"
+(اخبار in FA) that calls the route with the team's id and renders a
+vertical list of cards: thumbnail, headline, description, date+byline,
+and a "Read on ESPN →" link that opens the article's web URL in a new
+tab.
+
+The team-specific ESPN path /teams/{id}/news returns 0 articles for
+soccer (ESPN only populates it for US sports), so the league feed +
+client filter is the only way.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/espn/client.ts     |  16 ++++++
+ server/routes/football.ts | 100 ++++++++++++++++++++++++++++++++++++++
+ src/hooks/useApi.ts       |  15 ++++++
+ src/i18n/strings.ts       |  10 ++++
+ src/lib/api.ts            |   9 ++++
+ src/pages/TeamPage.tsx    |  95 +++++++++++++++++++++++++++++++++++-
+ src/types.ts              |  20 ++++++++
+ 7 files changed, 263 insertions(+), 2 deletions(-)
+
+diff --git a/server/espn/client.ts b/server/espn/client.ts
+index 88a0ce9..1b22d10 100644
+--- a/server/espn/client.ts
++++ b/server/espn/client.ts
+@@ -66,6 +66,22 @@ export async function fetchTeamRoster(league: LeagueSlug, teamId: string): Promi
+   return fetchJson(`${BASE}/${league}/teams/${encodeURIComponent(teamId)}/roster`);
+ }
+ 
++/**
++ * League news feed. Returns up to ~6 articles per league, refreshed
++ * throughout the day. Each article carries headline, description,
++ * published (ISO), byline, images[] (with a.espncdn.com URLs), and a
++ * links.web.href (full ESPN URL for "read on ESPN →"), plus a
++ * categories[] array where each article tags the teams it covers with
++ * team.id — the SAME id this app already uses everywhere else.
++ *
++ * The team-specific path /teams/{id}/news returns 0 articles for
++ * soccer (ESPN only populates it for US sports), so callers fetch the
++ * league feed and filter by team.id themselves.
++ */
++export async function fetchLeagueNews(league: LeagueSlug): Promise<unknown> {
++  return fetchJson(`${BASE}/${league}/news`);
++}
++
+ export function allLeagueSlugs(): LeagueSlug[] {
+   return [...LEAGUES];
+ }
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index 37f4d95..c2adf59 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -9,6 +9,7 @@ import { getDb, all, get } from "../db/index.js";
+ import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
+ 
+ import { isAllowedLeague } from "../espn/catalog.js";
++import { fetchLeagueNews } from "../espn/client.js";
+ import { competitionCatalogWithMatches } from "../espn/competitions.js";
+ import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
+ import { foldForm, type FormMatchRow } from "../standings/form.js";
+@@ -544,6 +545,105 @@ matchesRouter.get("/api/leagues/:league/teams", (req, res) => {
+   res.json({ season, teams: rows });
+ });
+ 
++/* ------------------------------------------------------------ league news */
++
++interface NewsArticle {
++  id: string;
++  headline: string;
++  description: string;
++  /** ISO. */
++  published: string;
++  byline: string | null;
++  imageUrl: string | null;
++  webUrl: string | null;
++  /** ESPN club ids the article is tagged with — the ids the app already uses. */
++  teamIds: string[];
++}
++
++/**
++ * One league's news for one minute. A club page asks for its club's slice of
++ * the league feed, so without this cache twenty clubs in one league would mean
++ * twenty identical ESPN calls for the same six articles.
++ */
++const newsCache = new Map<string, { at: number; payload: NewsArticle[] }>();
++const NEWS_TTL_MS = 60_000;
++
++/**
++ * ESPN article → our shape. Every field is optional at the edge, and the feed
++ * mixes in non-story cards, so anything without an id is dropped rather than
++ * rendered as an empty row.
++ */
++function toNewsArticle(raw: unknown): NewsArticle | null {
++  if (!raw || typeof raw !== "object") return null;
++  const a = raw as {
++    id?: unknown;
++    headline?: unknown;
++    description?: unknown;
++    published?: unknown;
++    byline?: unknown;
++    images?: unknown;
++    links?: { web?: { href?: unknown } };
++    categories?: unknown;
++  };
++  if (a.id == null || String(a.id) === "") return null;
++
++  const images = Array.isArray(a.images) ? a.images : [];
++  // The "header" crop is the wide one; a logo or a square thumb letterboxes.
++  const image =
++    images.find((i) => (i as { type?: unknown } | null)?.type === "header") ?? images[0];
++  const imageUrl = (image as { url?: unknown } | undefined)?.url;
++
++  const categories = Array.isArray(a.categories) ? a.categories : [];
++  const teamIds = categories.flatMap((c) => {
++    const cat = c as { type?: unknown; team?: { id?: unknown } } | null;
++    return cat?.type === "team" && cat.team?.id != null ? [String(cat.team.id)] : [];
++  });
++
++  return {
++    id: String(a.id),
++    headline: typeof a.headline === "string" ? a.headline : "",
++    description: typeof a.description === "string" ? a.description : "",
++    published: typeof a.published === "string" ? a.published : "",
++    byline: typeof a.byline === "string" && a.byline ? a.byline : null,
++    imageUrl: typeof imageUrl === "string" && imageUrl ? imageUrl : null,
++    webUrl: typeof a.links?.web?.href === "string" ? a.links.web.href : null,
++    teamIds,
++  };
++}
++
++async function getLeagueNews(league: LeagueSlug): Promise<NewsArticle[]> {
++  const cached = newsCache.get(league);
++  if (cached && Date.now() - cached.at < NEWS_TTL_MS) return cached.payload;
++  const raw = (await fetchLeagueNews(league)) as { articles?: unknown };
++  const payload = (Array.isArray(raw.articles) ? raw.articles : [])
++    .map(toNewsArticle)
++    .filter((a): a is NewsArticle => a != null);
++  newsCache.set(league, { at: Date.now(), payload });
++  return payload;
++}
++
++/**
++ * League news, optionally narrowed to one club. The team-scoped ESPN path
++ * (/teams/{id}/news) returns nothing for soccer — ESPN only populates it for
++ * US sports — so a league feed plus a team.id filter is the only route to
++ * per-club news. Public: it is the same content ESPN serves to anyone.
++ */
++matchesRouter.get("/api/leagues/:league/news", (req, res) => {
++  const league = String(req.params.league);
++  if (!isAllowedLeague(league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
++  const team = req.query.team ? String(req.query.team) : null;
++  getLeagueNews(league as LeagueSlug)
++    .then((articles) => {
++      res.json({ articles: team ? articles.filter((a) => a.teamIds.includes(team)) : articles });
++    })
++    .catch((err) => {
++      // News is decoration on a page that is otherwise complete: an ESPN
++      // outage should empty the tab, not 500 the club page.
++      console.error(`[news] ${league} FAILED:`, String(err));
++      res.json({ articles: [] });
++    });
++});
++
+ function getSeasonKeyDb(league: string): string {
+   const row = get<{ season: string }>(
+     db,
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index a7b650b..9e8ae1d 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -650,6 +650,21 @@ export function useTeamUnderstat(teamId: string) {
+   });
+ }
+ 
++/**
++ * Recent ESPN coverage for one club. Served from the league news feed and
++ * narrowed by team id, because ESPN publishes no per-team soccer news. Five
++ * minutes is plenty fresh for "what happened today" and keeps a tab switch
++ * off the network.
++ */
++export function useLeagueNews(league: string, teamId: string) {
++  return useQuery({
++    queryKey: ["league-news", league, teamId],
++    queryFn: () => api.getLeagueNews(league, teamId),
++    enabled: Boolean(league && teamId),
++    staleTime: 5 * 60_000,
++  });
++}
++
+ /* ------------------------------------------------------------------ squads */
+ 
+ export interface SquadRow {
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 4351193..4219d07 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -278,6 +278,11 @@ export const strings = {
+     "team.tab.fixtures": "Fixtures",
+     "team.tab.season": "Season",
+     "team.tab.xg": "xG",
++    "team.tab.news": "News",
++    "team.news.empty": "No recent news",
++    "team.news.emptyHint": "Check back later for updates",
++    "team.news.readMore": "Read on ESPN",
++    "team.news.byline": "By {name}",
+     "team.stats.goals": "Goals",
+     "team.stats.assists": "Assists",
+     "team.matchesPlayedOne": "1 match played",
+@@ -946,6 +951,11 @@ export const strings = {
+     "team.tab.fixtures": "بازی‌ها",
+     "team.tab.season": "آمار فصل",
+     "team.tab.xg": "xG",
++    "team.tab.news": "اخبار",
++    "team.news.empty": "اخباری نیست",
++    "team.news.emptyHint": "بعداً دوباره بررسی کنید",
++    "team.news.readMore": "در ESPN بخوانید",
++    "team.news.byline": "توسط {name}",
+     "team.stats.goals": "گل",
+     "team.stats.assists": "پاس گل",
+     "team.matchesPlayedOne": "۱ بازی",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index ec77992..828e5f6 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -10,6 +10,7 @@
+  */
+ 
+ import { currentAuthToken, getDeviceId } from "./auth";
++import type { NewsArticle } from "../types";
+ 
+ const BASE = "/api";
+ 
+@@ -596,6 +597,14 @@ export const api = {
+   getLeagueTeamStats: (league: string) =>
+     request<{ season: string; teams: LeagueTeamStatRow[] }>(`/leagues/${encodeURIComponent(league)}/teams`),
+ 
++  /** League news feed, narrowed to one club when `teamId` is given. */
++  getLeagueNews: (league: string, teamId?: string) => {
++    const qs = teamId ? `?team=${encodeURIComponent(teamId)}` : "";
++    return request<{ articles: NewsArticle[] }>(
++      `/leagues/${encodeURIComponent(league)}/news${qs}`,
++    );
++  },
++
+   getMatchPlayers: (matchId: string) =>
+     request<{ players: Record<string, unknown>[] }>(`/matches/${matchId}/players`),
+ 
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 2937443..80a8d36 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -14,7 +14,14 @@ import {
+   TeamBadge,
+ } from "../components/ui";
+ import { cx } from "../lib/cx";
+-import { matchFromApi, useSquad, useTeamDetail, useTeamUnderstat, type SquadRow } from "../hooks/useApi";
++import {
++  matchFromApi,
++  useLeagueNews,
++  useSquad,
++  useTeamDetail,
++  useTeamUnderstat,
++  type SquadRow,
++} from "../hooks/useApi";
+ import type { StringKey } from "../i18n/strings";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { TEAM_FALLBACK } from "../lib/colors";
+@@ -26,7 +33,7 @@ import type { ApiMatch } from "../lib/api";
+ import type { Position } from "../types";
+ import { competitionName } from "../lib/leagues";
+ 
+-type Tab = "squad" | "fixtures" | "season" | "xg";
++type Tab = "squad" | "fixtures" | "season" | "xg" | "news";
+ 
+ const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
+ 
+@@ -158,6 +165,7 @@ export default function TeamPage() {
+             { value: "fixtures", label: t("team.tab.fixtures") },
+             { value: "season", label: t("team.tab.season") },
+             { value: "xg", label: t("team.tab.xg") },
++            { value: "news", label: t("team.tab.news") },
+           ]}
+         />
+       </div>
+@@ -180,6 +188,7 @@ export default function TeamPage() {
+             points={seasonStats ? seasonStats.wins * 3 + seasonStats.draws : null}
+           />
+         ) : null}
++        {tab === "news" ? <NewsTab teamId={team.id} league={team.league ?? ""} /> : null}
+       </section>
+     </>
+   );
+@@ -634,3 +643,85 @@ function XgTab({ teamId, played, points }: { teamId: string; played: number; poi
+     </div>
+   );
+ }
++
++/* ------------------------------------------------------------ news */
++
++/**
++ * Recent ESPN coverage for this club. ESPN publishes no per-team soccer news
++ * feed, so the server takes the league's feed and narrows it by this club's
++ * id — the result is real coverage rather than a stub list, and every card
++ * links out to the article on ESPN.
++ */
++function NewsTab({ teamId, league }: { teamId: string; league: string }) {
++  const { t, lang, dir } = useI18n();
++  const query = useLeagueNews(league, teamId);
++
++  if (query.isLoading) return <PanelSkeleton height={192} />;
++  if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
++
++  const articles = query.data?.articles ?? [];
++  if (articles.length === 0) {
++    return <EmptyState title={t("team.news.empty")} hint={t("team.news.emptyHint")} />;
++  }
++
++  const when = new Intl.DateTimeFormat(lang === "fa" ? "fa-IR" : undefined, {
++    month: "short",
++    day: "numeric",
++    hour: "2-digit",
++    minute: "2-digit",
++  });
++  const cardClass =
++    "block rounded-card border border-line bg-surface p-3 transition-colors duration-[var(--t-fast)]";
++
++  return (
++    <ul className="space-y-2">
++      {articles.map((article) => {
++        const body = (
++          <>
++            {article.imageUrl ? (
++              <img
++                src={article.imageUrl}
++                alt=""
++                loading="lazy"
++                className="mb-2 h-32 w-full rounded-lg object-cover"
++              />
++            ) : null}
++            <h3 className="text-sm font-bold leading-snug text-ink">{article.headline}</h3>
++            {article.description ? (
++              <p className="mt-1 line-clamp-2 text-xs text-ink-2">{article.description}</p>
++            ) : null}
++            <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-3">
++              {article.published ? <span>{when.format(new Date(article.published))}</span> : null}
++              {article.byline ? (
++                <span>{t("team.news.byline", { name: article.byline })}</span>
++              ) : null}
++            </p>
++            {article.webUrl ? (
++              <p className="mt-1 text-[11px] font-bold text-volt">
++                {t("team.news.readMore")} {dir === "rtl" ? "←" : "→"}
++              </p>
++            ) : null}
++          </>
++        );
++        return (
++          <li key={article.id}>
++            {/* An article with no web URL is still worth reading on the card —
++                it just is not a link, so it must not pretend to be one. */}
++            {article.webUrl ? (
++              <a
++                href={article.webUrl}
++                target="_blank"
++                rel="noopener noreferrer"
++                className={cx(cardClass, "hover:bg-elevated")}
++              >
++                {body}
++              </a>
++            ) : (
++              <div className={cardClass}>{body}</div>
++            )}
++          </li>
++        );
++      })}
++    </ul>
++  );
++}
+diff --git a/src/types.ts b/src/types.ts
+index ae11663..1d3902f 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -220,3 +220,23 @@ export interface LeaderboardRow {
+   predictionPoints: number;
+   isYou?: boolean;
+ }
++
++/* ------------------------------------------------------------------- news */
++
++/**
++ * One ESPN news article, forwarded by the API as-is. `teamIds` are ESPN club
++ * ids — the same ones used for matches, rosters and standings — so narrowing
++ * the league feed to one club needs no mapping table.
++ */
++export interface NewsArticle {
++  id: string;
++  headline: string;
++  description: string;
++  /** ISO timestamp. */
++  published: string;
++  byline: string | null;
++  imageUrl: string | null;
++  /** Full ESPN article URL, opened in a new tab. Null when the feed omits it. */
++  webUrl: string | null;
++  teamIds: string[];
++}
+-- 
+2.54.0.windows.1
+

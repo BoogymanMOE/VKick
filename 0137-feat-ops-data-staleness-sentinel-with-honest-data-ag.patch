@@ -1,0 +1,642 @@
+From 01c29bb36b68ab84342ff7212e45660791aec665 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 20:03:26 +0330
+Subject: [PATCH 137/230] feat(ops): data-staleness sentinel with honest
+ data-age surface
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A dead cron loop, an ESPN shape change or a rate limit all fail the
+same silent way: the feed keeps rendering yesterday's football with no
+error anywhere. Three layers of signal:
+
+- server/sync/sentinel.ts tracks pass outcomes; the hourly cron turns
+  a dead loop (>30min without a completed pass), stale live matches
+  (untouched 15+ min) or followed leagues gone quiet (no fixture
+  within +/-7d) into one console/Telegram alert per 30-min cooldown
+  (ALERT_CHAT_ID env, log-only when unset).
+- GET /api/health/sync exposes the same snapshot for the client: the
+  feed footer now shows the SERVER's ledger date ("Data as of HH:MM")
+  instead of only the browser's last fetch, and switches to an explicit
+  "Data is delayed" line once live data lags past 30 minutes.
+- tests/sentinel.test.ts pins the no-alert-when-healthy, alert-once-
+  per-cooldown and quiet-league rules, alongside the pass bookkeeping.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ .env.example              |   4 +
+ server/routes/football.ts |  13 +++
+ server/sync/sentinel.ts   | 190 ++++++++++++++++++++++++++++++++++++++
+ server/sync/service.ts    |  55 ++++++++++-
+ src/hooks/useApi.ts       |  17 ++++
+ src/i18n/strings.ts       |   6 ++
+ src/lib/api.ts            |  18 ++++
+ src/pages/Matches.tsx     |  21 ++++-
+ tests/run.ts              |   2 +
+ tests/sentinel.test.ts    |  99 ++++++++++++++++++++
+ 10 files changed, 420 insertions(+), 5 deletions(-)
+ create mode 100644 server/sync/sentinel.ts
+ create mode 100644 tests/sentinel.test.ts
+
+diff --git a/.env.example b/.env.example
+index ac3eae9..fe2f051 100644
+--- a/.env.example
++++ b/.env.example
+@@ -47,6 +47,10 @@ TELEGRAM_BOT_TOKEN=
+ # developing, your production host after deploy. The bot's /start button and
+ # Mini App menu open this, so it must match what you registered in BotFather.
+ MINI_APP_URL=
++# Telegram chat that receives the sync sentinel's stale-data alerts (sync/sentinel.js):
++# dead sync loop, live matches untouched for 15+ minutes, followed leagues gone quiet.
++# Your own user id works (get it from @userinfobot). Empty = log-only alerting.
++ALERT_CHAT_ID=
+ 
+ # Data retention: finished matches older than this many days lose their
+ # detail rows (timeline, commentary, stat sheets, push audit). Match rows,
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index 88f4774..21e43f1 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -14,6 +14,9 @@ import { foldForm, type FormMatchRow } from "../standings/form.js";
+ import { buildFeedQuery } from "../matches/feed.js";
+ import { currentSeasonLabel } from "../scoring/ledger.js";
+ import { bad, requireUser } from "./shared.js";
++// Sync freshness for the ops surface: the client shows "data as of <time>"
++// rather than silently serving yesterday's football.
++import { syncHealthSnapshot } from "../sync/sentinel.js";
+ 
+ const db = getDb();
+ 
+@@ -50,6 +53,16 @@ matchesRouter.get("/api/competitions", (_req, res) => {
+   res.json({ competitions: competitionCatalog() });
+ });
+ 
++/**
++ * Sync freshness for the feed's "data as of" line (and any ops dashboard).
++ * Public like the feed routes: it carries only ledger dates and league slugs.
++ * The staleness judgement (is this old enough to surface?) belongs to the
++ * client, which knows its own render context.
++ */
++matchesRouter.get("/api/health/sync", (_req, res) => {
++  res.json(syncHealthSnapshot(db));
++});
++
+ /* ------------------------------------------------------------ matches */
+ 
+ matchesRouter.get("/api/matches", (req, res) => {
+diff --git a/server/sync/sentinel.ts b/server/sync/sentinel.ts
+new file mode 100644
+index 0000000..28b0728
+--- /dev/null
++++ b/server/sync/sentinel.ts
+@@ -0,0 +1,190 @@
++/**
++ * The staleness sentinel: sync has two silent failure modes — the loop stops
++ * being scheduled (a dead cron, an exception inside the pass), and the loop
++ * keeps running but ESPN answers with nothing useful (shape change, rate
++ * limit). Both leave the feed showing yesterday's football with no error
++ * anywhere. This module is the signal for both:
++ *
++ *  - a live match whose row has not been touched for 15+ minutes → stale;
++ *  - a sync pass that has not COMPLETED for 30+ minutes → the loop is dead;
++ *  - a followed competition with no fixture within ±7 days → the sync for it
++ *    is producing (or being fed) nothing.
++ *
++ * Everything takes `db` as an argument rather than closing over `getDb()`, so
++ * tests can drive it against a temp database like every other server module.
++ * The alert sender is a callback so the Telegram wiring (which needs a bot
++ * instance) stays in the caller and the logic here stays testable.
++ */
++import { all, get, type DB } from "../db/index.js";
++
++/** A live match untouched for this long means the summary path is broken. */
++const STALE_LIVE_MS = 15 * 60_000;
++/** A pass that has not completed for this long means the loop is dead. */
++const DEAD_LOOP_MS = 30 * 60_000;
++/** Minimum spacing between repeated alerts — matchday moments are noisy. */
++const ALERT_COOLDOWN_MS = 30 * 60_000;
++
++interface PassState {
++  /** Epoch ms of the last sync pass that completed without throwing. */
++  lastOkMs: number | null;
++  /** Completed passes since the last completed one (0 = healthy). */
++  consecutiveFailures: number;
++  /** Epoch ms of the last alert actually sent (cooldown reference). */
++  lastAlertMs: number;
++}
++
++const state: PassState = { lastOkMs: null, consecutiveFailures: 0, lastAlertMs: 0 };
++
++/** Reset for tests; production code never calls this. */
++export function resetSentinelStateForTest(): void {
++  state.lastOkMs = null;
++  state.consecutiveFailures = 0;
++  state.lastAlertMs = 0;
++}
++
++/** Record one sync pass that finished (0 new rows is still a finished pass). */
++export function recordSyncPassOk(): void {
++  state.lastOkMs = Date.now();
++  state.consecutiveFailures = 0;
++}
++
++/** Record one sync pass that threw. */
++export function recordSyncPassFail(): void {
++  state.consecutiveFailures += 1;
++}
++
++export function syncPassHealth(): { lastOkMs: number | null; consecutiveFailures: number } {
++  return { lastOkMs: state.lastOkMs, consecutiveFailures: state.consecutiveFailures };
++}
++
++export interface LeagueSyncRow {
++  league: string;
++  lastSyncedAt: string | null;
++}
++
++export interface SyncHealthSnapshot {
++  /** Newest last_synced_at across all matches — "the data is as fresh as this". */
++  latestLastSyncedAt: string | null;
++  /** Live/halftime matches whose row is STALE_LIVE_MS old or more. */
++  staleLive: number;
++  liveCount: number;
++  scheduledCount: number;
++  finishedCount: number;
++  /** Per-league freshness, for the endpoint consumer to display or alert on. */
++  perLeague: LeagueSyncRow[];
++  /** Followed competitions with no fixture within ±7 days of now. */
++  quietFollowedLeagues: string[];
++  lastOkSyncAt: string | null;
++  consecutiveFailures: number;
++}
++
++/**
++ * One SQL snapshot of everything the sentinel knows. Read-only: safe to call
++ * from an unauthenticated ops route (it exposes ledger dates and league slugs,
++ * nothing user-owned).
++ */
++export function syncHealthSnapshot(db: DB, now: Date = new Date()): SyncHealthSnapshot {
++  const counts = get<{ live: number; scheduled: number; finished: number }>(
++    db,
++    `SELECT
++       SUM(CASE WHEN status IN ('live','halftime') THEN 1 ELSE 0 END) AS live,
++       SUM(CASE WHEN status = 'scheduled' THEN 1 ELSE 0 END) AS scheduled,
++       SUM(CASE WHEN status = 'finished' THEN 1 ELSE 0 END) AS finished
++     FROM matches`,
++  );
++  const latest = get<{ t: string | null }>(
++    db,
++    "SELECT MAX(last_synced_at) AS t FROM matches WHERE last_synced_at IS NOT NULL",
++  );
++  const perLeague = all<LeagueSyncRow>(
++    db,
++    `SELECT league, MAX(last_synced_at) AS t
++     FROM matches WHERE last_synced_at IS NOT NULL GROUP BY league ORDER BY league ASC`,
++  );
++
++  const nowMs = now.getTime();
++  const staleLive =
++    get<{ n: number }>(
++      db,
++      `SELECT COUNT(*) AS n FROM matches
++       WHERE status IN ('live','halftime')
++         AND last_synced_at IS NOT NULL
++         AND last_synced_at <= ?`,
++      [new Date(nowMs - STALE_LIVE_MS).toISOString()],
++    )?.n ?? 0;
++
++  const quiet = all<{ league: string }>(
++    db,
++    `SELECT DISTINCT f.league AS league FROM followed_leagues f
++     WHERE NOT EXISTS (
++       SELECT 1 FROM matches m
++       WHERE m.league = f.league
++         AND m.kickoff_at >= ? AND m.kickoff_at <= ?
++     )`,
++    [new Date(nowMs - 7 * 24 * 3_600_000).toISOString(), new Date(nowMs + 7 * 24 * 3_600_000).toISOString()],
++  );
++
++  return {
++    latestLastSyncedAt: latest?.t ?? null,
++    staleLive: staleLive ?? 0,
++    liveCount: counts?.live ?? 0,
++    scheduledCount: counts?.scheduled ?? 0,
++    finishedCount: counts?.finished ?? 0,
++    perLeague: perLeague.map((r) => ({ league: r.league, lastSyncedAt: r.lastSyncedAt })),
++    quietFollowedLeagues: quiet.map((r) => r.league),
++    lastOkSyncAt: state.lastOkMs ? new Date(state.lastOkMs).toISOString() : null,
++    consecutiveFailures: state.consecutiveFailures,
++  };
++}
++
++export interface SentinelCheck {
++  /** True when an alert was sent on this call (cooldown allowed it). */
++  alerted: boolean;
++  /** Human-readable line describing the worst finding; null when healthy. */
++  problem: string | null;
++}
++
++/**
++ * The cron-side check: healthy data and a live loop send nothing; anything
++ * wrong sends at most one alert per cooldown, in the caller-provided
++ * transport, and reports the rest to the log.
++ *
++ * `send` never throws — the caller wraps it; a failed Telegram call must not
++ * throw out of a sync pass.
++ */
++export function checkAndAlert(
++  db: DB,
++  send: (text: string) => void,
++  now: Date = new Date(),
++): SentinelCheck {
++  const snap = syncHealthSnapshot(db, now);
++  const problems: string[] = [];
++
++  const passDead =
++    (snap.lastOkSyncAt === null && snap.consecutiveFailures >= 5) ||
++    (snap.lastOkSyncAt !== null &&
++      now.getTime() - new Date(snap.lastOkSyncAt).getTime() > DEAD_LOOP_MS);
++  if (passDead) {
++    problems.push(
++      `sync loop dead: no completed pass since ${snap.lastOkSyncAt ?? "boot"} ` +
++        `(${snap.consecutiveFailures} consecutive failures)`,
++    );
++  }
++  if (snap.staleLive > 0) {
++    problems.push(`${snap.staleLive} live match(es) untouched for 15+ min — summary sync is not keeping up`);
++  }
++  if (snap.quietFollowedLeagues.length > 0) {
++    problems.push(`followed league(s) with no fixture within ±7d: ${snap.quietFollowedLeagues.join(", ")}`);
++  }
++
++  if (problems.length === 0) return { alerted: false, problem: null };
++  const problem = problems.join("; ");
++
++  const cooldownOver = now.getTime() - state.lastAlertMs >= ALERT_COOLDOWN_MS;
++  if (cooldownOver) {
++    state.lastAlertMs = now.getTime();
++    send(`[vkick] sync sentinel: ${problem}`);
++    return { alerted: true, problem };
++  }
++  return { alerted: false, problem };
++}
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index ac92d0f..1dccc03 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -7,6 +7,14 @@ import { onMatchFinished } from "../predictions/resolver.js";
+ import { syncAllFavoriteTeamsUnderstat, syncLeagueUnderstatTables } from "./understat.js";
+ import { queueGoalAlerts, queueMatchdayAlerts } from "../notifications.js";
+ import { broadcast } from "../live/sse.js";
++// Sentinel: the loop's own failure detector — every pass below records its
++// outcome here, and the hourly check turns a dead loop or stale live matches
++// into one cooldown-gated alert (console at minimum, Telegram when wired).
++import {
++  checkAndAlert,
++  recordSyncPassFail,
++  recordSyncPassOk,
++} from "./sentinel.js";
+ 
+ const db = getDb();
+ 
+@@ -369,7 +377,9 @@ export function startSyncLoop(): void {
+             const matchday = queueMatchdayAlerts(db);
+             if (matchday > 0) log(`matchday pushes queued: ${matchday}`);
+           }
++          recordSyncPassOk();
+         } catch (err) {
++          recordSyncPassFail();
+           console.error("[sync] live loop error:", err);
+         } finally {
+           summariesRunning = false;
+@@ -393,8 +403,12 @@ export function startSyncLoop(): void {
+           for (const g of goals) {
+             broadcast("update", { matchId: g.matchId, type: "goal" });
+           }
++          recordSyncPassOk();
++        })
++        .catch((err) => {
++          recordSyncPassFail();
++          console.error("[sync] live pulse error:", err);
+         })
+-        .catch((err) => console.error("[sync] live pulse error:", err))
+         .finally(() => {
+           pulseRunning = false;
+         });
+@@ -413,7 +427,11 @@ export function startSyncLoop(): void {
+     }
+     scoreboardsRunning = true;
+     void syncScoreboards()
+-      .catch((err) => console.error("[sync] scoreboard loop error:", err))
++      .then(() => recordSyncPassOk())
++      .catch((err) => {
++        recordSyncPassFail();
++        console.error("[sync] scoreboard loop error:", err);
++      })
+       .finally(() => {
+         scoreboardsRunning = false;
+       });
+@@ -437,7 +455,11 @@ export function startSyncLoop(): void {
+     }
+     windowRunning = true;
+     void syncScoreboardWindow(1, 21)
+-      .catch((err) => console.error("[sync] window loop error:", err))
++      .then(() => recordSyncPassOk())
++      .catch((err) => {
++        recordSyncPassFail();
++        console.error("[sync] window loop error:", err);
++      })
+       .finally(() => {
+         windowRunning = false;
+       });
+@@ -449,6 +471,33 @@ export function startSyncLoop(): void {
+     void syncRosters().catch((err) => console.error("[sync] roster loop error:", err));
+   });
+ 
++  // Hourly: the staleness heartbeat. A dead loop or live matches far past
++  // their sync window is the one failure the app's users FEEL and no error
++  // SURFACE shows — this turns it into a message (Telegram when ALERT_CHAT_ID
++  // and the bot token are both set, the server log otherwise), water-falled to
++  // at most one alert per cooldown inside checkAndAlert.
++  cron.schedule("5 * * * *", () => {
++    const chatId = (process.env.ALERT_CHAT_ID ?? "").trim();
++    try {
++      const check = checkAndAlert(db, (text) => {
++        console.error(`[sentinel] ALERT: ${text}`);
++        if (!chatId) return;
++        void (async () => {
++          try {
++            const { getBot } = await import("../bot/index.js");
++            const b = getBot();
++            if (b) await b.api.sendMessage(chatId, text);
++          } catch (err) {
++            console.error("[sentinel] telegram alert failed:", String(err).slice(0, 120));
++          }
++        })();
++      });
++      if (check.problem && !check.alerted) log(`sentinel (cooldown) — ${check.problem}`);
++    } catch (err) {
++      console.error("[sentinel] check failed:", String(err).slice(0, 200));
++    }
++  });
++
+   // Weekly: Understat xG/xA/shot situations per favorite team.
+   // Runs at 5am UTC Tuesday — after weekend matches have settled.
+   cron.schedule("0 5 * * 2", async () => {
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index a532249..b842855 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -444,6 +444,23 @@ export function useCompetitions() {
+   });
+ }
+ 
++/**
++ * How fresh the SERVER's football data is (the sync sentinel's ledger):
++ * polled every couple of minutes from the feed so the footer line shows the
++ * truth — the fetch succeeded, but the data behind it may still be stale.
++ * Cheap (one small SQL snapshot), unauthenticated, and deliberately NOT
++ * refetched on focus (it would fight the feed's own refetches for no gain).
++ */
++export function useSyncHealth() {
++  return useQuery({
++    queryKey: ["sync-health"],
++    queryFn: () => api.getSyncHealth(),
++    staleTime: 2 * 60_000,
++    refetchInterval: 2 * 60_000,
++    refetchOnWindowFocus: false,
++  });
++}
++
+ /**
+  * Knockout competitions for the Cups picker: the club cups AND the
+  * international tournaments (both have no table). Selection is on the server's
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 1f2d5bf..4a600ac 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -181,6 +181,10 @@ export const strings = {
+     "deadline.locked": "Locked",
+     "matches.refresh": "Refresh",
+     "matches.lastSync": "Updated {time}",
++    // The server's sync ledger, not the browser's fetch time: sync can lag
++    // behind a successful fetch, and the footer line must not paper over that.
++    "matches.dataAsOf": "Data as of {time}",
++    "matches.syncDelayed": "Data is delayed — scores may be behind",
+     "matches.hint": "Live scores refresh every 30–60s",
+     "match.tabTimeline": "Timeline",
+     "match.tabStats": "Stats",
+@@ -791,6 +795,8 @@ export const strings = {
+     "deadline.locked": "قفل شد",
+     "matches.refresh": "به‌روزرسانی",
+     "matches.lastSync": "به‌روزرسانی {time}",
++    "matches.dataAsOf": "داده‌ها تا {time}",
++    "matches.syncDelayed": "داده‌ها به‌تاخیر افتاده — نتایج ممکن است عقب باشند",
+     "matches.hint": "نتایج زنده هر ۳۰ تا ۶۰ ثانیه به‌روز می‌شود",
+     "match.tabTimeline": "رویدادها",
+     "match.tabStats": "آمار",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 8c7be01..164d068 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -692,6 +692,24 @@ export const api = {
+ 
+   getCompetitions: () => request<{ competitions: ApiCompetition[] }>("/competitions"),
+ 
++  /**
++   * Sync freshness from the server's sentinel (/api/health/sync): the feed's
++   * "data as of" line is the SERVER's sync ledger, not the browser's fetch
++   * time — the two disagree the moment the sync loop lags behind the UI.
++   */
++  getSyncHealth: () =>
++    request<{
++      latestLastSyncedAt: string | null;
++      staleLive: number;
++      liveCount: number;
++      scheduledCount: number;
++      finishedCount: number;
++      perLeague: { league: string; lastSyncedAt: string | null }[];
++      quietFollowedLeagues: string[];
++      lastOkSyncAt: string | null;
++      consecutiveFailures: number;
++    }>("/health/sync"),
++
+   getStandings: (league: string) =>
+     request<{ season: string; standings: ApiStanding[] }>(`/standings/${encodeURIComponent(league)}`),
+ 
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 120f2b1..46bcc8f 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -9,7 +9,7 @@ import { Card, EmptyState, ErrorState } from "../components/ui";
+ import { MatchCardSkeleton } from "../components/Skeletons";
+ import { useNow } from "../hooks/useNow";
+ import { cx } from "../lib/cx";
+-import { useMatches, useFollowedLeagues } from "../hooks/useApi";
++import { useMatches, useFollowedLeagues, useSyncHealth } from "../hooks/useApi";
+ import { useFavorites } from "../hooks/useFavorites";
+ import { useI18n } from "../i18n/context";
+ import { formatClock } from "../lib/format";
+@@ -125,6 +125,17 @@ export default function Matches() {
+     return later[0] ? startOfDay(later[0]) : null;
+   }, [matches, selectedKey]);
+ 
++  // The server's sync ledger (the sentinel's snapshot), polled on a slow loop:
++  // the footer's data-age line tells the truth about the DATA, not just about
++  // the last browser fetch — sync can lag behind a 200-OK, and "silently
++  // quiet" is the one failure a live-score feed must never have.
++  const syncHealth = useSyncHealth();
++  const serverSyncedAt = syncHealth.data?.latestLastSyncedAt
++    ? new Date(syncHealth.data.latestLastSyncedAt)
++    : null;
++  const syncAt = serverSyncedAt ?? (lastSync as Date | null);
++  const syncStale = syncAt ? Date.now() - syncAt.getTime() > 30 * 60_000 : false;
++
+   // No data AND an error: an error over cached matches would replace a usable
+   // feed, so the error card is reserved for the cold-failure case.
+   const hasFeedError = matchesQuery.isError && !matchesQuery.data;
+@@ -397,7 +408,13 @@ export default function Matches() {
+           TopBar icon already carry the action, so this line only reports it. */}
+         <p className="mt-6 text-center text-[11px] text-ink-3">
+           {t("matches.hint")}
+-          {lastSync ? ` · ${t("matches.lastSync", { time: formatClock(lastSync, locale) })}` : ""}
++          {syncStale
++            ? ` · ${t("matches.syncDelayed")}`
++            : syncAt
++              ? ` · ${t("matches.dataAsOf", { time: formatClock(syncAt, locale) })}`
++              : lastSync
++                ? ` · ${t("matches.lastSync", { time: formatClock(lastSync, locale) })}`
++                : ""}
+         </p>
+       </div>
+     </>
+diff --git a/tests/run.ts b/tests/run.ts
+index d3f3d9f..ba36ce5 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -46,6 +46,7 @@ import { runErrorsTests } from "./errors.test.js";
+ import { runAdsgramTests } from "./adsgram.test.js";
+ import { runBotMenuTests } from "./botMenu.test.js";
+ import { runTimelineScoreTests } from "./timelineScore.test.js";
++import { runSentinelTests } from "./sentinel.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -94,6 +95,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["adsgram", runAdsgramTests],
+   ["botMenu", runBotMenuTests],
+   ["timelineScore", runTimelineScoreTests],
++  ["sentinel", runSentinelTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+diff --git a/tests/sentinel.test.ts b/tests/sentinel.test.ts
+new file mode 100644
+index 0000000..51bf852
+--- /dev/null
++++ b/tests/sentinel.test.ts
+@@ -0,0 +1,99 @@
++/**
++ * The staleness sentinel: the rules that keep a live-score feed honest.
++ *
++ * 1. Healthy data + a live loop send nothing — the silent no-op is the point.
++ * 2. A live match untouched for 15+ minutes is stale, and stale triggers the
++ *    alert exactly ONCE until the cooldown (30 min) has run its course: the
++ *    hourly check must not spam a matchday with the same warning.
++ * 3. A followed competition with no fixture within ±7 days is flagged as quiet.
++ * 4. Pass bookkeeping: one completed pass clears a failure streak; failures
++ *    accumulate until then.
++ */
++import { strict as assert } from "node:assert";
++import { DatabaseSync } from "node:sqlite";
++import fs from "node:fs";
++import os from "node:os";
++import path from "node:path";
++import { migrate } from "../server/db/schema.js";
++import {
++  checkAndAlert,
++  recordSyncPassFail,
++  recordSyncPassOk,
++  resetSentinelStateForTest,
++  syncHealthSnapshot,
++  syncPassHealth,
++} from "../server/sync/sentinel.js";
++
++const NOW = new Date("2026-10-18T18:00:00.000Z");
++
++export function runSentinelTests(): void {
++  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "verdikick-sentinel-")), "test.db");
++  const db = new DatabaseSync(file);
++  migrate(db);
++  resetSentinelStateForTest();
++
++  // Teams and users first: matches carries real foreign keys.
++  db.exec(`
++    INSERT INTO teams (id, name, short_name, league) VALUES ('H', 'Home FC', 'Home', 'eng.1'), ('A', 'Away FC', 'Away', 'eng.1');
++    INSERT INTO users (id, telegram_id, display_name, created_at) VALUES (1, 'u1', 'One', '2026-01-01T00:00:00.000Z');
++    INSERT INTO followed_leagues (user_id, league, created_at) VALUES (1, 'eng.1', '2026-01-01T00:00:00.000Z');
++    INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score, last_synced_at) VALUES
++      ('m1', 'eng.1', 'H', 'A', '${new Date(NOW.getTime() + 60_000).toISOString()}', 'live', 1, 0, '${NOW.toISOString()}');
++  `);
++
++  const healthy = syncHealthSnapshot(db, NOW);
++  assert.equal(healthy.staleLive, 0, "a freshly-synced live match is not stale");
++  assert.equal(healthy.quietFollowedLeagues.length, 0, "a league with a fixture ±7d is not quiet");
++  assert.ok(healthy.latestLastSyncedAt, "the ledger date is present");
++
++  // Healthy check sends nothing.
++  const sent: string[] = [];
++  const quiet1 = checkAndAlert(db, (t) => sent.push(t), NOW);
++  assert.equal(quiet1.alerted, false, "healthy data never alerts");
++  assert.equal(quiet1.problem, null, "healthy data reports no problem");
++  assert.equal(sent.length, 0, "no transport traffic when healthy");
++
++  // The live row goes stale (sync stopped mid-match): one alert, then cooldown.
++  db.prepare(
++    "UPDATE matches SET last_synced_at = ? WHERE id = 'm1'",
++  ).run(new Date(NOW.getTime() - 20 * 60_000).toISOString());
++  const stale = syncHealthSnapshot(db, NOW);
++  assert.equal(stale.staleLive, 1, "a live match 20 min untouched is stale");
++
++  const alert1 = checkAndAlert(db, (t) => sent.push(t), NOW);
++  assert.equal(alert1.alerted, true, "stale live matches alert");
++  assert.match(sent[0] ?? "", /live match/i, "the alert names the finding");
++  assert.ok(alert1.problem?.includes("live match"), `the problem line names staleness: ${alert1.problem}`);
++
++  const alert2 = checkAndAlert(db, (t) => sent.push(t), new Date(NOW.getTime() + 60_000));
++  assert.equal(alert2.alerted, false, "the cooldown suppresses repeat alerts");
++  assert.equal(sent.length, 1, "exactly one transport send per cooldown window");
++  assert.ok(alert2.problem, "the suppressed check still reports the problem for logs/ops");
++
++  // Away from staleness, back to healthy → nothing further.
++  db.prepare("UPDATE matches SET last_synced_at = ? WHERE id = 'm1'").run(NOW.toISOString());
++  const before = sent.length;
++  checkAndAlert(db, (t) => sent.push(t), new Date(NOW.getTime() + 120_000));
++  assert.equal(sent.length, before, "recovered data stops the alerting");
++
++  // Quiet followed league: eng.1 keeps its ±7d fixture, a second followed
++  // league with nothing anywhere near the window is flagged.
++  db.prepare(
++    "INSERT INTO followed_leagues (user_id, league, created_at) VALUES (1, 'uefa.champions', '2026-01-01T00:00:00.000Z')",
++  ).run();
++  const snap2 = syncHealthSnapshot(db, NOW);
++  assert.deepEqual(snap2.quietFollowedLeagues, ["uefa.champions"], "the empty competition is named");
++  db.prepare("DELETE FROM followed_leagues WHERE league = 'uefa.champions'").run();
++
++  // Pass bookkeeping: failures accumulate, one OK clears the streak.
++  resetSentinelStateForTest();
++  recordSyncPassFail();
++  recordSyncPassFail();
++  assert.equal(syncPassHealth().consecutiveFailures, 2, "failures accumulate");
++  assert.equal(syncPassHealth().lastOkMs, null, "no completed pass so far");
++  recordSyncPassOk();
++  assert.equal(syncPassHealth().consecutiveFailures, 0, "a completed pass clears the streak");
++  assert.ok(syncPassHealth().lastOkMs, "a completed pass stamps the ledger");
++
++  db.close();
++}
+-- 
+2.54.0.windows.1
+

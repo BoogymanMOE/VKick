@@ -1,0 +1,937 @@
+From 7527891ab75709a6722b216e7c0f2f4b14d5671d Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 28 Oct 2026 14:08:46 +0330
+Subject: [PATCH 1/4] fix(sync): persist completed scoreboard scores for form
+ data
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A completed scoreboard already has the final status and score, so store them
+without waiting for a summary request and keep summary retries open for a week.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/sync/service.ts |  2 +-
+ server/sync/upserts.ts | 11 +++++++++++
+ 2 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index 5de9b12..dec63c5 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -197,7 +197,7 @@ export async function syncSummaries(): Promise<GoalAlert[]> {
+       // Never-synced finished matches count as fresh (backfill), then settle.
+       if (!m.last_synced_at)
+         should = hoursToKickoff > -24 * 30; // current season window
+-      else should = hoursSinceSync > 1 && hoursSinceSync < 26;
++      else should = hoursSinceSync > 1 && hoursSinceSync < 24 * 7;
+     } else if (m.status === "scheduled" && hoursToKickoff < 3 && hoursToKickoff > -0.25) {
+       // Inside ~90 min of kickoff ESPN ships the official XI around the hour
+       // mark, and the lineup gate opens the shot/watch/versus/sub mechanics at
+diff --git a/server/sync/upserts.ts b/server/sync/upserts.ts
+index aa7540c..96e0ffe 100644
+--- a/server/sync/upserts.ts
++++ b/server/sync/upserts.ts
+@@ -87,6 +87,17 @@ export function applyScoreboard(db: DB, json: unknown, league: string): void {
+         (existing?.status === "finished" || existing?.status === "halftime") && m.status === "scheduled"
+           ? existing.status
+           : m.status;
++      // The scoreboard is the first reliable signal that a fixture is final.
++      // Fill an existing fixture row before the upsert flips its status, so
++      // form reads do not wait for a later summary sync.
++      if (m.status === "finished" && m.home_score !== null && m.away_score !== null) {
++        run(
++          db,
++          `UPDATE matches SET status = 'finished', home_score = ?, away_score = ?, last_synced_at = ?
++           WHERE id = ? AND status != 'finished'`,
++          [m.home_score, m.away_score, new Date().toISOString(), m.id],
++        );
++      }
+       upsert(
+         db,
+         "matches",
+-- 
+2.54.0.windows.1
+
+
+From 5c3e27033c0404e17cf77f886d5a778797f47918 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 28 Oct 2026 14:08:46 +0330
+Subject: [PATCH 2/4] feat(team): replace the empty xG tab with recent lineups
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Show the latest starting XI, used substitutes, and formation from stored match
+stats so club visitors can find the lineup without opening match detail.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/routes/football.ts |  53 ++++++++++
+ src/hooks/useApi.ts       |   9 ++
+ src/i18n/strings.ts       |  20 +++-
+ src/lib/api.ts            |   9 +-
+ src/pages/TeamPage.tsx    | 213 +++++++++-----------------------------
+ 5 files changed, 137 insertions(+), 167 deletions(-)
+
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index 8af0d3b..570811b 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -538,6 +538,59 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
+   res.json({ team, seasonStats: seasonStats ?? null, standing: standing ?? null, fixtures });
+ });
+ 
++/** Recent completed-match XI and used substitutes for a club. */
++matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
++  const teamId = String(req.params.id);
++  if (isBlockedTeamId(teamId)) return bad(res, "not found", 404);
++  const team = get<{ league: string }>(db, "SELECT league FROM teams WHERE id = ?", [teamId]);
++  if (!team) return bad(res, "not found", 404);
++  if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
++
++  const matchQuery = `SELECT id, league, home_team_id, away_team_id, home_formation, away_formation, kickoff_at
++    FROM matches
++    WHERE (home_team_id = ? OR away_team_id = ?) AND status = 'finished'
++    ORDER BY kickoff_at DESC LIMIT 1`;
++  let match = get<{
++    id: string;
++    league: string;
++    home_team_id: string;
++    away_team_id: string;
++    home_formation: string | null;
++    away_formation: string | null;
++    kickoff_at: string;
++  }>(db, matchQuery, [teamId, teamId]);
++  if (!match) return res.json({ match: null, starters: [], subs: [] });
++
++  let rows = lineupRows(match.id);
++  if (rows.length === 0) {
++    await backfillSummary(match.league, match.id);
++    match = get(db, matchQuery, [teamId, teamId]) ?? match;
++    rows = lineupRows(match.id);
++  }
++
++  const isHome = match.home_team_id === teamId;
++  const formation = isHome ? match.home_formation : match.away_formation;
++  const players = rows
++    .filter((row) => row.team_id === teamId)
++    .map((row) => ({
++      id: String(row.player_id),
++      name: String(row.full_name),
++      position: String(row.position ?? "MID"),
++      number: typeof row.jersey_number === "number" ? row.jersey_number : 0,
++      headshot: typeof row.headshot_url === "string" ? row.headshot_url : null,
++      espnPosition: typeof row.espn_position === "string" ? row.espn_position : null,
++      started: Number(row.started) === 1,
++      minutesPlayed: typeof row.minutes_played === "number" ? row.minutes_played : 0,
++    }));
++  const toPlayer = ({ started: _started, minutesPlayed: _minutesPlayed, ...player }: (typeof players)[number]) => player;
++
++  res.json({
++    match: { id: match.id, kickoffAt: match.kickoff_at, formation },
++    starters: players.filter((player) => player.started).map(toPlayer),
++    subs: players.filter((player) => !player.started && player.minutesPlayed > 0).map(toPlayer),
++  });
++});
++
+ /** Full squad for one club, position-grouped and shirt-number ordered. */
+ matchesRouter.get("/api/teams/:id/players", (req, res) => {
+   const teamId = String(req.params.id);
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 0a9ab9b..a6e6dad 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -631,6 +631,15 @@ export function useLeagueTeamStats(league: string) {
+ }
+ 
+ /** Per-team season stat line + recent fixtures. */
++export function useRecentLineup(teamId: string) {
++  return useQuery({
++    queryKey: ["recent-lineup", teamId],
++    queryFn: () => api.getRecentLineup(teamId),
++    enabled: Boolean(teamId),
++    staleTime: 5 * 60_000,
++  });
++}
++
+ export function useTeamDetail(teamId: string) {
+   return useQuery({
+     queryKey: ["team", teamId],
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index fe7a0b0..47568da 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -292,7 +292,7 @@ export const strings = {
+     "team.tab.squad": "Squad",
+     "team.tab.fixtures": "Fixtures",
+     "team.tab.season": "Season",
+-    "team.tab.xg": "xG",
++    "team.tab.lineup": "Recent XI",
+     "team.tab.news": "News",
+     "team.news.empty": "No recent news",
+     "team.news.emptyHint": "Check back later for updates",
+@@ -309,6 +309,14 @@ export const strings = {
+     "team.noFixtures": "No fixtures stored for this club yet.",
+     "team.statsEmpty": "No season stats yet",
+     "team.statsEmptyHint": "Team averages fill in after the next completed round.",
++    "team.recentResults": "Recent results",
++    "team.vs": "vs",
++    "team.upcomingFixtures": "Upcoming",
++    "team.lineupEmpty": "No recent lineup",
++    "team.lineupEmptyHint": "Lineups appear after the first match of the season.",
++    "team.lineupStarters": "Starting XI",
++    "team.lineupSubs": "Subs used",
++    "team.lineupViewMatch": "View match",
+     "team.statsAttack": "Attack",
+     "team.statsDefense": "Defense & control",
+     "xg.title": "Expected goals",
+@@ -978,7 +986,7 @@ export const strings = {
+     "team.tab.squad": "ترکیب",
+     "team.tab.fixtures": "بازی‌ها",
+     "team.tab.season": "آمار فصل",
+-    "team.tab.xg": "xG",
++    "team.tab.lineup": "ترکیب اخیر",
+     "team.tab.news": "اخبار",
+     "team.news.empty": "اخباری نیست",
+     "team.news.emptyHint": "بعداً دوباره بررسی کنید",
+@@ -995,6 +1003,14 @@ export const strings = {
+     "team.noFixtures": "هنوز بازی‌ای برای این باشگاه ثبت نشده.",
+     "team.statsEmpty": "هنوز آمار فصل موجود نیست",
+     "team.statsEmptyHint": "میانگین‌های تیم بعد از هفته کامل بعدی پر می‌شوند.",
++    "team.recentResults": "نتایج اخیر",
++    "team.vs": "در برابر",
++    "team.upcomingFixtures": "بازی‌های پیش رو",
++    "team.lineupEmpty": "ترکیب اخیری در دسترس نیست",
++    "team.lineupEmptyHint": "ترکیب‌ها پس از اولین بازی فصل ظاهر می‌شوند.",
++    "team.lineupStarters": "ترکیب اولیه",
++    "team.lineupSubs": "تعویض‌ها",
++    "team.lineupViewMatch": "مشاهده بازی",
+     "team.statsAttack": "حمله",
+     "team.statsDefense": "دفاع و کنترل",
+     "xg.title": "گل‌های انتظاری",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 0db9de0..4e5fa2a 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -10,7 +10,7 @@
+  */
+ 
+ import { currentAuthToken, getDeviceId } from "./auth";
+-import type { MatchForm, MatchH2H, NewsArticle } from "../types";
++import type { LineupPlayer, MatchForm, MatchH2H, NewsArticle } from "../types";
+ 
+ const BASE = "/api";
+ 
+@@ -587,6 +587,13 @@ export const api = {
+       fixtures: ApiMatch[];
+     }>(`/teams/${encodeURIComponent(id)}`),
+ 
++  getRecentLineup: (teamId: string) =>
++    request<{
++      match: { id: string; kickoffAt: string; formation: string | null } | null;
++      starters: LineupPlayer[];
++      subs: LineupPlayer[];
++    }>(`/teams/${encodeURIComponent(teamId)}/recent-lineup`),
++
+   getLeaguePlayers: (league: string, sort: string, limit = 50) =>
+     request<{
+       season: string;
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 5e9d5f9..e10fd8d 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -21,10 +21,9 @@ import {
+   useLeagueNews,
+   useSquad,
+   useTeamDetail,
+-  useTeamUnderstat,
++  useRecentLineup,
+   type SquadRow,
+ } from "../hooks/useApi";
+-import type { StringKey } from "../i18n/strings";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { TEAM_FALLBACK } from "../lib/colors";
+ import { useLocalState } from "../lib/useLocalState";
+@@ -32,10 +31,11 @@ import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
+ import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate, toFaDigits } from "../lib/format";
+ import type { ApiMatch } from "../lib/api";
++import type { LineupPlayer } from "../types";
+ import type { Position } from "../types";
+ import { competitionName } from "../lib/leagues";
+ 
+-type Tab = "squad" | "fixtures" | "season" | "xg" | "news";
++type Tab = "squad" | "fixtures" | "season" | "lineup" | "news";
+ 
+ const POS_ORDER: Position[] = ["GK", "DEF", "MID", "FWD"];
+ 
+@@ -200,7 +200,7 @@ export default function TeamPage() {
+             { value: "squad", label: t("team.tab.squad") },
+             { value: "fixtures", label: t("team.tab.fixtures") },
+             { value: "season", label: t("team.tab.season") },
+-            { value: "xg", label: t("team.tab.xg") },
++            { value: "lineup", label: t("team.tab.lineup") },
+             { value: "news", label: t("team.tab.news") },
+           ]}
+         />
+@@ -217,13 +217,7 @@ export default function TeamPage() {
+         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
+         {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
+         {tab === "season" ? <StatsTab stats={seasonStats} /> : null}
+-        {tab === "xg" ? (
+-          <XgTab
+-            teamId={team.id}
+-            played={seasonStats?.played ?? 0}
+-            points={seasonStats ? seasonStats.wins * 3 + seasonStats.draws : null}
+-          />
+-        ) : null}
++        {tab === "lineup" ? <RecentLineupTab teamId={team.id} /> : null}
+         {tab === "news" ? <NewsTab teamId={team.id} league={team.league ?? ""} /> : null}
+       </section>
+     </>
+@@ -511,177 +505,68 @@ function StatCard({ title, rows }: { title: string; rows: Array<{ label: string;
+   );
+ }
+ 
+-/* ------------------------------------------------------------ expected goals */
+-
+-/** Understat stores these display labels; map them to our own copy. */
+-const SITUATION_KEY: Record<string, StringKey> = {
+-  "Open play": "xg.sitOpenPlay",
+-  "From corner": "xg.sitCorner",
+-  "Set piece": "xg.sitSetPiece",
+-  "Direct Freekick": "xg.sitFreekick",
+-  Penalty: "xg.sitPenalty",
+-};
+-
+-/**
+- * Expected goals, from Understat (a different source to the ESPN stat sheet).
+- * A club's xG against its actual goals is the read that separates a good
+- * attacking side from a lucky one, and the per-type split is the part the
+- * broadcaster graphics never show.
+- *
+- * Empty is a normal outcome, not a failure: the scraper only runs for followed
+- * big-five clubs, so cups and the long tail have nothing here.
+- */
+-function XgTab({ teamId, played, points }: { teamId: string; played: number; points: number | null }) {
+-  const { t, localize } = useI18n();
+-  const query = useTeamUnderstat(teamId);
++/* ------------------------------------------------------------ recent lineup */
+ 
++function RecentLineupTab({ teamId }: { teamId: string }) {
++  const { t, lang, localize } = useI18n();
++  const query = useRecentLineup(teamId);
+   if (query.isLoading) return <PanelSkeleton height={192} />;
+   if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
++  const data = query.data;
++  if (!data?.match) return <EmptyState title={t("team.lineupEmpty")} hint={t("team.lineupEmptyHint")} />;
+ 
+-  const teamXg = query.data?.teamStats?.xg ?? null;
+-  const teamXga = query.data?.teamStats?.xga ?? null;
+-  const expected = query.data?.teamStats?.xpts ?? null;
+-  const ppda = query.data?.teamStats?.ppda ?? null;
+-  const deep = query.data?.teamStats?.deep ?? null;
+-  const situations = query.data?.situations ?? [];
+-  const players = [...(query.data?.players ?? [])].sort((a, b) => (b.xg ?? 0) - (a.xg ?? 0));
+-
+-  if (teamXg == null && situations.length === 0 && players.length === 0) {
+-    return <EmptyState title={t("xg.emptyTitle")} hint={t("xg.emptyHint")} />;
+-  }
+-
+-  const fixed = (value: number | null) => (value == null ? "–" : value.toFixed(2));
+-  const perMatch = (value: number | null) =>
+-    value != null && played > 0 ? (value / played).toFixed(2) : null;
+-  // Actual minus expected: the over/under-performance read.
+-  const delta = points != null && expected != null ? points - expected : null;
+-  const extra = [
+-    ppda != null ? { label: t("xg.ppda"), value: ppda.toFixed(2), hint: t("xg.ppdaHint") } : null,
+-    deep != null ? { label: t("xg.deep"), value: String(deep), hint: t("xg.deepHint") } : null,
+-  ].filter((row): row is { label: string; value: string; hint: string } => row != null);
+-  // Scale the bars against the biggest type so they read as shares of the total.
+-  const widest = Math.max(0.01, ...situations.map((s) => Math.max(s.xg ?? 0, s.xga ?? 0)));
++  const locale = lang === "fa" ? "fa-IR" : undefined;
++  const dateFmt = new Intl.DateTimeFormat(locale, { weekday: "short", month: "short", day: "numeric" });
++  const number = (value: number) => (lang === "fa" ? toFaDigits(value) : value);
++  const playerRows = (players: LineupPlayer[]) =>
++    players.map((player) => (
++      <li key={player.id} className="flex items-center gap-2 py-2">
++        <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-xs font-bold text-ink-2">
++          {player.number > 0 ? number(player.number) : "–"}
++        </span>
++        <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>
++        <span className="text-xs text-ink-3">{t(`pos.${player.position}`)}</span>
++      </li>
++    ));
+ 
+   return (
+-    <div className="space-y-lg">
+-      <Card className="p-4">
+-        <SectionHeading title={t("xg.title")} />
+-        <div className="mt-md grid grid-cols-2 gap-4">
+-          <div>
+-            <p className="text-xs font-semibold text-ink-3">{t("xg.for")}</p>
+-            <Num className="text-lg font-black text-volt">{fixed(teamXg)}</Num>
+-            {perMatch(teamXg) ? (
+-              <p className="text-xs text-ink-3">
+-                <Num>{perMatch(teamXg)}</Num> {t("xg.perMatch")}
+-              </p>
+-            ) : null}
+-          </div>
+-          <div className="text-end">
+-            <p className="text-xs font-semibold text-ink-3">{t("xg.against")}</p>
+-            <Num className="text-lg font-black text-ink-2">{fixed(teamXga)}</Num>
+-            {perMatch(teamXga) ? (
+-              <p className="text-xs text-ink-3">
+-                <Num>{perMatch(teamXga)}</Num> {t("xg.perMatch")}
+-              </p>
+-            ) : null}
+-          </div>
++    <div className="space-y-3">
++      <Card className="p-3">
++        <div className="flex items-center justify-between">
++          <span className="text-xs font-bold text-ink-3">{dateFmt.format(new Date(data.match.kickoffAt))}</span>
++          {data.match.formation ? <Chip tone="pitch">{data.match.formation}</Chip> : null}
+         </div>
+-
+-        {delta != null ? (
+-          <div className="mt-md flex items-baseline justify-between gap-2 border-t border-line pt-3">
+-            <span className="text-xs text-ink-2">{t("xg.points")}</span>
+-            <span className="text-xs text-ink-3">
+-              <Num className="text-sm font-bold text-ink">{points}</Num>
+-              {" · "}
+-              {t("xg.expected")} <Num className="text-sm font-bold text-gold">{expected?.toFixed(1)}</Num>{" "}
+-              <Num className={cx("font-bold", delta >= 0 ? "text-volt" : "text-danger")}>
+-                {delta >= 0 ? "+" : ""}
+-                {delta.toFixed(1)}
+-              </Num>
+-            </span>
+-          </div>
+-        ) : null}
+-
+-        {extra.length > 0 ? (
+-          <dl className="mt-md grid grid-cols-2 gap-3 border-t border-line pt-3">
+-            {extra.map((row) => (
+-              <div key={row.label}>
+-                <dt className="text-xs font-semibold text-ink-3">{row.label}</dt>
+-                <dd>
+-                  <Num className="text-sm font-bold text-ink">{row.value}</Num>
+-                </dd>
+-              </div>
+-            ))}
+-          </dl>
+-        ) : null}
+       </Card>
+-
+-      {situations.length > 0 ? (
+-        <Card className="p-4">
+-          <SectionHeading title={t("xg.situations")} />
+-          <p className="mt-1 text-xs text-ink-3">{t("xg.situationsHint")}</p>
+-          <ul className="mt-md space-y-3">
+-            {situations.map((situation) => {
+-              const key = SITUATION_KEY[situation.situation];
+-              return (
+-                <li key={situation.situation}>
+-                  <div className="flex items-baseline justify-between gap-2">
+-                    <span className="text-xs text-ink-2">{key ? t(key) : situation.situation}</span>
+-                    <span className="text-xs text-ink-3">
+-                      <Num>{situation.shots ?? 0}</Num> {t("stats.shots")} · <Num>{situation.goals ?? 0}</Num>{" "}
+-                      {t("stats.goals")}
+-                    </span>
+-                  </div>
+-                  <div className="mt-1 flex items-center gap-2">
+-                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-elevated">
+-                      <span
+-                        className="block h-full rounded-full bg-volt"
+-                        style={{ width: `${(((situation.xg ?? 0) / widest) * 100).toFixed(1)}%` }}
+-                      />
+-                    </span>
+-                    <Num className="w-9 flex-none text-end text-xs font-bold text-ink">
+-                      {fixed(situation.xg ?? 0)}
+-                    </Num>
+-                  </div>
+-                </li>
+-              );
+-            })}
+-          </ul>
+-        </Card>
+-      ) : null}
+-
+-      {players.length > 0 ? (
+-        <Card className="p-0">
+-          <div className="px-3 pt-3">
+-            <SectionHeading title={t("xg.players")} />
+-          </div>
+-          <ul className="mt-2 divide-y divide-line">
+-            {players.slice(0, 10).map((player) => (
+-              <li key={player.id} className="flex items-center gap-3 px-3 py-2">
+-                <Num className="grid h-6 w-6 flex-none place-items-center rounded-full bg-elevated text-xs text-ink-2">
+-                  {player.jersey ?? "–"}
+-                </Num>
+-                <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">
+-                  {localize(player.name)}
+-                </span>
+-                <span className="flex-none text-xs text-ink-3">
+-                  <Num className="me-2 text-ink-2">
+-                    {t("xg.xa")} {fixed(player.xa ?? 0)}
+-                  </Num>
+-                  <Num className="font-bold text-volt">{fixed(player.xg ?? 0)}</Num>
++      <Card className="p-3">
++        <SectionHeading title={t("team.lineupStarters")} />
++        <ul className="divide-y divide-line">{playerRows(data.starters)}</ul>
++      </Card>
++      {data.subs.length > 0 ? (
++        <Card className="p-3">
++          <SectionHeading title={t("team.lineupSubs")} />
++          <ul className="divide-y divide-line">
++            {data.subs.map((player) => (
++              <li key={player.id} className="flex items-center gap-2 py-2">
++                <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-xs font-bold text-ink-2">
++                  {player.number > 0 ? number(player.number) : "–"}
+                 </span>
++                <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>
++                <span className="flex-none text-xs font-bold text-pitch">↑</span>
+               </li>
+             ))}
+           </ul>
+-          <p className="px-3 pb-3 pt-2 text-xs text-ink-3">{t("xg.source")}</p>
+         </Card>
+       ) : null}
++      <Link
++        to={`/match/${data.match.id}`}
++        className="block rounded-card border border-line bg-surface p-3 text-center text-xs font-bold text-volt transition-colors hover:bg-elevated"
++      >
++        {t("team.lineupViewMatch")} →
++      </Link>
+     </div>
+   );
+ }
+ 
+-/* ------------------------------------------------------------ news */
+-
+ /**
+  * Recent ESPN coverage for this club. ESPN publishes no per-team soccer news
+  * feed, so the server takes the league's feed and narrows it by this club's
+-- 
+2.54.0.windows.1
+
+
+From 11300c22a9db28ed002661c72a0ee0bb88d40d6c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 28 Oct 2026 14:11:50 +0330
+Subject: [PATCH 3/4] feat(team): show recent results alongside season stats
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Label the summary tab as Stats and show recent finished matches with dates,
+scorelines, and W/D/L markers even when aggregates are unavailable.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/strings.ts    |   6 +-
+ src/pages/TeamPage.tsx | 139 +++++++++++++++++++++++++++++++----------
+ 2 files changed, 108 insertions(+), 37 deletions(-)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 47568da..f4a58ed 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -291,7 +291,7 @@ export const strings = {
+     "team.leagueUnsupported": "This league is no longer supported",
+     "team.tab.squad": "Squad",
+     "team.tab.fixtures": "Fixtures",
+-    "team.tab.season": "Season",
++    "team.tab.season": "Stats",
+     "team.tab.lineup": "Recent XI",
+     "team.tab.news": "News",
+     "team.news.empty": "No recent news",
+@@ -311,7 +311,6 @@ export const strings = {
+     "team.statsEmptyHint": "Team averages fill in after the next completed round.",
+     "team.recentResults": "Recent results",
+     "team.vs": "vs",
+-    "team.upcomingFixtures": "Upcoming",
+     "team.lineupEmpty": "No recent lineup",
+     "team.lineupEmptyHint": "Lineups appear after the first match of the season.",
+     "team.lineupStarters": "Starting XI",
+@@ -985,7 +984,7 @@ export const strings = {
+     "team.leagueUnsupported": "این لیگ دیگر پشتیبانی نمی‌شود",
+     "team.tab.squad": "ترکیب",
+     "team.tab.fixtures": "بازی‌ها",
+-    "team.tab.season": "آمار فصل",
++    "team.tab.season": "آمار",
+     "team.tab.lineup": "ترکیب اخیر",
+     "team.tab.news": "اخبار",
+     "team.news.empty": "اخباری نیست",
+@@ -1005,7 +1004,6 @@ export const strings = {
+     "team.statsEmptyHint": "میانگین‌های تیم بعد از هفته کامل بعدی پر می‌شوند.",
+     "team.recentResults": "نتایج اخیر",
+     "team.vs": "در برابر",
+-    "team.upcomingFixtures": "بازی‌های پیش رو",
+     "team.lineupEmpty": "ترکیب اخیری در دسترس نیست",
+     "team.lineupEmptyHint": "ترکیب‌ها پس از اولین بازی فصل ظاهر می‌شوند.",
+     "team.lineupStarters": "ترکیب اولیه",
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index e10fd8d..32e64d2 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -216,7 +216,7 @@ export default function TeamPage() {
+       >
+         {tab === "squad" ? <SquadTab squadQuery={squadQuery} /> : null}
+         {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
+-        {tab === "season" ? <StatsTab stats={seasonStats} /> : null}
++        {tab === "season" ? <StatsTab stats={seasonStats} fixtures={fixtures} teamId={team.id} /> : null}
+         {tab === "lineup" ? <RecentLineupTab teamId={team.id} /> : null}
+         {tab === "news" ? <NewsTab teamId={team.id} league={team.league ?? ""} /> : null}
+       </section>
+@@ -439,49 +439,122 @@ function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: strin
+ 
+ type SeasonStats = NonNullable<ReturnType<typeof useTeamDetail>["data"]>["seasonStats"];
+ 
+-function StatsTab({ stats }: { stats: SeasonStats }) {
+-  const { t } = useI18n();
+-  if (!stats) return <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />;
++function StatsTab({
++  stats,
++  fixtures,
++  teamId,
++}: {
++  stats: SeasonStats;
++  fixtures: ApiMatch[];
++  teamId: string;
++}) {
++  const { t, lang, localize } = useI18n();
++  const locale = lang === "fa" ? "fa-IR" : undefined;
++  const dateFmt = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" });
++  const recentResults = fixtures.filter((match) => match.status === "finished").slice(-5);
++  if (!stats && recentResults.length === 0) {
++    return <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />;
++  }
+ 
+   // Two reads instead of one dump: what the side creates, and what it concedes
+   // or controls. The flat list said everything at once and ranked nothing.
+-  const attackRows: Array<{ label: string; value: string }> = [
+-    { label: t("stats.goals"), value: `${stats.goals_for}` },
+-    { label: t("stats.shots"), value: `${stats.total_shots}` },
+-    { label: t("stats.onTarget"), value: `${stats.total_shots_on_target}` },
+-    { label: t("stats.corners"), value: `${stats.total_corners}` },
+-  ];
+-  const controlRows: Array<{ label: string; value: string }> = [
+-    { label: t("stats.conceded"), value: `${stats.goals_against}` },
+-    { label: t("stats.possession"), value: `${Math.round(stats.avg_possession)}%` },
+-    { label: t("stats.passAccuracy"), value: `${Math.round(stats.avg_pass_accuracy)}%` },
+-    { label: t("stats.fouls"), value: `${stats.total_fouls}` },
+-  ];
++  const attackRows: Array<{ label: string; value: string }> = stats
++    ? [
++        { label: t("stats.goals"), value: `${stats.goals_for}` },
++        { label: t("stats.shots"), value: `${stats.total_shots}` },
++        { label: t("stats.onTarget"), value: `${stats.total_shots_on_target}` },
++        { label: t("stats.corners"), value: `${stats.total_corners}` },
++      ]
++    : [];
++  const controlRows: Array<{ label: string; value: string }> = stats
++    ? [
++        { label: t("stats.conceded"), value: `${stats.goals_against}` },
++        { label: t("stats.possession"), value: `${Math.round(stats.avg_possession)}%` },
++        { label: t("stats.passAccuracy"), value: `${Math.round(stats.avg_pass_accuracy)}%` },
++        { label: t("stats.fouls"), value: `${stats.total_fouls}` },
++      ]
++    : [];
+ 
+   // The season in one line. The grouped cards below say what the side does;
+   // only the record says how it went, so it leads the tab rather than hiding
+   // as row one of a list nobody scanned to the bottom of.
+-  const record: Array<{ letter: string; value: number }> = [
+-    { letter: "W", value: stats.wins },
+-    { letter: "D", value: stats.draws },
+-    { letter: "L", value: stats.losses },
+-  ];
++  const record: Array<{ letter: string; value: number }> = stats
++    ? [
++        { letter: "W", value: stats.wins },
++        { letter: "D", value: stats.draws },
++        { letter: "L", value: stats.losses },
++      ]
++    : [];
+ 
+   return (
+     <div className="space-y-lg">
+-      <Card className="flex items-center justify-between gap-3 p-4">
+-        <span className="label text-ink-3">{t("statsPage.teams")}</span>
+-        <span className="flex items-baseline gap-2">
+-          {record.map(({ letter, value }) => (
+-            <span key={letter} className="flex items-baseline gap-0.5">
+-              <Num className="text-lg font-black text-ink">{value}</Num>
+-              <span className="label text-ink-3">{letter}</span>
++      {recentResults.length > 0 ? (
++        <Card className="p-3">
++          <SectionHeading title={t("team.recentResults")} />
++          <ul className="divide-y divide-line">
++            {recentResults.map((match) => {
++              const { home, away } = matchFromApi(match);
++              const isHome = home.id === teamId;
++              const gf = isHome ? match.home_score ?? 0 : match.away_score ?? 0;
++              const ga = isHome ? match.away_score ?? 0 : match.home_score ?? 0;
++              const result = gf > ga ? "W" : gf < ga ? "L" : "D";
++              const opponent = isHome ? away : home;
++              const resultLabel =
++                result === "W"
++                  ? t("table.formWShort")
++                  : result === "L"
++                    ? t("table.formLShort")
++                    : t("table.formDShort");
++              return (
++                <li key={match.id} className="flex items-center gap-2 py-2">
++                  <span
++                    className={cx(
++                      "grid h-6 w-6 flex-none place-items-center rounded text-[10px] font-bold",
++                      result === "W"
++                        ? "bg-pitch/20 text-pitch"
++                        : result === "L"
++                          ? "bg-danger/20 text-danger"
++                          : "bg-ink-3/15 text-ink-3",
++                    )}
++                  >
++                    {resultLabel}
++                  </span>
++                  <span className="min-w-0 flex-1 truncate text-xs text-ink-2">
++                    {isHome ? `${t("team.vs")} ` : ""}
++                    {localize(opponent.shortName)}
++                    {!isHome ? ` ${t("team.vs")}` : ""}
++                  </span>
++                  <span dir="ltr" className="flex-none text-xs font-bold text-ink">
++                    {lang === "fa" ? toFaDigits(`${gf}–${ga}`) : `${gf}–${ga}`}
++                  </span>
++                  <span className="flex-none text-[10px] text-ink-3">
++                    {dateFmt.format(new Date(match.kickoff_at))}
++                  </span>
++                </li>
++              );
++            })}
++          </ul>
++        </Card>
++      ) : null}
++      {stats ? (
++        <>
++          <Card className="flex items-center justify-between gap-3 p-4">
++            <span className="label text-ink-3">{t("statsPage.teams")}</span>
++            <span className="flex items-baseline gap-2">
++              {record.map(({ letter, value }) => (
++                <span key={letter} className="flex items-baseline gap-0.5">
++                  <Num className="text-lg font-black text-ink">{value}</Num>
++                  <span className="label text-ink-3">{letter}</span>
++                </span>
++              ))}
+             </span>
+-          ))}
+-        </span>
+-      </Card>
+-      <StatCard title={t("team.statsAttack")} rows={attackRows} />
+-      <StatCard title={t("team.statsDefense")} rows={controlRows} />
++          </Card>
++          <StatCard title={t("team.statsAttack")} rows={attackRows} />
++          <StatCard title={t("team.statsDefense")} rows={controlRows} />
++        </>
++      ) : (
++        <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />
++      )}
+     </div>
+   );
+ }
+-- 
+2.54.0.windows.1
+
+
+From fdee37b9ff1438264602f87187cc7efcb9fc4315 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 28 Oct 2026 14:11:50 +0330
+Subject: [PATCH 4/4] polish(team): separate results from upcoming fixtures
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Label played matches and future games in distinct sections so the fixture tab
+makes historical scorelines easy to find.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/strings.ts    |   2 +
+ src/pages/TeamPage.tsx | 135 ++++++++++++++++++++++-------------------
+ 2 files changed, 75 insertions(+), 62 deletions(-)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index f4a58ed..67d0b89 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -311,6 +311,7 @@ export const strings = {
+     "team.statsEmptyHint": "Team averages fill in after the next completed round.",
+     "team.recentResults": "Recent results",
+     "team.vs": "vs",
++    "team.upcomingFixtures": "Upcoming",
+     "team.lineupEmpty": "No recent lineup",
+     "team.lineupEmptyHint": "Lineups appear after the first match of the season.",
+     "team.lineupStarters": "Starting XI",
+@@ -1004,6 +1005,7 @@ export const strings = {
+     "team.statsEmptyHint": "میانگین‌های تیم بعد از هفته کامل بعدی پر می‌شوند.",
+     "team.recentResults": "نتایج اخیر",
+     "team.vs": "در برابر",
++    "team.upcomingFixtures": "بازی‌های پیش رو",
+     "team.lineupEmpty": "ترکیب اخیری در دسترس نیست",
+     "team.lineupEmptyHint": "ترکیب‌ها پس از اولین بازی فصل ظاهر می‌شوند.",
+     "team.lineupStarters": "ترکیب اولیه",
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 32e64d2..b151d09 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -369,69 +369,80 @@ function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: strin
+   const locale = lang === "fa" ? "fa-IR" : undefined;
+   if (fixtures.length === 0) return <EmptyState title={t("team.noFixtures")} />;
+ 
+-  return (
+-    <ul className="space-y-2">
+-      {fixtures.map((match) => {
+-        // One scoreline per fixture: crest, club, the result or the kickoff,
+-        // club, crest. The club whose page this is wears volt, so picking your
+-        // side out of a neutral fixture list needs no reading.
+-        const { home, away } = matchFromApi(match);
+-        return (
+-          <li key={match.id}>
+-            <Link
+-              to={`/match/${match.id}`}
+-              onPointerDown={() => prefetchMatch(match.id)}
+-              aria-label={`${localize(home.shortName)} ${t("common.versus")} ${localize(away.shortName)}`}
+-              className="flex items-center justify-between gap-2 rounded-card border border-line bg-surface p-2.5 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++  const played = fixtures.filter((match) => match.status === "finished");
++  const upcoming = fixtures.filter((match) => match.status !== "finished");
++  const renderMatch = (match: ApiMatch) => {
++    // One scoreline per fixture: crest, club, the result or the kickoff, club, crest.
++    const { home, away } = matchFromApi(match);
++    return (
++      <li key={match.id}>
++        <Link
++          to={`/match/${match.id}`}
++          onPointerDown={() => prefetchMatch(match.id)}
++          aria-label={`${localize(home.shortName)} ${t("common.versus")} ${localize(away.shortName)}`}
++          className="flex items-center justify-between gap-2 rounded-card border border-line bg-surface p-2.5 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++        >
++          <span className="flex min-w-0 flex-1 items-center gap-2">
++            <TeamBadge team={home} size="sm" />
++            <span
++              className={cx(
++                "min-w-0 truncate text-xs font-bold",
++                home.id === teamId ? "text-volt" : "text-ink",
++              )}
+             >
+-              <span className="flex min-w-0 flex-1 items-center gap-2">
+-                <TeamBadge team={home} size="sm" />
+-                <span
+-                  className={cx(
+-                    "min-w-0 truncate text-xs font-bold",
+-                    home.id === teamId ? "text-volt" : "text-ink",
+-                  )}
+-                >
+-                  {localize(home.shortName)}
+-                </span>
+-              </span>
+-              <span className="flex-none">
+-                {match.status === "finished" ? (
+-                  <Chip tone="muted">
+-                    <Num>
+-                      {match.home_score ?? 0}–{match.away_score ?? 0}
+-                    </Num>
+-                  </Chip>
+-                ) : match.status === "live" ? (
+-                  <Chip tone="live">
+-                    <Num>{match.minute_display ?? ""}</Num>
+-                  </Chip>
+-                ) : (
+-                  /* Kickoff carries the date AND the time, so a fixture weeks
+-                     out is unambiguous at a glance. */
+-                  <Chip tone="volt">
+-                    <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
+-                    {" · "}
+-                    <Num>{formatKickoff(new Date(match.kickoff_at), locale)}</Num>
+-                  </Chip>
+-                )}
+-              </span>
+-              <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
+-                <span
+-                  className={cx(
+-                    "min-w-0 truncate text-end text-xs font-bold",
+-                    away.id === teamId ? "text-volt" : "text-ink",
+-                  )}
+-                >
+-                  {localize(away.shortName)}
+-                </span>
+-                <TeamBadge team={away} size="sm" />
+-              </span>
+-            </Link>
+-          </li>
+-        );
+-      })}
+-    </ul>
++              {localize(home.shortName)}
++            </span>
++          </span>
++          <span className="flex-none">
++            {match.status === "finished" ? (
++              <Chip tone="muted">
++                <Num>
++                  {match.home_score ?? 0}–{match.away_score ?? 0}
++                </Num>
++              </Chip>
++            ) : match.status === "live" ? (
++              <Chip tone="live">
++                <Num>{match.minute_display ?? ""}</Num>
++              </Chip>
++            ) : (
++              <Chip tone="volt">
++                <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
++                {" · "}
++                <Num>{formatKickoff(new Date(match.kickoff_at), locale)}</Num>
++              </Chip>
++            )}
++          </span>
++          <span className="flex min-w-0 flex-1 items-center justify-end gap-2">
++            <span
++              className={cx(
++                "min-w-0 truncate text-end text-xs font-bold",
++                away.id === teamId ? "text-volt" : "text-ink",
++              )}
++            >
++              {localize(away.shortName)}
++            </span>
++            <TeamBadge team={away} size="sm" />
++          </span>
++        </Link>
++      </li>
++    );
++  };
++
++  return (
++    <div className="space-y-lg">
++      {played.length > 0 ? (
++        <div>
++          <SectionHeading title={t("team.recentResults")} />
++          <ul className="space-y-2">{played.map((match) => renderMatch(match))}</ul>
++        </div>
++      ) : null}
++      {upcoming.length > 0 ? (
++        <div>
++          <SectionHeading title={t("team.upcomingFixtures")} />
++          <ul className="space-y-2">{upcoming.map((match) => renderMatch(match))}</ul>
++        </div>
++      ) : null}
++    </div>
+   );
+ }
+ 
+-- 
+2.54.0.windows.1
+

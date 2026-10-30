@@ -1,0 +1,257 @@
+From bdaa0516c171ad3421581291844e14a182292ac8 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 26 Oct 2026 23:32:46 +0330
+Subject: [PATCH 1/2] fix(sync): stop match feeds from wiping stored player
+ headshots; repair roster sync SQL
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Match-summary and squad-roster upserts now coalesce headshot_url so a NULL
+in one ESPN feed no longer overwrites a photo the other stored, and the
+rosters command was dead SQL (a SELECT alias referenced inside WHERE) —
+it now runs off a derived table, restoring the photos ESPN does provide.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/sync/service.ts | 21 +++++++++++++--------
+ server/sync/upserts.ts |  8 ++++++--
+ 2 files changed, 19 insertions(+), 10 deletions(-)
+
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index c44f5c2..5de9b12 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -275,16 +275,21 @@ export async function syncRosters(): Promise<void> {
+   // Only roster big-five clubs: outside leagues are not polled, so no roster
+   // endpoint is called for them. Non-big-five teams keep whatever squad data
+   // they got from a cup/European fixture summary (if any).
++  // SQLite can't reference a SELECT alias (inferred_league) inside WHERE, so
++  // the query wraps the rows in a derived table to filter on that alias.
+   const teams = all<{ id: string; league: string; inferred_league: string; name: string }>(
+     db,
+-    `SELECT t.id, t.league, t.name,
+-            COALESCE((SELECT m.league FROM matches m
+-                      WHERE m.home_team_id = t.id OR m.away_team_id = t.id
+-                      ORDER BY m.kickoff_at DESC LIMIT 1), '') AS inferred_league
+-     FROM teams t
+-     WHERE t.league IN (${LEAGUES.map(() => "?").join(",")})
+-        OR t.inferred_league IN (${LEAGUES.map(() => "?").join(",")})
+-     ORDER BY t.name ASC`,
++    `SELECT s.id, s.league, s.inferred_league, s.name
++     FROM (
++       SELECT t.id, t.league, t.name,
++              COALESCE((SELECT m.league FROM matches m
++                        WHERE m.home_team_id = t.id OR m.away_team_id = t.id
++                        ORDER BY m.kickoff_at DESC LIMIT 1), '') AS inferred_league
++       FROM teams t
++     ) s
++     WHERE s.league IN (${LEAGUES.map(() => "?").join(",")})
++        OR s.inferred_league IN (${LEAGUES.map(() => "?").join(",")})
++     ORDER BY s.name ASC`,
+     [...LEAGUES, ...LEAGUES],
+   );
+   let ok = 0;
+diff --git a/server/sync/upserts.ts b/server/sync/upserts.ts
+index 82c6805..e034db5 100644
+--- a/server/sync/upserts.ts
++++ b/server/sync/upserts.ts
+@@ -168,7 +168,9 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
+ 
+     // Player stats + stat score
+     const { players, stats } = normalizeRosters(json);
+-    for (const p of players) upsert(db, "players", { ...p }, ["id"]);
++    // Match-summary rosters omit headshots for many athletes; coalescing stops
++    // a null here from wiping the photo the roster endpoint already stored.
++    for (const p of players) upsertCoalesce(db, "players", { ...p }, ["id"], ["headshot_url"]);
+ 
+     const conceded: Record<string, number> = {};
+     if (match.home_score !== null && match.away_score !== null) {
+@@ -351,7 +353,9 @@ export function applyRoster(db: DB, json: unknown, _league: string): void {
+   const players = normalizeRosterPlayers(json);
+   const coach = normalizeCoach(json);
+   tx(db, () => {
+-    for (const p of players) upsert(db, "players", { ...p }, ["id"]);
++    // Coalesce the headshot: either of the two feeds (match summary or squad
++    // roster) can ship it null, and neither side should erase the other's photo.
++    for (const p of players) upsertCoalesce(db, "players", { ...p }, ["id"], ["headshot_url"]);
+     if (coach) {
+       run(
+         db,
+-- 
+2.54.0.windows.1
+
+
+From 62c979f5c6c5cb76e8d5850716e00b64d56c450f Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 26 Oct 2026 23:36:26 +0330
+Subject: [PATCH 2/2] Timeline detail: colored cards, directed substitutions,
+ own-goal fix
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Card rows now draw the actual booking at a glance — yellow, red, or the
+stacked yellow-over-red pair for a second yellow — instead of a stroke
+icon. Substitutions render ESPN's documented on/off order (participants[0]
+came on, [1] went off) with a volt ▲ on the on-player and a danger ▼
+against the off-player, replacing the direction-agnostic ⇄. Own goals
+checked before the assist branch, so a two-participant own goal no longer
+labels its second name "Assist".
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/TimelineList.tsx | 79 +++++++++++++++++++++++++--------
+ 1 file changed, 60 insertions(+), 19 deletions(-)
+
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index 8c04622..4b5cea7 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -28,16 +28,18 @@ const typeKey: Record<TimelineEvent["type"], StringKey> = {
+  */
+ function eventIcon(
+   type: TimelineEvent["type"],
+-  description: string,
+-): { glyph: ReactNode; className: string } {
+-  const isRedCard = /\bred card\b|second yellow/i.test(description);
++  description: string,) : { glyph: ReactNode; className: string } {
+   switch (type) {
+     case "goal":
+       return { glyph: <BallIcon className="h-4 w-4" />, className: "text-volt" };
+     case "card":
++      // The booking reads at a glance as the actual card: a filled rounded
++      // rectangle — yellow, red, or yellow-in-front-of-red (a second yellow
++      // turning). The stroke icon stays for the booking kinds the feed
++      // describes neither way (rare).
+       return {
+-        glyph: <CardIcon className="h-4 w-4" />,
+-        className: isRedCard ? "text-danger" : "text-gold",
++        glyph: cardGlyph(description),
++        className: "",
+       };
+     case "substitution":
+       return { glyph: <SwapIcon className="h-4 w-4" />, className: "text-ink-2" };
+@@ -52,6 +54,28 @@ function eventIcon(
+   }
+ }
+ 
++/** The card itself, drawn: yellow, red, or the stacked yellow-over-red pair
++ *  ESPN describes as a "second yellow". Falls back to the stroke icon when
++ *  the description is too vague to pick a color. */
++function cardGlyph(description: string): ReactNode {
++  const isRed = /\bred card\b/i.test(description);
++  const isSecondYellow = /second yellow/i.test(description);
++  if (!isRed && !isSecondYellow) {
++    if (!/yellow/i.test(description)) return <CardIcon className="h-4 w-4 text-gold" />;
++    return <span aria-hidden="true" className="inline-block h-4 w-2.5 rounded-[2px] bg-gold shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />;
++  }
++  if (isSecondYellow) {
++    // Yellow-booked, then red: the pair overlaps — red behind, yellow front.
++    return (
++      <span aria-hidden="true" className="relative inline-block h-4 w-4">
++        <span className="absolute inset-y-0 end-0 w-2.5 rounded-[2px] bg-danger shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />
++        <span className="absolute inset-y-0 start-0 w-2.5 rounded-[2px] bg-gold shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />
++      </span>
++    );
++  }
++  return <span aria-hidden="true" className="inline-block h-4 w-2.5 rounded-[2px] bg-danger shadow-[inset_0_0_0_1px_rgb(0_0_0/0.15)]" />;
++}
++
+ /**
+  * A pinned comment belongs to a minute either directly (minute_seconds) or
+  * through its event. Minute-only pins render in the gap after the last event
+@@ -117,7 +141,7 @@ function PinnedComment({
+  * second line under it, and the icon pinned to the spine edge. A goal gets a
+  * volt-tinted cell so it reads at a glance. Children = the comment trigger.
+  */
+-function EventBody({ name, line2 }: { name: string; line2: string | null }) {
++function EventBody({ name, line2 }: { name: ReactNode; line2: ReactNode }) {
+   return name ? (
+     <span className="min-w-0 text-start" dir="auto">
+       <span className="block text-sm font-bold text-ink">{name}</span>
+@@ -133,7 +157,7 @@ function HomeSpineCell({
+   goal,
+   children,
+ }: {
+-  parts: { icon: { glyph: ReactNode; className: string }; name: string; line2: string | null };
++  parts: { icon: { glyph: ReactNode; className: string }; name: ReactNode; line2: ReactNode };
+   goal: boolean;
+   children?: ReactNode;
+ }) {
+@@ -158,7 +182,7 @@ function AwaySpineCell({
+   goal,
+   children,
+ }: {
+-  parts: { icon: { glyph: ReactNode; className: string }; name: string; line2: string | null };
++  parts: { icon: { glyph: ReactNode; className: string }; name: ReactNode; line2: ReactNode };
+   goal: boolean;
+   children?: ReactNode;
+ }) {
+@@ -271,19 +295,23 @@ export function TimelineList({
+       map with the English fallback, and neither ever truncates. */
+   function eventParts(event: TimelineEvent): {
+     icon: { glyph: ReactNode; className: string };
+-    name: string;
+-    line2: string | null;
++    name: ReactNode;
++    line2: ReactNode;
+   } {
+     const icon = eventIcon(event.type, event.description);
+     const names = event.participants.map(localize);
+     const [first, second] = names;
++    let name: ReactNode = first ?? "";
+ 
+-    // Second line: what the FIRST name did with the second one.
+-    let line2: string | null = null;
+-    if (event.type === "goal" && second) {
+-      line2 = t("timeline.assist", { name: second });
+-    } else if (event.type === "goal" && /\bown goal\b/i.test(event.description)) {
++    // Second line: what the FIRST name did with the second one. Own goal
++    // wins over the assist branch — with two participants (keeper whose
++    // deflection went in, etc.) calling the second name an assist would be
++    // flatly wrong, so the own-goal test must run first.
++    let line2: ReactNode = null;
++    if (event.type === "goal" && /\bown goal\b/i.test(event.description)) {
+       line2 = t("timeline.ownGoal");
++    } else if (event.type === "goal" && second) {
++      line2 = t("timeline.assist", { name: second });
+     } else if (event.type === "card") {
+       line2 = t(
+         /\bred card\b|second yellow/i.test(event.description)
+@@ -293,13 +321,26 @@ export function TimelineList({
+             : "timeline.card",
+       );
+     } else if (event.type === "substitution" && second) {
+-      // ESPN's sub direction varies by feed, so the pair reads as a swap (⇄)
+-      // rather than the page asserting an off/on order it can't verify.
+-      line2 = `⇄ ${second}`;
++      // ESPN's documented sub order (server/espn/normalize.ts, and relied on
++      // by findSubMinute): participants[0] came ON, [1] went OFF. Render the
++      // direction explicitly instead of the ambiguous swap glyph: a volt ▲
++      // beside the on-player's name, a danger ▼ with the off-player below.
++      name = (
++        <span className="inline-flex items-center gap-1">
++          <span aria-hidden="true" className="font-bold text-volt">▲</span>
++          {first}
++        </span>
++      );
++      line2 = (
++        <span className="inline-flex items-center gap-1">
++          <span aria-hidden="true" className="font-bold text-danger">▼</span>
++          {second}
++        </span>
++      );
+     } else if (!first) {
+       line2 = t(typeKey[event.type]);
+     }
+-    return { icon, name: first ?? "", line2 };
++    return { icon, name, line2 };
+   }
+ 
+   // Shared grid: side cells flex, fixed center for the minute (+ the score a
+-- 
+2.54.0.windows.1
+

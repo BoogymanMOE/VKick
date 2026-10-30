@@ -1,0 +1,123 @@
+From 6530ac0578dcc276fb33870f4e84a9d903990ce7 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 02:48:39 +0330
+Subject: [PATCH 191/230] =?UTF-8?q?feat(dateStrip):=202px=20fixture=20dots?=
+ =?UTF-8?q?=20under=20days=20with=20matches=20=E2=80=94=20scannable=20with?=
+ =?UTF-8?q?out=20tapping?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+DateStrip takes daysWithMatches (a set of day keys). Days with fixtures show
+a 2px muted dot; the selected chip shows nothing (the volt fill is already
+the marker) and today keeps its 4px volt dot. Matches computes the set from
+the matches payload using DateStrip's own exported dayKey, so the dot can
+never disagree with the chip it sits on.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/DateStrip.tsx | 18 +++++++++++++++---
+ src/pages/Matches.tsx        | 14 ++++++++++++--
+ 2 files changed, 27 insertions(+), 5 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index 147d064..4955908 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -11,6 +11,10 @@ const DAY_NAMES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+ interface DateStripProps {
+   selected: Date;
+   onSelect: (date: Date) => void;
++  /** Day keys (same format as `dayKey`) that have at least one match — the
++   *  chip carries a small dot so a quiet Saturday reads as quiet before the
++   *  tap. Absent = no dots (call sites without the data unchanged). */
++  daysWithMatches?: Set<string>;
+ }
+ 
+ const startOfDay = (d: Date) => {
+@@ -21,9 +25,11 @@ const startOfDay = (d: Date) => {
+ 
+ /**
+  * Local calendar-day key — never `toISOString()`, which is UTC and files a
+- * local midnight east of UTC under the previous day.
++ * local midnight east of UTC under the previous day. Exported so call sites
++ * that precompute per-day facts (the fixture dots) build keys that are
++ * guaranteed to match the chips' own keys.
+  */
+-const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
++export const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+ 
+ /**
+  * Yesterday … +3 as local calendar days. `setDate` (not millisecond arithmetic)
+@@ -38,7 +44,7 @@ function buildDays(): Date[] {
+   });
+ }
+ 
+-export function DateStrip({ selected, onSelect }: DateStripProps) {
++export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProps) {
+   const { t, lang } = useI18n();
+   const locale = lang === "fa" ? "fa-IR" : undefined;
+   // Localized day number: Farsi reads ۱۴ not 14.
+@@ -66,6 +72,7 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
+         const key = dayKey(day);
+         const isToday = key === todayKey;
+         const isSelected = key === selectedKey;
++        const hasMatches = daysWithMatches?.has(key) ?? false;
+         return (
+           <button
+             key={key}
+@@ -94,6 +101,11 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
+                 aria-hidden="true"
+                 className={`mt-0.5 h-1 w-1 rounded-full ${isSelected ? "bg-on-volt" : "bg-volt"}`}
+               />
++            ) : hasMatches && !isSelected ? (
++              // Days with fixtures get a 2px dot so the user can scan without
++              // tapping; the selected chip needs no marker (the volt fill IS
++              // the marker).
++              <span aria-hidden="true" className="mt-0.5 h-0.5 w-0.5 rounded-full bg-ink-3" />
+             ) : null}
+           </button>
+         );
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index f46a4a3..c9140e2 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -23,7 +23,7 @@ import { useI18n } from "../i18n/context";
+ import { formatClock } from "../lib/format";
+ import { competitionName } from "../lib/leagues";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+-import { DateStrip } from "../components/DateStrip";
++import { DateStrip, dayKey as chipDayKey } from "../components/DateStrip";
+ import { InlineAd } from "../components/InlineAd";
+ import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
+ import { usePullToRefresh } from "../hooks/usePullToRefresh";
+@@ -145,6 +145,16 @@ export default function Matches() {
+     () => dayMatches.filter((m) => isFavorite(m.home.id) || isFavorite(m.away.id)),
+     [dayMatches, isFavorite],
+   );
++
++  // Which strip chips carry a fixture dot: keys built with DateStrip's own
++  // exported dayKey, so the dot can never disagree with the chip it sits on.
++  const daysWithMatches = useMemo(() => {
++    const set = new Set<string>();
++    for (const match of matches) {
++      set.add(chipDayKey(new Date(match.kickoffAt)));
++    }
++    return set;
++  }, [matches]);
+   const otherMatches = useMemo(
+     () => dayMatches.filter((m) => !myTeamsMatches.includes(m)),
+     [dayMatches, myTeamsMatches],
+@@ -300,7 +310,7 @@ export default function Matches() {
+         <PullIndicator pull={pull} />
+ 
+         {/* Date strip: 5 day chips, today selected by default. */}
+-        <DateStrip selected={selectedDay} onSelect={setPicked} />
++        <DateStrip selected={selectedDay} onSelect={setPicked} daysWithMatches={daysWithMatches} />
+ 
+         {/* Favorite leagues — the start page's own way in. One tap re-scopes
+             the whole feed (concept pillar 1); the last chip opens the picker,
+-- 
+2.54.0.windows.1
+

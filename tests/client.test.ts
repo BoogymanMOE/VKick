@@ -7,6 +7,7 @@
  */
 import { strict as assert } from "node:assert";
 import { readableInk } from "../src/lib/colors.js";
+import { initialsOf } from "../src/lib/initials.js";
 import { breakdownItems } from "../src/lib/breakdown.js";
 import {
   buildPickerGroups,
@@ -16,6 +17,8 @@ import {
 } from "../src/lib/pickerGroups.js";
 import { scopeRankDelta, viewerStanding } from "../src/lib/leaderboard.js";
 import { leaguePickerSections } from "../src/lib/leaguePicker.js";
+import { getLiveLinkConnected, setLiveLinkConnected, subscribeLiveLink } from "../src/lib/liveLink.js";
+import { isNotPlayed } from "../src/lib/format.js";
 import type { ApiCompetition } from "../src/lib/api.js";
 import type { StringKey } from "../src/i18n/strings.js";
 import type { Team } from "../src/types.js";
@@ -28,6 +31,18 @@ function testReadableInk(): void {
   assert.equal(readableInk("#99C5EA"), "#04100B", "the pastel that failed AA with white");
   assert.equal(readableInk(null), "#FFFFFF", "an unknown colour keeps white");
   assert.equal(readableInk("not-a-colour"), "#FFFFFF", "a malformed value never throws");
+}
+
+/**
+ * The initials helper, exercised directly in case anything ever reaches back
+ * into it from the avatar and its fallback circle.
+ */
+function testInitialsOf(): void {
+  assert.equal(initialsOf("Cole Palmer"), "CP", "two words give both initials");
+  assert.equal(initialsOf("Ronald"), "R", "a single word gives one initial");
+  assert.equal(initialsOf("احمد"), "ا", "a non-Latin name keeps the first letter of the first word");
+  assert.equal(initialsOf(""), "?", "an empty string is a visible fallback, never blank");
+  assert.equal(initialsOf("   "), "?", "whitespace-only is treated as empty");
 }
 
 function testBreakdownItems(): void {
@@ -205,7 +220,47 @@ function testScopeRankDelta(): void {
   );
 }
 
+/**
+ * The push-link store behind the "live link lost" line. It must start honest
+ * (assume connected until the stream says otherwise), notify on transitions
+ * only, and let a screen unsubscribe without leaking a listener.
+ */
+function testLiveLinkStore(): void {
+  assert.equal(getLiveLinkConnected(), true, "optimistic until proven lost");
+  let calls = 0;
+  const unsubscribe = subscribeLiveLink(() => {
+    calls += 1;
+  });
+  setLiveLinkConnected(false);
+  assert.equal(getLiveLinkConnected(), false);
+  assert.equal(calls, 1, "a transition notifies once");
+  setLiveLinkConnected(false);
+  assert.equal(calls, 1, "setting the same value is a no-op");
+  setLiveLinkConnected(true);
+  assert.equal(calls, 2, "reconnect notifies too");
+  unsubscribe();
+  setLiveLinkConnected(false);
+  assert.equal(calls, 2, "an unsubscribed listener is gone");
+  setLiveLinkConnected(true);
+}
+
+/**
+ * A fixture ESPN reports under "post" that was never played. Every screen that
+ * prints a score for "not scheduled" reads this helper, so pin the membership:
+ * a postponed game must not be counted as a 0-0 result anywhere.
+ */
+function testIsNotPlayed(): void {
+  assert.equal(isNotPlayed("postponed"), true);
+  assert.equal(isNotPlayed("abandoned"), true);
+  assert.equal(isNotPlayed("cancelled"), true);
+  assert.equal(isNotPlayed("finished"), false);
+  assert.equal(isNotPlayed("live"), false);
+  assert.equal(isNotPlayed("halftime"), false);
+  assert.equal(isNotPlayed("scheduled"), false);
+}
+
 export function runClientTests(): void {
+  testInitialsOf();
   testReadableInk();
   testBreakdownItems();
   testPickerGroups();
@@ -213,7 +268,9 @@ export function runClientTests(): void {
   testViewerStanding();
   testScopeRankDelta();
   testLeaguePickerSections();
+  testLiveLinkStore();
+  testIsNotPlayed();
   console.log(
-    "  client: contrast ink, breakdown rendering, picker grouping, viewer standing, league picker OK",
+    "  client: contrast ink, breakdown rendering, picker grouping, viewer standing, league picker, live link OK",
   );
 }

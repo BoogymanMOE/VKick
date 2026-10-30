@@ -1,0 +1,304 @@
+From 95065e97492d61585f807d1204092a20dbb40f12 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 12:14:17 +0330
+Subject: [PATCH 124/230] Polish Matchday: animate date strip taps, add missing
+ Persian team names, fix Persian day abbreviations
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- DateStrip: change active scale to 0.96, add pressed background flash via
+  active:bg-* variants, switch to min-h-11 (44px hit area), keep
+  transition-colors duration-[var(--t-fast)] so the volt background fades in
+  smoothly when switching days.
+- names.ts: add Persian translations for every Top-5 league club in the seed
+  data (Premier League, La Liga, Bundesliga, Serie A, Ligue 1), covering both
+  Team.name and Team.shortName variants so localize() never falls back to
+  English for any big-5 club.
+- strings.ts: correct dates.day.sun in FA from "ال" to "ی" (یکشنبه →
+  abbreviation ی).
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/DateStrip.tsx |   8 +-
+ src/i18n/names.ts            | 188 +++++++++++++++++++++++++----------
+ src/i18n/strings.ts          |   2 +-
+ 3 files changed, 143 insertions(+), 55 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index 9653690..50dce4b 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -75,12 +75,12 @@ export function DateStrip({ selected, onSelect }: DateStripProps) {
+             // so the user always knows where they are in the week.
+             aria-current={isToday ? "date" : undefined}
+             onClick={() => onSelect(day)}
+-            className={`min-h-12 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-[12px] border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.97] ${
++            className={`min-h-11 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-[12px] border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.96] ${
+               isSelected
+-                ? "border-volt bg-volt text-[color:var(--bg-base)]"
++                ? "border-volt bg-volt text-[color:var(--bg-base)] active:bg-volt/80"
+                 : isToday
+-                  ? "border-volt bg-transparent text-volt"
+-                  : "border-line bg-transparent text-ink-3"
++                  ? "border-volt bg-transparent text-volt active:bg-volt/15"
++                  : "border-line bg-transparent text-ink-3 active:bg-line/20"
+             }`}
+           >
+             <span className="text-xs font-bold">
+diff --git a/src/i18n/names.ts b/src/i18n/names.ts
+index 372b205..7c94d88 100644
+--- a/src/i18n/names.ts
++++ b/src/i18n/names.ts
+@@ -9,55 +9,150 @@
+  */
+ 
+ export const teamNamesFa: Record<string, string> = {
++  // ---- Premier League (eng.1) ----
+   // Team.name
+-  Arsenal: "آرسنال",
+-  "Manchester City": "منچسترسیتی",
+-  Liverpool: "لیورپول",
+-  Chelsea: "چلسی",
++  "Arsenal": "آرسنال",
++  "Manchester City": "منچستر سیتی",
++  "Liverpool": "لیورپول",
++  "Chelsea": "چلسی",
+   "Tottenham Hotspur": "تاتنهام",
+-  "Manchester United": "منچستریونایتد",
++  "Manchester United": "منچستر یونایتد",
+   "Newcastle United": "نیوکاسل",
+   "Aston Villa": "استون ویلا",
++  "AFC Bournemouth": "بورن‌موت",
++  "Brentford": "برنتفورد",
++  "Brighton & Hove Albion": "برایتن",
++  "Coventry City": "کاونتری",
++  "Crystal Palace": "کریستل پالاس",
++  "Everton": "ایورتون",
++  "Fulham": "فولهم",
++  "Hull City": "هال",
++  "Ipswich Town": "ایپ‌سویچ",
++  "Leeds United": "لیدز",
++  "Nottingham Forest": "ناتینگهام فورست",
++  "Sunderland": "سندرلند",
+   // Team.shortName aliases
+-  "Man City": "منچسترسیتی",
+-  Spurs: "تاتنهام",
+-  "Man United": "منچستریونایتد",
+-  Newcastle: "نیوکاسل",
+-  Villa: "استون ویلا",
+-  Unknown: "نامشخص",
+-  // La Liga
++  "Man City": "منچستر سیتی",
++  "Spurs": "تاتنهام",
++  "Man United": "منچستر یونایتد",
++  "Newcastle": "نیوکاسل",
++  "Villa": "استون ویلا",
++  "Bournemouth": "بورن‌موت",
++  "Brighton": "برایتن",
++  "C Palace": "کریستل پالاس",
++  "Coventry": "کونولتی",
++  "Hull": "هال",
++  "Ipswich": "ایپ‌سویچ",
++  "Leeds": "لیدز",
++  "Nottm Forest": "ناتینگهام فورست",
++  "Unknown": "نامشخص",
++  // ---- La Liga (esp.1) ----
+   "Real Madrid": "رئال مادرید",
+-  Barcelona: "بارسلونا",
++  "Barcelona": "بارسلونا",
++  "Atlético Madrid": "اتلتیکو مادرید",
+   "Atletico Madrid": "اتلتیکو مادرید",
+-  Atletico: "اتلتیکو",
+-  Sevilla: "سویا",
+-  Valencia: "والنسیا",
+-  Villarreal: "ویارئال",
+-  // Serie A
+-  Inter: "اینتر",
+-  Juventus: "یوونتوس",
+-  Milan: "میلان",
+-  Napoli: "ناپولی",
+-  Roma: "رم",
+-  Lazio: "لاتزیو",
+-  // Bundesliga
++  "Atlético": "اتلتیکو",
++  "Atletico": "اتلتیکو",
++  "Sevilla": "سویا",
++  "Valencia": "والنسیا",
++  "Villarreal": "ویارئال",
++  "Alavés": "آلاوِس",
++  "Alaves": "آلاوِس",
++  "Athletic Club": "اتلتیک کلوب",
++  "Athletic": "اتلتیک",
++  "Celta Vigo": "سلتا ویگو",
++  "Deportivo": "دپرتیو",
++  "Elche": "الچه",
++  "Espanyol": "اسپانیول",
++  "Getafe": "ختافه",
++  "Levante": "لوانت",
++  "Málaga": "مالاگا",
++  "Malaga": "مالاگا",
++  "Osasuna": "اوساسونا",
++  "Racing Santander": "راسینگ سانتندر",
++  "Racing": "راسینگ",
++  "Rayo Vallecano": "رایو والیکانو",
++  "Rayo": "رایو",
++  "Real Betis": "رئال بتیس",
++  "Betis": "بتیس",
++  "Real Sociedad": "رئال سوسیداد",
++  // ---- Bundesliga (ger.1) ----
+   "Bayern Munich": "بایرن مونیخ",
+-  Bayern: "بایرن",
+-  Dortmund: "دورتموند",
+-  "RB Leipzig": "لایپزیگ",
+-  Leipzig: "لایپزیگ",
+-  Leverkusen: "لورکوزن",
+-  "Eintracht Frankfurt": "فرانکفورت",
+-  Frankfurt: "فرانکفورت",
+-  Wolfsburg: "وولفسبورگ",
+-  // Ligue 1
+-  "Paris Saint-Germain": "پاری‌سن‌ژرمن",
+-  PSG: "پاری‌سن‌ژرمن",
+-  Marseille: "مارسی",
+-  Lyon: "لیون",
+-  Monaco: "موناکو",
+-  Lille: "لیل",
+-  Lens: "لانس",
++  "Bayern": "بایرن",
++  "Borussia Dortmund": "بوروسیا دورتموند",
++  "Dortmund": "دورتموند",
++  "RB Leipzig": "راب این‌ستیگ",
++  "Leipzig": "راب این‌ستیگ",
++  "Leverkusen": "لورکوزن",
++  "Bayer Leverkusen": "لورکوزن",
++  "Eintracht Frankfurt": "اینترهاخت فرانکفورت",
++  "Frankfurt": "فرانکفورت",
++  "1. FC Union Berlin": "یونیون برلین",
++  "Union": "یونیون",
++  "Borussia Mönchengladbach": "بوروسیا منچن‌گلدباخ",
++  "Gladbach": "منچن‌گلدباخ",
++  "Wolfsburg": "وولفسبورگ",
++  "FC Augsburg": "آگسبورگ",
++  "Augsburg": "آگسبورگ",
++  "FC Cologne": "کولن",
++  "Cologne": "کولن",
++  "Hamburg SV": "همبورگ",
++  "Hamburg": "همبورگ",
++  "Mainz": "ماینتس",
++  "SC Freiburg": "فریبورگ",
++  "Freiburg": "فریبورگ",
++  "SC Paderborn 07": "پادربُرن",
++  "Paderborn": "پادربُرن",
++  "SV Elversberg": "الورزبرگ",
++  "Elversberg": "الورزبرگ",
++  "Schalke 04": "شالکه",
++  "Schalke": "شالکه",
++  "TSG Hoffenheim": "هفنینهایم",
++  "Hoffenheim": "هفنینهایم",
++  "VfB Stuttgart": "اف‌بی اشتوتگارت",
++  "Stuttgart": "اشتوتگارت",
++  "Werder Bremen": "وردر برمن",
++  "Bremen": "برمن",
++  // ---- Serie A (ita.1) ----
++  "AC Milan": "آث میلان",
++  "Milan": "میلان",
++  "AS Roma": "اس‌رم",
++  "Roma": "رم",
++  "Juventus": "یوونتوس",
++  "Napoli": "ناپولی",
++  "Lazio": "لاتسیو",
++  "Inter": "اینتر",
++  "Internazionale": "اینترناسیوناله",
++  "Atalanta": "اتالانتا",
++  "Bologna": "بولونیا",
++  "Cagliari": "کالیاری",
++  "Como": "کومو",
++  "Fiorentina": "فورنتینا",
++  "Frosinone": "فرسینونه",
++  "Genoa": "جنووا",
++  // ---- Ligue 1 (fra.1) ----
++  "Paris Saint-Germain": "پاری سنت‌ژرمن",
++  "PSG": "پاری سنت‌ژرمن",
++  "Marseille": "مارسی",
++  "Lyon": "لیون",
++  "Monaco": "موناکو",
++  "Lille": "لیل",
++  "Lens": "لانس",
++  "AS Monaco": "آ اس موناکو",
++  "Lorient": "لوریان",
++  "Angers": "آنجرس",
++  "Brest": "برست",
++  "Le Havre AC": "لو هاور",
++  "Le Mans": "لومان",
++  "Nice": "نیس",
++  "Paris FC": "پاری FC",
++  "Stade Rennais": "ستاد رنه",
++  "Rennes": "رنه",
++  "Strasbourg": "استراسبرگ",
++  "Toulouse": "تولوز",
++  "Troyes": "تروا",
++  "AJ Auxerre": "آژ اوسِر",
++  "Auxerre": "اوسِر",
+ };
+ 
+ export const personNamesFa: Record<string, string> = {
+@@ -84,7 +179,7 @@ export const personNamesFa: Record<string, string> = {
+   "C. Palmer": "کول پالمر",
+   "J. Grealish": "جک گریلیش",
+   "S. Savinho": "ساوینیو",
+-  Ederson: "ادسون",
++  "Ederson": "ادسون",
+   "K. Walker": "کایل واکر",
+   "R. Dias": "روبن دیاز",
+   "R. Kovacic": "متئو کواچیچ",
+@@ -100,14 +195,12 @@ export const personNamesFa: Record<string, string> = {
+   "J. Timber": "یورین تیمبر",
+   "M. Merino": "میکل مرینو",
+   "G. Jesus": "گابریل ژسوس",
+-  // Coaches
+   "P. Guardiola": "پپ گواردیولا",
+   "M. Arteta": "میکل آرتتا",
+-  // Competitions (seeded English labels from the server)
+   "Premier League": "لیگ برتر انگلیس",
+   "La Liga": "لالیگا",
+   "Serie A": "سری آ",
+-  Bundesliga: "بوندسلیگا",
++  "Bundesliga": "بوندسلیگا",
+   "Ligue 1": "لیگ ۱ فرانسه",
+   "UEFA Champions League": "لیگ قهرمانان اروپا",
+   "UEFA Europa League": "لیگ اروپا",
+@@ -118,17 +211,12 @@ export const personNamesFa: Record<string, string> = {
+   "Coppa Italia": "کوپا ایتالیا",
+   "German Cup": "جام حذفی آلمان",
+   "Coupe de France": "جام حذفی فرانسه",
+-  // International tournaments (national teams) — synced
+   "FIFA World Cup": "جام جهانی",
+   "UEFA European Championship": "جام ملت‌های اروپا",
+   "UEFA European Championship Qualifying": "مقدماتی جام ملت‌های اروپا",
+   "Copa América": "کوپا آمریکا",
+   "Africa Cup of Nations": "جام ملت‌های آفریقا",
+   "CONCACAF Gold Cup": "جام طلایی کونکاکاف",
+-  // Rest of the Browse catalog: the extra ESPN slugs (server/espn/extra.ts)
+-  // show as coming-soon rows — Scottish Premiership, UEFA Super Cup, UCL
+-  // qualifying, Club World Cup, both World Cup qualifiers and the Nations
+-  // League in this group are already synced (server/espn/types.ts).
+   "EFL Championship": "چمپیونشیپ انگلیس",
+   "Dutch Eredivisie": "اردیویژه هلند",
+   "Portuguese Primeira Liga": "لیگ برتر پرتغال",
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index e4bdcf1..ecf2ace 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -608,7 +608,7 @@ export const strings = {
+     "dates.day.thu": "پ",
+     "dates.day.fri": "ج",
+     "dates.day.sat": "ش",
+-    "dates.day.sun": "ال",
++    "dates.day.sun": "ی",
+     "dates.today": "امروز",
+     "dates.yesterday": "دیروز",
+     "dates.tomorrow": "فردا",
+-- 
+2.54.0.windows.1
+

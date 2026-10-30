@@ -147,10 +147,18 @@ export interface ApiMatch {
   home_team_id: string;
   away_team_id: string;
   kickoff_at: string;
-  status: "scheduled" | "live" | "halftime" | "finished";
+  status: "scheduled" | "live" | "halftime" | "finished" | "postponed" | "abandoned" | "cancelled";
   home_score: number | null;
   away_score: number | null;
   minute_display: string | null;
+  /** Shootout score when a knockout tie was settled on penalties. */
+  home_pens?: number | null;
+  away_pens?: number | null;
+  /** 'penalties' | 'extra-time' | null. */
+  decided_by?: "penalties" | "extra-time" | null;
+  venue?: string | null;
+  referee?: string | null;
+  attendance?: number | null;
   home_formation: string | null;
   away_formation: string | null;
   last_synced_at: string | null;
@@ -243,6 +251,9 @@ export interface LeaguePlayerStatRow {
   team_short: string | null;
   team_color: string | null;
   headshot_url: string | null;
+  /** Local-first face URL: /headshots/<id>.webp when the file exists, else the
+      remote headshot_url, else null (avatar falls back to initials). */
+  avatar_url?: string | null;
   jersey_number: number | null;
   appearances?: number | null;
   goals?: number | null;
@@ -297,6 +308,8 @@ export interface TeamStats {
   offsides: number | null;
   saves: number | null;
   goals: number | null;
+  /** Understat expected goals; null outside the big five (or before the sync). */
+  xg: number | null;
 }
 
 export interface ApiStanding {
@@ -323,6 +336,41 @@ export interface ApiStanding {
   xga?: number | null;
   /** Last five results, oldest first, e.g. "WWDLW"; null before a club's first match. */
   form?: string | null;
+  /** Home and away records folded from the same matches; null with no fixtures. */
+  splits?: ApiTeamSplits | null;
+}
+
+/** One side of a club's season, as the home/away table needs it. */
+export interface ApiSplitRow {
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  points: number;
+}
+
+export interface ApiTeamSplits {
+  home: ApiSplitRow;
+  away: ApiSplitRow;
+}
+
+/** One row of the league's top-scorer card (our own season stat table). */
+export interface ApiScorer {
+  player_id: string;
+  full_name: string;
+  short_name: string | null;
+  headshot_url: string | null;
+  avatar_url: string | null;
+  goals: number;
+  assists: number;
+  team_id: string;
+  team_name: string;
+  team_short: string | null;
+  /** The club's crest and colour, so the scorer's badge is the real one. */
+  team_color: string | null;
+  team_logo: string | null;
 }
 
 export interface ApiTimelineEvent {
@@ -341,14 +389,24 @@ export interface ApiTimelineEvent {
   goal_y: number | null;
 }
 
+export interface ApiTeamAvailability {
+  player_id: string;
+  player_name: string;
+  status: "injured" | "suspended" | "doubtful";
+  reason: string | null;
+  expected_return: string | null;
+}
+
 export interface ApiSquadPlayer {
   id: string;
   full_name: string;
   short_name: string | null;
   position: string;
+  availability?: ApiTeamAvailability | null;
   espn_position: string | null;
   jersey_number: number | null;
   headshot_url: string | null;
+  avatar_url?: string | null;
   appearances: number | null;
   season_goals: number | null;
   season_assists: number | null;
@@ -365,6 +423,7 @@ export interface ApiUnderstatPlayer {
   position: string;
   jersey: number | null;
   headshot: string | null;
+  avatarUrl: string | null;
   xg: number | null;
   xa: number | null;
   xg90: number | null;
@@ -410,6 +469,8 @@ export interface ApiPlayerRating {
   short_name: string | null;
   team_id: string;
   position: string;
+  avatarUrl: string | null;
+  headshot_url: string | null;
   stat_score: number | null;
   stat_breakdown: string | null;
   started: number;
@@ -586,7 +647,7 @@ export const api = {
     request<{
       team: ApiTeam;
       seasonStats: ApiTeamSeasonStats | null;
-      standing: { rank: number | null; points: number | null } | null;
+      standing: { rank: number | null; played: number | null; points: number | null } | null;
       fixtures: ApiMatch[];
     }>(`/teams/${encodeURIComponent(id)}`),
 
@@ -595,7 +656,13 @@ export const api = {
       match: { id: string; kickoffAt: string; formation: string | null } | null;
       starters: LineupPlayer[];
       subs: LineupPlayer[];
+      bench: LineupPlayer[];
     }>(`/teams/${encodeURIComponent(teamId)}/recent-lineup`),
+
+  getTeamAvailability: (teamId: string) =>
+    request<{ players: ApiTeamAvailability[]; stale?: boolean }>(
+      `/teams/${encodeURIComponent(teamId)}/availability`,
+    ),
 
   getLeaguePlayers: (league: string, sort: string, limit = 50) =>
     request<{
@@ -607,9 +674,20 @@ export const api = {
   getLeagueTeamStats: (league: string) =>
     request<{ season: string; teams: LeagueTeamStatRow[] }>(`/leagues/${encodeURIComponent(league)}/teams`),
 
-  /** League news feed, narrowed to one club when `teamId` is given. */
-  getLeagueNews: (league: string, teamId?: string) => {
-    const qs = teamId ? `?team=${encodeURIComponent(teamId)}` : "";
+  /**
+   * League news feed, narrowed to one club when `teamId` is given. `lang=fa`
+   * asks the server to overlay cached Persian translations; anything still
+   * untranslated comes back with `translated: false`.
+   */
+  getLeagueNews: (league: string, teamId?: string, lang?: string) => {
+    // Built by hand, not with URLSearchParams.size: older Telegram WebViews
+    // ship a URLSearchParams without that getter, and `undefined > 0` would
+    // silently drop the ?team=/lang= query on exactly the devices this app runs
+    // on.
+    const parts: string[] = [];
+    if (teamId) parts.push(`team=${encodeURIComponent(teamId)}`);
+    if (lang && lang !== "en") parts.push(`lang=${encodeURIComponent(lang)}`);
+    const qs = parts.length > 0 ? `?${parts.join("&")}` : "";
     return request<{ articles: NewsArticle[] }>(
       `/leagues/${encodeURIComponent(league)}/news${qs}`,
     );
@@ -695,9 +773,10 @@ export const api = {
         short_name: string | null;
         position: string;
         jersey_number: number | null;
-        /** ESPN headshot URL for the pitch/bench avatars; null for the players
-         *  the feed carries no artwork for (the UI shows initials). */
+        /** ESPN headshot URL for fallback if a local image fails or is absent. */
         headshot_url: string | null;
+        /** Local-first face URL from the server, or the remote URL as fallback. */
+        avatarUrl: string | null;
         /** ESPN's granular role ("CD-L", "AM-R") — places a player on a side
          *  of their line. Null for feeds that don't publish one. */
         espn_position: string | null;
@@ -719,7 +798,10 @@ export const api = {
   getForm: (id: string) => request<MatchForm>(`/matches/${id}/form`),
 
   /** Articles from this match's ESPN summary news block. */
-  getMatchNews: (id: string) => request<{ articles: NewsArticle[] }>(`/matches/${id}/news`),
+  getMatchNews: (id: string, lang?: string) =>
+    request<{ articles: NewsArticle[] }>(
+      `/matches/${encodeURIComponent(id)}/news${lang && lang !== "en" ? `?lang=${encodeURIComponent(lang)}` : ""}`,
+    ),
 
   getSquad: (teamId: string) =>
     request<{
@@ -755,7 +837,9 @@ export const api = {
     }>("/health/sync"),
 
   getStandings: (league: string) =>
-    request<{ season: string; standings: ApiStanding[] }>(`/standings/${encodeURIComponent(league)}`),
+    request<{ season: string; standings: ApiStanding[]; scorers?: ApiScorer[] }>(
+      `/standings/${encodeURIComponent(league)}`,
+    ),
 
   getRatings: (matchId: string) =>
     request<{

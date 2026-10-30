@@ -1,0 +1,93 @@
+From a22caa0cef3a9b055c670f6728b8a11261923a2b Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 13 Oct 2026 02:37:06 +0330
+Subject: [PATCH 068/230] Fix A-ADS bot: make static ad visible, drop React ad
+ duplicates
+
+- index.html: remove display:none from the AADS wrapper so the bot sees a
+  visible banner; add margin/padding/max-width/positioning so it renders at
+  the bottom without being covered by the fixed bottom nav.
+- Matches.tsx + MatchDetail.tsx: remove the <AdBanner /> import and usage
+  since the static HTML ad is now the single source of truth. This avoids
+  duplicate ads and keeps the React side out of the ad injection path.
+
+Gates: typecheck, lint, format, tests, build.
+---
+ index.html                | 5 ++++-
+ src/pages/MatchDetail.tsx | 6 ------
+ src/pages/Matches.tsx     | 5 -----
+ 3 files changed, 4 insertions(+), 12 deletions(-)
+
+diff --git a/index.html b/index.html
+index f671791..b7d5ac9 100644
+--- a/index.html
++++ b/index.html
+@@ -96,7 +96,10 @@
+     </script>
+     <script type="module" src="/src/main.tsx"></script>
+     <!-- BEGIN AADS AD UNIT 2458182 -->
+-    <div id="aads-frame" style="width: 100%; margin: auto; position: relative; z-index: 1; display: none">
++    <div
++      id="aads-frame"
++      style="margin: 16px auto; max-width: 468px; padding-bottom: 80px; position: relative; z-index: 1"
++    >
+       <iframe
+         data-aa="2458182"
+         src="//acceptable.a-ads.com/2458182/?size=Adaptive"
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 947d611..61c0c71 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -37,7 +37,6 @@ import { cx } from "../lib/cx";
+ import { api, serverErrorKey, type ApiPlayerRating, type ApiTimelineEvent } from "../lib/api";
+ import { TEAM_FALLBACK } from "../lib/colors";
+ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+-import { AdBanner } from "../components/AdBanner";
+ import { useAuth } from "../hooks/authContext";
+ import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+@@ -300,11 +299,6 @@ export default function MatchDetail() {
+         </>
+       ) : null}
+ 
+-      {/* Inline sponsored banner (Anonymous Ads / A-ADS), last block on the
+-          page so it never sits between the user and the match. Renders nothing
+-          unless ADS_ENABLED is "true"; see src/lib/ads.ts for the whole story. */}
+-      <AdBanner />
+-
+       {/* The Shot Predictor lives in the Predict tab now (concept v2). */}
+     </>
+   );
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 1894d36..8fc6872 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -26,7 +26,6 @@ import { formatClock, formatDayHeader, formatKickoff } from "../lib/format";
+ import { LEAGUE_BY_SLUG } from "../lib/leagues";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+ import { BallIcon, PlusIcon, RefreshIcon, StarFilledIcon } from "../components/icons";
+-import { AdBanner } from "../components/AdBanner";
+ import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
+ import { usePullToRefresh } from "../hooks/usePullToRefresh";
+ import { PullIndicator } from "../components/PullToRefresh";
+@@ -223,8 +222,6 @@ export default function Matches() {
+      can never push the fixtures out of view. Renders nothing unless
+      ADS_ENABLED is "true"; see src/lib/ads.ts. One placement per screen, so
+      the same node is reused by the two feed states that show it. */
+-  const adSlot = <AdBanner />;
+-
+   return (
+     <>
+       <ConfettiBurst trigger={burst} />
+@@ -510,8 +507,6 @@ export default function Matches() {
+               )}
+             </CollapsibleSection>
+ 
+-            {adSlot}
+-
+             {/* Previous results beneath the feed: folded away by default so the
+               matchday page leads with what's next; open when the score is
+               wanted. Rendered whenever the feed has data so a quiet history is
+-- 
+2.54.0.windows.1
+

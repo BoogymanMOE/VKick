@@ -1,0 +1,457 @@
+From a8c287cd3e9af56924ddab360a32fe7a0a245322 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 9 Oct 2026 02:33:07 +0330
+Subject: [PATCH 036/230] Add Privacy and Terms pages in both languages
+
+Short, honest documents (what we store, ESPN data, Adsgram ads, how deletion
+works, a contact placeholder) rendered from a data-driven section list and
+linked from Profile and the onboarding footer. Route paths live in one
+constant the router imports, and the test asserts every section resolves and
+is genuinely translated in EN and FA.
+---
+ src/App.tsx                   |  6 +++
+ src/components/LegalLinks.tsx | 25 +++++++++++
+ src/i18n/strings.ts           | 76 +++++++++++++++++++++++++++++++++
+ src/lib/legal.ts              | 49 +++++++++++++++++++++
+ src/pages/Legal.tsx           | 35 +++++++++++++++
+ src/pages/Onboarding.tsx      |  4 ++
+ src/pages/Profile.tsx         | 23 ++++++++++
+ tests/legal.test.ts           | 80 +++++++++++++++++++++++++++++++++++
+ tests/run.ts                  |  2 +
+ 9 files changed, 300 insertions(+)
+ create mode 100644 src/components/LegalLinks.tsx
+ create mode 100644 src/lib/legal.ts
+ create mode 100644 src/pages/Legal.tsx
+ create mode 100644 tests/legal.test.ts
+
+diff --git a/src/App.tsx b/src/App.tsx
+index e23fc77..902b3a0 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
+ import { AppShell } from "./components/AppShell";
+ import { AuthProvider, RequireAuth } from "./hooks/useAuth";
+ import { useFavorites } from "./hooks/useFavorites";
++import { LEGAL_ROUTES } from "./lib/legal";
+ 
+ // Every screen is lazy so the first paint only ships the shell, the auth gate
+ // and the route the user actually landed on. On the low-end Android webviews
+@@ -23,6 +24,8 @@ const TeamPage = lazy(() => import("./pages/TeamPage"));
+ const Table = lazy(() => import("./pages/Table"));
+ const Leaderboards = lazy(() => import("./pages/Leaderboards"));
+ const Predictions = lazy(() => import("./pages/Predictions"));
++const Privacy = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Privacy })));
++const Terms = lazy(() => import("./pages/Legal").then((m) => ({ default: m.Terms })));
+ 
+ export default function App() {
+   return (
+@@ -59,6 +62,9 @@ export default function App() {
+             <Route path="/predictions" element={<Predictions />} />
+             <Route path="/stats" element={<PlayerStats />} />
+             <Route path="/profile" element={<Profile />} />
++            {/* Legal pages: reachable from Profile and the onboarding footer. */}
++            <Route path={LEGAL_ROUTES.privacy} element={<Privacy />} />
++            <Route path={LEGAL_ROUTES.terms} element={<Terms />} />
+             {/* Unknown path: say so instead of silently redirecting (broken
+                   deep links from the bot become visible). */}
+             <Route path="*" element={<NotFound />} />
+diff --git a/src/components/LegalLinks.tsx b/src/components/LegalLinks.tsx
+new file mode 100644
+index 0000000..c68ee6d
+--- /dev/null
++++ b/src/components/LegalLinks.tsx
+@@ -0,0 +1,25 @@
++import { Link } from "react-router-dom";
++import { useI18n } from "../i18n/context";
++import { LEGAL_ROUTES } from "../lib/legal";
++import { cx } from "../lib/cx";
++
++/**
++ * The compact "Privacy policy · Terms of use" link row. Used on the onboarding
++ * screens (where a full section would crowd the primary action) and anywhere
++ * else a light-touch legal link belongs. Profile uses its own ListRows.
++ */
++export function LegalLinks({ className }: { className?: string }) {
++  const { t } = useI18n();
++  const linkClass = "underline decoration-line underline-offset-2 transition-colors hover:text-ink-2";
++  return (
++    <p className={cx("text-center text-[11px] text-ink-3", className)}>
++      <Link to={LEGAL_ROUTES.privacy} className={linkClass}>
++        {t("legal.privacyTitle")}
++      </Link>
++      <span aria-hidden="true"> · </span>
++      <Link to={LEGAL_ROUTES.terms} className={linkClass}>
++        {t("legal.termsTitle")}
++      </Link>
++    </p>
++  );
++}
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 9b7b170..7b0048c 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -305,6 +305,44 @@ export const strings = {
+       "This permanently deletes your account, favorites, predictions, ratings, comments and points. It cannot be undone, and the data cannot be recovered.",
+     "profile.deleteConfirm": "Delete forever",
+     "profile.deleting": "Deleting…",
++    "profile.legal": "Legal",
++    "legal.privacyTitle": "Privacy policy",
++    "legal.termsTitle": "Terms of use",
++    "legal.updated": "Last updated: October 2026",
++    "legal.privacy.stored.title": "What we store",
++    "legal.privacy.stored.body":
++      "Your sign-in identity (Telegram or username), display name, language, favorite clubs and leagues, predictions, ratings, comments, notification preferences, invite codes, and the points you earn. Nothing else.",
++    "legal.privacy.where.title": "Where it lives",
++    "legal.privacy.where.body":
++      "On this app's own server, in a single database. We don't sell or share your data, and the web build loads no third-party analytics or ad tracker.",
++    "legal.privacy.espn.title": "Football data",
++    "legal.privacy.espn.body":
++      "Fixtures, scores, lineups and stats come from ESPN's public API. That data is ESPN's; we only store the copy we need to show it to you.",
++    "legal.privacy.ads.title": "Ads",
++    "legal.privacy.ads.body":
++      "Inside Telegram only, a clearly-marked sponsored card may be shown through Adsgram. The web build shows no ads and never loads the ad SDK.",
++    "legal.privacy.delete.title": "Deleting your data",
++    "legal.privacy.delete.body":
++      "Profile → Delete account removes your account and everything in it — favorites, picks, ratings, comments and points — immediately and permanently.",
++    "legal.privacy.contact.title": "Contact",
++    "legal.privacy.contact.body": "Questions or data requests: add your contact address here.",
++    "legal.terms.use.title": "Using the app",
++    "legal.terms.use.body":
++      "Vkick is a football companion for following clubs, predicting matches and rating players. Use it as a fan — don't abuse, scrape or automate it.",
++    "legal.terms.content.title": "Your content",
++    "legal.terms.content.body":
++      "Comments and ratings you post are yours, but you give us permission to display them in the app. Don't post unlawful, hateful or spam content, and expect reported content to be removed.",
++    "legal.terms.espn.title": "Football data",
++    "legal.terms.espn.body":
++      "Scores, fixtures and stats come from ESPN's public API and may be delayed, incomplete or wrong. Predictions and points are for fun and have no monetary value.",
++    "legal.terms.ads.title": "Ads",
++    "legal.terms.ads.body":
++      "Inside Telegram, sponsored cards may appear through Adsgram. They are always labelled as sponsored.",
++    "legal.terms.delete.title": "Account deletion",
++    "legal.terms.delete.body":
++      "You can delete your account at any time from Profile. Deletion takes effect immediately and cannot be undone.",
++    "legal.terms.contact.title": "Contact",
++    "legal.terms.contact.body": "Questions or corrections: add your contact address here.",
+     "profile.editName": "Edit display name",
+     "profile.nameEmpty": "Display name can't be empty",
+     "profile.recipientOptedOut": "That person turned off these notifications",
+@@ -794,6 +832,44 @@ export const strings = {
+       "این کار حساب، تیم‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها و امتیازاتت را برای همیشه پاک می‌کند. قابل بازگشت نیست و داده‌ها بازیابی نمی‌شوند.",
+     "profile.deleteConfirm": "حذف برای همیشه",
+     "profile.deleting": "در حال حذف…",
++    "profile.legal": "حقوقی",
++    "legal.privacyTitle": "سیاست حفظ حریم خصوصی",
++    "legal.termsTitle": "شرایط استفاده",
++    "legal.updated": "آخرین به‌روزرسانی: مهر ۱۴۰۵",
++    "legal.privacy.stored.title": "چه چیزی ذخیره می‌کنیم",
++    "legal.privacy.stored.body":
++      "هویت ورودت (تلگرام یا نام کاربری)، نام نمایشی، زبان، باشگاه‌ها و لیگ‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها، تنظیمات اعلان، کدهای دعوت و امتیازهایی که می‌گیری. چیز دیگری نه.",
++    "legal.privacy.where.title": "کجا نگه داشته می‌شود",
++    "legal.privacy.where.body":
++      "روی سرور همین برنامه، در یک پایگاه داده. داده‌ات را نمی‌فروشیم و به اشتراک نمی‌گذاریم و نسخه وب هیچ ابزار تحلیلی یا ردیاب تبلیغاتی شخص ثالثی بار نمی‌کند.",
++    "legal.privacy.espn.title": "داده فوتبال",
++    "legal.privacy.espn.body":
++      "برنامه بازی‌ها، نتایج، ترکیب‌ها و آمار از API عمومی ESPN می‌آید. آن داده مال ESPN است؛ ما فقط نسخه‌ای را نگه می‌داریم که برای نمایش لازم است.",
++    "legal.privacy.ads.title": "تبلیغات",
++    "legal.privacy.ads.body":
++      "فقط داخل تلگرام، ممکن است یک کارت اسپانسری مشخصاً برچسب‌خورده از طریق Adsgram نمایش داده شود. نسخه وب هیچ تبلیغی نشان نمی‌دهد و کیت تبلیغاتی را بار نمی‌کند.",
++    "legal.privacy.delete.title": "حذف داده‌ها",
++    "legal.privacy.delete.body":
++      "پروفایل ← حذف حساب، حسابت و همه‌چیز درونش — باشگاه‌های محبوب، پیش‌بینی‌ها، امتیازها، دیدگاه‌ها و امتیازها — را فوراً و برای همیشه پاک می‌کند.",
++    "legal.privacy.contact.title": "تماس",
++    "legal.privacy.contact.body": "پرسش یا درخواست داده: نشانی تماس‌تان را اینجا اضافه کنید.",
++    "legal.terms.use.title": "استفاده از برنامه",
++    "legal.terms.use.body":
++      "وی‌کیک یک همراه فوتبالی برای دنبال‌کردن باشگاه‌ها، پیش‌بینی بازی‌ها و امتیازدادن به بازیکنان است. مثل یک هوادار از آن استفاده کن — سوءاستفاده، استخراج داده یا خودکارسازی نکن.",
++    "legal.terms.content.title": "محتوای شما",
++    "legal.terms.content.body":
++      "دیدگاه‌ها و امتیازهایی که می‌گذاری مال خودت است، اما به ما اجازه می‌دهی آن‌ها را در برنامه نمایش دهیم. محتوای غیرقانونی، نفرت‌پراکن یا اسپم نگذار و بدان محتوای گزارش‌شده حذف می‌شود.",
++    "legal.terms.espn.title": "داده فوتبال",
++    "legal.terms.espn.body":
++      "نتایج، برنامه بازی‌ها و آمار از API عمومی ESPN می‌آید و ممکن است با تأخیر، ناقص یا نادرست باشد. پیش‌بینی‌ها و امتیازها فقط برای سرگرمی‌اند و ارزش مالی ندارند.",
++    "legal.terms.ads.title": "تبلیغات",
++    "legal.terms.ads.body":
++      "داخل تلگرام، کارت‌های اسپانسری ممکن است از طریق Adsgram نمایش داده شوند. همیشه با برچسب اسپانسری مشخص می‌شوند.",
++    "legal.terms.delete.title": "حذف حساب",
++    "legal.terms.delete.body":
++      "هر وقت بخواهی می‌توانی از پروفایل حسابت را حذف کنی. حذف فوراً اعمال می‌شود و قابل بازگشت نیست.",
++    "legal.terms.contact.title": "تماس",
++    "legal.terms.contact.body": "پرسش یا اصلاح: نشانی تماس‌تان را اینجا اضافه کنید.",
+     "profile.editName": "ویرایش نام نمایشی",
+     "profile.nameEmpty": "نام نمایشی نمی‌تواند خالی باشد",
+     "profile.recipientOptedOut": "این شخص اعلان‌هایش را خاموش کرده",
+diff --git a/src/lib/legal.ts b/src/lib/legal.ts
+new file mode 100644
+index 0000000..cf06451
+--- /dev/null
++++ b/src/lib/legal.ts
+@@ -0,0 +1,49 @@
++/**
++ * Legal pages — Privacy and Terms — as data.
++ *
++ * The route paths live here and App.tsx imports them, so the router and the
++ * test cannot disagree about where these pages live. Each page is a list of
++ * {title, body} string keys; the page component renders exactly this list and
++ * tests/legal.test.ts asserts every key resolves in BOTH languages (EN/FA
++ * parity is a build invariant — a missing Persian string is a blank section).
++ *
++ * The contact sections carry a visible placeholder the owner fills in with a
++ * real address before launch.
++ */
++import type { StringKey } from "../i18n/strings";
++
++export const LEGAL_ROUTES = {
++  privacy: "/privacy",
++  terms: "/terms",
++} as const;
++
++export type LegalKind = keyof typeof LEGAL_ROUTES;
++
++export interface LegalSection {
++  title: StringKey;
++  body: StringKey;
++}
++
++export const LEGAL_TITLES: Record<LegalKind, StringKey> = {
++  privacy: "legal.privacyTitle",
++  terms: "legal.termsTitle",
++};
++
++export const LEGAL_SECTIONS: Record<LegalKind, LegalSection[]> = {
++  privacy: [
++    { title: "legal.privacy.stored.title", body: "legal.privacy.stored.body" },
++    { title: "legal.privacy.where.title", body: "legal.privacy.where.body" },
++    { title: "legal.privacy.espn.title", body: "legal.privacy.espn.body" },
++    { title: "legal.privacy.ads.title", body: "legal.privacy.ads.body" },
++    { title: "legal.privacy.delete.title", body: "legal.privacy.delete.body" },
++    { title: "legal.privacy.contact.title", body: "legal.privacy.contact.body" },
++  ],
++  terms: [
++    { title: "legal.terms.use.title", body: "legal.terms.use.body" },
++    { title: "legal.terms.content.title", body: "legal.terms.content.body" },
++    { title: "legal.terms.espn.title", body: "legal.terms.espn.body" },
++    { title: "legal.terms.ads.title", body: "legal.terms.ads.body" },
++    { title: "legal.terms.delete.title", body: "legal.terms.delete.body" },
++    { title: "legal.terms.contact.title", body: "legal.terms.contact.body" },
++  ],
++};
+diff --git a/src/pages/Legal.tsx b/src/pages/Legal.tsx
+new file mode 100644
+index 0000000..c848e4c
+--- /dev/null
++++ b/src/pages/Legal.tsx
+@@ -0,0 +1,35 @@
++import { TopBar } from "../components/TopBar";
++import { Card } from "../components/ui";
++import { useI18n } from "../i18n/context";
++import { LEGAL_SECTIONS, LEGAL_TITLES, type LegalKind } from "../lib/legal";
++
++/**
++ * One legal document, rendered from the {title, body} list in lib/legal.ts.
++ * Layout is direction-agnostic (logical spacing only), so the same component
++ * is correct in EN (ltr) and FA (rtl) without a branch.
++ */
++export function LegalPage({ kind }: { kind: LegalKind }) {
++  const { t } = useI18n();
++  return (
++    <>
++      <TopBar title={t(LEGAL_TITLES[kind])} />
++      <div className="mt-3 space-y-3 pb-8">
++        {LEGAL_SECTIONS[kind].map((section) => (
++          <Card key={section.title} className="p-4">
++            <h2 className="text-sm font-bold text-ink">{t(section.title)}</h2>
++            <p className="mt-1.5 text-xs leading-relaxed text-ink-2">{t(section.body)}</p>
++          </Card>
++        ))}
++        <p className="px-1 text-[11px] text-ink-3">{t("legal.updated")}</p>
++      </div>
++    </>
++  );
++}
++
++export function Privacy() {
++  return <LegalPage kind="privacy" />;
++}
++
++export function Terms() {
++  return <LegalPage kind="terms" />;
++}
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 3def89c..530e511 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -1,6 +1,7 @@
+ import { useMemo, useState } from "react";
+ import { useNavigate } from "react-router-dom";
+ import { TopBar } from "../components/TopBar";
++import { LegalLinks } from "../components/LegalLinks";
+ import { useToast } from "../components/toastContext";
+ import { cx } from "../lib/cx";
+ import { Button, Chip, Num, Segmented, TeamBadge } from "../components/ui";
+@@ -431,6 +432,8 @@ export default function Onboarding() {
+         ) : null}
+       </div>
+ 
++      <LegalLinks className="mt-3" />
++
+       <Num className="sr-only">{step}</Num>
+     </>
+   );
+@@ -513,6 +516,7 @@ function Intro({ onDone }: { onDone: () => void }) {
+         >
+           {t("intro.skip")}
+         </button>
++        <LegalLinks className="mt-2" />
+       </div>
+     </div>
+   );
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index bd7ae41..4109614 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -11,6 +11,7 @@ import { LANG_LABEL, type Lang } from "../i18n/strings";
+ import { useI18n } from "../i18n/context";
+ import { api, serverErrorKey } from "../lib/api";
+ import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
++import { LEGAL_ROUTES } from "../lib/legal";
+ import { useLocalState } from "../lib/useLocalState";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+ 
+@@ -270,6 +271,28 @@ export default function Profile() {
+         </Card>
+       </section>
+ 
++      <section className="mt-6">
++        <SectionHeading title={t("profile.legal")} />
++        <div className="space-y-2">
++          <ListRow
++            label={t("legal.privacyTitle")}
++            onClick={() => {
++              haptic("light");
++              navigate(LEGAL_ROUTES.privacy);
++            }}
++            right={<ChevronRightIcon className="text-ink-3" />}
++          />
++          <ListRow
++            label={t("legal.termsTitle")}
++            onClick={() => {
++              haptic("light");
++              navigate(LEGAL_ROUTES.terms);
++            }}
++            right={<ChevronRightIcon className="text-ink-3" />}
++          />
++        </div>
++      </section>
++
+       <WhatsNew />
+ 
+       <section className="mt-6">
+diff --git a/tests/legal.test.ts b/tests/legal.test.ts
+new file mode 100644
+index 0000000..a3bfdb3
+--- /dev/null
++++ b/tests/legal.test.ts
+@@ -0,0 +1,80 @@
++/**
++ * Privacy and Terms: the route paths and every string the pages render.
++ *
++ * The pages are data-driven (src/lib/legal.ts), so "the page renders in both
++ * languages" reduces to a checkable property: each registered route resolves to
++ * a title plus a non-empty {title, body} section list, in BOTH EN and FA, with
++ * the Persian prose genuinely different from the English (a forgotten
++ * translation is a build-breaking blank section, not a silent one).
++ *
++ * App.tsx imports LEGAL_ROUTES for the <Route path> values, so asserting those
++ * constants also pins where the pages live.
++ */
++import { strict as assert } from "node:assert";
++import { strings } from "../src/i18n/strings.js";
++import { LEGAL_ROUTES, LEGAL_SECTIONS, LEGAL_TITLES, type LegalKind } from "../src/lib/legal.js";
++
++const LANGS = ["en", "fa"] as const;
++
++export function runLegalTests(): void {
++  assert.deepEqual(
++    Object.values(LEGAL_ROUTES).sort(),
++    ["/privacy", "/terms"],
++    "the legal routes are /privacy and /terms",
++  );
++
++  const kinds = Object.keys(LEGAL_SECTIONS) as LegalKind[];
++  assert.deepEqual(kinds.sort(), ["privacy", "terms"], "both documents are defined");
++
++  for (const kind of kinds) {
++    for (const lang of LANGS) {
++      const t = strings[lang] as Record<string, string>;
++      const title = t[LEGAL_TITLES[kind]];
++      assert.ok(title && title.trim(), `${lang}: ${LEGAL_TITLES[kind]} is missing or empty`);
++      assert.ok(LEGAL_SECTIONS[kind].length > 0, `${kind} has sections`);
++      for (const section of LEGAL_SECTIONS[kind]) {
++        const heading = t[section.title];
++        const body = t[section.body];
++        assert.ok(
++          typeof heading === "string" && heading.trim().length > 0,
++          `${lang}: ${section.title} is missing or empty`,
++        );
++        assert.ok(
++          typeof body === "string" && body.trim().length > 0,
++          `${lang}: ${section.body} is missing or empty`,
++        );
++      }
++    }
++  }
++
++  // No untranslated prose: every FA body must differ from the EN one.
++  for (const kind of kinds) {
++    for (const section of LEGAL_SECTIONS[kind]) {
++      assert.notEqual(
++        strings.en[section.body],
++        strings.fa[section.body],
++        `${section.body} is identical in EN and FA (untranslated)`,
++      );
++    }
++  }
++
++  // The topics the docs must actually cover.
++  const required = [
++    "legal.privacy.stored.title",
++    "legal.privacy.espn.title",
++    "legal.privacy.ads.title",
++    "legal.privacy.delete.title",
++    "legal.privacy.contact.title",
++    "legal.terms.espn.title",
++    "legal.terms.delete.title",
++    "legal.terms.contact.title",
++  ] as const;
++  for (const key of required) {
++    for (const lang of LANGS) {
++      const value = (strings[lang] as Record<string, string>)[key];
++      assert.ok(value && value.trim(), `${lang}: required legal key ${key} is missing`);
++    }
++  }
++
++  console.log("  legal: /privacy + /terms routes, EN/FA sections present, distinct and complete OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 9264017..a29cf3e 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -33,6 +33,7 @@ import { runAnchorRaceTests } from "./anchorRace.test.js";
+ import { runLeaderboardTests } from "./leaderboard.test.js";
+ import { runBackupTests } from "./backup.test.js";
+ import { runAccountDeletionTests } from "./accountDeletion.test.js";
++import { runLegalTests } from "./legal.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -68,6 +69,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["leaderboard", runLeaderboardTests],
+   ["backup", runBackupTests],
+   ["accountDeletion", runAccountDeletionTests],
++  ["legal", runLegalTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

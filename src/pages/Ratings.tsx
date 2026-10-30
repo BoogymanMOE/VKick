@@ -7,6 +7,7 @@ import { TopBar } from "../components/TopBar";
 import { Card, Chip, EmptyState, ErrorState, SectionHeading, Segmented } from "../components/ui";
 import { api, serverErrorKey } from "../lib/api";
 import { TEAM_FALLBACK } from "../lib/colors";
+import { isNotPlayed } from "../lib/format";
 import { useMatches } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
 import type { PlayerRating } from "../types";
@@ -40,7 +41,11 @@ export default function Ratings() {
       { replace: true },
     );
 
-  const finished = matches.filter((m) => m.status !== "scheduled").slice(0, 8);
+  // Postponed and abandoned fixtures have no players to rate — they were never
+  // played, so they stay out of a list headed "rate the latest match".
+  const finished = matches
+    .filter((m) => m.status !== "scheduled" && !isNotPlayed(m.status))
+    .slice(0, 8);
 
   return (
     <>
@@ -254,6 +259,8 @@ function adapt(p: import("../lib/api").ApiPlayerRating, league: string): PlayerR
   return {
     playerId: p.player_id,
     name: p.name,
+    avatarUrl: p.avatarUrl,
+    headshotUrl: p.headshot_url,
     teamId: p.team_id,
     position: (p.position ?? "MID") as PlayerRating["position"],
     fantasyPoints: p.stat_score ?? 0,

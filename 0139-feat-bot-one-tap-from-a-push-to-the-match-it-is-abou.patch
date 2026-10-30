@@ -1,0 +1,250 @@
+From 3c3dc6bba633a907caaffd3f316279446fbcb309 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 20:05:01 +0330
+Subject: [PATCH 139/230] feat(bot): one tap from a push to the match it is
+ about
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+A goal push named the match but pointed nowhere: the user either opened
+the app and hunted for it, or muted the bot. Goal alerts and the whole
+matchday fan-out now end with a per-language footer line and a
+/#/match/<id> Mini App deep link, built at queue time from
+MINI_APP_URL — with the env unset or still a placeholder (example.com)
+the copy stays bare, never a dead link (tests pin both shapes).
+
+The drain also logs pushes delivered more than 120s after queueing:
+latency is exactly what makes the push channel feel untrustworthy mid-
+match, so it is measured at the one place where it is visible.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ .env.example                |  2 ++
+ server/bot/index.ts         | 18 ++++++++++--
+ server/messages.ts          | 27 ++++++++++++++++++
+ server/notifications.ts     | 17 ++++++++++--
+ tests/notifications.test.ts | 55 ++++++++++++++++++++++++++++++++++++-
+ 5 files changed, 114 insertions(+), 5 deletions(-)
+
+diff --git a/.env.example b/.env.example
+index fe2f051..f718e28 100644
+--- a/.env.example
++++ b/.env.example
+@@ -46,6 +46,8 @@ TELEGRAM_BOT_TOKEN=
+ # Public HTTPS URL of the web app — the tunnel URL from start-telegram.bat while
+ # developing, your production host after deploy. The bot's /start button and
+ # Mini App menu open this, so it must match what you registered in BotFather.
++# Also the base of the /#/match/<id> deep link attached to goal alerts and the
++# matchday pushes (notifications.ts) — leave empty and the pushes stay text-only.
+ MINI_APP_URL=
+ # Telegram chat that receives the sync sentinel's stale-data alerts (sync/sentinel.js):
+ # dead sync loop, live matches untouched for 15+ minutes, followed leagues gone quiet.
+diff --git a/server/bot/index.ts b/server/bot/index.ts
+index 280b234..a307233 100644
+--- a/server/bot/index.ts
++++ b/server/bot/index.ts
+@@ -287,9 +287,9 @@ async function drainPushes(): Promise<void> {
+   try {
+     const db = getDb();
+     const now = Date.now();
+-    const rows = all<{ id: number; telegram_id: string; text: string; attempts: number; kind: string }>(
++    const rows = all<{ id: number; telegram_id: string; text: string; attempts: number; kind: string; created_at: string }>(
+       db,
+-      `SELECT id, telegram_id, text, attempts, kind
++      `SELECT id, telegram_id, text, attempts, kind, created_at
+        FROM bot_push_queue
+       WHERE sent_at IS NULL AND failed_at IS NULL AND next_attempt_at <= ?
+       ORDER BY id ASC LIMIT 20`,
+@@ -318,6 +318,20 @@ async function drainPushes(): Promise<void> {
+       try {
+         await bot.api.sendMessage(row.telegram_id, row.text);
+         run(db, "UPDATE bot_push_queue SET sent_at = ? WHERE id = ?", [new Date().toISOString(), row.id]);
++        // Delivery-delay monitor: a "GOAL!" that lands 20 minutes after the
++        // goal trains users not to trust the push channel. A goal-to-sendTime
++        // gap over this threshold means the queue, the network or Telegram
++        // itself is lagging exactly when it matters most.
++        const queuedMs = Date.parse(row.created_at);
++        if (Number.isFinite(queuedMs)) {
++          const latencySec = (Date.now() - queuedMs) / 1000;
++          if (latencySec > 120) {
++            console.error(
++              `[bot] slow push delivery: ${kind} pushed ${Math.round(latencySec)}s after queueing ` +
++                `(queue->send should be seconds)`,
++            );
++          }
++        }
+       } catch (err) {
+         const msg = String(err);
+         const attempts = (row.attempts ?? 0) + 1;
+diff --git a/server/messages.ts b/server/messages.ts
+index e8443fe..b5a40a5 100644
+--- a/server/messages.ts
++++ b/server/messages.ts
+@@ -40,6 +40,33 @@ export interface MatchPushVars {
+   score: string;
+ }
+ 
++/**
++ * The "why am I getting this / where do I act" line, appended to pushes below.
++ * Left bare in the prior copy: a push named a match but pointed nowhere, so
++ * the user either opened the app and hunted for it or muted the bot entirely.
++ * The Mini App is a HashRouter, so the route travels after the `#` (same shape
++ * as the command-menu deep links in server/bot/index.ts).
++ */
++export function matchLink(matchId: string): string | null {
++  const base = (process.env.MINI_APP_URL ?? "").trim().replace(/\/+$/, "");
++  if (!base) return null;
++  let host = "";
++  try {
++    host = new URL(base).hostname;
++  } catch {
++    return null;
++  }
++  // Placeholder or unset config yields no link — a dead example.com footer
++  // trains users to ignore the line.
++  if (!host || host === "example.com" || host.endsWith(".example.com")) return null;
++  return `${base}/#/match/${matchId}`;
++}
++
++/** The line above the link — one sentence, per push language. */
++export function pushFooter(lang: PushLang): string {
++  return lang === "fa" ? "بازی زنده و شرح لحظه‌به‌لحظه:" : "Live scores and the minute-by-minute timeline:";
++}
++
+ export interface LockPushVars {
+   home: string;
+   away: string;
+diff --git a/server/notifications.ts b/server/notifications.ts
+index fe3ebe1..951e7f5 100644
+--- a/server/notifications.ts
++++ b/server/notifications.ts
+@@ -32,6 +32,8 @@ import {
+   halftimePush,
+   lineupPush,
+   lockPush,
++  matchLink,
++  pushFooter,
+   ratingsPush,
+   type PushLang,
+ } from "./messages.js";
+@@ -185,6 +187,17 @@ export function matchRecipients(db: DB, matchId: string, kind: PushKind): PushRe
+   return [...byId.values()];
+ }
+ 
++/**
++ * Attach the deep link in the recipient's own language: the copy plus one
++ * footer line and the Mini App match route. Bare when MINI_APP_URL is unset
++ * or still a placeholder — a dead example.com link would be worse than none,
++ * and every test text stays byte-identical with no env set.
++ */
++function withMatchLink(text: string, matchId: string, lang: PushLang): string {
++  const link = matchLink(matchId);
++  return link ? `${text}\n${pushFooter(lang)}\n${link}` : text;
++}
++
+ /** Queue one push. The bot's drain owns delivery and retries. */
+ export function enqueuePush(db: DB, telegramId: string, kind: PushKind, text: string): void {
+   db.prepare("INSERT INTO bot_push_queue (telegram_id, kind, text, created_at) VALUES (?, ?, ?, ?)").run(
+@@ -258,7 +271,7 @@ export function queueGoalAlerts(db: DB, goals: GoalAlertInput[]): number {
+         db,
+         r.telegramId,
+         "goal",
+-        goalPush(r.lang, { minute: g.minute, club, scorer: g.scorerName, score }),
++        withMatchLink(goalPush(r.lang, { minute: g.minute, club, scorer: g.scorerName, score }), g.matchId, r.lang),
+       );
+       queued++;
+     }
+@@ -391,7 +404,7 @@ function emit(db: DB, matchId: string, stage: PushKind, copy: (lang: PushLang) =
+   let sent = 0;
+   for (const r of matchRecipients(db, matchId, stage)) {
+     if (!claimNotification(db, r.telegramId, matchId, stage)) continue;
+-    enqueuePush(db, r.telegramId, stage, copy(r.lang));
++    enqueuePush(db, r.telegramId, stage, withMatchLink(copy(r.lang), matchId, r.lang));
+     sent += 1;
+   }
+   return sent;
+diff --git a/tests/notifications.test.ts b/tests/notifications.test.ts
+index 8ba4cca..7941215 100644
+--- a/tests/notifications.test.ts
++++ b/tests/notifications.test.ts
+@@ -30,7 +30,7 @@ import {
+   setPredictionsEnabledForTest,
+   setRatingsEnabledForTest,
+ } from "../server/features.js";
+-import { asPushLang, botCommandMenu, botStartText } from "../server/messages.js";
++import { asPushLang, botCommandMenu, botStartText, matchLink } from "../server/messages.js";
+ 
+ /** Fixed clock: the producers take `now`, so every window is deterministic. */
+ const NOW = new Date("2026-09-29T18:00:00.000Z");
+@@ -666,6 +666,58 @@ function testRatingsPushesGatedOff() {
+   db.close();
+ }
+ 
++/**
++ * Push trust: with MINI_APP_URL configured, every push carries a footer line
++ * plus a /#/match/<id> deep link, in the recipient's language — so the
++ * notification answers "why am I getting this and where do I act". With no
++ * env set the copy stays bare (never a dead example.com link).
++ */
++function testPushTrustLink(): void {
++  const base = "https://vkick.example.org";
++  const prev = process.env.MINI_APP_URL;
++  try {
++    process.env.MINI_APP_URL = base;
++    const db = tempDb();
++    seed(db);
++    db.prepare("UPDATE users SET language = 'fa' WHERE id = 1").run();
++    addMatch(db, "m_g", "live", minutesFromNow(-8), { home: 1, away: 0 });
++    queueGoalAlerts(db, [
++      { matchId: "m_g", scoringTeamId: "H", scorerName: "Saka", minute: "8", homeScore: 2, awayScore: 0 },
++    ]);
++    const en = queued(db).find((r) => r.telegram_id === "u3" && r.kind === "goal");
++    const fa = queued(db).find((r) => r.telegram_id === "u1" && r.kind === "goal");
++    const url = `${base}/#/match/m_g`;
++    assert.ok(en?.text.includes(`Live scores and the minute-by-minute timeline:\n${url}`),
++      `EN push carries the EN footer + deep link: ${en?.text}`);
++    assert.ok(!en?.text.includes("بازی زنده"), `EN push never gets the FA footer: ${en?.text}`);
++    assert.ok(fa?.text.includes(`بازی زنده و شرح لحظه‌به‌لحظه:\n${url}`),
++      `FA push carries the FA footer + deep link: ${fa?.text}`);
++    db.close();
++
++    // No MINI_APP_URL: the link and footer are omitted rather than made dead.
++    process.env.MINI_APP_URL = "";
++    const db2 = tempDb();
++    seed(db2);
++    addMatch(db2, "m_g", "live", minutesFromNow(-8), { home: 1, away: 0 });
++    queueGoalAlerts(db2, [
++      { matchId: "m_g", scoringTeamId: "H", scorerName: "Saka", minute: "8", homeScore: 1, awayScore: 0 },
++    ]);
++    const bare = queued(db2).find((r) => r.telegram_id === "u3" && r.kind === "goal");
++    assert.ok(bare?.text && !/#\/match\//.test(bare.text),
++      `bare copy has no deep link when MINI_APP_URL is unset: ${bare?.text}`);
++    assert.ok(!bare?.text.includes("Live scores and"), `bare copy has no footer: ${bare?.text}`);
++    db2.close();
++
++    // Placeholder hosts (still the example.com fallback some devs paste) are
++    // treated like unset: no dead link goes out.
++    process.env.MINI_APP_URL = "https://example.com";
++    assert.equal(matchLink("m_g"), null, "the placeholder host yields no link");
++  } finally {
++    if (prev === undefined) delete process.env.MINI_APP_URL;
++    else process.env.MINI_APP_URL = prev;
++  }
++}
++
+ export async function runNotificationTests(): Promise<void> {
+   // The legacy-behaviour tests below assert that prediction and rating pushes
+   // fire; they run with both flags on, and the two gated-off tests below cover
+@@ -684,6 +736,7 @@ export async function runNotificationTests(): Promise<void> {
+   testDeliverabilityFilter();
+   testPredictionPushesGatedOff();
+   testRatingsPushesGatedOff();
++  testPushTrustLink();
+   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
+   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
+   console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
+-- 
+2.54.0.windows.1
+

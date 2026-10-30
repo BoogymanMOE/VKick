@@ -1,0 +1,35 @@
+From 81a9afbbda900ab0e01caeb4177fe4061b589f72 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 12 Oct 2026 20:50:58 +0330
+Subject: [PATCH 066/230] Run initial 21-day fixture sweep on boot to populate
+ empty feed
+
+SKIP_CRON could leave the database empty because the first window sweep
+only ran on a 6-hour cron tick. Now startSyncLoop() fires an immediate
+void syncScoreboardWindow(1, 21) right after the once-guard, so the
+feed populates on boot. Wrapped in .catch() so failures never crash
+startup.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/sync/service.ts | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index 840b10f..adce1cb 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -331,6 +331,10 @@ export function startSyncLoop(): void {
+   if (started) return;
+   started = true;
+ 
++  // Initial sweep on boot: populate the feed immediately instead of waiting
++  // up to 6 hours for the cron window. Covers 1 day back and 21 days forward.
++  void syncScoreboardWindow(1, 21).catch((err) => console.error("[sync] initial window sweep error:", err));
++
+   // The live loop: summary of live matches every LIVE_SUMMARY_SECONDS.
+   // A plain interval (not cron) because the cadence is env-configurable and
+   // cron's finest useful step granularity doesn't fit arbitrary seconds.
+-- 
+2.54.0.windows.1
+

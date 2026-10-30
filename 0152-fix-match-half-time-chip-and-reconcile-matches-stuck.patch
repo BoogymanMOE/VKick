@@ -1,0 +1,413 @@
+From 3b81eeb7e1f5a4bb19dcd2605c0a5a06adf509fd Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 02:08:44 +0330
+Subject: [PATCH 152/230] fix(match): half-time chip, and reconcile matches
+ stuck in a live state
+
+---
+ server/matches/reconcile.ts  | 55 +++++++++++++++++++++++++++
+ server/routes/football.ts    | 15 +++++---
+ server/sync/sentinel.ts      | 22 +++++++++++
+ server/sync/service.ts       | 35 +++++++++++++++++
+ src/pages/MatchDetail.tsx    | 12 ++++--
+ tests/matchReconcile.test.ts | 74 ++++++++++++++++++++++++++++++++++++
+ tests/run.ts                 |  2 +
+ tests/sentinel.test.ts       | 10 +++++
+ 8 files changed, 217 insertions(+), 8 deletions(-)
+ create mode 100644 server/matches/reconcile.ts
+ create mode 100644 tests/matchReconcile.test.ts
+
+diff --git a/server/matches/reconcile.ts b/server/matches/reconcile.ts
+new file mode 100644
+index 0000000..2ac88a9
+--- /dev/null
++++ b/server/matches/reconcile.ts
+@@ -0,0 +1,55 @@
++/**
++ * Stuck-match reconciliation — the safety net for a match whose row says
++ * `live`/`halftime` long after the whistle should have gone.
++ *
++ * A live loop can stop mid-match (a dead cron, an ESPN shape change, a rate
++ * limit), and a summary fetch that fails leaves the row exactly as it was.
++ * The feed and the match page would then show a two-day-old game as "live"
++ * forever. Two layers close that:
++ *
++ *  - the sync loop re-fetches stuck rows from ESPN and stores `finished` when
++ *    the source says so (server/sync/service.ts);
++ *  - this module settles them at READ time: any live/halftime row whose kickoff
++ *    is older than STALE_LIVE_HOURS is served as `finished` with its last known
++ *    score, and one warning line is logged per match id. Nothing is stored —
++ *    the row stays as-is for the sync to repair, and a match that genuinely is
++ *    still running (a delayed kickoff) is untouched.
++ *
++ * Kept as a pure function so the route and the tests share one rule.
++ */
++
++/** A live/halftime match older than this is treated as finished at read time. */
++export const STALE_LIVE_HOURS = 5;
++export const STALE_LIVE_MS = STALE_LIVE_HOURS * 3_600_000;
++
++export interface LiveMatchRow {
++  id: string;
++  status: string;
++  kickoff_at: string;
++}
++
++/** True when a row is live/halftime AND its kickoff is long past. */
++export function isStaleLive(
++  row: Pick<LiveMatchRow, "status" | "kickoff_at">,
++  now: Date = new Date(),
++): boolean {
++  if (row.status !== "live" && row.status !== "halftime") return false;
++  return now.getTime() - new Date(row.kickoff_at).getTime() > STALE_LIVE_MS;
++}
++
++/**
++ * Return the row with a stale live/halftime status rewritten to `finished`.
++ * The score is left exactly as stored — the last known score is the honest one.
++ */
++export function settleStaleLive<T extends LiveMatchRow>(row: T, now: Date = new Date()): T {
++  if (!isStaleLive(row, now)) return row;
++  console.warn(
++    `[api] match ${row.id} stuck '${row.status}' >${STALE_LIVE_HOURS}h past kickoff — serving finished`,
++  );
++  return { ...row, status: "finished" };
++}
++
++/** Map form of settleStaleLive, for the feed's row list. */
++export function settleStaleLiveAll<T extends LiveMatchRow>(rows: T[], now: Date = new Date()): T[] {
++  return rows.map((row) => settleStaleLive(row, now));
++}
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index 2ba39a4..c05d092 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -12,6 +12,7 @@ import { competitionCatalog, isAllowedLeague } from "../espn/catalog.js";
+ import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
+ import { foldForm, type FormMatchRow } from "../standings/form.js";
+ import { buildFeedQuery } from "../matches/feed.js";
++import { settleStaleLive, settleStaleLiveAll, type LiveMatchRow } from "../matches/reconcile.js";
+ import { currentSeasonLabel } from "../scoring/ledger.js";
+ import { bad, requireUser } from "./shared.js";
+ // Sync freshness for the ops surface: the client shows "data as of <time>"
+@@ -32,8 +33,8 @@ function safeArr(s: unknown): unknown[] {
+   }
+ }
+ 
+-function matchWithTeams(id: string): unknown {
+-  return get(
++function matchWithTeams(id: string): (LiveMatchRow & Record<string, unknown>) | undefined {
++  return get<LiveMatchRow & Record<string, unknown>>(
+     db,
+     `SELECT m.*, 
+        th.name AS home_name, th.short_name AS home_short, th.abbreviation AS home_abbr, th.color AS home_color, th.logo_url AS home_logo,
+@@ -93,7 +94,7 @@ matchesRouter.get("/api/matches", (req, res) => {
+     to: req.query.to ? String(req.query.to) : null,
+     limit: req.query.limit ? String(req.query.limit) : null,
+   });
+-  const rows = all<{ league: string }>(
++  const rows = all<{ league: string; id: string; status: string; kickoff_at: string }>(
+     db,
+     `SELECT m.*,
+        th.name AS home_name, th.short_name AS home_short, th.abbreviation AS home_abbr, th.color AS home_color, th.logo_url AS home_logo,
+@@ -109,7 +110,11 @@ matchesRouter.get("/api/matches", (req, res) => {
+   // The allow-list is enforced HERE, not only in SQL: the catalog is trimmed to
+   // the five big leagues, and stale rows from older, wider syncs must never
+   // reach the feed even if a filter regresses.
+-  res.json({ matches: rows.filter((m) => isAllowedLeague(m.league)) });
++  //
++  // settleStaleLiveAll is the read-time net for a row stuck live/halftime long
++  // past kickoff (the sync loop repairs the row itself; this keeps the feed
++  // honest even when it can't).
++  res.json({ matches: settleStaleLiveAll(rows.filter((m) => isAllowedLeague(m.league))) });
+ });
+ 
+ matchesRouter.get("/api/matches/:id", (req, res) => {
+@@ -117,7 +122,7 @@ matchesRouter.get("/api/matches/:id", (req, res) => {
+   if (!assertMatchAllowed(res, matchId)) return;
+   const match = matchWithTeams(matchId);
+   if (!match) return; // unreachable: assertMatchAllowed already 404'd
+-  res.json({ match });
++  res.json({ match: settleStaleLive(match) });
+ });
+ 
+ /** Full minute-by-minute commentary for one match (blow-by-blow tab). */
+diff --git a/server/sync/sentinel.ts b/server/sync/sentinel.ts
+index 2836d5c..72bfe5b 100644
+--- a/server/sync/sentinel.ts
++++ b/server/sync/sentinel.ts
+@@ -21,6 +21,8 @@ import { all, get, type DB } from "../db/index.js";
+ const STALE_LIVE_MS = 15 * 60_000;
+ /** A pass that has not completed for this long means the loop is dead. */
+ const DEAD_LOOP_MS = 30 * 60_000;
++/** A live/halftime match whose kickoff is older than this was never reconciled. */
++const STUCK_KICKOFF_MS = 4 * 3_600_000;
+ /** Minimum spacing between repeated alerts — matchday moments are noisy. */
+ const ALERT_COOLDOWN_MS = 30 * 60_000;
+ 
+@@ -67,6 +69,8 @@ export interface SyncHealthSnapshot {
+   latestLastSyncedAt: string | null;
+   /** Live/halftime matches whose row is STALE_LIVE_MS old or more. */
+   staleLive: number;
++  /** Live/halftime matches whose kickoff is STUCK_KICKOFF_MS old or more. */
++  stuckLive: number;
+   liveCount: number;
+   scheduledCount: number;
+   finishedCount: number;
+@@ -113,6 +117,18 @@ export function syncHealthSnapshot(db: DB, now: Date = new Date()): SyncHealthSn
+       [new Date(nowMs - STALE_LIVE_MS).toISOString()],
+     )?.n ?? 0;
+ 
++  // A live/halftime row long past kickoff: the sync never reconciled it. The
++  // read-time fallback still serves it as finished, but the row is wrong and
++  // needs the loop (or a manual sync) to fix it.
++  const stuckLive =
++    get<{ n: number }>(
++      db,
++      `SELECT COUNT(*) AS n FROM matches
++       WHERE status IN ('live','halftime')
++         AND kickoff_at <= ?`,
++      [new Date(nowMs - STUCK_KICKOFF_MS).toISOString()],
++    )?.n ?? 0;
++
+   const quiet = all<{ league: string }>(
+     db,
+     `SELECT DISTINCT f.league AS league FROM followed_leagues f
+@@ -127,6 +143,7 @@ export function syncHealthSnapshot(db: DB, now: Date = new Date()): SyncHealthSn
+   return {
+     latestLastSyncedAt: latest?.t ?? null,
+     staleLive: staleLive ?? 0,
++    stuckLive: stuckLive ?? 0,
+     liveCount: counts?.live ?? 0,
+     scheduledCount: counts?.scheduled ?? 0,
+     finishedCount: counts?.finished ?? 0,
+@@ -173,6 +190,11 @@ export function checkAndAlert(
+   if (snap.staleLive > 0) {
+     problems.push(`${snap.staleLive} live match(es) untouched for 15+ min — summary sync is not keeping up`);
+   }
++  if (snap.stuckLive > 0) {
++    problems.push(
++      `${snap.stuckLive} live/half-time match(es) past kickoff by 4h+ — never reconciled (served as finished)`,
++    );
++  }
+   if (snap.quietFollowedLeagues.length > 0) {
+     problems.push(`followed league(s) with no fixture within ±7d: ${snap.quietFollowedLeagues.join(", ")}`);
+   }
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index 1dccc03..df1cc0b 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -18,6 +18,9 @@ import {
+ 
+ const db = getDb();
+ 
++/** A live/halftime match whose kickoff is older than this is treated as stuck. */
++const STUCK_LIVE_MS = 4 * 3_600_000;
++
+ function log(msg: string): void {
+   console.log(`[sync ${new Date().toISOString()}] ${msg}`);
+ }
+@@ -190,6 +193,37 @@ export async function syncSummaries(): Promise<GoalAlert[]> {
+   return goals;
+ }
+ 
++/**
++ * Stuck-live reconciliation: a match still marked live/halftime whose kickoff is
++ * more than four hours past. The per-minute summary pass already re-fetches
++ * every live row, but if ESPN cannot resolve it (or answers with the same stale
++ * status) the row never moves. This is the explicit second attempt on the
++ * slower 10-minute cadence, so a genuinely finished match settles instead of
++ * reading as live forever. The read-time fallback in server/matches/reconcile.ts
++ * is what guarantees the API never serves it as live regardless.
++ */
++export async function reconcileStuckLive(): Promise<number> {
++  const cutoff = new Date(Date.now() - STUCK_LIVE_MS).toISOString();
++  const stuck = all<{ id: string; league: string }>(
++    db,
++    `SELECT id, league FROM matches
++     WHERE status IN ('live','halftime') AND kickoff_at <= ?`,
++    [cutoff],
++  );
++  let reconciled = 0;
++  for (const m of stuck) {
++    try {
++      const json = await fetchSummary(m.league as LeagueSlug, m.id);
++      const { match } = applySummary(db, json, m.league);
++      if (match.status === "finished") reconciled += 1;
++    } catch (err) {
++      console.error(`[sync] stuck-match reconcile ${m.league}/${m.id} FAILED:`, String(err));
++    }
++  }
++  if (reconciled > 0) log(`stuck matches reconciled to finished: ${reconciled}`);
++  return reconciled;
++}
++
+ /**
+  * Squad pass: pull the full roster for every club we have stored. ESPN gives
+  * no batch endpoint, so this is one call per club — hence weekly (plus a
+@@ -427,6 +461,7 @@ export function startSyncLoop(): void {
+     }
+     scoreboardsRunning = true;
+     void syncScoreboards()
++      .then(() => reconcileStuckLive())
+       .then(() => recordSyncPassOk())
+       .catch((err) => {
+         recordSyncPassFail();
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index b7f7574..6006dc1 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -221,13 +221,19 @@ export default function MatchDetail() {
+                 <CountUp value={match.away_score} className="text-[40px] leading-none text-ink" />
+               )}
+             </span>
+-            {live ? (
++            {inPlay ? (
+               <Chip tone="live">
+                 <LiveDot />
+-                {t("status.live")} <Num>{currentMinute}&#39;</Num>
++                {match.status === "halftime" ? (
++                  t("timeline.halftime")
++                ) : (
++                  <>
++                    {t("status.live")} <Num>{currentMinute}&#39;</Num>
++                  </>
++                )}
+               </Chip>
+             ) : countdownLabel ? (
+-              <Chip tone="volt" className="animate-pulse">
++              <Chip tone="volt" className="motion-safe:animate-pulse">
+                 {countdownLabel}
+               </Chip>
+             ) : (
+diff --git a/tests/matchReconcile.test.ts b/tests/matchReconcile.test.ts
+new file mode 100644
+index 0000000..a1725cc
+--- /dev/null
++++ b/tests/matchReconcile.test.ts
+@@ -0,0 +1,74 @@
++/**
++ * Stuck-match reconciliation: a live/halftime row long past kickoff must never
++ * be served as live. The read-time rule (server/matches/reconcile.ts) is what
++ * the feed and match page rely on when the sync loop could not repair the row.
++ */
++import { strict as assert } from "node:assert";
++import { isStaleLive, settleStaleLive, settleStaleLiveAll } from "../server/matches/reconcile.js";
++
++const NOW = new Date("2026-10-18T18:00:00.000Z");
++const HOUR = 3_600_000;
++
++export function runMatchReconcileTests(): void {
++  const base = { id: "m1", home_score: 1, away_score: 0 };
++
++  // (a) a stale live match is served as finished, keeping its last known score.
++  const stale = settleStaleLive(
++    { ...base, status: "live", kickoff_at: new Date(NOW.getTime() - 6 * HOUR).toISOString() },
++    NOW,
++  );
++  assert.equal(stale.status, "finished", "a live match 6h past kickoff is served finished");
++  assert.equal(stale.home_score, 1, "the last known score is kept");
++  assert.equal(stale.away_score, 0, "the last known score is kept");
++
++  // Half-time is the same case: a break never lasts a day.
++  const staleHt = settleStaleLive(
++    { ...base, status: "halftime", kickoff_at: new Date(NOW.getTime() - 26 * HOUR).toISOString() },
++    NOW,
++  );
++  assert.equal(staleHt.status, "finished", "a half-time match a day past kickoff is served finished");
++
++  // (b) a fresh live match is untouched.
++  const fresh = settleStaleLive(
++    { ...base, status: "live", kickoff_at: new Date(NOW.getTime() - 30 * 60_000).toISOString() },
++    NOW,
++  );
++  assert.equal(fresh.status, "live", "a live match 30 min in is untouched");
++
++  // A scheduled match is never rewritten — it is not the live path.
++  const scheduled = settleStaleLive(
++    { ...base, status: "scheduled", kickoff_at: new Date(NOW.getTime() - 26 * HOUR).toISOString() },
++    NOW,
++  );
++  assert.equal(scheduled.status, "scheduled", "a scheduled match is never rewritten");
++  const finished = settleStaleLive(
++    { ...base, status: "finished", kickoff_at: new Date(NOW.getTime() - 26 * HOUR).toISOString() },
++    NOW,
++  );
++  assert.equal(finished.status, "finished", "a finished match is never rewritten");
++
++  // The boundary: exactly 5h is not yet stale, 5h + 1ms is.
++  assert.equal(
++    isStaleLive({ status: "live", kickoff_at: new Date(NOW.getTime() - 5 * HOUR).toISOString() }, NOW),
++    false,
++    "exactly 5h past kickoff is not yet stale",
++  );
++  assert.equal(
++    isStaleLive({ status: "live", kickoff_at: new Date(NOW.getTime() - 5 * HOUR - 1).toISOString() }, NOW),
++    true,
++    "5h + 1ms past kickoff is stale",
++  );
++
++  // The list form settles only the stale rows.
++  const rows = settleStaleLiveAll(
++    [
++      { ...base, id: "a", status: "live", kickoff_at: new Date(NOW.getTime() - 6 * HOUR).toISOString() },
++      { ...base, id: "b", status: "live", kickoff_at: new Date(NOW.getTime() - 10 * 60_000).toISOString() },
++    ],
++    NOW,
++  );
++  assert.equal(rows[0]?.status, "finished", "the stale row is settled");
++  assert.equal(rows[1]?.status, "live", "the fresh row is left alone");
++
++  console.log("  matchReconcile: stale live/halftime served finished, fresh live untouched OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 370fdee..f0fc3ed 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -48,6 +48,7 @@ import { runBotMenuTests } from "./botMenu.test.js";
+ import { runTimelineScoreTests } from "./timelineScore.test.js";
+ import { runSentinelTests } from "./sentinel.test.js";
+ import { runFaStringsTests } from "./faStrings.test.js";
++import { runMatchReconcileTests } from "./matchReconcile.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -98,6 +99,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["timelineScore", runTimelineScoreTests],
+   ["sentinel", runSentinelTests],
+   ["faStrings", runFaStringsTests],
++  ["matchReconcile", runMatchReconcileTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+diff --git a/tests/sentinel.test.ts b/tests/sentinel.test.ts
+index 51bf852..94a50a1 100644
+--- a/tests/sentinel.test.ts
++++ b/tests/sentinel.test.ts
+@@ -53,6 +53,15 @@ export function runSentinelTests(): void {
+   assert.equal(quiet1.problem, null, "healthy data reports no problem");
+   assert.equal(sent.length, 0, "no transport traffic when healthy");
+ 
++  // A live row long past kickoff is stuck: the sentinel flags it as never
++  // reconciled (the read-time fallback still serves it as finished).
++  db.prepare(
++    `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score, last_synced_at)
++     VALUES ('m2', 'eng.1', 'H', 'A', ?, 'live', 1, 0, ?)`,
++  ).run(new Date(NOW.getTime() - 6 * 3_600_000).toISOString(), NOW.toISOString());
++  const stuck = syncHealthSnapshot(db, NOW);
++  assert.equal(stuck.stuckLive, 1, "a live match 6h past kickoff is stuck");
++
+   // The live row goes stale (sync stopped mid-match): one alert, then cooldown.
+   db.prepare(
+     "UPDATE matches SET last_synced_at = ? WHERE id = 'm1'",
+@@ -64,6 +73,7 @@ export function runSentinelTests(): void {
+   assert.equal(alert1.alerted, true, "stale live matches alert");
+   assert.match(sent[0] ?? "", /live match/i, "the alert names the finding");
+   assert.ok(alert1.problem?.includes("live match"), `the problem line names staleness: ${alert1.problem}`);
++  assert.match(alert1.problem ?? "", /reconciled/i, "the alert names the stuck live match");
+ 
+   const alert2 = checkAndAlert(db, (t) => sent.push(t), new Date(NOW.getTime() + 60_000));
+   assert.equal(alert2.alerted, false, "the cooldown suppresses repeat alerts");
+-- 
+2.54.0.windows.1
+

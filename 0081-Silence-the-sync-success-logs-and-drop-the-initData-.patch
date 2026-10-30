@@ -1,0 +1,164 @@
+From 0898d1b3d8ea403b9adc542f91c9b2e9d2813098 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 00:37:18 +0330
+Subject: [PATCH 081/230] Silence the sync success logs and drop the initData
+ debug dumps
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The 15s live pulse logged one "scoreboard <league>: window ok" line per
+competition per tick — 32 lines every 15 seconds — which buried the auth
+failures in the Render logs. Success is now silent and only failures speak:
+the FAILED lines in the sync loops and the [auth:guest] VERIFICATION FAILED
+diagnostic are untouched. The temporary auth probe (server) and the client
+console dumps that printed Telegram initData are gone too; the enterApp
+console.error stays.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/routes/auth.ts  | 33 ---------------------------------
+ server/sync/service.ts |  1 -
+ src/hooks/useAuth.tsx  | 10 ----------
+ src/lib/auth.ts        |  8 --------
+ src/lib/telegramUrl.ts |  7 -------
+ 5 files changed, 59 deletions(-)
+
+diff --git a/server/routes/auth.ts b/server/routes/auth.ts
+index a4007f2..1e1d644 100644
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -29,37 +29,6 @@ export const authRouter = express.Router();
+ 
+ const USERNAME_RE = /^[a-zA-Z0-9_.]{3,24}$/;
+ 
+-/* ---------------------------------------------------------------------------
+- * Auth probe — logs every guest attempt so Telegram login failures are
+- * visible in production Render logs. Logs initData KEY NAMES and booleans
+- * only — never the initData string, never the hash, never the signature
+- * value, never the bot token. Field names are not secrets and are what
+- * actually matter here: whether the client sent `signature` decides which
+- * check-string algorithm is correct.
+- */
+-function authProbeGuest(
+-  initData: string,
+-  verified: { ok: true } | { ok: false; reason: string } | null,
+-  outcome: "telegram" | "guest",
+-): void {
+-  // Always log: the user needs to see why Telegram login fails in the Render logs.
+-  const keys = initData ? [...new URLSearchParams(initData).keys()].sort().join(",") : "";
+-  const hasSignature = initData ? new URLSearchParams(initData).has("signature") : false;
+-  const verdict = !initData
+-    ? "no-initData"
+-    : !botToken()
+-      ? "no-bot-token"
+-      : !verified
+-        ? "no-verdict"
+-        : verified.ok
+-          ? "pass"
+-          : `fail(${verified.reason})`;
+-  console.log(
+-    `[auth:guest] initData=${initData ? "yes" : "no"} verify=${verdict} ` +
+-      `signature=${hasSignature ? "yes" : "no"} outcome=${outcome} keys=[${keys}]`,
+-  );
+-}
+-
+ /**
+  * Well-formed scrypt hash of a random secret, used ONLY to equalize login
+  * timing for unknown usernames (one scrypt verification either way). It
+@@ -178,7 +147,6 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
+     // Same device previously used the web guest path: bring its data along.
+     mergeIfGuest(req, user);
+     const token = issueSession(user.id);
+-    authProbeGuest(initData, verified, "telegram"); // TEMP AUTH PROBE
+     res.json({ ok: true, mode: "telegram", token, user: publicUser(user) });
+     return;
+   }
+@@ -191,7 +159,6 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
+   );
+   const user = existing ?? upsertUser(syntheticId, `Guest ${deviceId.slice(0, 4)}`);
+   const token = issueSession(user.id);
+-  authProbeGuest(initData, verified, "guest"); // TEMP AUTH PROBE
+   res.json({ ok: true, mode: "session", token, user: publicUser(user) });
+ });
+ 
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index adce1cb..3b3250e 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -71,7 +71,6 @@ export async function syncScoreboardWindow(backDays: number, forwardDays: number
+         console.error(`[sync] scoreboard ${league} (${off}) FAILED:`, String(err));
+       }
+     }
+-    log(`scoreboard ${league}: window ok`);
+   }
+   return goals;
+ }
+diff --git a/src/hooks/useAuth.tsx b/src/hooks/useAuth.tsx
+index 4331bc2..4ce29f8 100644
+--- a/src/hooks/useAuth.tsx
++++ b/src/hooks/useAuth.tsx
+@@ -96,17 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+       // login into a guest account with no bot pushes.
+       await waitForTelegram();
+       const initData = telegramInitData();
+-      if (!initData) {
+-        console.warn("[auth] enterApp called with no initData");
+-      }
+-      console.log(
+-        `[auth] enterApp initData=${initData ? "present(" + initData.slice(0, 40) + ")..." : "null"} deviceId=${getDeviceId().slice(0, 8)}...`,
+-      );
+       const res = await api.guest(getDeviceId(), initData);
+-      console.log(
+-        `[auth] enterApp result mode=${res.mode} token=${res.token.slice(0, 8)}... user=${res.user.display_name}`,
+-      );
+-
+       if (!res.ok) throw new Error("GUEST_ENTRY_FAILED");
+       // Persistent slot either way: entry must survive restarts.
+       applyAuthSuccess(res.token, true);
+diff --git a/src/lib/auth.ts b/src/lib/auth.ts
+index a55b40a..67e62c4 100644
+--- a/src/lib/auth.ts
++++ b/src/lib/auth.ts
+@@ -120,19 +120,11 @@ function clearLoggedOut(): void {
+  * the launch URL (see lib/telegramUrl) so a Telegram user is still themselves
+  * when telegram.org is unreachable and the SDK script never loads — which is
+  * exactly the network this app ships to.
+- *
+- * Debug: log the full picture (SDK global, SDK initData, URL-captured value)
+- * so the Telegram auth bug can be traced in the browser console.
+  */
+ export function telegramInitData(): string | null {
+   const tg = window.Telegram?.WebApp;
+   const sdkInitData = typeof tg?.initData === "string" && tg.initData ? tg.initData : undefined;
+   const captured = capturedTelegramInitData();
+-  console.log("[auth] telegramInitData check:", {
+-    hasWebApp: !!tg,
+-    sdkInitData: sdkInitData ?? null,
+-    captured,
+-  });
+   if (sdkInitData) return sdkInitData;
+   return captured;
+ }
+diff --git a/src/lib/telegramUrl.ts b/src/lib/telegramUrl.ts
+index 2e75833..d7875e2 100644
+--- a/src/lib/telegramUrl.ts
++++ b/src/lib/telegramUrl.ts
+@@ -177,13 +177,6 @@ export function applyTelegramUrlNormalization(): void {
+     capturedInitData = result.initData ?? capturedInitData ?? readStoredInitData();
+     if (result.initData) writeStoredInitData(result.initData);
+     if (result.changed) window.history.replaceState(null, "", result.url);
+-    console.log("[auth] applyTelegramUrlNormalization:", {
+-      sdkInitData: sdkInitData || null,
+-      fromUrl: result.initData,
+-      captured: capturedInitData,
+-      changed: result.changed,
+-      newUrl: result.url,
+-    });
+   } catch {
+     /* keep booting; the worst case is a 404 screen, not a crash */
+   }
+-- 
+2.54.0.windows.1
+

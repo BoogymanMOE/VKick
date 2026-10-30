@@ -7,6 +7,7 @@ import { useCompetitionLabel } from "../hooks/useApi";
 import { Num, TeamBadge } from "./ui";
 import { StarFilledIcon } from "./icons";
 import { cx } from "../lib/cx";
+import { parseMinute } from "../lib/format";
 
 /**
  * The Matchday feed, per the shell redesign: the day's matches stop repeating
@@ -91,14 +92,32 @@ export const MatchRow = memo(function MatchRow({
   // minute/dot and the status label, and must lose to the break.
   const isLive = match.status === "live" && !isHalftime;
   const isFinished = match.status === "finished";
+  // Not played: ESPN reports these under state "post" too, so they used to
+  // render as finished 0-0 results. They carry no score and no countdown.
+  const notPlayedLabel =
+    match.status === "postponed"
+      ? t("status.postponed")
+      : match.status === "cancelled"
+        ? t("status.cancelled")
+        : match.status === "abandoned"
+          ? t("status.abandoned")
+          : null;
   const hasScore = isLive || isHalftime || isFinished;
+  const pens =
+    match.homePens != null && match.awayPens != null
+      ? { home: match.homePens, away: match.awayPens }
+      : null;
   const home = localize(match.home.shortName);
   const away = localize(match.away.shortName);
   const clock = clockFormatter(lang === "fa" ? "fa-IR" : "en").format(new Date(match.kickoffAt));
   // Live minute, Persian digits under fa: "۴۴′". The feed's `minute` is the
   // server's normalised clock ("44'"); only the numeric part is localized.
-  const minuteNum = /\d+/.exec(match.minute ?? "")?.[0] ?? null;
-  const minuteLabel = minuteNum ? digitFormatter(lang === "fa" ? "fa-IR" : "en").format(Number(minuteNum)) : null;
+  // Added time is part of the clock: "90'+3'" is 90+3, not 90.
+  const minute = parseMinute(match.minute);
+  const digits = digitFormatter(lang === "fa" ? "fa-IR" : "en");
+  const minuteLabel = minute
+    ? `${digits.format(minute.base)}${minute.added ? `+${digits.format(minute.added)}` : ""}`
+    : null;
 
   // The accessible name carries the state: score + minute when in play, final
   // score when finished, kickoff time when upcoming.
@@ -107,11 +126,15 @@ export const MatchRow = memo(function MatchRow({
     : isHalftime
       ? t("matches.groupHalftime")
       : isFinished
-        ? t("status.finished")
-        : clock;
+        ? pens
+          ? `${t("status.finished")}, ${pens.home}-${pens.away} ${t("match.pensShort")}`
+          : match.decidedBy === "extra-time"
+            ? t("match.aet")
+            : t("status.finished")
+        : (notPlayedLabel ?? clock);
   const label = hasScore
     ? `${home} ${match.homeScore ?? 0}-${match.awayScore ?? 0}, ${away} ${match.awayScore ?? 0}, ${status}`
-    : `${home} ${t("common.versus")} ${away}, ${clock}`;
+    : `${home} ${t("common.versus")} ${away}, ${status}`;
 
   const homeFollowed = isFavoriteTeam(match.home.id);
   const awayFollowed = isFavoriteTeam(match.away.id);
@@ -151,7 +174,17 @@ export const MatchRow = memo(function MatchRow({
               {t("matches.groupHalftime")}
             </span>
           ) : isFinished ? (
-            <span className="text-[11px] font-bold leading-5 text-ink-3">{t("status.finished")}</span>
+            // A cup tie that needed 120 minutes or spot kicks says so where the
+            // clock would be; a plain 90-minute result stays "FT".
+            <span className="text-[10px] font-bold leading-4 text-ink-3">
+              {pens
+                ? t("match.pensShort")
+                : match.decidedBy === "extra-time"
+                  ? t("match.aet")
+                  : t("status.finished")}
+            </span>
+          ) : notPlayedLabel ? (
+            <span className="text-[10px] font-bold leading-4 text-ink-3">{notPlayedLabel}</span>
           ) : (
             <span className="whitespace-nowrap text-[15px] font-bold leading-5 text-ink">
               <Num>{clock}</Num>
@@ -178,10 +211,19 @@ export const MatchRow = memo(function MatchRow({
                 {match.homeScore ?? 0}
               </Num>
             </span>
-            <span className="flex h-[22px] items-center">
+            <span className="flex h-[22px] items-center gap-1">
               <Num className="text-[15px] font-extrabold text-ink">
                 {match.awayScore ?? 0}
               </Num>
+              {/* A shootout score sits beside the 120-minute score, so a tie
+                  decided on spot kicks never reads as a draw. */}
+              {pens ? (
+                <span className="text-[10px] font-bold text-ink-3">
+                  <Num dir="ltr">
+                    ({digits.format(pens.home)}–{digits.format(pens.away)})
+                  </Num>
+                </span>
+              ) : null}
             </span>
           </div>
         ) : null}

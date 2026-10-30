@@ -1,0 +1,209 @@
+From 393f53c69d29f090a7db8ece87b176f2c130f5c8 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 7 Oct 2026 16:46:38 +0330
+Subject: [PATCH 030/230] Show the YOU chip on the viewer's own leaderboard row
+ only
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Leaderboards passed youLabel={t("board.you")} to every BoardRow, and
+BoardRow renders the chip whenever a label exists — so all six rows on
+the global board wore a YOU chip (audit DOM check: "1 D Dev YOU 170",
+"2 D Demo User 2 YOU 146", …). The chip now comes from boardRowView in
+lib/leaderboard.ts, which materialises the label only for row.is_you and
+keeps the highlight flag in the same projection.
+
+tests/leaderboard.test.ts renders a six-row board with exactly one
+is_you row and asserts exactly one chip lands on it, that a board with
+no marked row yields zero chips, and that the FA label behaves the same.
+Verified live: viewer's row shows YOU, rows 2-6 show none.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/lib/leaderboard.ts     | 26 ++++++++++++++++
+ src/pages/Leaderboards.tsx | 31 +++++++++++--------
+ tests/leaderboard.test.ts  | 63 ++++++++++++++++++++++++++++++++++++++
+ tests/run.ts               |  2 ++
+ 4 files changed, 109 insertions(+), 13 deletions(-)
+ create mode 100644 tests/leaderboard.test.ts
+
+diff --git a/src/lib/leaderboard.ts b/src/lib/leaderboard.ts
+index 82399e0..def6a80 100644
+--- a/src/lib/leaderboard.ts
++++ b/src/lib/leaderboard.ts
+@@ -41,6 +41,32 @@ export function viewerStanding(
+   return null;
+ }
+ 
++/**
++ * One board row as the screen renders it: the volt highlight, and the YOU
++ * chip's text — `undefined` on everyone else's rows.
++ */
++export interface BoardRowView {
++  highlight: boolean;
++  youLabel: string | undefined;
++}
++
++/**
++ * The YOU chip belongs to the viewer's own row and NOWHERE else.
++ *
++ * This rule used to live inline in the render, where the label was passed
++ * unconditionally — so every row on the board wore a YOU chip, a list of
++ * strangers all claiming to be you (caught in the launch audit: 6 of 6 rows
++ * on the global board). Keeping the decision here means the component's chip
++ * condition (`youLabel ? chip : null`) has exactly one input, and a test can
++ * render a six-row board and count the chips it would produce.
++ */
++export function boardRowView(row: ViewerBoardRow, youLabel: string): BoardRowView {
++  return {
++    highlight: Boolean(row.is_you),
++    youLabel: row.is_you ? youLabel : undefined,
++  };
++}
++
+ /**
+  * Rank movement between two observations of the SAME board, as a pure function.
+  * The board refetches on window focus, so the client can honestly say "you
+diff --git a/src/pages/Leaderboards.tsx b/src/pages/Leaderboards.tsx
+index 67adac7..b1ded82 100644
+--- a/src/pages/Leaderboards.tsx
++++ b/src/pages/Leaderboards.tsx
+@@ -17,7 +17,7 @@ import { cx } from "../lib/cx";
+ import { slugForLeague, useLeaderboard, useLeagueTabs, type LeaderboardScope } from "../hooks/useApi";
+ import { useFavorites } from "../hooks/useFavorites";
+ import { useI18n } from "../i18n/context";
+-import { scopeRankDelta, viewerStanding } from "../lib/leaderboard";
++import { boardRowView, scopeRankDelta, viewerStanding } from "../lib/leaderboard";
+ 
+ type BoardTab = "global" | "league" | "club";
+ 
+@@ -177,18 +177,23 @@ export default function Leaderboards() {
+               <span className="text-end">{t("board.points")}</span>
+             </div>
+             <ul className="space-y-1.5">
+-              {rows.map((row, index) => (
+-                <BoardRow
+-                  key={row.username ?? row.display_name}
+-                  index={index}
+-                  rank={row.rank}
+-                  name={row.display_name}
+-                  total={row.total}
+-                  highlight={row.is_you}
+-                  youLabel={t("board.you")}
+-                  delta={row.is_you ? rankDelta : null}
+-                />
+-              ))}
++              {rows.map((row, index) => {
++                // The YOU chip is the viewer's own row and nobody else's —
++                // boardRowView owns that rule (see lib/leaderboard.ts).
++                const view = boardRowView(row, t("board.you"));
++                return (
++                  <BoardRow
++                    key={row.username ?? row.display_name}
++                    index={index}
++                    rank={row.rank}
++                    name={row.display_name}
++                    total={row.total}
++                    highlight={view.highlight}
++                    youLabel={view.youLabel}
++                    delta={row.is_you ? rankDelta : null}
++                  />
++                );
++              })}
+             </ul>
+           </>
+         )}
+diff --git a/tests/leaderboard.test.ts b/tests/leaderboard.test.ts
+new file mode 100644
+index 0000000..4074c8e
+--- /dev/null
++++ b/tests/leaderboard.test.ts
+@@ -0,0 +1,63 @@
++/**
++ * The YOU chip renders on the viewer's own leaderboard row and nowhere else.
++ *
++ * The bug this pins: the label was passed to every BoardRow unconditionally,
++ * so a six-row board showed six YOU chips — the launch audit's DOM check read
++ * "1 D Dev YOU 170 / 2 D Demo User 2 YOU 146 / …" for all six rows. The chip
++ * condition inside BoardRow is `youLabel ? <Chip/> : null`, so counting the
++ * projected views that carry a label is exactly counting the chips the board
++ * would render.
++ */
++import { strict as assert } from "node:assert";
++import { boardRowView, type ViewerBoardRow } from "../src/lib/leaderboard.js";
++
++/** Six rows as the API hands them over — ranks 1…6, one of them the viewer. */
++function sixRowBoard(viewerRank: number | null): ViewerBoardRow[] {
++  const names = ["Dev", "Demo User 2", "Demo User 3", "Demo User 5", "Demo User 4", "Demo User 6"];
++  return names.map((_, i) => ({
++    rank: i + 1,
++    total: 170 - i * 7,
++    is_you: viewerRank === i + 1,
++  }));
++}
++
++export async function runLeaderboardTests(): Promise<void> {
++  // 1. The audit's board: six rows, one is_you → exactly ONE chip, on that row.
++  {
++    const rows = sixRowBoard(2);
++    const views = rows.map((row) => boardRowView(row, "You"));
++    const chips = views.filter((v) => v.youLabel !== undefined);
++    assert.equal(chips.length, 1, `expected exactly one YOU chip, got ${chips.length}`);
++    assert.equal(views[1]!.youLabel, "You", "the chip must sit on the viewer's own row");
++    assert.equal(views[1]!.highlight, true, "the viewer's row is the highlighted one");
++    // Nobody else's row claims to be the viewer.
++    for (const [i, view] of views.entries()) {
++      if (i === 1) continue;
++      assert.equal(view.youLabel, undefined, `row ${i + 1} must not carry a YOU chip`);
++      assert.equal(view.highlight, false, `row ${i + 1} must not be highlighted`);
++    }
++  }
++
++  // 2. Viewer below the page (server marks no row) → zero chips anywhere.
++  {
++    const views = sixRowBoard(null).map((row) => boardRowView(row, "You"));
++    assert.equal(
++      views.filter((v) => v.youLabel !== undefined).length,
++      0,
++      "an unmarked board renders no YOU chips",
++    );
++  }
++
++  // 3. The exact regression: even when every other prop is identical, the
++  //    label only materialises for is_you — never from position or rank.
++  {
++    const views = sixRowBoard(1).map((row) => boardRowView(row, "تو"));
++    assert.deepEqual(
++      views.map((v) => v.youLabel),
++      ["تو", undefined, undefined, undefined, undefined, undefined],
++      "only row 1 carries the label (FA copy included)",
++    );
++  }
++
++  console.log("  leaderboard YOU chip: one row, one chip OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 747b803..6051815 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -30,6 +30,7 @@ import { runPredictionWindowTests } from "./predictionWindow.test.js";
+ import { runOptimisticTests } from "./optimistic.test.js";
+ import { runCompetitionsTests } from "./competitions.test.js";
+ import { runAnchorRaceTests } from "./anchorRace.test.js";
++import { runLeaderboardTests } from "./leaderboard.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -62,6 +63,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["optimistic", runOptimisticTests],
+   ["competitions", runCompetitionsTests],
+   ["anchorRace", runAnchorRaceTests],
++  ["leaderboard", runLeaderboardTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

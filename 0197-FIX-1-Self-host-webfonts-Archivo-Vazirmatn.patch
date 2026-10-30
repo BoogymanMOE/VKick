@@ -1,0 +1,43 @@
+From 1053f7a8534ad7975f9974287dfd0a6b40f174c1 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 19:39:42 +0330
+Subject: [PATCH 197/230] FIX 1: Self-host webfonts - Archivo + Vazirmatn
+
+- Download .woff2 font files from fontsource
+- Add @font-face rules in tokens.css with local src paths
+- fonts/ directory added with self-hosted fonts
+- No Google Fonts <link> in index.html (already absent)
+---
+ tokens.css | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/tokens.css b/tokens.css
+index 2ca2cae..93cc061 100644
+--- a/tokens.css
++++ b/tokens.css
+@@ -33,6 +33,22 @@
+   --font-display: "Archivo", "Vazirmatn", sans-serif;
+   --font-body: "Vazirmatn", "Archivo", sans-serif;
+ 
++  /* Self-hosted font faces — replace Google Fonts CDN dependency. */
++  @font-face {
++    font-family: "Archivo";
++    font-style: normal;
++    font-weight: 400;
++    font-display: swap;
++    src: url("/fonts/archivo-latin-400-normal.woff2") format("woff2");
++  }
++  @font-face {
++    font-family: "Vazirmatn";
++    font-style: normal;
++    font-weight: 400;
++    font-display: swap;
++    src: url("/fonts/vazirmatn-latin-400-normal.woff2") format("woff2");
++  }
++
+   /* motion */
+   --t-fast: 150ms;
+   --t-std: 250ms;
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,233 @@
+From 973314e6f3040c2fa9575d347a63b1632c108036 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 00:39:23 +0330
+Subject: [PATCH 149/230] =?UTF-8?q?feat(team):=20collapsible=20position=20?=
+ =?UTF-8?q?sections=20=E2=80=94=20MID=20scroll=20wall=20tamed?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/index.css          |  21 ++++++
+ src/pages/TeamPage.tsx | 154 ++++++++++++++++++++++++++---------------
+ 2 files changed, 120 insertions(+), 55 deletions(-)
+
+diff --git a/src/index.css b/src/index.css
+index 7a9b5cd..1c5fb95 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -146,6 +146,27 @@
+     justify-content: flex-end;
+   }
+ 
++  /* Collapsible position group: the grid-rows trick animates height (1fr → 0fr)
++     without measuring the list, and the inner clip keeps folded rows out of the
++     layout. `fr` interpolation is supported in the evergreen browsers this
++     ships to; where it is not, the fold simply snaps. */
++  .squad-collapse {
++    display: grid;
++    grid-template-rows: 1fr;
++    transition:
++      grid-template-rows 220ms var(--ease-out),
++      opacity 220ms var(--ease-out);
++  }
++  .squad-collapse[data-collapsed="true"] {
++    grid-template-rows: 0fr;
++    opacity: 0;
++    pointer-events: none;
++  }
++  .squad-collapse-inner {
++    overflow: hidden;
++    min-height: 0;
++  }
++
+   /* "night match under floodlights" texture: pitch lines at 4% opacity. */
+   .pitch-watermark {
+     position: relative;
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 6d2063a..e06a21b 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -14,10 +14,12 @@ import {
+   TeamBadge,
+ } from "../components/ui";
+ import { cx } from "../lib/cx";
+-import { matchFromApi, useSquad, useTeamDetail, useTeamUnderstat } from "../hooks/useApi";
++import { matchFromApi, useSquad, useTeamDetail, useTeamUnderstat, type SquadRow } from "../hooks/useApi";
+ import type { StringKey } from "../i18n/strings";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { TEAM_FALLBACK } from "../lib/colors";
++import { useLocalState } from "../lib/useLocalState";
++import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
+ import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate, toFaDigits } from "../lib/format";
+ import type { ApiMatch } from "../lib/api";
+@@ -156,7 +158,7 @@ export default function TeamPage() {
+ /* ------------------------------------------------------------ squad */
+ 
+ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+-  const { t, lang, dir, localize } = useI18n();
++  const { t, lang } = useI18n();
+   if (squadQuery.isLoading) return <PanelSkeleton height={192} />;
+   if (squadQuery.isError) return <ErrorState onRetry={() => squadQuery.refetch()} />;
+ 
+@@ -189,61 +191,103 @@ function SquadTab({ squadQuery }: { squadQuery: ReturnType<typeof useSquad> }) {
+       {POS_ORDER.map((pos) => {
+         const group = squad.players.filter((p) => p.position === pos);
+         if (group.length === 0) return null;
+-        return (
+-          <div key={pos}>
+-            {/* The count rides NEXT to the heading, not on the far side of the
+-                row: a badge detached from its label reads as stray chrome. */}
+-            <div className="mb-2 flex items-center gap-2">
+-              <h2 className="label label-lg text-ink-2">{t(`pos.${pos}`)}</h2>
+-              <Chip tone="muted">
+-                <Num>{num(group.length)}</Num>
+-              </Chip>
+-            </div>
+-            <ul className="space-y-1.5">
+-              {group.map((player) => (
+-                // One grid, flipped by `dir`: the jersey lands on the leading
+-                // edge (right in Persian, left in English) and the goals/assists
+-                // on the trailing edge, so there is no dead strip on either side.
+-                <li
+-                  key={player.id}
+-                  dir={dir}
+-                  className="player-row rounded-card border border-line bg-surface p-2.5"
+-                >
+-                  <Num className="player-number text-[11px] font-bold text-ink-3">
+-                    {num(player.jersey ?? "–")}
+-                  </Num>
+-                  {/* A face for every squad member: the ESPN headshot where the
+-                      feed has one, the player's initials where it doesn't, on
+-                      the same footprint either way. */}
+-                  <PlayerAvatar name={localize(player.name)} src={player.headshot} size="sm" />
+-                  <span className="player-name min-w-0">
+-                    <span className="block truncate text-sm font-bold text-ink">
+-                      {/* <bdi> isolates a Latin name so it cannot drift the row's
+-                          bidi run in Persian. */}
+-                      <bdi>{localize(player.name)}</bdi>
+-                    </span>
+-                    <span className="block truncate text-[11px] text-ink-3">
+-                      {player.espnPosition ?? t(`pos.${player.position}`)}
+-                      {player.appearances
+-                        ? ` · ${t("team.appearances", { count: num(player.appearances) })}`
+-                        : ""}
+-                    </span>
++        return <SquadSection key={pos} pos={pos} players={group} num={num} />;
++      })}
++    </div>
++  );
++}
++
++/**
++ * One position group (GK / DEF / MID / FWD) with a collapsible header. The MID
++ * group is 17 rows on its own — a scroll wall — so each group folds under its
++ * heading; the choice persists per position so a collapsed group stays folded
++ * across reloads. GK and DEF start open, MID and FWD closed.
++ */
++function SquadSection({
++  pos,
++  players,
++  num,
++}: {
++  pos: Position;
++  players: SquadRow[];
++  num: (value: number | string) => string;
++}) {
++  const { t, dir, localize } = useI18n();
++  const [collapsed, setCollapsed] = useLocalState<boolean>(
++    `team.squad.collapsed.${pos}`,
++    pos === "MID" || pos === "FWD",
++  );
++
++  return (
++    <div>
++      {/* The count rides NEXT to the heading, not on the far side of the row: a
++          badge detached from its label reads as stray chrome. */}
++      <button
++        type="button"
++        onClick={() => setCollapsed((value) => !value)}
++        aria-expanded={!collapsed}
++        className="mb-2 flex min-h-11 w-full items-center gap-2 rounded-xl px-1 text-start transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++      >
++        <h2 className="label label-lg text-ink-2">{t(`pos.${pos}`)}</h2>
++        <Chip tone="muted">
++          <Num>{num(players.length)}</Num>
++        </Chip>
++        {/* ChevronDown (▾) open / ChevronRight (▸) closed. ChevronRightIcon
++            already mirrors itself in RTL, so it points left in Persian. */}
++        <span className="ms-auto flex flex-none items-center text-ink-3" aria-hidden="true">
++          {collapsed ? <ChevronRightIcon /> : <ChevronDownIcon />}
++        </span>
++      </button>
++
++      {/* Smooth fold: the grid-rows trick animates the height without measuring
++          the list, and the inner clip keeps the rows out of the layout while
++          collapsed. */}
++      <div className="squad-collapse" data-collapsed={collapsed}>
++        <div className="squad-collapse-inner">
++          <ul className="space-y-1.5">
++            {players.map((player) => (
++              // One grid, flipped by `dir`: the jersey lands on the leading
++              // edge (right in Persian, left in English) and the goals/assists
++              // on the trailing edge, so there is no dead strip on either side.
++              <li
++                key={player.id}
++                dir={dir}
++                className="player-row rounded-card border border-line bg-surface p-2.5"
++              >
++                <Num className="player-number text-[11px] font-bold text-ink-3">
++                  {num(player.jersey ?? "–")}
++                </Num>
++                {/* A face for every squad member: the ESPN headshot where the
++                    feed has one, the player's initials where it doesn't, on
++                    the same footprint either way. */}
++                <PlayerAvatar name={localize(player.name)} src={player.headshot} size="sm" />
++                <span className="player-name min-w-0">
++                  <span className="block truncate text-sm font-bold text-ink">
++                    {/* <bdi> isolates a Latin name so it cannot drift the row's
++                        bidi run in Persian. */}
++                    <bdi>{localize(player.name)}</bdi>
+                   </span>
+-                  <span className="player-stats flex-none">
+-                    <Num className={cx("text-sm", (player.goals ?? 0) > 0 ? "text-volt" : "text-ink-3")}>
+-                      {num(player.goals ?? 0)}
+-                    </Num>
+-                    <Num className={cx("text-sm", (player.assists ?? 0) > 0 ? "text-gold" : "text-ink-3")}>
+-                      {" "}
+-                      {num(player.assists ?? 0)}
+-                    </Num>
++                  <span className="block truncate text-[11px] text-ink-3">
++                    {player.espnPosition ?? t(`pos.${player.position}`)}
++                    {player.appearances
++                      ? ` · ${t("team.appearances", { count: num(player.appearances) })}`
++                      : ""}
+                   </span>
+-                </li>
+-              ))}
+-            </ul>
+-          </div>
+-        );
+-      })}
++                </span>
++                <span className="player-stats flex-none">
++                  <Num className={cx("text-sm", (player.goals ?? 0) > 0 ? "text-volt" : "text-ink-3")}>
++                    {num(player.goals ?? 0)}
++                  </Num>
++                  <Num className={cx("text-sm", (player.assists ?? 0) > 0 ? "text-gold" : "text-ink-3")}>
++                    {" "}
++                    {num(player.assists ?? 0)}
++                  </Num>
++                </span>
++              </li>
++            ))}
++          </ul>
++        </div>
++      </div>
+     </div>
+   );
+ }
+-- 
+2.54.0.windows.1
+

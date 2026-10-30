@@ -1,0 +1,840 @@
+From b04aad51978d693b75950ecca88ba773ed649eb7 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 03:58:06 +0330
+Subject: [PATCH 009/230] Referral mechanics: invite codes, one-shot
+ redemption, capped global bonuses
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Each account gets one reusable code (unambiguous alphabet); an account may
+redeem exactly one other code, ever, and a code's owner can never redeem it
+themselves. The referrer earns +10 per paid invite on the global board only,
+capped at 25 paid invites — later connections still record with rewarded=0.
+Points flow through the ledger (source=referral_bonus) so idempotency and
+the tiebreak are inherited. Profile gains an Invite friends card with the
+copyable code, honest paid/cap stats and the redeem form; rules documented
+in scoring-rules.md and pinned by tests/referral.test.ts.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ scoring-rules.md                  |  16 ++-
+ server/db/schema.ts               |  21 ++++
+ server/routes/me.ts               |  21 ++++
+ server/scoring/ledger.ts          |  11 +-
+ server/scoring/predictionScore.ts |   6 +
+ server/scoring/referral.ts        | 161 +++++++++++++++++++++++++
+ src/hooks/useApi.ts               |  44 +++++++
+ src/i18n/strings.ts               |  28 +++++
+ src/lib/api.ts                    |  22 ++++
+ src/pages/Profile.tsx             |  88 +++++++++++++-
+ tests/referral.test.ts            | 191 ++++++++++++++++++++++++++++++
+ tests/run.ts                      |   2 +
+ 12 files changed, 602 insertions(+), 9 deletions(-)
+ create mode 100644 server/scoring/referral.ts
+ create mode 100644 tests/referral.test.ts
+
+diff --git a/scoring-rules.md b/scoring-rules.md
+index 2e6f09b..85b60c9 100644
+--- a/scoring-rules.md
++++ b/scoring-rules.md
+@@ -164,7 +164,7 @@ Every mechanic is zero-or-positive. A wrong prediction never subtracts points or
+ 
+ Every award appends one immutable `point_ledger` row (source = `prediction` or `streak_bonus`; prediction awards carry the match). The ledger incrementally maintains `user_point_totals` per scope:
+ 
+-- **Global** — season total across every award (predictions + streak bonuses).
++- **Global** — season total across every award (predictions + streak bonuses + capped referral bonuses).
+ - **Per-league** (`league:<slug>`) — points from predictions on matches in that league. Any prediction on any match counts toward that match's league board automatically; no following requirement.
+ - **Per-club** (`club:<teamId>`) — points from predictions on matches involving that club; each match feeds **both** clubs' boards.
+ 
+@@ -172,12 +172,22 @@ Every award appends one immutable `point_ledger` row (source = `prediction` or `
+ 
+ **Season boundary:** opens when the first tracked league kicks off, closes when the last one finishes — implemented **data-driven**, not by a calendar date: the active label is the Aug–May label of the most recent tracked-league match whose kickoff has passed (`activeSeason()` in `server/scoring/season.ts`). A summer gap therefore keeps the finished season's boards readable (summer internationals score into them), and the label flips exactly at the new season's first tracked kickoff — future-dated fixtures never flip it early. Fresh databases fall back to the calendar label. All three views (and streak state) reset together via the season label on every totals/streak row (e.g. `2026-27`); `rollSeasonIfNeeded` does the streak reset lazily. Pinned by `tests/season.test.ts` against a synthetic boundary.
+ 
+-**The ratings firewall:** the 3-card rating system and comments are cosmetic/social only. No code path from `crowd_ratings` or `timeline_comments` reaches the ledger — only prediction resolutions and streak bonuses append to it. The Player to Watch crowd *gate* reads rating averages but never writes points from them. A test (`tests/predictionScore.test.ts`) pins that ratings produce no ledger rows.
++**The ratings firewall:** the 3-card rating system and comments are cosmetic/social only. No code path from `crowd_ratings` or `timeline_comments` reaches the ledger — only prediction resolutions, streak bonuses and capped referral bonuses append to it. The Player to Watch crowd *gate* reads rating averages but never writes points from them. A test (`tests/predictionScore.test.ts`) pins that ratings produce no ledger rows.
++
++## Referral bonuses
++
++Growth rewards, deliberately fenced off from match scoring:
++
++- Every account owns **one reusable invite code** (`referral_codes`, allocated lazily on first ask). Codes use an unambiguous alphabet (no I/L/O/0/1) because they are typed by hand into chats.
++- An account may redeem someone else's code **exactly once, ever** (`referral_redemptions.invitee_user_id` UNIQUE). Self-referral is structural: a code's owner can never redeem it.
++- The referrer earns **+10 per paid invite** (`POINTS.referral.perInvite`) on the **global scope only** — referrals are growth, not match prediction, so league and club boards are never touched.
++- Paid invites cap at **25 per referrer** (`POINTS.referral.maxPaidInvites`). Redemptions beyond the cap are still recorded with `rewarded = 0` — the social graph stays true even when the points stop.
++- The bonus flows through the same ledger (`source = 'referral_bonus'`, `source_id` = the redemption row id), so idempotency and the tiebreak come for free. Implementation: `server/scoring/referral.ts`; pinned by `tests/referral.test.ts`.
+ 
+ ## Notes for implementation
+ 
+ - Store every mechanic's result as a JSON `breakdown` on the `predictions` row (one key per rule that applied, even if 0) so the UI can show a transparent "why did I get X" panel.
+-- All point math lives in `server/scoring/predictionScore.ts` as pure functions; `server/scoring/ledger.ts` owns the ledger + totals; `server/scoring/streak.ts` owns streak orchestration. Nothing else computes points.
++- All point math lives in `server/scoring/predictionScore.ts` as pure functions; `server/scoring/ledger.ts` owns the ledger + totals; `server/scoring/streak.ts` owns streak orchestration; `server/scoring/referral.ts` owns invite codes and their capped bonuses. Nothing else computes points.
+ - Zero-point settlements write no ledger row (they'd otherwise corrupt tiebreak timestamps).
+ - Re-resolution is safe: prediction awards are idempotent per prediction (ledger UNIQUE), streak evaluations per (user, match), threshold bonuses per season.
+ - These values are config, not schema: if early users find them off, it's a change to this doc + the constants in `predictionScore.ts`, not a migration.
+diff --git a/server/db/schema.ts b/server/db/schema.ts
+index 1906f0a..5887030 100644
+--- a/server/db/schema.ts
++++ b/server/db/schema.ts
+@@ -517,6 +517,27 @@ export function migrate(db: DatabaseSync): void {
+       ratings     INTEGER NOT NULL DEFAULT 1,   -- rating-window opens
+       updated_at  TEXT NOT NULL
+     );
++
++    -- Referral program (scoring-rules.md "Referral bonuses"). One reusable
++    -- code per user (user_id UNIQUE); redemptions are one-per-invitee ever
++    -- (invitee_user_id UNIQUE) and record whether the referrer's cap still
++    -- allowed points ('rewarded'), so the social graph stays true even when
++    -- the points stop. The paid bonus itself lands in point_ledger with
++    -- source = 'referral_bonus' and source_id = the redemption row id.
++    CREATE TABLE IF NOT EXISTS referral_codes (
++      code       TEXT PRIMARY KEY,
++      user_id    INTEGER NOT NULL UNIQUE REFERENCES users(id),
++      created_at TEXT NOT NULL
++    );
++    CREATE TABLE IF NOT EXISTS referral_redemptions (
++      id               INTEGER PRIMARY KEY AUTOINCREMENT,
++      code             TEXT NOT NULL,
++      referrer_user_id INTEGER NOT NULL REFERENCES users(id),
++      invitee_user_id  INTEGER NOT NULL UNIQUE REFERENCES users(id),
++      rewarded         INTEGER NOT NULL DEFAULT 0,  -- 1 when the cap allowed points
++      created_at       TEXT NOT NULL
++    );
++    CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referral_redemptions(referrer_user_id);
+   `);
+ 
+   // The replay-pitch columns were added after v1 of this schema; fresh DBs
+diff --git a/server/routes/me.ts b/server/routes/me.ts
+index 7213b22..debbc23 100644
+--- a/server/routes/me.ts
++++ b/server/routes/me.ts
+@@ -8,6 +8,7 @@ import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS, favoriteCapError } from "../db/teamG
+ import { writeLimiter } from "../auth/rateLimit.js";
+ import { currentSeasonLabel } from "../scoring/ledger.js";
+ import { evaluateStreakForUser } from "../scoring/streak.js";
++import { referralStats, redeemReferralCode } from "../scoring/referral.js";
+ import { POINTS as SCORING_POINTS } from "../scoring/predictionScore.js";
+ import { bad, currentUser, requireUser, MAX_LEAGUES } from "./shared.js";
+ 
+@@ -19,6 +20,26 @@ const STREAK_BONUS = SCORING_POINTS.streak as Record<number, number>;
+ 
+ export const meRouter = express.Router();
+ 
++/* ------------------------------------------------------------ referrals */
++
++// The caller's invite code (allocated on first ask) plus their redemption
++// stats — Profile renders the share code and the honest paid-vs-cap count.
++meRouter.get("/api/me/referral", requireUser, (_req, res) => {
++  res.json({ referral: referralStats(db, currentUser(_req).id) });
++});
++
++// Redeem an invite code. One redemption per account, ever; the referrer is
++// paid a fixed bonus (global board only) while their cap lasts — the
++// connection is recorded either way. Rate-limited like every write.
++meRouter.post("/api/me/referral/redeem", requireUser, writeLimiter, (req, res) => {
++  const code = String(req.body?.code ?? "");
++  const result = redeemReferralCode(db, currentUser(req).id, code);
++  if (!result.ok) {
++    return bad(res, result.error, result.error === "INVALID_CODE" ? 404 : 400);
++  }
++  res.json(result);
++});
++
+ /* ------------------------------------------------------------ profile */
+ 
+ // The signed-in user's profile (shared by Profile screen and header).
+diff --git a/server/scoring/ledger.ts b/server/scoring/ledger.ts
+index b089fc1..d87a4be 100644
+--- a/server/scoring/ledger.ts
++++ b/server/scoring/ledger.ts
+@@ -9,10 +9,11 @@
+  * recomputed (scoring-rules.md "Leaderboard rules").
+  *
+  * THE FIREWALL (scoring-rules.md §8 / task spec §5): only prediction
+- * resolutions and streak bonuses append to the ledger. Crowd ratings and
+- * comments are cosmetic/social — no code path from `crowd_ratings` or
+- * `timeline_comments` reaches this module, and nothing else may import it
+- * (asserted by tests/predictionScore.test.ts, ratingsNeverTouchLedger()).
++ * resolutions, streak bonuses and (capped) referral bonuses append to the
++ * ledger. Crowd ratings and comments are cosmetic/social — no code path from
++ * `crowd_ratings` or `timeline_comments` reaches this module, and nothing
++ * else may import it (asserted by tests/predictionScore.test.ts,
++ * ratingsNeverTouchLedger()).
+  *
+  * No negative scoring (§7): award() rejects negative points at the door —
+  * the CHECK constraint on the table is the second net.
+@@ -31,7 +32,7 @@ export function currentSeasonLabel(now: Date = new Date()): string {
+   return seasonLabelForDate(now);
+ }
+ 
+-export type LedgerSource = "prediction" | "streak_bonus";
++export type LedgerSource = "prediction" | "streak_bonus" | "referral_bonus";
+ 
+ export interface AwardInput {
+   userId: number;
+diff --git a/server/scoring/predictionScore.ts b/server/scoring/predictionScore.ts
+index bcf933e..88de2c1 100644
+--- a/server/scoring/predictionScore.ts
++++ b/server/scoring/predictionScore.ts
+@@ -44,6 +44,12 @@ export const POINTS = {
+ 
+   streak: { 3: 2, 5: 5, 10: 10 } as Record<number, number>,
+   streakThresholds: [3, 5, 10],
++
++  // Referral bonuses (scoring-rules.md "Referral bonuses"): growth rewards,
++  // paid on the GLOBAL board only. maxPaidInvites caps a referrer's lifetime
++  // payout at perInvite × maxPaidInvites; later invites still connect the
++  // accounts but pay nothing.
++  referral: { perInvite: 10, maxPaidInvites: 25 },
+ } as const;
+ 
+ /* ------------------------------------------------------------ lineup */
+diff --git a/server/scoring/referral.ts b/server/scoring/referral.ts
+new file mode 100644
+index 0000000..00ba855
+--- /dev/null
++++ b/server/scoring/referral.ts
+@@ -0,0 +1,161 @@
++/**
++ * Referral mechanics — invite codes and their (capped) point bonuses.
++ *
++ * Rules (scoring-rules.md "Referral bonuses"):
++ *  - Every account owns exactly ONE reusable invite code (created lazily on
++ *    first ask — codes are not minted for users who never open Profile).
++ *  - An account may redeem someone else's code exactly ONCE, ever: the
++ *    invitee_user_id UNIQUE constraint is the backstop, the pre-check gives
++ *    the friendly error.
++ *  - The referrer earns POINTS.referral.perInvite per PAID invite, on the
++ *    GLOBAL scope only (like streak bonuses — referrals are growth, not
++ *    match prediction, so they never touch league/club boards).
++ *  - Paid invites cap at POINTS.referral.maxPaidInvites per referrer.
++ *    Redemptions beyond the cap are still recorded (the social graph stays
++ *    true) but pay nothing — `rewarded = 0` marks them.
++ *  - Self-referral is structurally impossible: the owner of a code can never
++ *    redeem it.
++ *
++ * Points flow through the SAME ledger as everything else (source =
++ * `referral_bonus`, source_id = the referral_redemptions row), so idempotency
++ * and the tiebreak come for free. Constants live in POINTS (config, not
++ * schema — see scoring-rules.md "Notes for implementation").
++ */
++import { randomBytes } from "node:crypto";
++import type { DatabaseSync } from "node:sqlite";
++import { get, run, tx } from "../db/index.js";
++import { award } from "./ledger.js";
++import { POINTS } from "./predictionScore.js";
++
++/** Unambiguous alphabet: no I/L/O/0/1 — codes are typed by hand into a chat. */
++const ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
++const CODE_LENGTH = 8;
++
++/** A fresh invite code, crypto-random. */
++export function generateReferralCode(): string {
++  const bytes = randomBytes(CODE_LENGTH);
++  let code = "";
++  for (const byte of bytes) {
++    code += ALPHABET[byte % ALPHABET.length];
++  }
++  return code;
++}
++
++/**
++ * The user's code, creating it on first call. PK collisions retry a handful
++ * of times before giving up loudly (the keyspace is 31^8 ≈ 8.5e11, so a
++ * collision means something is deeply wrong).
++ */
++export function ensureReferralCode(db: DatabaseSync, userId: number): string {
++  const existing = get<{ code: string }>(db, "SELECT code FROM referral_codes WHERE user_id = ?", [
++    userId,
++  ]);
++  if (existing) return existing.code;
++  for (let attempt = 0; attempt < 5; attempt += 1) {
++    const code = generateReferralCode();
++    try {
++      run(db, "INSERT INTO referral_codes (code, user_id, created_at) VALUES (?, ?, ?)", [
++        code,
++        userId,
++        new Date().toISOString(),
++      ]);
++      return code;
++    } catch (err) {
++      if (!String(err).includes("UNIQUE")) throw err;
++    }
++  }
++  throw new Error("referral: could not allocate a unique code");
++}
++
++export interface ReferralStats {
++  code: string;
++  /** Redemptions attributed to this user's code. */
++  invited: number;
++  /** How many of those paid points (cap-bounded). */
++  rewarded: number;
++  maxPaidInvites: number;
++  perInvite: number;
++  /** Whether THIS user already redeemed someone's code. */
++  youRedeemed: boolean;
++}
++
++export function referralStats(db: DatabaseSync, userId: number): ReferralStats {
++  const code = ensureReferralCode(db, userId);
++  const invited = get<{ n: number; paid: number }>(
++    db,
++    "SELECT COUNT(*) AS n, COALESCE(SUM(rewarded), 0) AS paid FROM referral_redemptions WHERE referrer_user_id = ?",
++    [userId],
++  );
++  const mine = get<{ n: number }>(
++    db,
++    "SELECT COUNT(*) AS n FROM referral_redemptions WHERE invitee_user_id = ?",
++    [userId],
++  );
++  return {
++    code,
++    invited: invited?.n ?? 0,
++    rewarded: invited?.paid ?? 0,
++    maxPaidInvites: POINTS.referral.maxPaidInvites,
++    perInvite: POINTS.referral.perInvite,
++    youRedeemed: (mine?.n ?? 0) > 0,
++  };
++}
++
++export type RedeemResult =
++  | { ok: true; rewarded: boolean; points: number }
++  | { ok: false; error: "INVALID_CODE" | "SELF_REFERRAL" | "ALREADY_REDEEMED" };
++
++/**
++ * Redeem `rawCode` on behalf of `inviteeId`. Order matters inside the tx:
++ * the redemption row is written FIRST (its id feeds the ledger source_id),
++ * then the award appends — any throw rolls both back. The invitee UNIQUE
++ * constraint is the race backstop for two simultaneous submits.
++ */
++export function redeemReferralCode(db: DatabaseSync, inviteeId: number, rawCode: string): RedeemResult {
++  const code = rawCode.trim().toUpperCase();
++  if (!code) return { ok: false, error: "INVALID_CODE" };
++  const row = get<{ user_id: number }>(db, "SELECT user_id FROM referral_codes WHERE code = ?", [code]);
++  if (!row) return { ok: false, error: "INVALID_CODE" };
++  if (row.user_id === inviteeId) return { ok: false, error: "SELF_REFERRAL" };
++  const already = get<{ n: number }>(
++    db,
++    "SELECT COUNT(*) AS n FROM referral_redemptions WHERE invitee_user_id = ?",
++    [inviteeId],
++  );
++  if ((already?.n ?? 0) > 0) return { ok: false, error: "ALREADY_REDEEMED" };
++
++  try {
++    return tx(db, () => {
++      const paid = get<{ n: number }>(
++        db,
++        "SELECT COUNT(*) AS n FROM referral_redemptions WHERE referrer_user_id = ? AND rewarded = 1",
++        [row.user_id],
++      );
++      const rewarded = (paid?.n ?? 0) < POINTS.referral.maxPaidInvites;
++      const info = db
++        .prepare(
++          `INSERT INTO referral_redemptions (code, referrer_user_id, invitee_user_id, rewarded, created_at)
++           VALUES (?, ?, ?, ?, ?)`,
++        )
++        .run(code, row.user_id, inviteeId, rewarded ? 1 : 0, new Date().toISOString());
++      const redemptionId = Number(info.lastInsertRowid);
++      if (rewarded) {
++        award(db, {
++          userId: row.user_id,
++          matchId: null,
++          source: "referral_bonus",
++          mechanic: "referral",
++          points: POINTS.referral.perInvite,
++          sourceId: redemptionId,
++          league: null,
++          teamIds: [],
++        });
++      }
++      return { ok: true, rewarded, points: rewarded ? POINTS.referral.perInvite : 0 };
++    });
++  } catch (err) {
++    // Lost a race against another redeem from this same account.
++    if (String(err).includes("UNIQUE")) return { ok: false, error: "ALREADY_REDEEMED" };
++    throw err;
++  }
++}
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 94ddb1a..9c96113 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -385,6 +385,50 @@ export function useLeagueTabs(): LeagueTab[] {
+   );
+ }
+ 
++/* ------------------------------------------------------------ referrals */
++
++/**
++ * The viewer's invite code + redemption stats, with the redeem mutation.
++ * Success/failure toast here (once, centrally) so Profile only supplies the
++ * form — a redeemed code clears the local draft via the shared invalidate.
++ */
++export function useReferral() {
++  const qc = useQueryClient();
++  const { t } = useI18n();
++  const { push } = useToast();
++
++  const query = useQuery({
++    queryKey: ["referral"],
++    queryFn: () => api.getReferral(),
++    select: (data) => data.referral,
++    staleTime: 60_000,
++  });
++
++  const redeem = useMutation({
++    mutationFn: (code: string) => api.redeemReferral(code),
++    onSuccess: (res) => {
++      haptic("medium");
++      qc.invalidateQueries({ queryKey: ["referral"] });
++      push({
++        text: t(res.rewarded ? "referral.redeemed" : "referral.redeemedNoPoints"),
++        tone: "volt",
++        icon: "✓",
++      });
++    },
++    onError: (err) => {
++      haptic("medium");
++      push({ text: t(serverErrorKey(err) as StringKey), tone: "danger", icon: "✕" });
++    },
++  });
++
++  return {
++    referral: query.data,
++    loading: query.isLoading,
++    redeem,
++    redeeming: redeem.isPending,
++  };
++}
++
+ /* ------------------------------------------------------------ notification prefs */
+ 
+ export interface NotificationPrefs {
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 056729a..6912dec 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -358,6 +358,20 @@ export const strings = {
+     "cups.winnerAdvances": "Winner advances",
+     "cups.feedsFrom": "Winners from {round}",
+ 
++    "referral.title": "Invite friends",
++    "referral.hint": "Share your code — when a friend joins and redeems it, you earn points on the global board.",
++    "referral.copy": "Copy",
++    "referral.copied": "Code copied",
++    "referral.statInvited": "{invited} friend(s) joined",
++    "referral.statPaid": "{rewarded} of {max} bonuses paid",
++    "referral.redeemPlaceholder": "Have a code? Enter it",
++    "referral.redeem": "Redeem",
++    "referral.redeemed": "Referral redeemed — welcome aboard",
++    "referral.redeemedNoPoints": "Referral redeemed",
++    "referral.errInvalid": "That code doesn't exist",
++    "referral.errSelf": "That's your own code",
++    "referral.errAlready": "You already used an invite code",
++
+     "predict.lineup": "Lineup Predictor",
+     "predict.lineupHint": "Predict the starting XI",
+     "predict.shot": "Shot Plotter",
+@@ -1018,6 +1032,20 @@ export const strings = {
+     "cups.winnerAdvances": "برنده صعود می‌کند",
+     "cups.feedsFrom": "برندگان از {round}",
+ 
++    "referral.title": "دعوت دوستان",
++    "referral.hint": "کدت را به اشتراک بگذار — وقتی دوستی بیاید و کدت را ثبت کند، امتیاز روی تابلوی سراسری می‌گیری.",
++    "referral.copy": "کپی",
++    "referral.copied": "کد کپی شد",
++    "referral.statInvited": "{invited} دوست پیوست",
++    "referral.statPaid": "{rewarded} از {max} پاداش پرداخت شده",
++    "referral.redeemPlaceholder": "کد داری؟ واردش کن",
++    "referral.redeem": "ثبت",
++    "referral.redeemed": "کد ثبت شد — خوش آمدی",
++    "referral.redeemedNoPoints": "کد ثبت شد",
++    "referral.errInvalid": "این کد وجود ندارد",
++    "referral.errSelf": "این کد خودت است",
++    "referral.errAlready": "قبلاً یک کد استفاده کرده‌ای",
++
+     "predict.lineup": "پیش‌بینی ترکیب",
+     "predict.lineupHint": "ترکیب اصلی رو حدس بزن",
+     "predict.shot": "نقشه شوت",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index d07ae0b..a0ae63c 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -60,6 +60,10 @@ export function serverErrorKey(err: unknown): string {
+     INVALID_PAYLOAD: "common.error",
+     // ratings (3-card rule)
+     RATING_CAP_REACHED: "ratings.capReached",
++    // referrals
++    INVALID_CODE: "referral.errInvalid",
++    SELF_REFERRAL: "referral.errSelf",
++    ALREADY_REDEEMED: "referral.errAlready",
+     // auth
+     NO_ACCOUNT: "auth.errNoAccount",
+     // Wrong password and unknown username share one response (the server
+@@ -158,6 +162,16 @@ export interface ApiFollowedLeague {
+   created_at: string;
+ }
+ 
++/** Referral program state for the viewer (Profile → Invite friends). */
++export interface ApiReferral {
++  code: string;
++  invited: number;
++  rewarded: number;
++  maxPaidInvites: number;
++  perInvite: number;
++  youRedeemed: boolean;
++}
++
+ export interface ApiPredictionWindow {
+   opensAt: string | null;
+   lockAt: string;
+@@ -516,6 +530,14 @@ export const api = {
+ 
+   getFollowedLeagues: () => request<{ leagues: ApiFollowedLeague[] }>("/me/leagues"),
+ 
++  getReferral: () => request<{ referral: ApiReferral }>("/me/referral"),
++
++  redeemReferral: (code: string) =>
++    request<{ ok: boolean; rewarded: boolean; points: number }>("/me/referral/redeem", {
++      method: "POST",
++      body: JSON.stringify({ code }),
++    }),
++
+   followLeague: (league: string) =>
+     request<{ ok: boolean }>("/me/leagues", {
+       method: "POST",
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 34b70dc..4998396 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -6,7 +6,7 @@ import { CloseIcon, PencilIcon } from "../components/icons";
+ import { useToast } from "../components/Toast";
+ import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch } from "../components/ui";
+ import { useAuth } from "../hooks/useAuth";
+-import { useNotificationPrefs } from "../hooks/useApi";
++import { useNotificationPrefs, useReferral } from "../hooks/useApi";
+ import { LANG_LABEL, type Lang } from "../i18n/strings";
+ import { useI18n } from "../i18n/I18nProvider";
+ import { serverErrorKey } from "../lib/api";
+@@ -190,6 +190,8 @@ export default function Profile() {
+         </div>
+       </section>
+ 
++      <ReferralSection />
++
+       <section className="mt-6">
+         <SectionHeading title={t("profile.settings")} />
+         <div className="space-y-2">
+@@ -344,6 +346,90 @@ export default function Profile() {
+   );
+ }
+ 
++/* ------------------------------------------------------------ referrals */
++
++/**
++ * Invite friends: the share code (copied to clipboard), the honest paid/cap
++ * count, and — until the viewer has redeemed someone's code — the redeem
++ * form. The server owns every rule (one code per user, one redemption per
++ * account, capped rewards); this card only states what the state is.
++ */
++function ReferralSection() {
++  const { t } = useI18n();
++  const { push } = useToast();
++  const { referral, loading, redeem, redeeming } = useReferral();
++  const [codeDraft, setCodeDraft] = useState("");
++
++  const copy = async () => {
++    haptic("light");
++    try {
++      await navigator.clipboard.writeText(referral?.code ?? "");
++      push({ text: t("referral.copied"), tone: "volt", icon: "✓" });
++    } catch {
++      /* clipboard unavailable (private mode) — the code is visible to copy by hand */
++    }
++  };
++
++  const submit = () => {
++    const code = codeDraft.trim();
++    if (!code || redeeming) return;
++    redeem.mutate(code, {
++      onSettled: () => setCodeDraft(""),
++    });
++  };
++
++  return (
++    <section className="mt-6">
++      <SectionHeading title={t("referral.title")} />
++      <Card className="space-y-3 p-3">
++        <p className="text-xs text-ink-2">{t("referral.hint")}</p>
++        <div className="flex items-center gap-2">
++          {/* Codes are Latin and typed by hand: always LTR, letterspaced so
++              the 8 characters stay readable at a glance. */}
++          <code
++            dir="ltr"
++            className="min-h-11 flex-1 rounded-card border border-line bg-elevated px-3 py-2.5 text-center text-sm font-black tracking-[0.3em] text-volt"
++          >
++            {loading || !referral ? "· · · · · · · ·" : referral.code}
++          </code>
++          <Button variant="ghost" onClick={() => void copy()} disabled={!referral}>
++            {t("referral.copy")}
++          </Button>
++        </div>
++        {referral ? (
++          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-line pt-2 text-xs text-ink-3">
++            <span>{t("referral.statInvited", { invited: referral.invited })}</span>
++            <span>
++              {t("referral.statPaid", { rewarded: referral.rewarded, max: referral.maxPaidInvites })}
++            </span>
++          </div>
++        ) : null}
++        {referral && !referral.youRedeemed ? (
++          <div className="flex gap-2 border-t border-line pt-3">
++            <input
++              dir="ltr"
++              className="min-h-11 min-w-0 flex-1 rounded-card border border-line bg-surface px-3 text-sm font-bold uppercase tracking-widest text-ink placeholder:font-normal placeholder:tracking-normal placeholder:text-ink-3 focus:border-volt focus:outline-none"
++              placeholder={t("referral.redeemPlaceholder")}
++              value={codeDraft}
++              onChange={(e) => setCodeDraft(e.target.value)}
++              onKeyDown={(e) => {
++                if (e.key === "Enter") submit();
++              }}
++              maxLength={12}
++              autoComplete="off"
++              autoCapitalize="characters"
++              aria-label={t("referral.redeemPlaceholder")}
++            />
++            <Button onClick={submit} disabled={redeeming || !codeDraft.trim()}>
++              {redeeming ? t("common.loading") : t("referral.redeem")}
++            </Button>
++          </div>
++        ) : null}
++      </Card>
++    </section>
++  );
++}
++
+ /* ------------------------------------------------------------ what's new */
+ 
+ /**
+diff --git a/tests/referral.test.ts b/tests/referral.test.ts
+new file mode 100644
+index 0000000..4665493
+--- /dev/null
++++ b/tests/referral.test.ts
+@@ -0,0 +1,191 @@
++/**
++ * Referral mechanics over a real (in-memory) database: one code per user,
++ * one redemption per account, capped global-only rewards through the ledger.
++ * These are the anti-abuse rules — they get the same pinning as the scoring
++ * state machine.
++ */
++import { strict as assert } from "node:assert";
++import { DatabaseSync } from "node:sqlite";
++import {
++  ensureReferralCode,
++  generateReferralCode,
++  referralStats,
++  redeemReferralCode,
++} from "../server/scoring/referral.js";
++import { POINTS } from "../server/scoring/predictionScore.js";
++
++const ALPHABET = new Set("ABCDEFGHJKMNPQRSTUVWXYZ23456789".split(""));
++
++function makeDb(): DatabaseSync {
++  const db = new DatabaseSync(":memory:");
++  db.exec(`
++    -- Minimal mirror (see tests/predictionScore.test.ts): just what the
++    -- ledger + referral tables need.
++    CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, display_name TEXT NOT NULL);
++    CREATE TABLE matches (
++      id TEXT PRIMARY KEY, league TEXT NOT NULL,
++      home_team_id TEXT NOT NULL, away_team_id TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'finished'
++    );
++    CREATE TABLE point_ledger (
++      id INTEGER PRIMARY KEY AUTOINCREMENT,
++      user_id INTEGER NOT NULL, match_id TEXT, source TEXT NOT NULL, mechanic TEXT,
++      points INTEGER NOT NULL CHECK (points >= 0), scope_season TEXT NOT NULL,
++      awarded_at TEXT NOT NULL, source_id INTEGER NOT NULL, UNIQUE(source, source_id)
++    );
++    CREATE TABLE user_point_totals (
++      user_id INTEGER NOT NULL, scope TEXT NOT NULL, scope_season TEXT NOT NULL,
++      total INTEGER NOT NULL DEFAULT 0, reached_total_at TEXT NOT NULL,
++      PRIMARY KEY (user_id, scope, scope_season)
++    );
++    CREATE TABLE referral_codes (
++      code TEXT PRIMARY KEY,
++      user_id INTEGER NOT NULL UNIQUE,
++      created_at TEXT NOT NULL
++    );
++    CREATE TABLE referral_redemptions (
++      id INTEGER PRIMARY KEY AUTOINCREMENT,
++      code TEXT NOT NULL,
++      referrer_user_id INTEGER NOT NULL,
++      invitee_user_id INTEGER NOT NULL UNIQUE,
++      rewarded INTEGER NOT NULL DEFAULT 0,
++      created_at TEXT NOT NULL
++    );
++  `);
++  return db;
++}
++
++function addUser(db: DatabaseSync, name: string): number {
++  const info = db.prepare("INSERT INTO users (display_name) VALUES (?)").run(name);
++  return Number(info.lastInsertRowid);
++}
++
++function globalTotal(db: DatabaseSync, userId: number): number {
++  const row = db
++    .prepare("SELECT total FROM user_point_totals WHERE user_id = ? AND scope = 'global'")
++    .get(userId) as { total: number } | undefined;
++  return row?.total ?? 0;
++}
++
++function ledgerCount(db: DatabaseSync, userId: number): number {
++  return (db.prepare("SELECT COUNT(*) AS n FROM point_ledger WHERE user_id = ?").get(userId) as { n: number }).n;
++}
++
++function testCodeGeneration(): void {
++  for (let i = 0; i < 50; i += 1) {
++    const code = generateReferralCode();
++    assert.equal(code.length, 8, "codes are 8 characters");
++    for (const ch of code) {
++      assert.ok(ALPHABET.has(ch), `unambiguous alphabet only, saw "${ch}"`);
++    }
++  }
++  assert.notEqual(generateReferralCode(), generateReferralCode(), "random codes differ");
++}
++
++function testEnsureCode(): void {
++  const db = makeDb();
++  const a = addUser(db, "referrer");
++  const b = addUser(db, "other");
++  const first = ensureReferralCode(db, a);
++  assert.equal(ensureReferralCode(db, a), first, "one code per user, stable across calls");
++  assert.notEqual(ensureReferralCode(db, b), first, "different users get different codes");
++}
++
++function testRedeemHappyPath(): void {
++  const db = makeDb();
++  const referrer = addUser(db, "referrer");
++  const invitee = addUser(db, "friend");
++  const code = ensureReferralCode(db, referrer);
++
++  const result = redeemReferralCode(db, invitee, code.toLowerCase());
++  assert.ok(result.ok, "lowercase input still redeems (normalized)");
++  if (result.ok) {
++    assert.equal(result.rewarded, true, "first invite pays");
++    assert.equal(result.points, POINTS.referral.perInvite);
++  }
++
++  assert.equal(globalTotal(db, referrer), POINTS.referral.perInvite, "referrer's global total grew");
++  assert.equal(ledgerCount(db, referrer), 1, "exactly one ledger row");
++  const row = db
++    .prepare("SELECT source, mechanic, match_id FROM point_ledger WHERE user_id = ?")
++    .get(referrer) as { source: string; mechanic: string; match_id: string | null };
++  assert.equal(row.source, "referral_bonus");
++  assert.equal(row.mechanic, "referral");
++  assert.equal(row.match_id, null, "referrals are not tied to a match");
++
++  // Global scope ONLY: no league/club boards were bumped.
++  const scopes = db
++    .prepare("SELECT scope FROM user_point_totals WHERE user_id = ?")
++    .all(referrer) as Array<{ scope: string }>;
++  assert.deepEqual(
++    scopes.map((s) => s.scope),
++    ["global"],
++    "referral rewards feed the global board only",
++  );
++
++  const stats = referralStats(db, referrer);
++  assert.equal(stats.invited, 1);
++  assert.equal(stats.rewarded, 1);
++  assert.equal(stats.youRedeemed, false, "the referrer hasn't redeemed anyone");
++  const inviteeStats = referralStats(db, invitee);
++  assert.equal(inviteeStats.youRedeemed, true, "the invitee's one-shot is used");
++}
++
++function testRedeemGuards(): void {
++  const db = makeDb();
++  const referrer = addUser(db, "referrer");
++  const other = addUser(db, "other");
++  const invitee = addUser(db, "friend");
++  const code = ensureReferralCode(db, referrer);
++  const otherCode = ensureReferralCode(db, other);
++
++  const self = redeemReferralCode(db, referrer, code);
++  assert.ok(!self.ok && self.error === "SELF_REFERRAL", "own code is refused");
++
++  const invalid = redeemReferralCode(db, invitee, "ZZZZZZZZ");
++  assert.ok(!invalid.ok && invalid.error === "INVALID_CODE", "unknown codes are refused");
++
++  assert.ok(redeemReferralCode(db, invitee, code).ok);
++  const again = redeemReferralCode(db, invitee, otherCode);
++  assert.ok(!again.ok && again.error === "ALREADY_REDEEMED", "one redemption per account, ever");
++  assert.equal(ledgerCount(db, referrer), 1, "the refused redeem moved nothing");
++  assert.equal(globalTotal(db, other), 0, "the second referrer got nothing from a spent account");
++}
++
++function testCap(): void {
++  const db = makeDb();
++  const referrer = addUser(db, "referrer");
++  const code = ensureReferralCode(db, referrer);
++  const { perInvite, maxPaidInvites } = POINTS.referral;
++
++  for (let i = 0; i < maxPaidInvites + 3; i += 1) {
++    const invitee = addUser(db, `friend${i}`);
++    const result = redeemReferralCode(db, invitee, code);
++    assert.ok(result.ok, `redemption ${i} records`);
++    if (result.ok) {
++      assert.equal(result.rewarded, i < maxPaidInvites, "rewards stop at the cap");
++      assert.equal(result.points, i < maxPaidInvites ? perInvite : 0);
++    }
++  }
++
++  const stats = referralStats(db, referrer);
++  assert.equal(stats.invited, maxPaidInvites + 3, "every connection is recorded");
++  assert.equal(stats.rewarded, maxPaidInvites, "paid invites cap exactly");
++  assert.equal(globalTotal(db, referrer), maxPaidInvites * perInvite, "totals stop at the cap");
++  assert.equal(ledgerCount(db, referrer), maxPaidInvites, "no ledger rows beyond the cap");
++}
++
++function testConstants(): void {
++  assert.ok(POINTS.referral.perInvite > 0, "the referral bonus is positive (§7: no negative scoring)");
++  assert.ok(Number.isInteger(POINTS.referral.perInvite));
++  assert.ok(POINTS.referral.maxPaidInvites >= 1, "the cap admits at least one invite");
++}
++
++export function runReferralTests(): void {
++  testCodeGeneration();
++  testEnsureCode();
++  testRedeemHappyPath();
++  testRedeemGuards();
++  testCap();
++  testConstants();
++  console.log("  referral: codes, one-shot redemption, global-only capped ledger rewards OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 86fed50..85d9575 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -22,6 +22,7 @@ import { runRetentionTests } from "./retention.test.js";
+ import { runTeamGroupsTests } from "./teamGroups.test.js";
+ import { runVerifyTests } from "./verify.test.js";
+ import { runBracketTests } from "./bracket.test.js";
++import { runReferralTests } from "./referral.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -44,6 +45,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["teamGroups", runTeamGroupsTests],
+   ["verify", runVerifyTests],
+   ["bracket", runBracketTests],
++  ["referral", runReferralTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

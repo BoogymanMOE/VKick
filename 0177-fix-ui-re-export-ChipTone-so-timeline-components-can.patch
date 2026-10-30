@@ -1,0 +1,32 @@
+From 16c749210052076d2c34874b0d9100fad326f78e Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 20 Oct 2026 00:09:59 +0330
+Subject: [PATCH 177/230] fix(ui): re-export ChipTone so timeline components
+ can import the tone union
+
+ChipTone was defined in ui.tsx but not exported, so any module that imported
+it (TimelineList uses `import { Chip, Num, type ChipTone }`) would get a
+typecheck error. Re-export the type so the timeline's chip-tone map can type
+its return as ChipTone and pass it straight to Chip.
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/ui.tsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index b2c584c..f865d7f 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -244,7 +244,7 @@ export function LiveDot() {
+   return <span className="live-dot" aria-hidden="true" />;
+ }
+ 
+-type ChipTone = "volt" | "live" | "gold" | "danger" | "pitch" | "muted";
++export type ChipTone = "volt" | "live" | "gold" | "danger" | "pitch" | "muted";
+ 
+ const chipStyles: Record<ChipTone, { className: string; style?: React.CSSProperties }> = {
+   volt: {
+-- 
+2.54.0.windows.1
+

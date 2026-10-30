@@ -134,6 +134,9 @@ async function suite(): Promise<void> {
           offsides: 2,
           saves: 3,
           goals: 2,
+          // No Understat plot for this match — null, not 0, so the panel can
+          // say "xG unavailable" instead of drawing an empty bar.
+          xg: null,
         },
         "home side carries the whole contract shape",
       );

@@ -1,0 +1,51 @@
+From 812a44848bdbac3f6d91faa0c252f02b2ba2297b Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 02:47:13 +0330
+Subject: [PATCH 190/230] fix(matches): TopBar subtitle syncs to selected day,
+ not hardcoded today
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The header used a mount-time new Date() while the DateStrip below could
+move the feed days away — pick Friday and the header still said Wednesday.
+The subtitle now formats selectedDay (long weekday + day + short month).
+formatDayHeader was rejected deliberately: its Today/Tomorrow branches are
+hardcoded English strings, which would have broken the FA acceptance, and
+calendar:"gregory" keeps fa-IR on the same month/day number the strip
+chips print (fa-IR's default Persian calendar renames them).
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/pages/Matches.tsx | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 11910b2..f46a4a3 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -264,11 +264,17 @@ export default function Matches() {
+       <ConfettiBurst trigger={burst} />
+       <TopBar
+         title={t("matches.title")}
+-        subtitle={new Date().toLocaleDateString(lang === "fa" ? "fa-IR" : undefined, {
+-          weekday: "short",
++        // The subtitle is the SELECTED day, not today: the DateStrip below
++        // can move the feed a week, and a header that stayed on Wednesday
++        // while the cards showed Friday would be the one lying. calendar:
++        // "gregory" keeps fa-IR on the same month/day number the strip's
++        // chips print (fa-IR's default Persian calendar renames them).
++        subtitle={new Intl.DateTimeFormat(locale, {
++          weekday: "long",
+           day: "numeric",
+           month: "short",
+-        })}
++          calendar: "gregory",
++        }).format(selectedDay)}
+         right={
+           // The non-gesture refresh path the pull-to-refresh comment promises:
+           // a real 44px button, reachable by keyboard and announced by name.
+-- 
+2.54.0.windows.1
+

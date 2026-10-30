@@ -1,0 +1,57 @@
+From 24c20e70ea2604a0cd756fd309c8f1896e06dd5e Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 20:42:44 +0330
+Subject: [PATCH 091/230] Add standings sync startup log and admin manual
+ trigger endpoint
+
+---
+ server/routes/admin.ts | 12 +++++++++++-
+ server/sync/service.ts |  2 ++
+ 2 files changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/server/routes/admin.ts b/server/routes/admin.ts
+index 2f47a20..f8ade97 100644
+--- a/server/routes/admin.ts
++++ b/server/routes/admin.ts
+@@ -4,7 +4,7 @@
+  */
+ import express from "express";
+ import { getDb, get, run } from "../db/index.js";
+-import { syncScoreboards, syncScoreboardWindow } from "../sync/service.js";
++import { syncScoreboards, syncScoreboardWindow, syncStandings } from "../sync/service.js";
+ import { bad, isAdmin, requireUser } from "./shared.js";
+ 
+ const db = getDb();
+@@ -31,6 +31,16 @@ adminRouter.post("/api/admin/sync-window", requireUser, (req, res) => {
+     .catch((err) => bad(res, `sync failed: ${String(err).slice(0, 120)}`, 500));
+ });
+ 
++adminRouter.post("/api/admin/sync-standings", requireUser, async (_req, res) => {
++  if (!isAdmin(_req)) return bad(res, "admin only", 403);
++  try {
++    await syncStandings();
++    res.json({ ok: true, message: "Standings sync complete" });
++  } catch (err) {
++    bad(res, `sync failed: ${String(err).slice(0, 120)}`, 500);
++  }
++});
++
+ adminRouter.post("/api/admin/notify", requireUser, (req, res) => {
+   if (!isAdmin(req)) return bad(res, "admin only", 403);
+   const { telegramId, text } = req.body ?? {};
+diff --git a/server/sync/service.ts b/server/sync/service.ts
+index 8937386..f1eaf5b 100644
+--- a/server/sync/service.ts
++++ b/server/sync/service.ts
+@@ -334,6 +334,8 @@ export function startSyncLoop(): void {
+   // Initial sweep on boot: populate the feed immediately instead of waiting
+   // up to 6 hours for the cron window. Covers 1 day back and 21 days forward.
+   void syncScoreboardWindow(1, 21).catch((err) => console.error("[sync] initial window sweep error:", err));
++  console.log("[sync] triggering initial standings sweep on boot...");
++  void syncStandings().catch((err) => console.error("[sync] initial standings sweep error:", err));
+ 
+   // The live loop: summary of live matches every LIVE_SUMMARY_SECONDS.
+   // A plain interval (not cron) because the cadence is env-configurable and
+-- 
+2.54.0.windows.1
+

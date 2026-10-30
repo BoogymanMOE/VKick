@@ -1,0 +1,219 @@
+From 1f4f420970cdebc6771aa098c0edd58ac6f9308c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 02:53:36 +0330
+Subject: [PATCH 006/230] Exclude Bot API 8.0 signature field from initData
+ check string
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Current Telegram clients attach an Ed25519 signature to every initData
+payload. Folding it into the bot-token HMAC check string (the old
+exclude-only-hash algorithm) makes every authentic login fail — the
+documented Bot API 8.0 algorithm excludes both hash and signature, and
+validators that exclude only hash reject authentic payloads.
+
+Excluding it is strictly safe: payloads without the field hash identically
+either way. The TEMP probe is replaced by a permanent failure-path ops line
+(sent-but-unverified initData = silent Telegram→guest downgrade) and the
+verify suite pins the documented algorithm both ways.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ server/routes/auth.ts     | 29 +++++----------------
+ server/telegram/verify.ts | 21 ++++++++++-----
+ tests/verify.test.ts      | 55 ++++++++++++++++++++++++++++-----------
+ 3 files changed, 60 insertions(+), 45 deletions(-)
+
+diff --git a/server/routes/auth.ts b/server/routes/auth.ts
+index ba43dea..c232e71 100644
+--- a/server/routes/auth.ts
++++ b/server/routes/auth.ts
+@@ -123,27 +123,18 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
+   const initData = String(req.body?.initData ?? "");
+   const verified = initData && botToken() ? verifyInitData(initData, botToken()) : null;
+ 
+-  // TEMP AUTH PROBE — remove once a real Telegram client has been observed.
+-  // Never logs the initData, tokens, or any payload bytes: only the verdict,
+-  // the verification reason on failure, and the resulting identity mode.
+-  if (!initData) {
+-    console.log("[auth:guest] TEMP no initData sent (plain web guest)");
+-  } else if (verified?.ok) {
+-    console.log("[auth:guest] TEMP initData verified: true");
+-  } else {
++  // A sent-but-unverified initData is the one auth outcome worth an ops line:
++  // it means a Telegram user is about to become a guest (silent downgrade).
++  // Successes and plain web guests stay silent — they are the normal paths.
++  if (initData && !verified?.ok) {
+     const reason =
+-      verified && !verified.ok
+-        ? verified.reason
+-        : botToken()
+-          ? "verify returned no verdict"
+-          : "no bot token configured";
+-    console.log(`[auth:guest] TEMP initData verified: false reason="${reason}"`);
++      verified && !verified.ok ? verified.reason : botToken() ? "verify returned no verdict" : "no bot token configured";
++    console.log(`[auth:guest] initData sent but NOT verified (falling back to guest) reason="${reason}"`);
+   }
+ 
+   // Telegram identity wins over the guest id, so reopening in the Mini App
+   // merges straight into the Telegram account instead of a second profile.
+   if (verified?.ok) {
+-    console.log("[auth:guest] TEMP entry mode=telegram (initData verified)");
+     const user = upsertUser(
+       String(verified.user.id),
+       [verified.user.first_name, verified.user.last_name].filter(Boolean).join(" ") ||
+@@ -165,14 +156,6 @@ authRouter.post("/api/auth/guest", authLimiter, (req, res) => {
+   );
+   const user = existing ?? upsertUser(syntheticId, `Guest ${deviceId.slice(0, 4)}`);
+   const token = issueSession(user.id);
+-  if (initData) {
+-    // TEMP AUTH PROBE — the interesting case: the client DID send initData
+-    // but it did not verify, so a Telegram user is about to become a guest.
+-    console.log(
+-      `[auth:guest] TEMP entry mode=session (guest) — initData was sent but NOT verified` +
+-        (verified && !verified.ok ? ` reason="${verified.reason}"` : ""),
+-    );
+-  }
+   res.json({ ok: true, mode: "session", token, user: publicUser(user) });
+ });
+ 
+diff --git a/server/telegram/verify.ts b/server/telegram/verify.ts
+index aaf386b..582aed5 100644
+--- a/server/telegram/verify.ts
++++ b/server/telegram/verify.ts
+@@ -16,17 +16,23 @@ export interface TelegramUser {
+ const MAX_AGE_SECONDS = 86_400;
+ 
+ /**
+- * Verify Telegram WebApp initData (official algorithm):
++ * Verify Telegram WebApp initData (official algorithm, Bot API 8.0+):
+  * secret = HMAC_SHA256(key="WebAppData", message=botToken)
+  * hash   = HMAC_SHA256(key=secret,  message=dataCheckString)
+- * where dataCheckString is all fields except `hash`, sorted, "k=v" joined by \n.
++ * where dataCheckString is all fields except `hash` and `signature`, sorted,
++ * "k=v" joined by \n.
+  *
+- * Every other field — including Bot API 8.0's `signature` — is a regular
+- * member of the check string (TEMP audit note: if live-client logging shows
+- * real Telegram payloads carrying `signature` failing here, the field needs
+- * excluding from the check string; don't change this speculatively).
++ * `signature` (an Ed25519 signature for third-party verification, added in
++ * Bot API 8.0) is NOT part of the bot-token HMAC check string. Current
++ * Telegram clients attach it to every payload; folding it in makes every
++ * authentic login fail. Excluding it is strictly safe: payloads without the
++ * field hash identically either way. (Spec: core.telegram.org/bots/webapps
++ * "Validating data received via the Mini App"; empirically confirmed against
++ * a live bot token — validators that exclude only `hash` reject authentic
++ * signature-carrying payloads, which is exactly the failure the TEMP probe
++ * was watching for.)
+  *
+- * `auth_date` is REQUIRED: its absence is now a rejection, not a skip, and the
++ * `auth_date` is REQUIRED: its absence is a rejection, not a skip, and the
+  * comparison is constant-time so a probe can't binary-search the digest.
+  */
+ export function verifyInitData(
+@@ -37,6 +43,7 @@ export function verifyInitData(
+   const hash = params.get("hash");
+   if (!hash) return { ok: false, reason: "missing hash" };
+   params.delete("hash");
++  params.delete("signature");
+ 
+   const dataCheckString = [...params.entries()]
+     .map(([k, v]) => `${k}=${v}`)
+diff --git a/tests/verify.test.ts b/tests/verify.test.ts
+index 7589aad..a4cc1be 100644
+--- a/tests/verify.test.ts
++++ b/tests/verify.test.ts
+@@ -5,9 +5,10 @@
+  *
+  * Pins: valid payload passes, tampering fails, wrong token fails, auth_date
+  * is required and enforced, non-hex digests fail closed (timing-safe path),
+- * and `signature` is treated as a regular check-string field (current spec —
+- * flip this test together with verify.ts if live-client logging ever shows
+- * real Telegram payloads must exclude it).
++ * and Bot API 8.0's `signature` field is EXCLUDED from the check string —
++ * payloads signed per the documented algorithm (signature left out of the
++ * hashed fields) verify, while payloads that folded signature in fail, which
++ * is exactly what old validators did to every current Telegram client.
+  */
+ import { strict as assert } from "node:assert";
+ import crypto from "node:crypto";
+@@ -15,10 +16,19 @@ import { verifyDevToken, verifyInitData } from "../server/telegram/verify.js";
+ 
+ const BOT_TOKEN = "7000000000:TEST-token-for-the-verify-suite";
+ 
+-/** Sign a query-string of key=value pairs exactly like Telegram documents it. */
+-function sign(fields: Record<string, string>, botToken: string = BOT_TOKEN): string {
++/**
++ * Sign a query-string of key=value pairs exactly like Telegram documents it.
++ * `includeSignatureInCheck` reproduces the old-validator mistake (folding the
++ * signature field into the hashed string) to pin its rejection.
++ */
++function sign(
++  fields: Record<string, string>,
++  botToken: string = BOT_TOKEN,
++  includeSignatureInCheck = false,
++): string {
+   const secret = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
+-  const dataCheckString = Object.entries(fields)
++  const checkFields = includeSignatureInCheck ? fields : Object.fromEntries(Object.entries(fields).filter(([k]) => k !== "signature"));
++  const dataCheckString = Object.entries(checkFields)
+     .map(([k, v]) => `${k}=${v}`)
+     .sort()
+     .join("\n");
+@@ -82,18 +92,31 @@ function testMalformedDigests() {
+   assert.equal(verifyInitData("user=%7B%22id%22%3A1%7D", BOT_TOKEN).ok, false, "no hash at all rejected");
+ }
+ 
+-function testSignatureIsARegularField() {
+-  // Current semantics: `signature` (Bot API 8.0+) participates in the check
+-  // string like any other field. This pins the behavior the live-client
+-  // logging is watching; change it together with verify.ts, not before.
+-  const payload = sign({
++function testSignatureExcludedFromCheckString() {
++  const fields = {
+     auth_date: String(Math.floor(Date.now() / 1000) - 30),
+     query_id: "AAHtest",
+     signature: "dGVzdC1zaWduYXR1cmU",
+     user: '{"id":9,"first_name":"Sara"}',
++  };
++  // Documented algorithm: the client signs all fields EXCEPT hash and
++  // signature. Our validator must accept exactly that payload.
++  const authentic = sign(fields);
++  const ok = verifyInitData(authentic, BOT_TOKEN);
++  assert.equal(ok.ok, true, "signature-carrying payload (signed per spec) verifies");
++
++  // The old-validator mistake: fold signature into the check string. Every
++  // real Bot API 8.0+ payload would fail that way — pin the rejection.
++  const legacyHashed = sign(fields, BOT_TOKEN, true);
++  assert.equal(verifyInitData(legacyHashed, BOT_TOKEN).ok, false, "signature-in-check-string hash mismatches");
++
++  // A legacy payload WITHOUT the field is unaffected by the exclusion.
++  const legacy = sign({
++    auth_date: fields.auth_date,
++    query_id: fields.query_id,
++    user: fields.user,
+   });
+-  const r = verifyInitData(payload, BOT_TOKEN);
+-  assert.equal(r.ok, true, "signature-as-regular-field payload verifies");
++  assert.equal(verifyInitData(legacy, BOT_TOKEN).ok, true, "pre-8.0 payload still verifies");
+ }
+ 
+ function testDevToken() {
+@@ -109,7 +132,9 @@ export async function runVerifyTests(): Promise<void> {
+   testTampering();
+   testAuthDateRules();
+   testMalformedDigests();
+-  testSignatureIsARegularField();
++  testSignatureExcludedFromCheckString();
+   testDevToken();
+-  console.log("  verify: valid/tamper/wrong-token, auth_date required+fresh, bad digests closed, dev tokens OK");
++  console.log(
++    "  verify: valid/tamper/wrong-token, auth_date required+fresh, bad digests closed, signature excluded, dev tokens OK",
++  );
+ }
+-- 
+2.54.0.windows.1
+

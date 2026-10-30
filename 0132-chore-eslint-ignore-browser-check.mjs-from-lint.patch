@@ -1,0 +1,34 @@
+From 0341e5627a0c3f0543ef2d87b9d2755b71aedb30 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 17:18:13 +0330
+Subject: [PATCH 132/230] chore(eslint): ignore browser-check.mjs from lint
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+It's a Node.js Playwright script with browser globals (document,
+localStorage, console) and only runs via tsx with the Playwright
+environment, not the TypeScript/eslint pipeline.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ eslint.config.js | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/eslint.config.js b/eslint.config.js
+index c942ef4..e90fc37 100644
+--- a/eslint.config.js
++++ b/eslint.config.js
+@@ -14,7 +14,7 @@ import prettier from "eslint-config-prettier";
+  * as a lint error.
+  */
+ export default tseslint.config(
+-  { ignores: ["dist", "dist-server", "node_modules", "**/*.tsbuildinfo", "scripts/**", ".tmp/**"] },
++  { ignores: ["dist", "dist-server", "node_modules", "**/*.tsbuildinfo", "scripts/**", ".tmp/**", "tests/browser-check.mjs"] },
+   js.configs.recommended,
+   ...tseslint.configs.recommended,
+   {
+-- 
+2.54.0.windows.1
+

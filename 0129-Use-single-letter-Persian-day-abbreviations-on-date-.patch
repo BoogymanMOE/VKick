@@ -1,0 +1,47 @@
+From 39e6ac629b51b4b125de94566e072b42e4f8eb2a Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 14:06:00 +0330
+Subject: [PATCH 129/230] Use single-letter Persian day abbreviations on date
+ strip
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Revert the 3-letter Persian day forms back to single letters (د س چ پ ج ش ی)
+which are the standard Persian calendar abbreviations and fit the chip design
+without overflowing at 390px. English day labels unchanged.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/strings.ts | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index bbd540a..ecf2ace 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -602,13 +602,13 @@ export const strings = {
+     "matches.otherMatches": "سایر مسابقات",
+     "table.view.tables": "جدول‌ها",
+     "table.view.browse": "مرور",
+-    "dates.day.mon": "دو",
+-    "dates.day.tue": "سه",
+-    "dates.day.wed": "چه",
+-    "dates.day.thu": "پن",
+-    "dates.day.fri": "جمع",
+-    "dates.day.sat": "شن",
+-    "dates.day.sun": "یک",
++    "dates.day.mon": "د",
++    "dates.day.tue": "س",
++    "dates.day.wed": "چ",
++    "dates.day.thu": "پ",
++    "dates.day.fri": "ج",
++    "dates.day.sat": "ش",
++    "dates.day.sun": "ی",
+     "dates.today": "امروز",
+     "dates.yesterday": "دیروز",
+     "dates.tomorrow": "فردا",
+-- 
+2.54.0.windows.1
+

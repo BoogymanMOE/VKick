@@ -1,0 +1,135 @@
+From 7279d85b7840dea555705e5fa1b28ea34b8eff1d Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 16:37:21 +0330
+Subject: [PATCH 087/230] Fix audit bugs: F5 sub window mismatch, F11 back nav
+ roots, F12 unguarded JSON.parse
+
+---
+ server/routes/me.ts            |  7 ++++++-
+ server/routes/predictions.ts   | 22 ++++++++++++++--------
+ server/scoring/streak.ts       |  8 +++++++-
+ src/hooks/useBackNavigation.ts | 13 ++++++++++++-
+ 4 files changed, 39 insertions(+), 11 deletions(-)
+
+diff --git a/server/routes/me.ts b/server/routes/me.ts
+index 0b3cd18..cd14634 100644
+--- a/server/routes/me.ts
++++ b/server/routes/me.ts
+@@ -358,7 +358,12 @@ meRouter.get("/api/me/streak", requireUser, (req, res) => {
+     "SELECT current, season_hits, thresholds_paid, streak_active FROM user_streaks WHERE user_id = ?",
+     [user.id],
+   );
+-  const thresholdsPaid = JSON.parse(row?.thresholds_paid ?? "[]") as number[];
++  let thresholdsPaid: number[];
++  try {
++    thresholdsPaid = JSON.parse(row?.thresholds_paid ?? "[]") as number[];
++  } catch {
++    thresholdsPaid = [];
++  }
+   const current = row?.current ?? 0;
+   const next = STREAK_THRESHOLDS.find((n) => !thresholdsPaid.includes(n)) ?? null;
+ 
+diff --git a/server/routes/predictions.ts b/server/routes/predictions.ts
+index 1693fd6..ba61543 100644
+--- a/server/routes/predictions.ts
++++ b/server/routes/predictions.ts
+@@ -11,7 +11,6 @@ import {
+   LINEUP_GATED,
+   isLineupGated,
+   lineupPublished,
+-  lockWindowFor,
+   windowFor,
+ } from "../predictions/window.js";
+ import { bad, currentUser, requireUser } from "./shared.js";
+@@ -88,7 +87,8 @@ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter
+   }
+ 
+   const now = new Date();
+-  const window = lockWindowFor(mechanic, match.kickoff_at);
++  const published = isLineupPublished(matchId);
++  const window = windowFor(mechanic, match.kickoff_at, published);
+ 
+   // Lock enforcement per mechanic window (prediction-mechanics.md):
+   // - lineup locks 2h before kickoff, the rest at kickoff; the sub window is
+@@ -97,15 +97,21 @@ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter
+     if (match.status !== "scheduled") return bad(res, "LOCKED_MATCH_STARTED");
+     if (new Date(window.lockAt).getTime() < now.getTime()) return bad(res, "LOCKED_DEADLINE_PASSED");
+   } else {
+-    // Sub Predictor window: opens with the lineup (~1h pre-kickoff), open
+-    // through scheduled (board prep) + first-half live — LOCKED at halftime
+-    // (real status from the sync) and finished. The halftime status is what
+-    // makes "editable until half-time" a server rule instead of UI copy.
++    // Sub Predictor window: opens with the lineup, open through scheduled
++    // (board prep) + first-half live — LOCKED at halftime (real status from
++    // the sync) and finished. The halftime status is what makes "editable
++    // until half-time" a server rule instead of UI copy.
+     if (match.status === "halftime" || match.status === "finished") {
+       return bad(res, "SUB_LOCKED_HALFTIME");
+     }
+     if (match.status !== "live" && match.status !== "scheduled") return bad(res, "SUB_ONLY_DURING_LIVE");
+-    if (match.status === "scheduled" && new Date(window.opensAt ?? "").getTime() > now.getTime()) {
++    // windowFor nulls opensAt once the lineup is published, so the server
++    // agrees with the client: no SUB_NOT_OPEN after publication.
++    if (
++      match.status === "scheduled" &&
++      window.opensAt &&
++      new Date(window.opensAt).getTime() > now.getTime()
++    ) {
+       return bad(res, "SUB_NOT_OPEN");
+     }
+   }
+@@ -127,4 +133,4 @@ predictionsRouter.post("/api/matches/:id/predictions", requireUser, writeLimiter
+   res.json({ ok: true, lockAt: window.lockAt, opensAt: window.opensAt });
+ });
+ 
+-export { MECHANICS, LINEUP_GATED, lockWindowFor };
++export { MECHANICS, LINEUP_GATED };
+diff --git a/server/scoring/streak.ts b/server/scoring/streak.ts
+index a92dc26..907c3fc 100644
+--- a/server/scoring/streak.ts
++++ b/server/scoring/streak.ts
+@@ -237,10 +237,16 @@ function loadStreakState(db: DatabaseSync, userId: number): StreakState {
+   if (!row) {
+     return { current: 0, seasonHits: 0, thresholdsPaid: [], lastMatchId: null, active: 0 };
+   }
++  let thresholdsPaid: number[];
++  try {
++    thresholdsPaid = JSON.parse(row.thresholds_paid) as number[];
++  } catch {
++    thresholdsPaid = [];
++  }
+   return {
+     current: row.current,
+     seasonHits: row.season_hits,
+-    thresholdsPaid: JSON.parse(row.thresholds_paid) as number[],
++    thresholdsPaid,
+     lastMatchId: row.last_match_id,
+     active: row.streak_active ? 1 : 0,
+   };
+diff --git a/src/hooks/useBackNavigation.ts b/src/hooks/useBackNavigation.ts
+index af5a101..9e34fbd 100644
+--- a/src/hooks/useBackNavigation.ts
++++ b/src/hooks/useBackNavigation.ts
+@@ -3,7 +3,18 @@ import { useLocation, useNavigate } from "react-router-dom";
+ import { telegram } from "../lib/telegram";
+ 
+ /** The tab roots — the back button hides here; Telegram's default close takes over. */
+-const ROOTS = new Set(["/matches", "/leaderboards", "/browse", "/table", "/profile"]);
++const ROOTS = new Set([
++  "/matches",
++  "/leaderboards",
++  "/browse",
++  "/table",
++  "/profile",
++  "/onboarding",
++  "/cups",
++  "/ratings",
++  "/predictions",
++  "/stats",
++]);
+ 
+ /**
+  * Telegram's Android back button. Without it, pressing back on a detail page
+-- 
+2.54.0.windows.1
+

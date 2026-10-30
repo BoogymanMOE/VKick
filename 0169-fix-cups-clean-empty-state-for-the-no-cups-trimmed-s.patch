@@ -1,0 +1,37 @@
+From 157daca27069666ae4937be7a3ffd4af7b2626df Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 16:25:47 +0330
+Subject: [PATCH 169/230] =?UTF-8?q?fix(cups):=20clean=20empty=20state=20fo?=
+ =?UTF-8?q?r=20the=20no-cups-trimmed=20state=20(route=20kept=20=E2=80=94?=
+ =?UTF-8?q?=20reachable,=20no=20crash)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+#/cups loads cleanly at 390x720 and shows its "no fixtures in this window"
+empty state; the route stays because cups-with-fixtures are deliberately
+listed again by the competition catalog. The empty state now carries the
+shared icon treatment (🏆 above the title, muted, 24px).
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/pages/Cups.tsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/pages/Cups.tsx b/src/pages/Cups.tsx
+index ae623f8..27abb70 100644
+--- a/src/pages/Cups.tsx
++++ b/src/pages/Cups.tsx
+@@ -222,7 +222,7 @@ export default function Cups() {
+             {scheduled.length > 0 ? (
+               <CupMatchList matches={scheduled} />
+             ) : (
+-              <EmptyState title={t("cups.empty")} hint={t("cups.emptyHint")} />
++              <EmptyState icon="🏆" title={t("cups.empty")} hint={t("cups.emptyHint")} />
+             )}
+           </section>
+ 
+-- 
+2.54.0.windows.1
+

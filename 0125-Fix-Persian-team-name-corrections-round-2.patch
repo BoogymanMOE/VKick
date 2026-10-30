@@ -1,0 +1,33 @@
+From d49b0962256b6e1f89f2634c5ae96bcf99a600ef Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 12:31:34 +0330
+Subject: [PATCH 125/230] Fix Persian team name corrections round 2
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Coventry shortName alias corrected from "کونولتی" to "کاونتری"
+  to match the Coventry City full-name translation.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/names.ts | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/i18n/names.ts b/src/i18n/names.ts
+index 7c94d88..2ec14fb 100644
+--- a/src/i18n/names.ts
++++ b/src/i18n/names.ts
+@@ -40,7 +40,7 @@ export const teamNamesFa: Record<string, string> = {
+   "Bournemouth": "بورن‌موت",
+   "Brighton": "برایتن",
+   "C Palace": "کریستل پالاس",
+-  "Coventry": "کونولتی",
++  "Coventry": "کاونتری",
+   "Hull": "هال",
+   "Ipswich": "ایپ‌سویچ",
+   "Leeds": "لیدز",
+-- 
+2.54.0.windows.1
+

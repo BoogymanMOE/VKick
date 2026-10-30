@@ -1,0 +1,69 @@
+From 9d2e3260ec3b6c3b4a9026bdb42006f45acd0f45 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 16:25:09 +0330
+Subject: [PATCH 214/230] =?UTF-8?q?fix(feed):=20one-line=20timestamp=20?=
+ =?UTF-8?q?=E2=80=94=20Sun=2015:00=20instead=20of=203=20stacked=20lines?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ src/components/MatchCard.tsx | 10 +++-------
+ src/lib/format.ts            | 13 +++++++++++++
+ 2 files changed, 16 insertions(+), 7 deletions(-)
+
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index e7a69bc..b92e86b 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -5,7 +5,6 @@ import { useI18n } from "../i18n/context";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { useCompetitionLabel } from "../hooks/useApi";
+ import { formatKickoff } from "../lib/format";
+-import { kickoffParts } from "../lib/format";
+ import { LiveDot, Num, TeamBadge } from "./ui";
+ import { recordFlipFirst } from "../lib/flip";
+ 
+@@ -182,12 +181,9 @@ export const MatchCard = memo(function MatchCard({
+             <>
+               {/* Weekday: 18px bold, 23px line height so the row is 23px tall even
+                   when the period below is empty (Persian). */}
+-              <span className="min-h-[23px] text-md font-bold leading-[23px] text-ink-2">{parts.day}</span>
+-              {/* Clock: the exact centre row. 18px bold, 23px leading, LTR isolated. */}
+-              <span data-testid="match-center" className="text-md font-bold leading-[23px] text-ink-2">{parts.clock}</span>
+-              {/* Period: AM/PM for en-US, empty 23px spacer for fa-IR. Same fixed
+-                  height keeps the clock vertically centred in both scripts. */}
+-              <span className="min-h-[23px] text-md font-bold leading-[23px] text-ink-2">{parts.period}</span>
++              <span className="text-sm font-display font-extrabold text-ink-2">
++                {formatKickoffShort(new Date(match.kickoffAt), lang === "fa" ? "fa-IR" : undefined)}
++              </span>
+             </>
+           )}
+         </div>
+diff --git a/src/lib/format.ts b/src/lib/format.ts
+index 2422a76..14b156d 100644
+--- a/src/lib/format.ts
++++ b/src/lib/format.ts
+@@ -48,6 +48,19 @@ export function kickoffParts(date: Date, locale?: string): { day: string; clock:
+   return { day, clock, period };
+ }
+ 
++/**
++ * Short kickoff label: weekday + 24h time, one line.
++ * EN: Sun 15:00
++ * FA: یکشنبه ۱۵:۰۰ (Persian day name + Persian digits)
++ * For LIVE matches this is combined with the score/minute below.
++ * For FINISHED matches this is the final score + "FT" on one line.
++ */
++export function formatKickoffShort(date: Date, locale?: string): string {
++  const day = new Intl.DateTimeFormat(locale ?? "en", { weekday: "short" }).format(date);
++  const time = new Intl.DateTimeFormat(locale ?? "en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
++  return `${day} ${time}`;
++}
++
+ /**
+  * Sticky date header label for grouped upcoming feeds.
+  * Returns "Today" / "Tomorrow" for near dates, or a full weekday + date for
+-- 
+2.54.0.windows.1
+

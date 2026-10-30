@@ -1,0 +1,4687 @@
+From 848e8447c755cde90fe469359902b0d0a85ef1f2 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 7 Oct 2026 01:07:40 +0330
+Subject: [PATCH 022/230] Remove the live pitch view and the 2D match replay
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Delete LivePitch, ReplayPitch, PitchArt and the pitch/replay model libs,
+the /match/:id/replay route (with its legacy redirect), the
+GET /api/matches/:id/replay endpoint, the replay scrubber and tactical-view
+CSS, the replay page skeleton and transport icons, the three test suites and
+their runner wiring, and the replay.* / live.* / shot.play i18n keys in both
+EN and FA.
+
+Match detail keeps the timeline/predict/stats/lineups/ratings tabs with no
+gap where the pitch sat; the timeline, commentary and per-match stat
+endpoints plus every sync behind them stay, so no data path and no schema
+changes with it.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ PRODUCT.md                     |   2 +-
+ README.md                      |   4 +-
+ data-model.md                  |   3 +-
+ roadmap.md                     |   2 +-
+ server/routes/football.ts      |  46 +--
+ src/App.tsx                    |   2 -
+ src/components/LivePitch.tsx   | 712 ---------------------------------
+ src/components/PitchArt.tsx    | 123 ------
+ src/components/ReplayPitch.tsx | 630 -----------------------------
+ src/components/Skeletons.tsx   |  18 -
+ src/components/icons.tsx       |  14 -
+ src/hooks/useApi.ts            |  26 --
+ src/i18n/strings.ts            |  72 ----
+ src/index.css                  | 388 ------------------
+ src/lib/api.ts                 |  18 -
+ src/lib/livePitch.ts           | 504 -----------------------
+ src/lib/pitchView.ts           | 245 ------------
+ src/lib/replay.ts              | 314 ---------------
+ src/pages/Cups.tsx             |  14 +-
+ src/pages/MatchDetail.tsx      |  55 +--
+ src/pages/MatchReplayPage.tsx  | 408 -------------------
+ src/pages/TeamPage.tsx         |   8 -
+ tests/livePitch.test.ts        | 323 ---------------
+ tests/pitchArt.test.ts         | 145 -------
+ tests/replay.test.ts           | 182 ---------
+ tests/run.ts                   |   6 -
+ 26 files changed, 13 insertions(+), 4251 deletions(-)
+ delete mode 100644 src/components/LivePitch.tsx
+ delete mode 100644 src/components/PitchArt.tsx
+ delete mode 100644 src/components/ReplayPitch.tsx
+ delete mode 100644 src/lib/livePitch.ts
+ delete mode 100644 src/lib/pitchView.ts
+ delete mode 100644 src/lib/replay.ts
+ delete mode 100644 src/pages/MatchReplayPage.tsx
+ delete mode 100644 tests/livePitch.test.ts
+ delete mode 100644 tests/pitchArt.test.ts
+ delete mode 100644 tests/replay.test.ts
+
+diff --git a/PRODUCT.md b/PRODUCT.md
+index d18ddec..4fd1cf0 100644
+--- a/PRODUCT.md
++++ b/PRODUCT.md
+@@ -33,7 +33,7 @@ Emotional goals: the rush of a live goal, the pride of recognition from the crow
+ 2. **One meaning per color.** Teal means broadcast/action, amber means evaluation, red means danger, turf green means pitch. Never mix on one element.
+ 3. **Earned spectacle.** Animation and glow are reserved for goal moments and live state; the resting UI is calm and confident.
+ 4. **Personage without rainbow.** Club identity arrives through their own color and a real sense of place, not through decorative accents.
+-5. **Tactical depth as product.** The 2.5D pitch view is not a graphic, it is the living match: formations, momentum, and pressure made legible.
++5. **Tactical depth as product.** Line-ups, timeline and stats read like the living match — formations, momentum, and pressure made legible, not a scoreboard.
+ 
+ ## Accessibility & Inclusion
+ 
+diff --git a/README.md b/README.md
+index 7a13fc9..09f3929 100644
+--- a/README.md
++++ b/README.md
+@@ -71,7 +71,7 @@ the real one. It attaches predictions to **synced** fixtures rather than inventi
+ | Path | What |
+ |---|---|
+ | `server/db/schema.ts` | All tables (mirrors `data-model.md` + `prediction-mechanics.md`) |
+-| `server/routes/*.ts` | Route modules mounted by `server/index.ts`: `auth` (login/guest/register + guest merge), `me` (profile, favorites, leagues, streak, prefs), `football` (matches, replay, teams, squads, standings), `predictions`, `ratings` (+ comments), `leaderboards`, `admin` |
++| `server/routes/*.ts` | Route modules mounted by `server/index.ts`: `auth` (login/guest/register + guest merge), `me` (profile, favorites, leagues, streak, prefs), `football` (matches, teams, squads, standings), `predictions`, `ratings` (+ comments), `leaderboards`, `admin` |
+ | `server/espn/normalize.ts` | The ONLY file that knows ESPN's JSON shapes |
+ | `server/sync/service.ts` | Cron loops: live 1m, scoreboards 10m, standings daily |
+ | `server/sync/upserts.ts` | Normalized data → SQLite, goal-alert detection |
+@@ -84,7 +84,7 @@ the real one. It attaches predictions to **synced** fixtures rather than inventi
+ 
+ ## API surface
+ 
+-Public (no auth): `GET /api/matches` (relevance window by default — live now + last 3 days of results + next 14; accepts `league`, `date`, `from`/`to` for an explicit range, and `limit`), `GET /api/matches/:id`, `/lineups`, `/timeline`, `/commentary`, `/players` (per-match stat table), `/replay`, `GET /api/teams` (+ `/:id` season line, `/:id/players`, `/:id/understat`), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`, `GET /api/competitions`
++Public (no auth): `GET /api/matches` (relevance window by default — live now + last 3 days of results + next 14; accepts `league`, `date`, `from`/`to` for an explicit range, and `limit`), `GET /api/matches/:id`, `/lineups`, `/timeline`, `/commentary`, `/players` (per-match stat table), `GET /api/teams` (+ `/:id` season line, `/:id/players`, `/:id/understat`), `GET /api/leagues/:league/players?sort=goals|assists|…` (season leaderboard), `GET /api/leagues/:league/teams` (season team stats), `GET /api/standings/:league`, `GET /api/competitions`
+ 
+ Auth (Bearer = Telegram initData, or an `mg_` session token from the username path): `POST /api/auth/login`, `GET /api/me`, `GET/POST/DELETE /api/me/favorites` (max 5 clubs plus up to 5 national teams, one flagged `is_favorite` — errors are machine-readable codes), `GET/POST /api/me/leagues` (max 5), `GET/POST /api/me/referral` (+ `/redeem`), `GET/POST /api/matches/:id/ratings` (3-card cap, 1 vote per player per match, 1–10), `GET/POST /api/matches/:id/comments`, `GET/POST /api/matches/:id/predictions` (lock enforcement per mechanic), `GET /api/me/predictions`, `GET /api/me/streak` (favorite-club streak + next threshold bonus)
+ 
+diff --git a/data-model.md b/data-model.md
+index d691d00..055c6c8 100644
+--- a/data-model.md
++++ b/data-model.md
+@@ -104,7 +104,8 @@ Per-player season xG/xA and per-90 rates (PK `player_id, season`).
+ 
+ ### `match_understat_stats`
+ **Per-match** xG, one row per club (PK `match_id, team_id`): `xg`, `xga`,
+-`last_synced_at`. This is what the replay pitch's expected-goals card reads.
++`last_synced_at`. The per-fixture xG record, written by the Understat sync;
++no screen reads it yet.
+ Understat's league history carries no opponent name, so a fixture is paired to
+ an ESPN match only when side, both goal counts and a within-a-day kickoff agree
+ with exactly one candidate (`matchResultsToMatches`); ambiguous pairings are
+diff --git a/roadmap.md b/roadmap.md
+index 5213c81..7f56edd 100644
+--- a/roadmap.md
++++ b/roadmap.md
+@@ -80,7 +80,7 @@ Concept: `concept.md`. Mechanics: `prediction-mechanics.md`. Scoring: `scoring-r
+ 
+ - [x] Goal alerts: detection in the sync, per-club fan-out to followers, delivered by the bot's push-queue drain, gated at queue time **and** send time by `user_notification_prefs` so opting out is a real switch.
+ - [x] The rest of the matchday notifications (`server/notifications.ts`): the lineup drop ("the Sub Predictor is open"), the last call before kickoff, the half-time lock, and the rating-window open after full time.
+-- [x] Visual/UX hardening pass (2026-09-29 audit): contrast-aware ink on team-coloured discs (`readableInk`, PlayerStats + replay pins), a 44px replay scrubber, 44px targets on every text link (Login, Onboarding, Cups, Table rows, Predictions, Profile), RTL back chevron that mirrors in Persian, stake-framed leaderboard empty state, and cup round groupings (first round → final) backed by the new `matches.round` column.
++- [x] Visual/UX hardening pass (2026-09-29 audit): contrast-aware ink on team-coloured discs (`readableInk`, PlayerStats), 44px targets on every text link (Login, Onboarding, Cups, Table rows, Predictions, Profile), RTL back chevron that mirrors in Persian, stake-framed leaderboard empty state, and cup round groupings (first round → final) backed by the new `matches.round` column.
+   - Every stage is **claimed once per (user, match, stage)** in `match_notifications`, because the producer runs on the minute loop against matches that sit inside their window for up to two hours — without the claim, "kicks off in 40 minutes" arrives forty times.
+   - Freshness windows (6h back, 2h ahead) stop a first boot against a database of historic fixtures from queueing months of reminders.
+   - Each kind checks its own Profile switch (`PREF_COLUMN`), so muting goal alerts leaves lock reminders intact.
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index adde922..d8c614a 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -1,6 +1,6 @@
+ /**
+- * Football-data reads: competitions, matches, match detail, replay,
+- * commentary, teams (+season line), squads, Understat, season stat
++ * Football-data reads: competitions, matches, match detail, commentary,
++ * teams (+season line), squads, Understat, season stat
+  * leaderboards, standings. Public routes stay public (web preview); the
+  * Understat read keeps its requireUser gate. Behavior unchanged.
+  */
+@@ -82,46 +82,6 @@ matchesRouter.get("/api/matches/:id", (req, res) => {
+   res.json({ match });
+ });
+ 
+-/**
+- * Everything the 2D replay pitch needs in one payload: key events (with shot
+- * coordinates when ESPN published them), the full commentary track, and the
+- * per-side team stats (possession for the momentum legend).
+- */
+-matchesRouter.get("/api/matches/:id/replay", (req, res) => {
+-  const matchId = String(req.params.id);
+-  const match = matchWithTeams(matchId);
+-  if (!match) return bad(res, "not found", 404);
+-  const events = all(
+-    db,
+-    `SELECT e.*,
+-       (SELECT COUNT(*) FROM timeline_comments c WHERE c.event_id = e.id) AS comment_count
+-     FROM timeline_events e WHERE e.match_id = ?
+-     ORDER BY e.minute_seconds ASC`,
+-    [matchId],
+-  );
+-  const commentary = all(
+-    db,
+-    "SELECT sequence, minute_display, minute_seconds, text FROM match_commentary WHERE match_id = ? ORDER BY sequence ASC",
+-    [matchId],
+-  );
+-  const teamStats = all(
+-    db,
+-    "SELECT team_id, possession_pct, shots, shots_on_target, corners, fouls FROM match_team_stats WHERE match_id = ?",
+-    [matchId],
+-  );
+-  // Per-match expected goals (Understat). Empty for clubs outside the big
+-  // five or a fixture the matcher couldn't pair — the client renders "no data"
+-  // rather than a zero.
+-  const xg = all(db, "SELECT team_id, xg, xga FROM match_understat_stats WHERE match_id = ?", [matchId]);
+-  res.json({
+-    match,
+-    events: events.map((e: any) => ({ ...e, participants: safeArr(e.participants) })),
+-    commentary,
+-    teamStats,
+-    xg,
+-  });
+-});
+-
+ /** Full minute-by-minute commentary for one match (blow-by-blow tab). */
+ matchesRouter.get("/api/matches/:id/commentary", (req, res) => {
+   const lines = all(
+@@ -191,7 +151,7 @@ matchesRouter.get("/api/matches/:id/timeline", (req, res) => {
+      ORDER BY e.minute_seconds ASC`,
+     [matchId],
+   );
+-  res.json({ events: events.map((e: any) => ({ ...e, participants: safeArr(e.participants) })) });
++  res.json({ events: events.map((e) => ({ ...e, participants: safeArr(e.participants) })) });
+ });
+ 
+ /* ------------------------------------------------------------ teams */
+diff --git a/src/App.tsx b/src/App.tsx
+index 551862e..e23fc77 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -12,7 +12,6 @@ import Login from "./pages/Login";
+ 
+ const Browse = lazy(() => import("./pages/Browse"));
+ const MatchDetail = lazy(() => import("./pages/MatchDetail"));
+-const MatchReplayPage = lazy(() => import("./pages/MatchReplayPage"));
+ const Cups = lazy(() => import("./pages/Cups"));
+ const Matches = lazy(() => import("./pages/Matches"));
+ const NotFound = lazy(() => import("./pages/NotFound"));
+@@ -43,7 +42,6 @@ export default function App() {
+             <Route path="/matches" element={<Matches />} />
+             <Route path="/cups" element={<Cups />} />
+             <Route path="/match/:id" element={<MatchDetail />} />
+-            <Route path="/match/:id/replay" element={<MatchReplayPage />} />
+             <Route path="/team/:id" element={<TeamPage />} />
+             {/* My Teams is gone — the onboarding picker is the only place to
+                 manage favorites. Old deep links land there. The fantasy Draft
+diff --git a/src/components/LivePitch.tsx b/src/components/LivePitch.tsx
+deleted file mode 100644
+index 55c44c2..0000000
+--- a/src/components/LivePitch.tsx
++++ /dev/null
+@@ -1,712 +0,0 @@
+-/**
+- * The live pitch, rebuilt around what ESPN's feeds can honestly support
+- * (PRODUCT.md rule 1): one ball on a floodlit pitch, placed where the last
+- * tracked action happened, with a short trail of the recent actions and an
+- * annotation chip that says what it was and who did it. No formation discs —
+- * without tracking data any player positions would be fake, and the replay
+- * keeps those for scrubbed matches.
+- *
+- * Data plan: the `/api/matches/:id/replay` payload already carries the timeline
+- * AND the full commentary track, so no extra endpoint is needed; the page just
+- * polls it live. Classification of the commentary ("Attempt saved…", "Corner,
+- * Team. Conceded by…") lives in src/lib/livePitch.ts.
+- */
+-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+-import { useI18n } from "../i18n/I18nProvider";
+-import { haptic } from "../lib/telegram";
+-import { Num, cx } from "./ui";
+-import {
+-  buildLiveModel,
+-  PITCH_LENGTH_M,
+-  PITCH_WIDTH_M,
+-  type LiveActionKind,
+-  type LiveSide,
+-} from "../lib/livePitch";
+-import { TACTICAL_VIEWPORT } from "../lib/pitchView";
+-import { PitchArt } from "./PitchArt";
+-import type { ApiTimelineEvent } from "../lib/api";
+-
+-const VP = TACTICAL_VIEWPORT;
+-
+-/** Per-side team stats from the boxscore — updated on every live poll. */
+-export interface LiveTeamStats {
+-  team_id: string;
+-  possession_pct: number | null;
+-  shots: number | null;
+-  shots_on_target: number | null;
+-  corners: number | null;
+-  fouls: number | null;
+-}
+-
+-interface LivePitchProps {
+-  home: LiveSide;
+-  away: LiveSide;
+-  /** The match's current minute from the score sync. */
+-  currentMinute: number;
+-  /** Current score for the broadcast chip (0 before the first goal). */
+-  homeScore: number;
+-  awayScore: number;
+-  events: ApiTimelineEvent[];
+-  commentary: {
+-    sequence: number;
+-    minute_display: string | null;
+-    minute_seconds: number | null;
+-    text: string;
+-  }[];
+-  /** Live boxscore rows, keyed by team id — drives the stat duel. */
+-  teamStats: LiveTeamStats[];
+-}
+-
+-/** Tailwind can't parameterise these; the chip tone follows the action kind. */
+-const KIND_TONE: Record<LiveActionKind, string> = {
+-  goal: "text-[#FFD466] border-volt/60",
+-  shot: "text-[#FFD466] border-[#FFD466]/35",
+-  corner: "text-ink border-line",
+-  freekick: "text-ink border-line",
+-  foul: "text-ink-2 border-line",
+-  card: "text-ink-2 border-line",
+-  substitution: "text-ink-2 border-line",
+-  var: "text-ink-2 border-line",
+-  none: "text-ink-3 border-line",
+-};
+-
+-/** Per-kind glyph for the rhythm tape: one character, no icon dependency. */
+-const KIND_GLYPH: Record<LiveActionKind, string> = {
+-  goal: "●",
+-  shot: "✕",
+-  corner: "∡",
+-  freekick: "¯¯",
+-  foul: "✋",
+-  card: "■",
+-  substitution: "⇄",
+-  var: "◇",
+-  none: "·",
+-};
+-
+-export function LivePitch({
+-  home,
+-  away,
+-  currentMinute,
+-  homeScore,
+-  awayScore,
+-  events,
+-  commentary,
+-  teamStats,
+-}: LivePitchProps) {
+-  const { t, localize } = useI18n();
+-
+-  const model = useMemo(
+-    () =>
+-      buildLiveModel({
+-        home,
+-        away,
+-        events,
+-        commentary,
+-        currentMinute,
+-      }),
+-    [home, away, events, commentary, currentMinute],
+-  );
+-
+-  // The tape moment under inspection: null = follow live. Tapping a tick pins
+-  // the annotation + ball there (a broadcast "watch that again" beat); tapping
+-  // the newest tick or the live chip returns to live.
+-  const [inspect, setInspect] = useState<number | null>(null);
+-
+-  const moment = model.moment;
+-
+-  // Same trick as ReplayPitch: the marker layer lives in the pitch's own
+-  // 340x180 space and is scaled to the rendered surface width, so the ball
+-  // and the trail dots track the stretched SVG art on any card width.
+-  const surfaceRef = useRef<HTMLDivElement | null>(null);
+-  const layersRef = useRef<HTMLDivElement | null>(null);
+-  useLayoutEffect(() => {
+-    const surface = surfaceRef.current;
+-    const layers = layersRef.current;
+-    if (!surface || !layers) return;
+-    const sync = (width: number) => {
+-      if (width > 0) layers.style.transform = `scale(${(width / VP.width).toFixed(4)})`;
+-    };
+-    sync(surface.clientWidth);
+-    if (typeof ResizeObserver === "undefined") return;
+-    const observer = new ResizeObserver((entries) => {
+-      const entry = entries[0];
+-      if (entry) sync(entry.contentRect.width);
+-    });
+-    observer.observe(surface);
+-    return () => observer.disconnect();
+-  }, []);
+-
+-  // Pitch geometry (the replay's surface, reused) — trail and ball share the
+-  // SVG's coordinate space so the trail tracks the stretched art exactly.
+-  const innerW = VP.width - VP.marginX * 2;
+-  const innerH = VP.height - VP.marginY * 2;
+-  const toSvg = (p: { lx: number; ly: number }) => ({
+-    x: VP.marginX + p.lx * innerW,
+-    y: VP.marginY + p.ly * innerH,
+-  });
+-
+-  const spots = model.trail.map((p) => toSvg(p));
+-
+-  // Inspection replays a tracked moment; live follows the newest one.
+-  const shown = inspect != null ? (model.events.find((e) => e.sequence === inspect) ?? moment) : moment;
+-  const shownSpot = toSvg(shown?.ball ?? { lx: 0.5, ly: 0.5 });
+-
+-  const showTrail = spots.length > 1 && inspect == null;
+-  const showBall = Boolean(shown);
+-
+-  const actorSide = shown?.side ?? null;
+-  const sideColor = actorSide === "home" ? home.color : actorSide === "away" ? away.color : null;
+-
+-  // --- Territorial pressure (the broadcast "who's on top" read) ----------
+-  // Straight from the model: it weighs the last few tracked actions into a
+-  // 0..1 tilt (0.5 = even). Pure and deterministic, built from tracked actions
+-  // only — no invented player positions. Flat means an even game, which is
+-  // itself information, so the wash fades out entirely.
+-  const tilt = Math.max(-1, Math.min(1, (model.pressure - 0.5) * 2));
+-  const pressure = Math.abs(tilt);
+-  const territoryCx = VP.marginX + innerW * (0.5 + 0.22 * tilt);
+-  const territoryCy = VP.marginY + innerH * 0.5;
+-  const territoryColor = tilt >= 0 ? home.color : away.color;
+-
+-  // --- Live boxscore (real numbers from the ESPN stats sync) --------------
+-  const homeStats = teamStats.find((s) => s.team_id === home.id) ?? null;
+-  const awayStats = teamStats.find((s) => s.team_id === away.id) ?? null;
+-  const homePoss = homeStats?.possession_pct != null ? Number(homeStats.possession_pct) : null;
+-  const duelRows: Array<{ label: string; home: number; away: number }> = [];
+-  if (homeStats || awayStats) {
+-    const pair = (label: string, h: number | null | undefined, a: number | null | undefined) => {
+-      if (h == null && a == null) return;
+-      duelRows.push({ label, home: h ?? 0, away: a ?? 0 });
+-    };
+-    pair(t("stats.shots"), homeStats?.shots, awayStats?.shots);
+-    pair(t("stats.onTarget"), homeStats?.shots_on_target, awayStats?.shots_on_target);
+-    pair(t("stats.corners"), homeStats?.corners, awayStats?.corners);
+-    pair(t("stats.fouls"), homeStats?.fouls, awayStats?.fouls);
+-  }
+-
+-  // --- Goal pins + persistent shot map ------------------------------------
+-  const goalPins = model.allGoals.map((goal) => {
+-    const spot = toSvg(goal.ball);
+-    const color = goal.side === "home" ? home.color : goal.side === "away" ? away.color : "#FFD466";
+-    const own = /own goal/i.test(goal.detail) ? ` (OG)` : "";
+-    // ESPN's goalPositionY (0..100 across the mouth) — a real broadcast fact:
+-    // the ball crossed here. Drawn coords mirror for the away side like every
+-    // other x/y, and the pin attacks the mirrored goal.
+-    const mouthY =
+-      goal.side != null && goal.goalY != null
+-        ? VP.marginY + innerH * (goal.side === "home" ? goal.goalY / 100 : 1 - goal.goalY / 100)
+-        : null;
+-    const goalLx = goal.side === "home" ? 1 : 0;
+-    return {
+-      x: spot.x,
+-      y: spot.y,
+-      color,
+-      label: `${goal.minuteDisplay || ""}${own}`,
+-      mouth: mouthY != null ? { x: VP.marginX + innerW * goalLx, y: mouthY } : null,
+-    };
+-  });
+-  // Shots persist for the whole match (except while inspecting — the tape owns
+-  // the spotlight then), so the map accrues like a chalkboard.
+-  const shotMarks = (inspect == null ? model.shots : []).map((shot) => {
+-    const spot = toSvg(shot.ball);
+-    return {
+-      x: spot.x,
+-      y: spot.y,
+-      color: shot.side === "away" ? "#FF6B8A" : "var(--volt)",
+-      goal: shot.kind === "goal",
+-    };
+-  });
+-
+-  // Distance measure: for shots, a hairline from the spot to the goal centre
+-  // under attack plus the metre label — the geometry the chip only numbers.
+-  const measure =
+-    shown && (shown.kind === "shot" || shown.kind === "goal") && shown.side != null && shown.distanceM != null
+-      ? (() => {
+-          const goalLx = shown.side === "home" ? 1 : 0;
+-          const from = toSvg(shown.ball);
+-          const to = toSvg({ lx: goalLx, ly: 0.5 });
+-          return { from, to, label: shown.distanceM };
+-        })()
+-      : null;
+-
+-  // Momentum ribbon: REAL possession when the boxscore has landed (ESPN
+-  // publishes it live), falling back to the latest action's side. A 62% side
+-  // gets a 62%-wide ribbon — honest broadcast numbers, not a vibe.
+-  const momentumPct =
+-    homePoss != null
+-      ? Math.min(80, Math.max(20, homePoss))
+-      : shown?.side == null
+-        ? 50
+-        : shown.side === "home"
+-          ? 68
+-          : 32;
+-
+-  // Goal moment: celebrate only goals that land while this pitch is on
+-  // screen. `seenRef` absorbs whatever goals are already on record at mount
+-  // (opening a page at 78' must not replay the 47' one); the ref then fires
+-  // once per new goal. Switching matches unmounts this component, so the
+-  // seen-set resets naturally.
+-  const [goalFx, setGoalFx] = useState(0);
+-  const seenGoalRef = useRef<string | null>(null);
+-  const bootedRef = useRef(false);
+-  const timerRef = useRef<number | null>(null);
+-  const goalKey = model.lastGoal
+-    ? `${model.lastGoal.side ?? "?"}:${model.lastGoal.minuteDisplay}:${model.lastGoal.actor ?? ""}`
+-    : "";
+-  // "Loaded" = the replay payload has reached us; booting before that would
+-  // absorb an empty key and then celebrate goals that predate the page.
+-  const loaded = events.length > 0 || commentary.length > 0;
+-  useEffect(() => {
+-    if (!loaded) return;
+-    // First loaded render: absorb whatever goals are already on record —
+-    // opening a page at 78' must never replay the 47' one.
+-    if (!bootedRef.current) {
+-      bootedRef.current = true;
+-      seenGoalRef.current = goalKey;
+-      return;
+-    }
+-    if (!goalKey || seenGoalRef.current === goalKey) return;
+-    seenGoalRef.current = goalKey;
+-    setGoalFx((v) => v + 1);
+-    // The moment is a burst, not a state: after a few seconds the ball goes
+-    // back to wherever play resumed. Cleared on the next goal or unmount.
+-    if (timerRef.current) window.clearTimeout(timerRef.current);
+-    timerRef.current = window.setTimeout(() => setGoalFx(0), 6000);
+-    return () => {
+-      if (timerRef.current) window.clearTimeout(timerRef.current);
+-    };
+-  }, [goalKey, loaded]);
+-
+-  const celebrate = goalFx > 0 && Boolean(model.lastGoal);
+-  const goalGlowColor =
+-    model.lastGoal?.side === "home" ? home.color : model.lastGoal?.side === "away" ? away.color : "#FFD466";
+-  const goalSpot = toSvg(model.lastGoal?.ball ?? { lx: 0.5, ly: 0.5 });
+-
+-  const KIND_LABEL: Record<LiveActionKind, string> = {
+-    goal: t("live.actionGoal"),
+-    shot: t("live.actionShot"),
+-    corner: t("live.actionCorner"),
+-    freekick: t("live.actionFreekick"),
+-    foul: t("live.actionFoul"),
+-    card: t("live.actionCard"),
+-    substitution: t("live.actionSub"),
+-    var: t("live.actionVar"),
+-    none: t("live.actionNone"),
+-  };
+-
+-  const surface = (
+-    <div className="tac-surface" dir="ltr" ref={surfaceRef}>
+-      <PitchArt
+-        id="lp"
+-        homeLabel={`${localize(home.shortName)} →`}
+-        awayLabel={`← ${localize(away.shortName)}`}
+-        defs={
+-          <radialGradient id="lp-territory" cx="0.5" cy="0.5" r="0.5">
+-            <stop offset="0" stopColor={territoryColor} stopOpacity="0.2" />
+-            <stop offset="1" stopColor={territoryColor} stopOpacity="0" />
+-          </radialGradient>
+-        }
+-        wash={
+-          /* Territorial pressure: a soft wash centred on the ball weighted by
+-             the running shot share — the "who's on top" read without fake
+-             player dots. Pure SVG paint; no layout cost. */
+-          pressure > 0 ? (
+-            <ellipse
+-              cx={territoryCx}
+-              cy={territoryCy}
+-              rx={64 + pressure * 46}
+-              ry={40 + pressure * 22}
+-              fill="url(#lp-territory)"
+-            />
+-          ) : null
+-        }
+-      >
+-        {/* The recent actions' trajectory: one dashed polyline, home volt /
+-            away rose, plus dots that grow toward the newest spot. */}
+-        {showTrail && (
+-          <>
+-            <polyline
+-              points={spots.map((s) => `${s.x.toFixed(1)},${s.y.toFixed(1)}`).join(" ")}
+-              fill="none"
+-              stroke={actorSide === "away" ? "#FF6B8A" : "var(--volt)"}
+-              strokeWidth="1.6"
+-              strokeDasharray="4 4"
+-              opacity="0.8"
+-            />
+-            {spots.slice(0, -1).map((s, i) => (
+-              <circle key={i} cx={s.x} cy={s.y} r={2 + i * 0.8} fill="rgba(247,251,249,0.5)" />
+-            ))}
+-          </>
+-        )}
+-
+-        {/* Persistent shot map: every shot on record as a small ring — goals
+-            stay filled — accruing over the match like a chalkboard. */}
+-        {shotMarks.map((mark, index) => (
+-          <g key={`shot-${index}`}>
+-            {mark.goal ? (
+-              <circle cx={mark.x} cy={mark.y} r="2.4" fill={mark.color} opacity="0.95" />
+-            ) : (
+-              <circle
+-                cx={mark.x}
+-                cy={mark.y}
+-                r="2.2"
+-                fill="none"
+-                stroke={mark.color}
+-                strokeWidth="1.1"
+-                opacity="0.7"
+-              />
+-            )}
+-          </g>
+-        ))}
+-
+-        {/* Distance measure for the shown shot: hairline to the goal centre
+-            under attack, tiny label at its midpoint. */}
+-        {measure && (
+-          <g opacity="0.85">
+-            <line
+-              x1={measure.from.x}
+-              y1={measure.from.y}
+-              x2={measure.to.x}
+-              y2={measure.to.y}
+-              stroke="rgba(255,212,102,0.6)"
+-              strokeWidth="0.9"
+-              strokeDasharray="3 3"
+-            />
+-            <text
+-              x={(measure.from.x + measure.to.x) / 2}
+-              y={(measure.from.y + measure.to.y) / 2 - 3}
+-              fontSize="6.5"
+-              fontWeight="700"
+-              textAnchor="middle"
+-              fill="#FFD466"
+-            >
+-              {measure.label}m
+-            </text>
+-            <circle cx={measure.to.x} cy={measure.to.y} r="1.4" fill="rgba(255,212,102,0.8)" />
+-          </g>
+-        )}
+-
+-        {/* Goal pins: every goal on record stays mapped at its spot, so the
+-            pitch tells the whole story at a glance, not just the last act.
+-            When ESPN published goalPositionY, a hairline shows exactly where
+-            in the mouth the ball crossed. */}
+-        {goalPins.map((pin, index) => (
+-          <g key={index} opacity="0.9">
+-            {pin.mouth ? (
+-              <line
+-                x1={pin.x}
+-                y1={pin.y}
+-                x2={pin.mouth.x}
+-                y2={pin.mouth.y}
+-                stroke={pin.color}
+-                strokeWidth="0.8"
+-                strokeDasharray="2 2"
+-                opacity="0.55"
+-              />
+-            ) : null}
+-            <circle cx={pin.x} cy={pin.y} r="5.5" fill={pin.color} opacity="0.22" />
+-            <circle cx={pin.x} cy={pin.y} r="2.6" fill={pin.color} />
+-            <text
+-              x={pin.x}
+-              y={pin.y - 8}
+-              fontSize="6.5"
+-              fontWeight="700"
+-              textAnchor="middle"
+-              fill={pin.color}
+-            >
+-              {pin.label}
+-            </text>
+-          </g>
+-        ))}
+-      </PitchArt>
+-
+-      {/* The one and only ball: classic white-and-black disc with a live
+-          pulse, inside the layers div so it scales with the surface. While a
+-          goal celebration runs, the ball parks on the goal spot and glows in
+-          the scorer's colour under the expanding rings. A slow transform
+-          transition makes position updates glide, not teleport — the ball
+-          "travels" the pitch between tracked actions. */}
+-      {showBall && (
+-        <div className="tac-layers" ref={layersRef} style={{ width: VP.width, height: VP.height }}>
+-          <span
+-            className={cx(
+-              "tac-ball",
+-              celebrate ? "lp-goal-glow" : inspect != null ? "lp-inspect" : "lp-pulse",
+-              // While celebrating the ball parks on the goal spot; otherwise it
+-              // glides between tracked actions (reduced motion drops the glide).
+-              !celebrate && "tac-ball-glide",
+-            )}
+-            style={
+-              celebrate
+-                ? ({
+-                    transform: `translate(${goalSpot.x}px, ${goalSpot.y}px)`,
+-                    "--goal-color": goalGlowColor,
+-                  } as CSSProperties)
+-                : ({
+-                    transform: `translate(${shownSpot.x}px, ${shownSpot.y}px)`,
+-                    "--glide": "1.6s",
+-                  } as CSSProperties)
+-            }
+-            aria-hidden="true"
+-          />
+-          {/* Where the tracked action happened: a single expanding ping in
+-              the acting side's colour, re-keyed per action. While inspecting,
+-              a steady spotlight ring pins the replayed moment instead. */}
+-          {!celebrate &&
+-            (inspect != null ? (
+-              <span
+-                className="lp-inspect-ring"
+-                style={{
+-                  left: shownSpot.x,
+-                  top: shownSpot.y,
+-                  borderColor: sideColor ?? "rgba(242,246,244,0.5)",
+-                }}
+-                aria-hidden="true"
+-              />
+-            ) : (
+-              <span
+-                key={shown?.sequence ?? "idle"}
+-                className="lp-action-ping"
+-                style={{
+-                  left: shownSpot.x,
+-                  top: shownSpot.y,
+-                  borderColor: sideColor ?? "rgba(242,246,244,0.5)",
+-                }}
+-                aria-hidden="true"
+-              />
+-            ))}
+-          {celebrate
+-            ? [
+-                <span
+-                  key={`ring-a-${goalFx}`}
+-                  className="lp-goal-ring"
+-                  style={{ left: goalSpot.x, top: goalSpot.y, borderColor: goalGlowColor }}
+-                  aria-hidden="true"
+-                />,
+-                <span
+-                  key={`ring-b-${goalFx}`}
+-                  className="lp-goal-ring lp-goal-ring-late"
+-                  style={{ left: goalSpot.x, top: goalSpot.y, borderColor: goalGlowColor }}
+-                  aria-hidden="true"
+-                />,
+-              ]
+-            : null}
+-        </div>
+-      )}
+-
+-      {/* Broadcast score chip + minute, over the pitch — plus the momentum
+-          ribbon: tilt in the on-top side's colour, dead centre = even. */}
+-      <div className="pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center gap-1">
+-        <div className="flex items-center justify-center gap-2">
+-          <span
+-            className={cx(
+-              "flex items-center gap-1.5 rounded-md border bg-base/85 px-2 py-1 text-[11px] font-bold text-ink backdrop-blur-sm",
+-              celebrate ? "lp-score-flash" : "border-line",
+-            )}
+-          >
+-            <span
+-              className="h-2 w-2 rounded-full"
+-              style={{ backgroundColor: home.color }}
+-              aria-hidden="true"
+-            />
+-            {localize(home.shortName)}
+-            <Num className="text-sm">
+-              {homeScore}–{awayScore}
+-            </Num>
+-            {localize(away.shortName)}
+-            <span
+-              className="h-2 w-2 rounded-full"
+-              style={{ backgroundColor: away.color }}
+-              aria-hidden="true"
+-            />
+-          </span>
+-          <span className="flex items-center gap-1 rounded-md border border-line bg-base/85 px-1.5 py-1 text-[11px] font-bold text-ink-2 backdrop-blur-sm">
+-            <Num>{currentMinute >= 90 ? `90+${Math.max(0, currentMinute - 90)}` : currentMinute}&#39;</Num>
+-          </span>
+-          {inspect != null ? (
+-            <button
+-              type="button"
+-              onClick={() => setInspect(null)}
+-              className="flex items-center gap-1 rounded-md border border-volt bg-volt/15 px-1.5 py-1 text-[10px] font-bold text-volt"
+-            >
+-              {t("live.backToLive")}
+-            </button>
+-          ) : null}
+-        </div>
+-        {moment ? (
+-          <span
+-            className="h-[3px] w-24 overflow-hidden rounded-full bg-base/70 backdrop-blur-sm"
+-            role="img"
+-            aria-label={t("live.momentum")}
+-          >
+-            <span
+-              className="block h-full w-[var(--w)] rounded-full transition-[width] duration-[var(--t-slow)] ease-[var(--ease-out)]"
+-              style={
+-                {
+-                  "--w": `${Math.round(momentumPct)}%`,
+-                  backgroundColor: momentumPct >= 50 ? home.color : away.color,
+-                  marginLeft: momentumPct >= 50 ? undefined : `${Math.round(momentumPct)}%`,
+-                } as CSSProperties
+-              }
+-            />
+-          </span>
+-        ) : null}
+-      </div>
+-
+-      {/* The annotation: what just happened, to whom, and how far — for the
+-          live moment or the one under inspection. */}
+-      <div className="absolute inset-x-2 bottom-2 flex flex-col gap-1.5">
+-        {shown ? (
+-          <div
+-            className={cx(
+-              "flex items-center gap-1.5 self-start rounded-full border bg-base/90 px-2.5 py-1.5 text-[11px] font-bold backdrop-blur-sm",
+-              KIND_TONE[shown.kind],
+-            )}
+-          >
+-            <span
+-              className="h-2 w-2 flex-none rounded-full"
+-              style={{ backgroundColor: sideColor ?? "var(--ink-3)" }}
+-              aria-hidden="true"
+-            />
+-            <span className="whitespace-nowrap">
+-              {KIND_LABEL[shown.kind]}
+-              {shown.actor ? <span className="text-ink"> · {localize(shown.actor)}</span> : null}
+-              {shown.recipient ? (
+-                <span className="font-semibold text-ink-2">
+-                  {" "}
+-                  {t("live.to")} {localize(shown.recipient)}
+-                </span>
+-              ) : null}
+-            </span>
+-            <Num className="text-ink-3">{shown.minuteDisplay || `${currentMinute}'`}</Num>
+-            {shown.distanceM != null ? (
+-              <>
+-                <span className="text-ink-3">·</span>
+-                <span className="text-ink-2">
+-                  <Num>{shown.distanceM}</Num> {t("live.metres")}
+-                </span>
+-              </>
+-            ) : null}
+-          </div>
+-        ) : (
+-          <div className="self-start rounded-full border border-line bg-base/90 px-2.5 py-1.5 text-[11px] font-semibold text-ink-2 backdrop-blur-sm">
+-            {t("live.waiting")}
+-          </div>
+-        )}
+-
+-        {shown?.detail ? (
+-          <p
+-            className="max-w-[92%] self-start rounded-xl border border-line bg-base/85 px-2.5 py-1.5 text-[11px] leading-snug text-ink-2 backdrop-blur-sm"
+-            style={{
+-              display: "-webkit-box",
+-              WebkitLineClamp: 2,
+-              WebkitBoxOrient: "vertical",
+-              overflow: "hidden",
+-            }}
+-          >
+-            {shown.detail}
+-          </p>
+-        ) : null}
+-      </div>
+-
+-      {/* Quiet footprint: pitch size so the "N m" chip is self-explanatory. */}
+-      <div className="pointer-events-none absolute right-2 top-2 rounded-md border border-line bg-base/85 px-1.5 py-1 text-[10px] font-semibold text-ink-3 backdrop-blur-sm">
+-        <Num>
+-          {PITCH_LENGTH_M}×{PITCH_WIDTH_M}
+-        </Num>
+-      </div>
+-    </div>
+-  );
+-
+-  const tape = model.events;
+-  return (
+-    <>
+-      {surface}
+-      {/* The live stat duel: real boxscore numbers in one compact row — the
+-          classic broadcast strip under the pitch. Appears only once ESPN has
+-          published stats for this match. */}
+-      {duelRows.length > 0 ? (
+-        <div className="mt-1.5 rounded-card border border-line bg-surface px-3 py-2">
+-          <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-x-2">
+-            {duelRows.map((row) => (
+-              <div key={row.label} className="col-span-3 grid grid-cols-subgrid items-baseline py-0.5">
+-                <Num className="text-end text-[11px] font-bold text-ink">{row.home}</Num>
+-                <span className="text-center text-[10px] font-semibold uppercase tracking-wide text-ink-3">
+-                  {row.label}
+-                </span>
+-                <Num className="text-[11px] font-bold text-ink">{row.away}</Num>
+-              </div>
+-            ))}
+-          </div>
+-        </div>
+-      ) : null}
+-      {/* The match rhythm: one tick per tracked event, oldest → newest, split
+-          around the HT marker. Amber ticks = shots/goals, grey = the rest;
+-          goal ticks carry a flag. Tap to replay a moment on the pitch; the
+-          newest tick (or Back to live) hands the spotlight back. */}
+-      {tape.length > 0 ? (
+-        <div className="lp-tape" role="tablist" aria-label={t("live.tape")} dir="ltr">
+-          {tape.map((ev, index) => {
+-            const key = ev.sequence;
+-            const selected = inspect === key || (inspect == null && index === tape.length - 1);
+-            const big = ev.kind === "shot" || ev.kind === "goal";
+-            const halfTimeGap =
+-              index > 0 &&
+-              minuteOfDisplay(ev.minuteDisplay) >= 45 &&
+-              minuteOfDisplay(tape[index - 1].minuteDisplay) < 45;
+-            return (
+-              <div
+-                key={key}
+-                className="flex min-w-0 items-end gap-px"
+-                style={halfTimeGap ? { marginLeft: 10 } : undefined}
+-              >
+-                {halfTimeGap ? <span className="lp-tape-ht" aria-hidden="true" /> : null}
+-                <button
+-                  type="button"
+-                  role="tab"
+-                  aria-selected={selected}
+-                  title={`${ev.minuteDisplay || ""} ${KIND_LABEL[ev.kind]}${ev.actor ? ` · ${ev.actor}` : ""}`.trim()}
+-                  onClick={() => {
+-                    haptic("light");
+-                    // Toggle: tap the shown moment again (or the newest, which
+-                    // is "live") to hand the spotlight back to the feed.
+-                    setInspect(selected ? null : key);
+-                  }}
+-                  className="lp-tick-wrap"
+-                >
+-                  {ev.kind === "goal" ? (
+-                    <span
+-                      className="lp-tick-flag"
+-                      style={{ backgroundColor: ev.side === "away" ? away.color : home.color }}
+-                      aria-hidden="true"
+-                    />
+-                  ) : null}
+-                  <span
+-                    className={cx("lp-tick", big && "lp-tick-big", selected && "lp-tick-on")}
+-                    style={
+-                      big ? { backgroundColor: ev.side === "away" ? "#FF6B8A" : "var(--volt)" } : undefined
+-                    }
+-                    aria-hidden="true"
+-                  >
+-                    {KIND_GLYPH[ev.kind]}
+-                  </span>
+-                  {selected ? (
+-                    <span className="lp-tick-minute">
+-                      <Num>{ev.minuteDisplay || `${currentMinute}'`}</Num>
+-                    </span>
+-                  ) : null}
+-                </button>
+-              </div>
+-            );
+-          })}
+-        </div>
+-      ) : null}
+-    </>
+-  );
+-}
+-
+-/** "45+2'" → 45; "" → 0. Tape-only helper. */
+-function minuteOfDisplay(display: string): number {
+-  const m = /\d+/.exec(display ?? "");
+-  return m ? Number(m[0]) : 0;
+-}
+diff --git a/src/components/PitchArt.tsx b/src/components/PitchArt.tsx
+deleted file mode 100644
+index a857377..0000000
+--- a/src/components/PitchArt.tsx
++++ /dev/null
+@@ -1,123 +0,0 @@
+-/**
+- * The shared pitch surface: one place that paints the static art both the live
+- * and the replay views stand on. A pitch missing its penalty areas, spots and
+- * corner arcs reads as a diagram, not a ground, so both views render this exact
+- * surface and only their own overlays differ.
+- *
+- * The moving parts (players, ball, trajectory) are composited DOM layers in the
+- * caller, scaled to this SVG's 340x180 space — see `.tac-layers` in index.css.
+- */
+-import type { ReactNode } from "react";
+-import { TACTICAL_VIEWPORT, bandCorners, cornerArcPath, penaltyArcPath, project } from "../lib/pitchView";
+-
+-const VP = TACTICAL_VIEWPORT;
+-const INNER_W = VP.width - VP.marginX * 2;
+-const INNER_H = VP.height - VP.marginY * 2;
+-
+-/** One chalk colour for every marking; the turf stays the only saturated green. */
+-const CHALK = "rgba(35,160,102,0.5)";
+-const CHALK_SOFT = "rgba(35,160,102,0.42)";
+-const CHALK_DOT = "rgba(35,160,102,0.55)";
+-
+-export interface PitchArtProps {
+-  /** Unique prefix for this surface's SVG gradients (two pitches can coexist). */
+-  id: string;
+-  /** Side names along the bottom edge, each showing which goal it attacks. */
+-  homeLabel?: string;
+-  awayLabel?: string;
+-  /** Extra `<defs>` the overlay paints need (e.g. a territory gradient). */
+-  defs?: ReactNode;
+-  /** A translucent wash painted under the markings (territory / pressure). */
+-  wash?: ReactNode;
+-  /** Paint drawn on top of the markings (trails, pins, measures). */
+-  children?: ReactNode;
+-}
+-
+-export function PitchArt({ id, homeLabel, awayLabel, defs, wash, children }: PitchArtProps) {
+-  const centre = project(0.5, 0.5);
+-  return (
+-    <svg viewBox={`0 0 ${VP.width} ${VP.height}`} className="tac-svg" aria-hidden="true">
+-      <defs>
+-        <linearGradient id={`${id}-grass`} x1="0" y1="0" x2="1" y2="0">
+-          <stop offset="0" stopColor="#0E251E" />
+-          <stop offset="0.5" stopColor="#0C2119" />
+-          <stop offset="1" stopColor="#0A1B15" />
+-        </linearGradient>
+-        <radialGradient id={`${id}-spot`} cx="0.5" cy="0.38" r="0.9">
+-          <stop offset="0" stopColor="rgba(53,224,188,0.14)" />
+-          <stop offset="1" stopColor="rgba(53,224,188,0)" />
+-        </radialGradient>
+-        {defs}
+-      </defs>
+-
+-      <rect width={VP.width} height={VP.height} fill={`url(#${id}-grass)`} />
+-      <polygon points={bandCorners(0, 1, 0, 1)} fill="none" stroke={CHALK_SOFT} strokeWidth="1.5" />
+-      {Array.from({ length: 8 }, (_, index) => (
+-        <polygon
+-          key={index}
+-          points={bandCorners(index / 8, (index + 1) / 8, 0, 1)}
+-          fill="#ffffff"
+-          opacity={index % 2 === 1 ? 0.035 : 0}
+-        />
+-      ))}
+-      <polygon points={bandCorners(0, 1, 0, 1)} fill={`url(#${id}-spot)`} />
+-      {wash}
+-
+-      {/* Six-yard boxes, penalty areas and the 9.15m arc off each penalty spot. */}
+-      <polygon points={bandCorners(0, 0.052, 0.365, 0.635)} fill="none" stroke={CHALK_SOFT} strokeWidth="1" />
+-      <polygon points={bandCorners(0.948, 1, 0.365, 0.635)} fill="none" stroke={CHALK_SOFT} strokeWidth="1" />
+-      <polygon points={bandCorners(0, 0.157, 0.204, 0.796)} fill="none" stroke={CHALK} strokeWidth="1.2" />
+-      <polygon points={bandCorners(0.843, 1, 0.204, 0.796)} fill="none" stroke={CHALK} strokeWidth="1.2" />
+-      <path d={penaltyArcPath("home")} fill="none" stroke={CHALK} strokeWidth="1.2" />
+-      <path d={penaltyArcPath("away")} fill="none" stroke={CHALK} strokeWidth="1.2" />
+-      <circle cx={project(0.11, 0.5).x} cy={project(0.11, 0.5).y} r="1.2" fill={CHALK_DOT} />
+-      <circle cx={project(0.89, 0.5).x} cy={project(0.89, 0.5).y} r="1.2" fill={CHALK_DOT} />
+-
+-      {/* The 1m corner arcs, swept onto the field of play. */}
+-      <path d={cornerArcPath(0, 0)} fill="none" stroke={CHALK} strokeWidth="1" />
+-      <path d={cornerArcPath(0, 1)} fill="none" stroke={CHALK} strokeWidth="1" />
+-      <path d={cornerArcPath(1, 0)} fill="none" stroke={CHALK} strokeWidth="1" />
+-      <path d={cornerArcPath(1, 1)} fill="none" stroke={CHALK} strokeWidth="1" />
+-
+-      {/* Halfway line, centre circle and centre spot. */}
+-      <line
+-        x1={project(0.5, 0).x}
+-        y1={project(0.5, 0).y}
+-        x2={project(0.5, 1).x}
+-        y2={project(0.5, 1).y}
+-        stroke={CHALK}
+-        strokeWidth="1.2"
+-      />
+-      <ellipse
+-        cx={centre.x}
+-        cy={centre.y}
+-        rx={(9.15 / 105) * INNER_W}
+-        ry={(9.15 / 68) * INNER_H}
+-        fill="none"
+-        stroke={CHALK}
+-        strokeWidth="1.2"
+-      />
+-      <circle cx={centre.x} cy={centre.y} r="1.2" fill={CHALK_DOT} />
+-
+-      {/* Direction hint, whisper-quiet: which goal each side attacks. */}
+-      {homeLabel || awayLabel ? (
+-        <>
+-          <text x={VP.marginX + 10} y={VP.height - 7} fontSize="7" fill="rgba(147,174,166,0.5)">
+-            {homeLabel}
+-          </text>
+-          <text
+-            x={VP.marginX + INNER_W - 10}
+-            y={VP.height - 7}
+-            fontSize="7"
+-            textAnchor="end"
+-            fill="rgba(147,174,166,0.5)"
+-          >
+-            {awayLabel}
+-          </text>
+-        </>
+-      ) : null}
+-
+-      {children}
+-    </svg>
+-  );
+-}
+diff --git a/src/components/ReplayPitch.tsx b/src/components/ReplayPitch.tsx
+deleted file mode 100644
+index 34111ee..0000000
+--- a/src/components/ReplayPitch.tsx
++++ /dev/null
+@@ -1,630 +0,0 @@
+-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+-import { useI18n } from "../i18n/I18nProvider";
+-import type { Position } from "../types";
+-import { TACTICAL_VIEWPORT, lineupSlots, project, type MomentumPoint } from "../lib/pitchView";
+-import type { ReplayEvent, ReplayModel, ReplayTick } from "../lib/replay";
+-import { readableInk } from "../lib/colors";
+-import { haptic } from "../lib/telegram";
+-import { PitchArt } from "./PitchArt";
+-import { Num, cx } from "./ui";
+-
+-const VP = TACTICAL_VIEWPORT;
+-const INNER_W = VP.width - VP.marginX * 2;
+-const INNER_H = VP.height - VP.marginY * 2;
+-
+-/** Touch slop for picking a shot: the whole pitch is the target, not the ring. */
+-const TAP_RADIUS_PX = 44;
+-
+-export interface ReplayPlayer {
+-  id: string;
+-  side: "home" | "away";
+-  name: string;
+-  number: number;
+-  position: Position;
+-  /** ESPN's granular role — sets which side of its line the disc stands on. */
+-  espnPosition?: string | null;
+-}
+-
+-export interface ReplayPitchProps {
+-  model: ReplayModel;
+-  tick: ReplayTick;
+-  homeStarters: ReplayPlayer[];
+-  awayStarters: ReplayPlayer[];
+-  /** The side's real formation ("4-2-3-1"); empty falls back to flat lines. */
+-  homeFormation?: string;
+-  awayFormation?: string;
+-  playing: boolean;
+-}
+-
+-/** Field coords → the SVG's own 340x180 space (same space as the art). */
+-function toSvg(p: { lx: number; ly: number }) {
+-  return { x: VP.marginX + p.lx * INNER_W, y: VP.marginY + p.ly * INNER_H };
+-}
+-
+-/** Where a pin's line meets the goal line given ESPN's 0..100 mouth position. */
+-function goalMouth(side: "home" | "away", goalY: number) {
+-  const lx = side === "home" ? 1 : 0;
+-  const ly = side === "home" ? goalY / 100 : 1 - goalY / 100;
+-  return toSvg({ lx, ly });
+-}
+-
+-/**
+- * The replay surface: a static broadcast-style pitch (SVG) with per-minute
+- * overlays — starting XI chips, the ball, goal pins and the score. All
+- * positions derive from the tick, so scrubbing is instant and deterministic.
+- * The pitch never mirrors in RTL (dir="ltr" on the surface), like ShotPlotter.
+- *
+- * It shares its ground with the live view (`PitchArt`): full markings, a
+- * territory wash driven by the minute's momentum, the run of play as a dashed
+- * trail, a persistent shot map built from the stored commentary and goal pins
+- * that show where in the mouth the ball crossed.
+- *
+- * The shot map is the one interactive layer. Pointer: a tap anywhere on the
+- * pitch picks the nearest shot (the rings are far too small to hit). Keyboard
+- * and screen reader: each shot is a real button with a roving tab index, so Tab
+- * enters the map and the arrow keys walk shot to shot, announcing each.
+- */
+-export function ReplayPitch({
+-  model,
+-  tick,
+-  homeStarters,
+-  awayStarters,
+-  homeFormation = "",
+-  awayFormation = "",
+-  playing,
+-}: ReplayPitchProps) {
+-  const { t, localize } = useI18n();
+-
+-  // Same trick as TacticalView: the marker layers live in the pitch's own
+-  // 340x180 space and get scaled to the rendered surface width so discs track
+-  // the stretched SVG art on any card width.
+-  const surfaceRef = useRef<HTMLDivElement | null>(null);
+-  const layersRef = useRef<HTMLDivElement | null>(null);
+-  useLayoutEffect(() => {
+-    const surface = surfaceRef.current;
+-    const layers = layersRef.current;
+-    if (!surface || !layers) return;
+-    const sync = (width: number) => {
+-      if (width > 0) layers.style.transform = `scale(${(width / VP.width).toFixed(4)})`;
+-    };
+-    sync(surface.clientWidth);
+-    if (typeof ResizeObserver === "undefined") return;
+-    const observer = new ResizeObserver((entries) => {
+-      const entry = entries[0];
+-      if (entry) sync(entry.contentRect.width);
+-    });
+-    observer.observe(surface);
+-    return () => observer.disconnect();
+-  }, []);
+-
+-  // The tapped shot (see `selected` below for when it is released), plus a
+-  // handle on each shot's card so the arrow keys can move real DOM focus.
+-  const [picked, setPicked] = useState<string | null>(null);
+-  const shotRefs = useRef<Array<HTMLButtonElement | null>>([]);
+-
+-  const slots = useMemo(() => {
+-    const mk = (starters: ReplayPlayer[], side: "home" | "away", formation: string) => {
+-      const lineup = {
+-        formation,
+-        coach: "",
+-        starters: starters.map((p) => ({
+-          id: p.id,
+-          name: p.name,
+-          position: p.position,
+-          number: p.number,
+-          espnPosition: p.espnPosition ?? null,
+-        })),
+-        subs: [],
+-      };
+-      return lineupSlots(lineup, side);
+-    };
+-    return {
+-      home: mk(homeStarters, "home", homeFormation),
+-      away: mk(awayStarters, "away", awayFormation),
+-    };
+-  }, [homeStarters, awayStarters, homeFormation, awayFormation]);
+-
+-  // Club colours range from near-black to pastel; the ink flips per side so
+-  // every disc's number clears WCAG AA on its own fill.
+-  const homeInk = readableInk(model.home.color);
+-  const awayInk = readableInk(model.away.color);
+-
+-  // Everything that has happened by this minute, oldest → newest.
+-  const past = useMemo(
+-    () => model.events.filter((e) => e.minute <= tick.minute && e.minute > 0),
+-    [model, tick.minute],
+-  );
+-
+-  // Goal pins: every goal so far stays mapped at its origin. ESPN's stored
+-  // coords face each team's own attack and were already mirrored by
+-  // fieldPoint(); coord-less goals fall back to the edge of the box they
+-  // attacked rather than the centre spot.
+-  const goalPins = past
+-    .filter((e) => e.type === "goal")
+-    .map((e) => {
+-      const point = e.hasCoords ? toSvg(e) : toSvg({ lx: e.side === "home" ? 0.86 : 0.14, ly: 0.5 });
+-      const color = e.side === "away" ? model.away.color : model.home.color;
+-      return {
+-        id: e.id,
+-        x: point.x,
+-        y: point.y,
+-        color,
+-        label: e.minuteDisplay,
+-        mouth: e.side && e.goalY != null ? goalMouth(e.side, e.goalY) : null,
+-      };
+-    });
+-
+-  // The run of play: the recent positioned moments as a dashed trail, so the
+-  // surface shows where the match has been, not just where the ball sits.
+-  const trailMoments = model.moments.filter((m) => m.minute <= tick.minute).slice(-5);
+-  const trail = trailMoments.map((m) => toSvg(m));
+-  const trailSide = trailMoments[trailMoments.length - 1]?.side ?? null;
+-
+-  // Persistent shot map: every shot the commentary describes, accrued up to
+-  // this minute. Goals are left out — the pins below already own them — so the
+-  // rings read as the shots that didn't beat the keeper.
+-  const shotMarks = model.shots
+-    .filter((shot) => !shot.goal && shot.minute <= tick.minute)
+-    .map((shot) => ({ ...shot, ...toSvg(shot) }));
+-
+-  // The tapped shot. The map is persistent, so the callout stays pinned while
+-  // playback runs on; it only lets go when a scrub back past that shot's minute
+-  // removes its ring from the map.
+-  const selected = picked ? (shotMarks.find((shot) => shot.id === picked) ?? null) : null;
+-
+-  // Territorial wash: the minute's momentum tilts a soft glow toward the side
+-  // on the front foot, in their own colour. Flat momentum = no wash, which is
+-  // itself the read: an even game.
+-  const tilt = Math.max(-1, Math.min(1, tick.momentum));
+-  const washStrength = Math.abs(tilt);
+-  const washColor = tilt >= 0 ? model.home.color : model.away.color;
+-  const washCx = VP.marginX + INNER_W * (0.5 + 0.22 * tilt);
+-  const washCy = VP.marginY + INNER_H * 0.5;
+-
+-  const ball = toSvg(tick.ball);
+-  const homeScored = (side: "home" | "away") => tick.goals.some((g) => g.side === side);
+-
+-  const shotDistance = (distanceM: number | null) =>
+-    distanceM != null ? `${distanceM} ${t("live.metres")}` : "";
+-  /** The card's visible copy: who shot, and from where at what minute. */
+-  const shotName = (shot: { actor: string | null }) =>
+-    shot.actor ? localize(shot.actor) : t("live.actionShot");
+-  const shotMeta = (shot: { minute: number; minuteDisplay: string; distanceM: number | null }) => {
+-    const distance = shotDistance(shot.distanceM);
+-    return `${shot.minuteDisplay || `${shot.minute}'`}${distance ? ` · ${distance}` : ""}`;
+-  };
+-  /** What a screen reader hears for a shot: minute, shooter, range. */
+-  const shotLabel = (shot: {
+-    minute: number;
+-    minuteDisplay: string;
+-    actor: string | null;
+-    distanceM: number | null;
+-  }) => {
+-    const distance = shotDistance(shot.distanceM);
+-    return [
+-      shot.minuteDisplay || `${shot.minute}'`,
+-      t("live.actionShot"),
+-      shot.actor ? localize(shot.actor) : null,
+-      distance || null,
+-    ]
+-      .filter(Boolean)
+-      .join(", ");
+-  };
+-
+-  /**
+-   * Where a shot's card sits. Shots cluster around the boxes (drawn y 60..120),
+-   * so a lower one gets its card above and an upper one below — clear of the
+-   * score chip at the top and the caption at the bottom. Horizontally it is
+-   * clamped so a card never runs off the touchline.
+-   */
+-  const cardAnchor = (shot: { x: number; y: number }) => ({
+-    left: `${Math.min(76, Math.max(24, (shot.x / VP.width) * 100))}%`,
+-    top: `${(shot.y / VP.height) * 100}%`,
+-    transform: `translate(-50%, ${shot.y > 90 ? "calc(-100% - 9px)" : "9px"})`,
+-  });
+-
+-  /** Move roving focus one shot along; the focus handler sets the selection. */
+-  function stepShotFocus(from: number, delta: number) {
+-    const next = Math.min(shotMarks.length - 1, Math.max(0, from + delta));
+-    if (next !== from) shotRefs.current[next]?.focus();
+-  }
+-
+-  /**
+-   * A ring is ~4px wide, far below a usable touch target, so a tap anywhere on
+-   * the pitch picks the nearest shot within a 44px radius — the whole ground is
+-   * the hit area, and a tap clear of every shot dismisses instead. Tapping the
+-   * pinned shot again releases it.
+-   */
+-  function handlePitchTap(event: MouseEvent<HTMLDivElement>) {
+-    const surface = surfaceRef.current;
+-    if (!surface || shotMarks.length === 0) return;
+-    // A pointer pick moves the callout, so any keyboard focus the map still
+-    // holds would be left on a card that has just been hidden.
+-    const active = document.activeElement;
+-    if (active instanceof HTMLElement && active.dataset.shotCard !== undefined) active.blur();
+-    const rect = surface.getBoundingClientRect();
+-    if (rect.width === 0 || rect.height === 0) return;
+-    const vx = ((event.clientX - rect.left) / rect.width) * VP.width;
+-    const vy = ((event.clientY - rect.top) / rect.height) * VP.height;
+-    let nearest = shotMarks[0];
+-    let nearestDist = Infinity;
+-    for (const shot of shotMarks) {
+-      const dist = Math.hypot(shot.x - vx, shot.y - vy);
+-      if (dist < nearestDist) {
+-        nearestDist = dist;
+-        nearest = shot;
+-      }
+-    }
+-    const radius = (TAP_RADIUS_PX / rect.width) * VP.width;
+-    if (nearestDist > radius || selected?.id === nearest.id) {
+-      setPicked(null);
+-      return;
+-    }
+-    haptic("light");
+-    setPicked(nearest.id);
+-  }
+-
+-  // The newest key moment, captioned on the pitch like a broadcast lower-third.
+-  const latest = past[past.length - 1] ?? null;
+-  const TYPE_LABEL: Record<ReplayEvent["type"], string> = {
+-    goal: t("timeline.goal"),
+-    card: t("timeline.card"),
+-    substitution: t("timeline.sub"),
+-    var: t("timeline.var"),
+-    halftime: t("timeline.halftime"),
+-    fulltime: t("timeline.fulltime"),
+-    kickoff: t("replay.otherEvent"),
+-    other: t("replay.otherEvent"),
+-  };
+-  const latestNames = latest ? latest.participants.map(localize).join(" · ") : "";
+-  const latestColor = latest?.side === "away" ? model.away.color : model.home.color;
+-
+-  return (
+-    <div
+-      dir="ltr"
+-      className={cx("tac-surface", shotMarks.length > 0 && "cursor-pointer")}
+-      ref={surfaceRef}
+-      onClick={handlePitchTap}
+-    >
+-      <PitchArt
+-        id="rp"
+-        homeLabel={`${localize(model.home.shortName)} →`}
+-        awayLabel={`← ${localize(model.away.shortName)}`}
+-        defs={
+-          <radialGradient id="rp-territory" cx="0.5" cy="0.5" r="0.5">
+-            <stop offset="0" stopColor={washColor} stopOpacity={0.05 + washStrength * 0.2} />
+-            <stop offset="1" stopColor={washColor} stopOpacity="0" />
+-          </radialGradient>
+-        }
+-        wash={
+-          washStrength > 0.04 ? (
+-            <ellipse
+-              cx={washCx}
+-              cy={washCy}
+-              rx={64 + washStrength * 46}
+-              ry={40 + washStrength * 22}
+-              fill="url(#rp-territory)"
+-            />
+-          ) : null
+-        }
+-      >
+-        {/* The run of play: a dashed polyline through the recent spots, dots
+-            growing toward the newest one. */}
+-        {trail.length > 1 ? (
+-          <>
+-            <polyline
+-              points={trail.map((s) => `${s.x.toFixed(1)},${s.y.toFixed(1)}`).join(" ")}
+-              fill="none"
+-              stroke={trailSide === "away" ? "#FF6B8A" : "var(--volt)"}
+-              strokeWidth="1.4"
+-              strokeDasharray="3 4"
+-              opacity="0.7"
+-            />
+-            {trail.map((s, i) => (
+-              <circle key={i} cx={s.x} cy={s.y} r={1.6 + i * 0.5} fill="rgba(247,251,249,0.45)" />
+-            ))}
+-          </>
+-        ) : null}
+-
+-        {/* The shot map: home shots volt, away shots rose, one ring per shot.
+-            Zone-derived from the commentary, not tracked, so it fills the
+-            pitch honestly without pretending to be real positions. */}
+-        {shotMarks.map((shot) => {
+-          const isOn = selected?.id === shot.id;
+-          const color = shot.side === "away" ? "#FF6B8A" : "var(--volt)";
+-          return (
+-            <g key={shot.id}>
+-              {isOn ? <circle cx={shot.x} cy={shot.y} r="5.4" fill={color} opacity="0.22" /> : null}
+-              <circle
+-                cx={shot.x}
+-                cy={shot.y}
+-                r={isOn ? "3" : "2.2"}
+-                fill={isOn ? color : "none"}
+-                stroke={color}
+-                strokeWidth={isOn ? "1.4" : "1.1"}
+-                opacity={isOn ? 1 : 0.72}
+-              />
+-            </g>
+-          );
+-        })}
+-
+-        {/* Goal pins: spot halo + minute, with a hairline to the exact point in
+-            the mouth the ball crossed when ESPN published goalPositionY. */}
+-        {goalPins.map((pin) => (
+-          <g key={`g-${pin.id}`} opacity="0.9">
+-            {pin.mouth ? (
+-              <line
+-                x1={pin.x}
+-                y1={pin.y}
+-                x2={pin.mouth.x}
+-                y2={pin.mouth.y}
+-                stroke={pin.color}
+-                strokeWidth="0.8"
+-                strokeDasharray="2 2"
+-                opacity="0.55"
+-              />
+-            ) : null}
+-            <circle cx={pin.x} cy={pin.y} r="5.5" fill={pin.color} opacity="0.22" />
+-            <circle cx={pin.x} cy={pin.y} r="2.6" fill={pin.color} />
+-            <text
+-              x={pin.x}
+-              y={pin.y - 8}
+-              fontSize="6.5"
+-              fontWeight="700"
+-              textAnchor="middle"
+-              fill={pin.color}
+-            >
+-              {pin.label}
+-            </text>
+-          </g>
+-        ))}
+-      </PitchArt>
+-
+-      {/* Formation chips (per minute of the match — subs don't reposition the XI) */}
+-      <div className="tac-layers" ref={layersRef} style={{ width: VP.width, height: VP.height }}>
+-        {homeStarters.map((player) => {
+-          const slot = slots.home[player.id] ?? { lx: 0.5, ly: 0.5 };
+-          const point = project(slot.lx, slot.ly);
+-          return (
+-            <span
+-              key={`h-${player.id}`}
+-              className="tac-c absolute"
+-              style={{
+-                left: point.x,
+-                top: point.y,
+-                width: 15,
+-                height: 15,
+-                marginLeft: -7.5,
+-                marginTop: -7.5,
+-                background: model.home.color,
+-                color: homeInk,
+-              }}
+-              title={`${player.number} ${localize(player.name)}`}
+-            >
+-              <Num>{player.number}</Num>
+-            </span>
+-          );
+-        })}
+-        {awayStarters.map((player) => {
+-          const slot = slots.away[player.id] ?? { lx: 0.5, ly: 0.5 };
+-          const point = project(slot.lx, slot.ly);
+-          return (
+-            <span
+-              key={`a-${player.id}`}
+-              className="tac-c absolute"
+-              style={{
+-                left: point.x,
+-                top: point.y,
+-                width: 15,
+-                height: 15,
+-                marginLeft: -7.5,
+-                marginTop: -7.5,
+-                background: model.away.color,
+-                color: awayInk,
+-              }}
+-              title={`${player.number} ${localize(player.name)}`}
+-            >
+-              <Num>{player.number}</Num>
+-            </span>
+-          );
+-        })}
+-
+-        {/* The ball: the same white-and-black disc as the live view. While the
+-            replay plays it breathes and glides between minutes; paused, it
+-            holds still so scrubbing is instant. */}
+-        <span
+-          className={cx("tac-ball", playing && "lp-pulse tac-ball-glide")}
+-          style={{ transform: `translate(${ball.x}px, ${ball.y}px)`, "--glide": "900ms" } as CSSProperties}
+-          aria-hidden="true"
+-        />
+-      </div>
+-
+-      {/* Score line pinned over the pitch, broadcast style */}
+-      <div className="pointer-events-none absolute inset-x-0 top-2 flex items-center justify-center gap-2">
+-        <span className="flex items-center gap-1.5 rounded-md border border-line bg-base/85 px-2 py-1 text-[11px] font-bold text-ink backdrop-blur-sm">
+-          <span
+-            className={cx("h-2 w-2 rounded-full", !homeScored("home") && "opacity-40")}
+-            style={{ backgroundColor: model.home.color }}
+-            aria-hidden="true"
+-          />
+-          {localize(model.home.shortName)}
+-          <Num className="text-base">
+-            {tick.homeScore}–{tick.awayScore}
+-          </Num>
+-          {localize(model.away.shortName)}
+-          <span
+-            className={cx("h-2 w-2 rounded-full", !homeScored("away") && "opacity-40")}
+-            style={{ backgroundColor: model.away.color }}
+-            aria-hidden="true"
+-          />
+-        </span>
+-        <span className="flex items-center gap-1 rounded-md border border-line bg-base/85 px-1.5 py-1 text-[11px] font-bold text-ink-2 backdrop-blur-sm">
+-          {tick.minute >= 90 ? (
+-            <Num>90+{Math.max(0, tick.minute - 90)}&#39;</Num>
+-          ) : (
+-            <Num>{tick.minute}&#39;</Num>
+-          )}
+-        </span>
+-      </div>
+-
+-      {/* The shot map's hit layer: one real button per shot, parked where its
+-          card shows. Unpicked cards are hidden with opacity rather than
+-          display, so they stay focusable and in the accessibility tree for the
+-          arrow keys to walk; only the picked one is visible and tappable. */}
+-      {shotMarks.length > 0 ? (
+-        <>
+-          {/* The map is arrow-driven; say so, since nothing on screen does. */}
+-          <span id="rp-shot-keys" className="sr-only">
+-            {t("replay.shotKeys")}
+-          </span>
+-          <div
+-            role="group"
+-            aria-label={t("replay.shotMap")}
+-            aria-describedby="rp-shot-keys"
+-            className="pointer-events-none absolute inset-0 z-10"
+-          >
+-            {shotMarks.map((shot, index) => {
+-              const isOn = selected?.id === shot.id;
+-              return (
+-                <button
+-                  key={shot.id}
+-                  type="button"
+-                  ref={(element) => {
+-                    shotRefs.current[index] = element;
+-                  }}
+-                  data-shot-card=""
+-                  tabIndex={isOn || (!selected && index === 0) ? 0 : -1}
+-                  aria-label={shotLabel(shot)}
+-                  aria-pressed={isOn}
+-                  onFocus={() => setPicked(shot.id)}
+-                  onClick={(event) => {
+-                    // Keep the pitch's nearest-shot handler out of it; a card
+-                    // is only clickable while it is the picked one, so release.
+-                    event.stopPropagation();
+-                    setPicked(null);
+-                    event.currentTarget.blur();
+-                  }}
+-                  onKeyDown={(event) => {
+-                    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+-                      event.preventDefault();
+-                      stepShotFocus(index, 1);
+-                    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+-                      event.preventDefault();
+-                      stepShotFocus(index, -1);
+-                    } else if (event.key === "Home") {
+-                      event.preventDefault();
+-                      shotRefs.current[0]?.focus();
+-                    } else if (event.key === "End") {
+-                      event.preventDefault();
+-                      shotRefs.current[shotMarks.length - 1]?.focus();
+-                    } else if (event.key === "Escape") {
+-                      setPicked(null);
+-                      event.currentTarget.blur();
+-                    }
+-                  }}
+-                  className={cx(
+-                    "absolute flex flex-col items-center rounded-lg border border-line bg-base/90 px-2 py-1 text-center backdrop-blur-sm",
+-                    isOn ? "pointer-events-auto" : "pointer-events-none opacity-0",
+-                  )}
+-                  style={cardAnchor(shot)}
+-                >
+-                  <span className="max-w-[9rem] truncate text-[11px] font-bold text-ink">
+-                    {shotName(shot)}
+-                  </span>
+-                  <Num className="text-[10px] font-semibold text-ink-3">{shotMeta(shot)}</Num>
+-                </button>
+-              );
+-            })}
+-          </div>
+-        </>
+-      ) : null}
+-
+-      {/* The lower third, one row: the newest moment this minute on the left
+-          (so a scrub lands on a described happening, not a bare dot) and, on
+-          the right, a nudge that the shot rings are tappable until one is. */}
+-      {latest || (shotMarks.length > 0 && !selected) ? (
+-        <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center gap-2">
+-          {latest ? (
+-            <span className="flex min-w-0 items-center gap-1.5 rounded-full border border-line bg-base/90 px-2.5 py-1.5 text-[11px] font-bold text-ink-2 backdrop-blur-sm">
+-              <span
+-                className="h-2 w-2 flex-none rounded-full"
+-                style={{ backgroundColor: latestColor }}
+-                aria-hidden="true"
+-              />
+-              <Num className="flex-none text-ink-3">{latest.minuteDisplay}</Num>
+-              <span className="truncate">
+-                <span className="text-ink">{TYPE_LABEL[latest.type]}</span>
+-                {latestNames ? <span> · {latestNames}</span> : null}
+-              </span>
+-            </span>
+-          ) : null}
+-          {shotMarks.length > 0 && !selected ? (
+-            <span
+-              aria-hidden="true"
+-              className="ml-auto flex flex-none items-center gap-1 rounded-full border border-line bg-base/85 px-2 py-1.5 text-[10px] font-semibold text-ink-3 backdrop-blur-sm"
+-            >
+-              {t("replay.shotHint")}
+-              <span className="font-normal opacity-70">← →</span>
+-            </span>
+-          ) : null}
+-        </div>
+-      ) : null}
+-    </div>
+-  );
+-}
+-
+-/** Momentum strip over match minutes for the replay scrubber context. */
+-export function ReplayMomentum({ model, minute }: { model: ReplayModel; minute: number }) {
+-  const { localize } = useI18n();
+-  const script: MomentumPoint[] = useMemo(
+-    () => model.ticks.map((tick) => ({ minute: tick.minute, home: tick.momentum })),
+-    [model],
+-  );
+-  return (
+-    <div className="mt-2 border-t border-line pt-2">
+-      <p className="mb-1 label text-ink-3">
+-        {localize(model.home.shortName)} vs {localize(model.away.shortName)}
+-      </p>
+-      <svg viewBox="0 0 320 40" className="block h-10 w-full" aria-hidden="true">
+-        <line
+-          x1="0"
+-          y1="20"
+-          x2="320"
+-          y2="20"
+-          stroke="rgba(147,174,166,0.25)"
+-          strokeWidth="1"
+-          strokeDasharray="3 3"
+-        />
+-        <polyline
+-          points={script
+-            .map(
+-              (p) => `${((p.minute / model.totalMinutes) * 320).toFixed(1)},${(20 - p.home * 16).toFixed(1)}`,
+-            )
+-            .join(" ")}
+-          fill="none"
+-          stroke={model.home.color}
+-          strokeWidth="1.4"
+-        />
+-        <polyline
+-          points={script
+-            .map(
+-              (p) =>
+-                `${((p.minute / model.totalMinutes) * 320).toFixed(1)},${(20 + Math.max(0, -p.home) * 16).toFixed(1)}`,
+-            )
+-            .join(" ")}
+-          fill="none"
+-          stroke={model.away.color}
+-          strokeWidth="1.4"
+-        />
+-        <line
+-          x1={(Math.min(minute, model.totalMinutes) / model.totalMinutes) * 320}
+-          y1="0"
+-          x2={(Math.min(minute, model.totalMinutes) / model.totalMinutes) * 320}
+-          y2="40"
+-          stroke="var(--volt)"
+-          strokeWidth="1.4"
+-        />
+-      </svg>
+-    </div>
+-  );
+-}
+diff --git a/src/components/Skeletons.tsx b/src/components/Skeletons.tsx
+index 043c2cd..c0178d7 100644
+--- a/src/components/Skeletons.tsx
++++ b/src/components/Skeletons.tsx
+@@ -190,24 +190,6 @@ export function LineupsSkeleton() {
+   );
+ }
+ 
+-/** Replay page: the 2D pitch surface + transport bar. */
+-export function ReplaySkeleton() {
+-  return (
+-    <div className="space-y-3">
+-      <div className={cx(bar, "aspect-[340/180] w-full rounded-[10px]")} />
+-      <div className="rounded-card border border-line bg-surface p-3">
+-        <div className="flex items-center gap-3">
+-          <span className={cx(bar, "h-11 w-11 rounded-full")} />
+-          <div className="flex-1 space-y-2">
+-            <span className={cx(bar, "block h-2 w-full")} />
+-            <span className={cx(bar, "block h-2 w-2/3")} />
+-          </div>
+-        </div>
+-      </div>
+-    </div>
+-  );
+-}
+-
+ /** Browse/Cups competition rows: badge + two lines + chevron. */
+ export function CompRowSkeleton({ rows = 6 }: { rows?: number }) {
+   return (
+diff --git a/src/components/icons.tsx b/src/components/icons.tsx
+index 2d92a95..03f7408 100644
+--- a/src/components/icons.tsx
++++ b/src/components/icons.tsx
+@@ -133,20 +133,6 @@ export const PlusIcon = (p: SVGProps<SVGSVGElement>) => (
+   </svg>
+ );
+ 
+-/** Play — Match Replay entry points. */
+-export const PlayIcon = (p: SVGProps<SVGSVGElement>) => (
+-  <svg {...base(p)} width={14} height={14}>
+-    <path d="M7 4.5l12 7.5-12 7.5z" />
+-  </svg>
+-);
+-
+-/** Pause — the replay transport. */
+-export const PauseIcon = (p: SVGProps<SVGSVGElement>) => (
+-  <svg {...base(p)} width={16} height={16}>
+-    <path d="M9 5v14M15 5v14" strokeWidth={2.4} />
+-  </svg>
+-);
+-
+ /** Swap — the Sub Board prediction. */
+ export const SwapIcon = (p: SVGProps<SVGSVGElement>) => (
+   <svg {...base(p)} width={14} height={14}>
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 1810ad5..74be78f 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -621,21 +621,6 @@ export function useTeamUnderstat(teamId: string) {
+ 
+ /* ------------------------------------------------------------ replay & squads */
+ 
+-export function useReplay(
+-  matchId: string,
+-  /** Live matches pass { refetchInterval: 30_000, staleTime: 0 } to keep the
+-   *  pitch current; the default caches hard for finished replays. */
+-  options?: { refetchInterval: number; staleTime: number },
+-) {
+-  return useQuery({
+-    queryKey: ["replay", matchId],
+-    queryFn: () => api.getReplay(matchId),
+-    enabled: Boolean(matchId),
+-    staleTime: 10 * 60_000,
+-    ...options,
+-  });
+-}
+-
+ export function useCommentary(matchId: string) {
+   return useQuery({
+     queryKey: ["commentary", matchId],
+@@ -683,17 +668,6 @@ export function useSquad(teamId: string) {
+   });
+ }
+ 
+-/** Timeline events with shot coordinates, for pitch visualizations. */
+-export function useReplayEvents(matchId: string) {
+-  return useQuery({
+-    queryKey: ["replay", matchId],
+-    queryFn: () => api.getReplay(matchId),
+-    enabled: Boolean(matchId),
+-    staleTime: 10 * 60_000,
+-    select: (data) => data.events,
+-  });
+-}
+-
+ /* ------------------------------------------------------------ my predictions */
+ 
+ /**
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 0a9d20d..c7ef44d 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -83,8 +83,6 @@ export const strings = {
+     "shot.zoneOutsideCenter": "Outside box · center",
+     "shot.zoneOutsideRight": "Outside box · right",
+     "shot.cellLabel": "Pitch row {row}, column {col}",
+-    "shot.play": "Resume",
+-    "shot.pause": "Pause",
+     "timeline.goal": "Goal",
+     "timeline.card": "Card",
+     "timeline.sub": "Substitution",
+@@ -175,40 +173,6 @@ export const strings = {
+     "comments.post": "Post",
+     "commentary.empty": "No commentary yet",
+     "commentary.title": "Commentary",
+-    "replay.title": "Match replay",
+-    "replay.openHint": "Watch how the match unfolded on a 2D pitch",
+-    "replay.notFinished": "This match hasn't finished — the replay fills in as events arrive.",
+-    "replay.scrub": "Scrub through the match",
+-    "replay.minutePerSecond": "1s = 1'",
+-    "replay.tabEvents": "Key events",
+-    "replay.tabCommentary": "Commentary",
+-    "replay.kickoffSoon": "Kickoff — events will appear here as the match played on.",
+-    "replay.noCommentary": "No commentary was captured for this match.",
+-    "replay.onMap": "on map",
+-    "replay.shotHint": "Tap a shot",
+-    "replay.shotMap": "Shot map",
+-    "replay.shotKeys": "Use the arrow keys to step through the shots; Escape closes the callout.",
+-    "replay.otherEvent": "Match event",
+-    "replay.emptyTitle": "Nothing to replay yet",
+-    "replay.emptyHint": "Replays appear once a match has events on record.",
+-    "replay.emptyAction": "Find a finished match",
+-    "replay.sourceNote": "Replayed from the stored event feed · 2D pitch",
+-    "replay.xgSource": "Understat · this match",
+-    "live.actionGoal": "Goal",
+-    "live.actionShot": "Shot",
+-    "live.actionCorner": "Corner",
+-    "live.actionFreekick": "Free kick",
+-    "live.actionFoul": "Foul",
+-    "live.actionCard": "Card",
+-    "live.actionSub": "Sub",
+-    "live.actionVar": "VAR",
+-    "live.actionNone": "Live",
+-    "live.to": "to",
+-    "live.metres": "m",
+-    "live.momentum": "Momentum",
+-    "live.tape": "Match rhythm — tap a moment to replay it on the pitch",
+-    "live.backToLive": "Live",
+-    "live.waiting": "Waiting for the first tracked action…",
+     "team.title": "Team",
+     "team.tabSquad": "Squad",
+     "team.tabFixtures": "Fixtures",
+@@ -594,8 +558,6 @@ export const strings = {
+     "shot.zoneOutsideCenter": "بیرون محوطه · وسط",
+     "shot.zoneOutsideRight": "بیرون محوطه · راست",
+     "shot.cellLabel": "ردیف {row}، ستون {col}",
+-    "shot.play": "ادامه",
+-    "shot.pause": "توقف",
+     "timeline.goal": "گل",
+     "timeline.card": "کارت",
+     "timeline.sub": "تعویض",
+@@ -686,40 +648,6 @@ export const strings = {
+     "comments.post": "ارسال",
+     "commentary.empty": "هنوز گزارش زنده‌ای نیست",
+     "commentary.title": "گزارش زنده",
+-    "replay.title": "بازپخش بازی",
+-    "replay.openHint": "بازی را روی زمین دوبعدی دوباره ببینید",
+-    "replay.notFinished": "این بازی تمام نشده — بازپخش با ثبت رویدادها کامل می‌شود.",
+-    "replay.scrub": "جابه‌جایی در بازی",
+-    "replay.minutePerSecond": "۱ ثانیه = ۱ دقیقه",
+-    "replay.tabEvents": "لحظه‌های کلیدی",
+-    "replay.tabCommentary": "گزارش زنده",
+-    "replay.kickoffSoon": "شروع بازی — رویدادها به‌ترتیب اینجا می‌آیند.",
+-    "replay.noCommentary": "گزارش زنده‌ای برای این بازی ثبت نشده.",
+-    "replay.onMap": "روی نقشه",
+-    "replay.shotHint": "روی یک شوت بزن",
+-    "replay.shotMap": "نقشه شوت‌ها",
+-    "replay.shotKeys": "با کلیدهای جهت‌دار بین شوت‌ها جابه‌جا شوید؛ Escape توضیح را می‌بندد.",
+-    "replay.otherEvent": "رویداد بازی",
+-    "replay.emptyTitle": "هنوز چیزی برای پخش مجدد نیست",
+-    "replay.emptyHint": "پخش مجدد بعد از ثبت رویدادهای بازی ساخته می‌شود.",
+-    "replay.emptyAction": "پیدا کردن بازی تمام‌شده",
+-    "replay.sourceNote": "بازسازی‌شده از رویدادهای ثبت‌شده · زمین دوبعدی",
+-    "replay.xgSource": "Understat · همین بازی",
+-    "live.actionGoal": "گل",
+-    "live.actionShot": "شوت",
+-    "live.actionCorner": "کرنر",
+-    "live.actionFreekick": "ضربه آزاد",
+-    "live.actionFoul": "خطا",
+-    "live.actionCard": "کارت",
+-    "live.actionSub": "تعویض",
+-    "live.actionVar": "وَر",
+-    "live.actionNone": "زنده",
+-    "live.to": "به",
+-    "live.metres": "متر",
+-    "live.momentum": "جریان بازی",
+-    "live.tape": "ریتم بازی — برای بازپخش روی زمین، یک لحظه را بزن",
+-    "live.backToLive": "زنده",
+-    "live.waiting": "در انتظار نخستین رویداد ثبت‌شده…",
+     "team.title": "تیم",
+     "team.tabSquad": "بازیکنان",
+     "team.tabFixtures": "بازی‌ها",
+diff --git a/src/index.css b/src/index.css
+index 388b46c..afee23c 100644
+--- a/src/index.css
++++ b/src/index.css
+@@ -521,47 +521,6 @@
+     }
+   }
+ 
+-  /* Replay scrubber: a native range input rebuilt to the 44px touch floor —
+-     the track is the visible 4px bar, the thumb is a 22px volt knob, and the
+-     whole control stays 44px tall so dragging never fights a finger. */
+-  .range-scrub {
+-    appearance: none;
+-    width: 100%;
+-    height: 44px;
+-    background: transparent;
+-    cursor: pointer;
+-  }
+-  .range-scrub::-webkit-slider-runnable-track {
+-    height: 4px;
+-    border-radius: 999px;
+-    background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+-  }
+-  .range-scrub::-webkit-slider-thumb {
+-    appearance: none;
+-    width: 22px;
+-    height: 22px;
+-    margin-top: -9px; /* (44 - 4) / 2 - 22/2 → centres the thumb on the track */
+-    border-radius: 999px;
+-    background: var(--volt);
+-    border: none;
+-  }
+-  .range-scrub::-moz-range-track {
+-    height: 4px;
+-    border-radius: 999px;
+-    background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+-  }
+-  .range-scrub::-moz-range-thumb {
+-    width: 22px;
+-    height: 22px;
+-    border-radius: 999px;
+-    background: var(--volt);
+-    border: none;
+-  }
+-  .range-scrub:focus-visible {
+-    outline: 2px solid var(--volt);
+-    outline-offset: 2px;
+-  }
+-
+   /* A pin that scored gets one celebratory pulse when the result lands. */
+   .pin-scored {
+     animation: rating-pulse var(--t-slow) var(--ease-pop);
+@@ -589,351 +548,4 @@
+       radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--volt) 9%, transparent), transparent 55%),
+       var(--bg-surface);
+   }
+-
+-  /* --- Live tactical view (flat 2D, horizontal) --------------------------- */
+-
+-  /* The horizontal surface: pitch length runs left to right. The SVG paints the
+-     static art once; the moving players and ball are composited DOM layers on
+-     top and only ever have their `transform` rewritten every frame. */
+-  .tac-surface {
+-    position: relative;
+-    overflow: hidden;
+-    aspect-ratio: 340 / 180;
+-    border-radius: 10px;
+-    border: 1px solid var(--border-subtle);
+-    box-shadow:
+-      inset 0 12px 26px rgba(0, 0, 0, 0.4),
+-      inset 0 -7px 20px rgba(0, 0, 0, 0.35);
+-  }
+-  .tac-svg {
+-    display: block;
+-    width: 100%;
+-    height: 100%;
+-  }
+-
+-  /* Moving layers: they live in the pitch's own 340x180 coordinate space and
+-     are scaled to the surface (width ratio, set from a ResizeObserver in
+-     TacticalView) so markers track the stretched SVG art exactly — otherwise
+-     discs drift toward the top-left and clip outside the touchlines whenever
+-     the card is narrower or wider than 340px. */
+-  .tac-layers {
+-    position: absolute;
+-    left: 0;
+-    top: 0;
+-    transform-origin: 0 0;
+-    pointer-events: none;
+-  }
+-
+-  /* Player anchors: zero-size, translate3d'd to their turf spot. */
+-  .tac-p {
+-    position: absolute;
+-    left: 0;
+-    top: 0;
+-    width: 0;
+-    height: 0;
+-    pointer-events: none;
+-    will-change: transform;
+-    contain: layout style;
+-  }
+-
+-  /* The marker: a flat disc in the team colour, crisp edges, no inner shading.
+-     The hairline rim and the GK ring are the only extra paint. */
+-  .tac-c {
+-    position: absolute;
+-    display: grid;
+-    place-items: center;
+-    border-radius: 999px;
+-    color: #04100b;
+-    font-family: var(--font-display);
+-    font-weight: 800;
+-    /* Discs are 15–17px in pitch space; the jersey number has to fit inside. */
+-    font-size: 9px;
+-    line-height: 1;
+-    letter-spacing: -0.02em;
+-    border: 1px solid rgba(255, 255, 255, 0.4);
+-  }
+-  .tac-gkring {
+-    box-shadow: 0 0 0 1.5px rgba(237, 247, 243, 0.6);
+-  }
+-
+-  /* The ball: a classic white-and-black football. The black patches are
+-     layered radial gradients — a centre panel plus rim wedges clipped by the
+-     circle — so it reads as a real ball at 10px. No glow, to stay crisp. */
+-  .tac-ball {
+-    position: absolute;
+-    left: 0;
+-    top: 0;
+-    width: 10px;
+-    height: 10px;
+-    margin: -5px 0 0 -5px;
+-    border-radius: 999px;
+-    background:
+-      radial-gradient(circle at 50% 50%, #0b100e 0 1.7px, transparent 1.9px),
+-      radial-gradient(circle at 2% 30%, #0b100e 0 2.4px, transparent 2.6px),
+-      radial-gradient(circle at 98% 70%, #0b100e 0 2.4px, transparent 2.6px),
+-      radial-gradient(circle at 72% 2%, #0b100e 0 2.1px, transparent 2.3px),
+-      radial-gradient(circle at 30% 98%, #0b100e 0 2.1px, transparent 2.3px), #f2f6f4;
+-    border: 1px solid rgba(10, 20, 16, 0.5);
+-    pointer-events: none;
+-    will-change: transform;
+-  }
+-
+-  /* The ball travels between tracked spots rather than teleporting. Its
+-     position is a compositor-only transform, never left/top, which would
+-     re-layout the whole layer on every frame of the glide. The two views cover
+-     very different ground per step, so the duration comes in as `--glide`
+-     (live 1.6s, replay 0.9s per match-minute). Reduced motion drops the glide
+-     entirely — the ball jumps, which is honest, not jarring. */
+-  .tac-ball-glide {
+-    transition: transform var(--glide, 900ms) var(--ease-out);
+-  }
+-  @media (prefers-reduced-motion: reduce) {
+-    .tac-ball-glide {
+-      transition: none;
+-    }
+-  }
+-
+-  /* Live pitch: the ball breathes so "this is happening now" is visible at a
+-     glance; static (replay) balls stay still. */
+-  .lp-pulse {
+-    animation: lp-pulse 2.4s ease-in-out infinite;
+-  }
+-  @keyframes lp-pulse {
+-    0%,
+-    100% {
+-      box-shadow: 0 0 0 0 rgba(242, 246, 244, 0.32);
+-    }
+-    50% {
+-      box-shadow: 0 0 0 6px rgba(242, 246, 244, 0.07);
+-    }
+-  }
+-  @media (prefers-reduced-motion: reduce) {
+-    .lp-pulse {
+-      animation: none;
+-    }
+-  }
+-
+-  /* Inspecting a tape moment: the ball holds still with a calm ring, no
+-     pulse — it's a replay, not a live feed. */
+-  .lp-inspect {
+-    box-shadow: 0 0 0 2px rgba(242, 246, 244, 0.4);
+-  }
+-  .lp-inspect-ring {
+-    position: absolute;
+-    width: 20px;
+-    height: 20px;
+-    margin: -10px 0 0 -10px;
+-    border-radius: 999px;
+-    border: 1.5px solid;
+-    opacity: 0.55;
+-    pointer-events: none;
+-  }
+-
+-  /* The match rhythm tape: one tick per tracked event, oldest → newest. A
+-     horizontal scroll strip that reads like an audio waveform of the game. */
+-  .lp-tape {
+-    display: flex;
+-    align-items: flex-end;
+-    gap: 3px;
+-    overflow-x: auto;
+-    padding: 6px 4px 2px;
+-    scrollbar-width: none;
+-  }
+-  .lp-tape::-webkit-scrollbar {
+-    display: none;
+-  }
+-  .lp-tick-wrap {
+-    position: relative;
+-    display: flex;
+-    flex-direction: column;
+-    align-items: center;
+-    gap: 2px;
+-    padding: 2px 1px;
+-    flex: none;
+-  }
+-  .lp-tick {
+-    display: grid;
+-    place-items: center;
+-    width: 14px;
+-    height: 10px;
+-    border-radius: 3px;
+-    border: 1px solid var(--border-subtle);
+-    background: color-mix(in srgb, var(--text-muted) 16%, transparent);
+-    color: var(--text-muted);
+-    font-size: 7px;
+-    line-height: 1;
+-    transition:
+-      transform var(--t-fast) var(--ease-out),
+-      border-color var(--t-fast) var(--ease-out);
+-  }
+-  .lp-tick-big {
+-    width: 14px;
+-    height: 16px;
+-    color: #04100b;
+-    border-color: transparent;
+-  }
+-  .lp-tick-on {
+-    transform: translateY(-2px) scale(1.15);
+-    border-color: var(--volt);
+-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--volt) 45%, transparent);
+-  }
+-  .lp-tick-flag {
+-    width: 0;
+-    height: 0;
+-    border-inline-start: 4px solid;
+-    border-block: 2.5px solid transparent;
+-  }
+-  .lp-tick-minute {
+-    position: absolute;
+-    top: -4px;
+-    transform: translateY(-100%);
+-    white-space: nowrap;
+-    font-size: 9px;
+-    font-weight: 700;
+-    color: var(--volt);
+-    pointer-events: none;
+-  }
+-  .lp-tape-ht {
+-    align-self: center;
+-    width: 1px;
+-    height: 18px;
+-    background: var(--border-subtle);
+-    margin-inline-end: 8px;
+-  }
+-  @media (prefers-reduced-motion: reduce) {
+-    .lp-tick {
+-      transition: none;
+-    }
+-  }
+-
+-  /* Action ping: one expanding ring where the latest tracked action landed,
+-     in the acting side's colour. Re-keyed per action so it replays. */
+-  .lp-action-ping {
+-    position: absolute;
+-    width: 22px;
+-    height: 22px;
+-    margin: -11px 0 0 -11px;
+-    border-radius: 999px;
+-    border: 1.5px solid;
+-    pointer-events: none;
+-    animation: lp-action-ping 2.8s var(--ease-out) forwards;
+-  }
+-  @keyframes lp-action-ping {
+-    0% {
+-      transform: scale(0.4);
+-      opacity: 0.85;
+-    }
+-    55% {
+-      opacity: 0.35;
+-    }
+-    100% {
+-      transform: scale(1.9);
+-      opacity: 0;
+-    }
+-  }
+-  @media (prefers-reduced-motion: reduce) {
+-    .lp-action-ping {
+-      animation: none;
+-      opacity: 0.4;
+-      transform: scale(1);
+-    }
+-  }
+-
+-  /* Goal moment: two expanding rings in the scorer's colour (the second is
+-     delayed for a double-beat), the ball glowing underneath, and the score
+-     chip flashing. All pure CSS transforms — no layout, no JS timers. */
+-  .lp-goal-ring {
+-    position: absolute;
+-    width: 30px;
+-    height: 30px;
+-    margin: -15px 0 0 -15px;
+-    border-radius: 999px;
+-    border: 2.5px solid;
+-    pointer-events: none;
+-    box-shadow: 0 0 16px color-mix(in srgb, var(--goal-color, var(--volt)) 65%, transparent);
+-    animation: lp-goal-ring 1100ms var(--ease-out) forwards;
+-  }
+-  .lp-goal-ring-late {
+-    animation-delay: 260ms;
+-  }
+-  @keyframes lp-goal-ring {
+-    0% {
+-      transform: scale(0.3);
+-      opacity: 0.95;
+-    }
+-    70% {
+-      opacity: 0.55;
+-    }
+-    100% {
+-      transform: scale(4.4);
+-      opacity: 0;
+-    }
+-  }
+-  .lp-goal-glow {
+-    animation: lp-goal-glow 1300ms ease-in-out;
+-  }
+-  @keyframes lp-goal-glow {
+-    0%,
+-    100% {
+-      box-shadow: 0 0 0 0 transparent;
+-    }
+-    25%,
+-    65% {
+-      box-shadow: 0 0 14px 4px color-mix(in srgb, var(--goal-color, var(--volt)) 55%, transparent);
+-    }
+-  }
+-  .lp-score-flash {
+-    border-color: color-mix(in srgb, var(--goal-color, var(--volt)) 70%, transparent);
+-    animation: lp-score-flash 1400ms ease-out;
+-  }
+-  @keyframes lp-score-flash {
+-    0% {
+-      transform: scale(1.12);
+-    }
+-    35% {
+-      transform: scale(1.02);
+-    }
+-    100% {
+-      transform: scale(1);
+-    }
+-  }
+-  @media (prefers-reduced-motion: reduce) {
+-    .lp-goal-ring {
+-      animation-duration: 1ms;
+-    }
+-    .lp-goal-glow,
+-    .lp-score-flash {
+-      animation: none;
+-    }
+-  }
+-
+-  /* Goal arrival: one expanding ring, GPU-animated by CSS. */
+-  .tac-ripple {
+-    position: absolute;
+-    width: 24px;
+-    height: 24px;
+-    margin: -12px 0 0 -12px;
+-    border-radius: 999px;
+-    border: 2px solid;
+-    pointer-events: none;
+-    animation: tac-ripple 950ms var(--ease-out) forwards;
+-  }
+-  @keyframes tac-ripple {
+-    0% {
+-      transform: scale(0.35);
+-      opacity: 0.95;
+-      box-shadow: 0 0 18px color-mix(in srgb, var(--volt) 70%, transparent);
+-    }
+-    100% {
+-      transform: scale(2.6);
+-      opacity: 0;
+-      box-shadow: 0 0 0 0 transparent;
+-    }
+-  }
+-
+-  @media (prefers-reduced-motion: reduce) {
+-    .tac-ripple {
+-      animation-duration: 1ms;
+-    }
+-  }
+ }
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 061f341..1811ea6 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -255,23 +255,6 @@ export interface ApiCommentaryLine {
+   text: string;
+ }
+ 
+-export interface ApiReplay {
+-  match: ApiMatch;
+-  events: ApiTimelineEvent[];
+-  commentary: ApiCommentaryLine[];
+-  teamStats: {
+-    team_id: string;
+-    possession_pct: number | null;
+-    shots: number | null;
+-    shots_on_target: number | null;
+-    corners: number | null;
+-    fouls: number | null;
+-  }[];
+-  /** Per-match expected goals (Understat), one row per club. Absent when no
+-   *  side was matched — the client falls back to "no data". */
+-  xg?: { team_id: string; xg: number | null; xga: number | null }[];
+-}
+-
+ export interface ApiSquadPlayer {
+   id: string;
+   full_name: string;
+@@ -603,7 +586,6 @@ export const api = {
+   getTimeline: (id: string) => request<{ events: ApiTimelineEvent[] }>(`/matches/${id}/timeline`),
+ 
+   /** Full replay bundle for the 2D pitch playback of a finished match. */
+-  getReplay: (id: string) => request<ApiReplay>(`/matches/${id}/replay`),
+ 
+   getCommentary: (id: string) => request<{ commentary: ApiCommentaryLine[] }>(`/matches/${id}/commentary`),
+ 
+diff --git a/src/lib/livePitch.ts b/src/lib/livePitch.ts
+deleted file mode 100644
+index ea6c01e..0000000
+--- a/src/lib/livePitch.ts
++++ /dev/null
+@@ -1,504 +0,0 @@
+-/**
+- * The live pitch's brain — turns ESPN's commentary text + timeline events into
+- * a "what is happening right now" model: ball placement, the current action
+- * (shot / corner / free kick / foul / goal / card / substitution) and who did
+- * what to whom. Pure and synchronous so tests and the component share one
+- * truth.
+- *
+- * Honest by design (PRODUCT.md rule 1): ESPN's live feeds carry no player
+- * tracking, so this never invents movement. The ball sits where the tracked
+- * action happened — real shot coordinates when published — the zone comes from
+- * the commentary's own words ("outside the box", "attacking half") and the
+- * distance is the pitch-distance of that spot. Feed silent? The pitch says so
+- * instead of guessing.
+- *
+- * Commentary verbs are ESPN house style and remarkably consistent:
+- *   "Attempt saved. Name (Team) left footed shot from outside the box ..."
+- *   "Corner, Team. Conceded by Name."
+- *   "Foul by Name (Team)."
+- *   "Name (Team) wins a free kick in the attacking half."
+- */
+-
+-import type { ApiTimelineEvent } from "./api";
+-import { fieldPoint, seedHash, type FieldPoint } from "./pitchView";
+-
+-/** FIFA-standard pitch, used to convert field fractions into metres. */
+-export const PITCH_LENGTH_M = 105;
+-export const PITCH_WIDTH_M = 68;
+-
+-export type LiveActionKind =
+-  "goal" | "shot" | "corner" | "freekick" | "foul" | "card" | "substitution" | "var" | "none";
+-
+-export interface LiveCommentaryLine {
+-  sequence: number;
+-  minute_display: string | null;
+-  minute_seconds: number | null;
+-  text: string;
+-}
+-
+-export interface LiveSide {
+-  id: string;
+-  name: string;
+-  shortName: string;
+-  color: string;
+-}
+-
+-export interface LiveMoment {
+-  kind: LiveActionKind;
+-  /** First tracked sentence after the lead-in, trimmed — raw ESPN wording. */
+-  detail: string;
+-  /** Shooter / fouler / carded player / player coming on. */
+-  actor: string | null;
+-  /** Fouled player, corner conceder, player going off. */
+-  recipient: string | null;
+-  side: "home" | "away" | null;
+-  /** Ball spot for this moment, in drawn-pitch field coords (home attacks right). */
+-  ball: FieldPoint;
+-  /** Metres from the goal under attack; only meaningful for shots and goals. */
+-  distanceM: number | null;
+-  /** Where the ball crossed the goal line (ESPN goalPositionY, 0..100 across
+-   *  the mouth) — goals only when ESPN published it. Drives the goal-direction
+-   *  marker on the pitch. */
+-  goalY: number | null;
+-  /** Minute number from the display ("45+2" → 45). */
+-  minute: number;
+-  minuteDisplay: string;
+-  sequence: number;
+-}
+-
+-export interface LiveModel {
+-  moment: LiveMoment | null;
+-  /** The latest goal regardless of what came after — drives the celebration
+-   *  ring, so a 70' sub doesn't swallow the 69' goal's moment. */
+-  lastGoal: LiveMoment | null;
+-  /** Every goal on record, in match order — the pitch pins them all so the
+-   *  surface tells the whole story, not just the last act. */
+-  allGoals: LiveMoment[];
+-  /** Every tracked moment of the match, in match order — the raw material
+-   *  for the rhythm tape. Includes goals. */
+-  events: LiveMoment[];
+-  /** Every shot and goal on record with its spot — the persistent shot map.
+-   *  Empty when the feed carried no shot data. */
+-  shots: LiveMoment[];
+-  /** 0..1 read of which side play has tilted toward (1 = fully home). Sourced
+-   *  from the last few tracked actions; flat means an even game. */
+-  pressure: number;
+-  /** Up to the last three tracked ball spots, oldest → newest, for the trail. */
+-  trail: FieldPoint[];
+-}
+-
+-/* ------------------------------------------------------------ text parsing */
+-
+-/** Number before any stoppage suffix: "45+1" → 45, "82'" → 82. */
+-function minuteNumOf(display: string | null | undefined): number {
+-  const m = /\d+/.exec(display ?? "");
+-  return m ? Number(m[0]) : 0;
+-}
+-
+-/**
+- * "Name (Team)" where Name is the run of words between the last sentence break
+- * and the bracket. Handles "Attempt saved. Max (Estonia) ...", "Foul by Max
+- * (Bulgaria)." and "Own Goal by Max (Team)." without a full-name grammar.
+- */
+-function nameTeamAfter(text: string, from: number): { name: string; team: string } | null {
+-  const open = text.indexOf("(", from);
+-  if (open < 0) return null;
+-  const close = text.indexOf(")", open);
+-  if (close < 0) return null;
+-  const team = text.slice(open + 1, close).trim();
+-  const before = text.slice(0, open);
+-  const start = Math.max(before.lastIndexOf(". "), before.lastIndexOf(", "), before.lastIndexOf("! "));
+-  let name = before.slice(start + 1).trim();
+-  name = name.replace(/^own goal by\s+/i, "").replace(/^by\s+/i, "");
+-  if (!name || name.length > 40) return null;
+-  return { name, team };
+-}
+-
+-function resolveSide(team: string | null, sides: { home: LiveSide; away: LiveSide }): "home" | "away" | null {
+-  if (!team) return null;
+-  const n = team.trim().toLowerCase();
+-  if (!n) return null;
+-  for (const side of ["home", "away"] as const) {
+-    const s = sides[side];
+-    if (s.name.toLowerCase() === n || s.shortName.toLowerCase() === n) return side;
+-  }
+-  return null;
+-}
+-
+-/**
+- * Zone → how far from the goal under attack, as a fraction of the length.
+- * Order matters: the most specific match wins.
+- */
+-const ZONES: Array<[RegExp, number]> = [
+-  [/from the penalty spot|penalty kick|penalty - scored/i, 0.895],
+-  [/from (?:a )?difficult angle on the (?:left|right)/i, 0.9],
+-  [/inside (?:the )?six yard box|from very close range/i, 0.945],
+-  [/from (?:the )?six yard box/i, 0.945],
+-  [/close range/i, 0.93],
+-  [/from the (?:left|right) side of (?:the )?(?:six yard box|the box)/i, 0.9],
+-  [/from the centre of (?:the )?box/i, 0.875],
+-  [/in (?:the )?(?:centre|middle) of (?:the )?(?:goal|box)/i, 0.875],
+-  [/shot from outside the box|from outside the box/i, 0.81],
+-  [/from more than \d+ yards/i, 0.8],
+-  [/free kick/i, 0.78],
+-  [/in the (?:penalty )?box|in the area/i, 0.885],
+-];
+-
+-/** "in the attacking half" → 0.72, "defensive"/"own" half → 0.28. */
+-function halfSpot(text: string): number | null {
+-  if (/in the attacking half/i.test(text)) return 0.72;
+-  if (/in the defensive half|in their own half|in (?:the )?own half/i.test(text)) return 0.28;
+-  return null;
+-}
+-
+-function zoneOf(text: string): { lx: number; zone: string } | null {
+-  for (const [re, lx] of ZONES) {
+-    const m = re.exec(text);
+-    if (m)
+-      return {
+-        lx,
+-        zone: m[0]
+-          .replace(/^from\s+/i, "")
+-          .replace(/\s+/g, " ")
+-          .toLowerCase(),
+-      };
+-  }
+-  return null;
+-}
+-
+-/** Deterministic width wobble so repeated builds render the same pitch. */
+-function wobble(id: string, spread: number): number {
+-  return (seedHash(id) - 0.5) * spread;
+-}
+-
+-function clamp01(v: number): number {
+-  return Math.min(1, Math.max(0, v));
+-}
+-
+-/** Mirror a spot fraction into drawn-pitch coords for the attacking side. */
+-function attackingSpot(side: "home" | "away" | null, lxBase: number, ly: number): FieldPoint {
+-  const lx = side === "away" ? 1 - lxBase : lxBase;
+-  return { lx: clamp01(lx), ly: clamp01(ly) };
+-}
+-
+-/** Metres from the goal under attack for a drawn-pitch spot. */
+-export function distanceFromGoal(side: "home" | "away" | null, ball: FieldPoint): number | null {
+-  if (!side) return null;
+-  const toGoal = side === "home" ? 1 - ball.lx : ball.lx;
+-  return Math.round(toGoal * PITCH_LENGTH_M);
+-}
+-
+-/**
+- * Classify one commentary line. Returns null for lines with no pitch meaning
+- * ("Fourth official has announced…"), "none" for tracked-but-unmappable
+- * restarts (offside, delays) that shouldn't claim the annotation.
+- */
+-export function classifyLine(text: string): LiveActionKind | null {
+-  const s = text.replace(/\s+/g, " ").trim();
+-  if (!s) return null;
+-  const head = s.split(/(?<=\.)\s/, 1)[0] ?? s;
+-  const low = s.toLowerCase();
+-  if (/^goal!/i.test(head) || /^own goal by/i.test(head)) return "goal";
+-  if (/^attempt (?:saved|missed|blocked)|^attempt by|^penalty (?:saved|missed)/i.test(head)) return "shot";
+-  if (/^corner/i.test(head)) return "corner";
+-  if (/^foul by|^hand ball/i.test(head)) return "foul";
+-  if (/wins a free kick/i.test(low)) return "freekick";
+-  if (/^penalty conceded/i.test(head)) return "foul";
+-  if (/is shown the (?:yellow|red) card|second yellow card/i.test(low)) return "card";
+-  if (/^substitution/i.test(head)) return "substitution";
+-  if (
+-    /^delay (?:in match|over)|^offside|^fourth official|^second half begins|^first half ends|^match ends|^match starts|^video review/i.test(
+-      head,
+-    )
+-  ) {
+-    return "none";
+-  }
+-  if (/\b(shot|attempt)\b/.test(low)) return "shot";
+-  return null;
+-}
+-
+-interface RawMoment {
+-  kind: LiveActionKind;
+-  detail: string;
+-  actor: string | null;
+-  recipient: string | null;
+-  side: "home" | "away" | null;
+-  spot: FieldPoint | null;
+-  distanceM: number | null;
+-  goalY: number | null;
+-  minuteNum: number;
+-  minuteDisplay: string;
+-  order: number;
+-  /** goal-like raws absorb same-minute commentary shots when merging. */
+-  authoritative: boolean;
+-  /** Ball position just before this raw, filled during the model walk.
+-   *  Gives coord-less events (cards, fouls, some goals) their own spot. */
+-  posAt?: FieldPoint | null;
+-}
+-
+-function detailAfterLead(text: string): string {
+-  const idx = text.indexOf(". ");
+-  const rest = idx >= 0 && idx < 60 ? text.slice(idx + 2) : text;
+-  const trimmed = rest.replace(/\s+/g, " ").trim();
+-  return trimmed.length > 96 ? `${trimmed.slice(0, 94).trimEnd()}…` : trimmed;
+-}
+-
+-function momentFromCommentary(
+-  line: LiveCommentaryLine,
+-  sides: { home: LiveSide; away: LiveSide },
+-): RawMoment | null {
+-  const text = line.text.replace(/\s+/g, " ").trim();
+-  const kind = classifyLine(text);
+-  if (!kind || kind === "none") return null;
+-  const minuteNum = minuteNumOf(line.minute_display);
+-  const base: RawMoment = {
+-    kind,
+-    detail: detailAfterLead(text),
+-    actor: null,
+-    recipient: null,
+-    side: null,
+-    spot: null,
+-    distanceM: null,
+-    goalY: null,
+-    minuteNum,
+-    minuteDisplay: line.minute_display ?? (minuteNum ? `${minuteNum}'` : ""),
+-    order: line.sequence,
+-    authoritative: false,
+-  };
+-
+-  if (kind === "shot" || kind === "goal") {
+-    const nt = nameTeamAfter(text, 0);
+-    base.actor = nt?.name ?? null;
+-    base.side = resolveSide(nt?.team ?? null, sides);
+-    const zone = zoneOf(text);
+-    const lxBase = zone?.lx ?? (kind === "goal" ? 0.86 : 0.78);
+-    const ly = clamp01(0.5 + wobble(`shot:${line.sequence}`, 0.36));
+-    base.spot = attackingSpot(base.side, lxBase, ly);
+-    base.distanceM = base.spot ? distanceFromGoal(base.side, base.spot) : null;
+-    return base;
+-  }
+-
+-  if (kind === "corner") {
+-    const m = /^Corner,\s*([^,.]+?)\.?\s+(?:Conceded by\s+([^(.]+?)\.?)?$/i.exec(text);
+-    const team = m?.[1]?.trim() ?? null;
+-    base.recipient = m?.[2]?.trim() || null;
+-    base.side = resolveSide(team, sides);
+-    // The taker walks to the corner arc at the end they attack.
+-    base.spot = base.side ? attackingSpot(base.side, 0.985, 0.045) : null;
+-    return base;
+-  }
+-
+-  if (kind === "freekick" || kind === "foul") {
+-    const nt = nameTeamAfter(text, 0);
+-    base.actor = nt?.name ?? null;
+-    base.side = resolveSide(nt?.team ?? null, sides);
+-    const half = halfSpot(text);
+-    base.spot = attackingSpot(base.side, half ?? 0.5, clamp01(0.5 + wobble(`fk:${line.sequence}`, 0.5)));
+-    if (kind === "foul") {
+-      // The awarded kick, not the fouler, moves the ball; often the paired
+-      // "X wins a free kick" line carries the spot for both.
+-      base.spot = base.spot && half != null ? base.spot : null;
+-    }
+-    return base;
+-  }
+-
+-  if (kind === "card") {
+-    const nt = nameTeamAfter(text, 0);
+-    base.actor = nt?.name ?? null;
+-    base.side = resolveSide(nt?.team ?? null, sides);
+-    return base;
+-  }
+-
+-  if (kind === "substitution") {
+-    const m = /^Substitution,\s*([^,.]+?)\.\s*(.+?)\s+replaces\s+(.+?)\./i.exec(text);
+-    if (m) {
+-      base.side = resolveSide(m[1]?.trim() ?? null, sides);
+-      base.actor = m[2]?.trim() ?? null;
+-      base.recipient = m[3]?.trim() ?? null;
+-    }
+-    return base;
+-  }
+-
+-  return null;
+-}
+-
+-/* ----------------------------------------------------------- shot extraction */
+-
+-/** One shot (or goal) the commentary describes, with the spot it implies. */
+-export interface CommentaryShot {
+-  sequence: number;
+-  /** Minute number from the display ("45+2" → 45). */
+-  minuteNum: number;
+-  minuteDisplay: string;
+-  actor: string | null;
+-  side: "home" | "away" | null;
+-  /** Drawn-pitch field coords (home attacks right), zone-derived for shots. */
+-  ball: FieldPoint;
+-  distanceM: number | null;
+-  /** Goal lines are kept so a caller can mark them separately from shots. */
+-  goal: boolean;
+-  detail: string;
+-}
+-
+-/**
+- * Pull every shot and goal the stored commentary describes out of the text, in
+- * match order. The replay's persistent shot map runs on this so a given line of
+- * commentary always lands at the same spot on either pitch — one parsing truth,
+- * shared by the live view and the replay.
+- */
+-export function shotsFromCommentary(
+-  commentary: LiveCommentaryLine[],
+-  sides: { home: LiveSide; away: LiveSide },
+-): CommentaryShot[] {
+-  const shots: CommentaryShot[] = [];
+-  for (const line of commentary) {
+-    const m = momentFromCommentary(line, sides);
+-    if (!m || (m.kind !== "shot" && m.kind !== "goal") || !m.spot) continue;
+-    shots.push({
+-      sequence: m.order,
+-      minuteNum: m.minuteNum,
+-      minuteDisplay: m.minuteDisplay,
+-      actor: m.actor,
+-      side: m.side,
+-      ball: m.spot,
+-      distanceM: m.distanceM,
+-      goal: m.kind === "goal",
+-      detail: m.detail,
+-    });
+-  }
+-  return shots;
+-}
+-
+-/* ------------------------------------------------- timeline authoritative */
+-
+-const TIMELINE_KIND: Record<string, LiveActionKind> = {
+-  goal: "goal",
+-  card: "card",
+-  substitution: "substitution",
+-  var: "var",
+-};
+-
+-function momentFromTimeline(
+-  ev: ApiTimelineEvent,
+-  kind: LiveActionKind,
+-  sides: { home: LiveSide; away: LiveSide },
+-): RawMoment {
+-  const side = ev.team_id === sides.home.id ? "home" : ev.team_id === sides.away.id ? "away" : null;
+-  const hasCoords = ev.field_x !== null && ev.field_y !== null;
+-  const minuteNum = minuteNumOf(ev.minute_display);
+-  const spot = hasCoords ? fieldPoint(side ?? "home", ev.field_x as number, ev.field_y as number) : null;
+-  return {
+-    kind,
+-    detail: detailAfterLead(ev.description ?? ""),
+-    actor: ev.participants[0]?.name || null,
+-    recipient: ev.participants[1]?.name || null,
+-    side,
+-    spot,
+-    distanceM: spot ? distanceFromGoal(side, spot) : null,
+-    goalY: ev.goal_y,
+-    minuteNum,
+-    minuteDisplay: ev.minute_display ? `${ev.minute_display}'` : "",
+-    order: 900_000 + minuteNum * 10 + (ev.participants.length ? 1 : 0),
+-    authoritative: true,
+-  };
+-}
+-
+-/* ------------------------------------------------------------ the model */
+-
+-/**
+- * Build the live model: the latest tracked action (timeline events win over
+- * their same-minute commentary duplicates) plus the last few ball spots for
+- * the trajectory trail. `currentMinute` gates the future away — at 0 (clock
+- * not started / halftime parse) everything recorded so far shows.
+- */
+-export function buildLiveModel(input: {
+-  home: LiveSide;
+-  away: LiveSide;
+-  events: ApiTimelineEvent[];
+-  commentary: LiveCommentaryLine[];
+-  currentMinute: number;
+-}): LiveModel {
+-  const sides = { home: input.home, away: input.away };
+-  const now = input.currentMinute;
+-  const withinNow = (minuteNum: number) => (now > 0 ? minuteNum <= now + 1 : true);
+-
+-  let raws: RawMoment[] = [];
+-  for (const line of input.commentary) {
+-    const m = momentFromCommentary(line, sides);
+-    if (m && withinNow(m.minuteNum)) raws.push(m);
+-  }
+-  for (const ev of input.events) {
+-    const kind = TIMELINE_KIND[ev.type];
+-    if (!kind) continue;
+-    const m = momentFromTimeline(ev, kind, sides);
+-    if (!withinNow(m.minuteNum)) continue;
+-    raws = raws.filter(
+-      (r) =>
+-        !(r.minuteNum === m.minuteNum && (r.kind === m.kind || (m.kind === "goal" && r.kind === "shot"))),
+-    );
+-    raws.push(m);
+-  }
+-
+-  raws.sort((a, b) => a.minuteNum - b.minuteNum || a.order - b.order);
+-
+-  // The ball is where the last spot-carrying action left it; spot-less raws
+-  // (fouls with no half mentioned, cards) inherit that position. `posAt`
+-  // remembers where the ball was at each raw, so a coord-less goal still
+-  // celebrates at its own place in the game rather than a later spot.
+-  let carried: FieldPoint | null = null;
+-  const spots: FieldPoint[] = [];
+-  for (const raw of raws) {
+-    raw.posAt = carried;
+-    if (raw.spot) {
+-      carried = raw.spot;
+-      spots.push(raw.spot);
+-    }
+-  }
+-
+-  const last = raws[raws.length - 1];
+-  if (!last)
+-    return { moment: null, lastGoal: null, allGoals: [], events: [], shots: [], pressure: 0.5, trail: [] };
+-
+-  const toMoment = (raw: RawMoment): LiveMoment => ({
+-    kind: raw.kind,
+-    detail: raw.detail,
+-    actor: raw.actor,
+-    recipient: raw.recipient,
+-    side: raw.side,
+-    ball: raw.spot ?? raw.posAt ?? { lx: 0.5, ly: 0.5 },
+-    distanceM: raw.distanceM,
+-    goalY: raw.goalY,
+-    minute: raw.minuteNum,
+-    minuteDisplay: raw.minuteDisplay,
+-    sequence: raw.order,
+-  });
+-
+-  const moment = toMoment(last);
+-  // Goals always carry a spot (tracked coords or the zone fallback), so the
+-  // celebration ring lands where the ball crossed the line.
+-  const goalRaws = raws.filter((r) => r.kind === "goal");
+-  const shotRaws = raws.filter((r) => r.kind === "shot" || r.kind === "goal");
+-  const lastGoalRaw = goalRaws[goalRaws.length - 1] ?? null;
+-  // Territorial pressure: walk the last few spot-carrying actions, weighting
+-  // later ones more; each contributes its side's tilt. Both-null → perfectly
+-  // even. The score stays 0..1 with 0.5 = even, so the renderer can use it
+-  // directly as a centre-out wash without re-normalising.
+-  let tilt = 0;
+-  let weight = 0;
+-  for (const raw of raws.slice(-6)) {
+-    const w = raw.spot ? 2 : 1;
+-    if (raw.side === "home") tilt += w;
+-    else if (raw.side === "away") tilt -= w;
+-    weight += w;
+-  }
+-  const pressure = weight > 0 ? 0.5 + tilt / (2 * weight) : 0.5;
+-  return {
+-    moment,
+-    lastGoal: lastGoalRaw ? toMoment(lastGoalRaw) : null,
+-    allGoals: goalRaws.map(toMoment),
+-    events: raws.map(toMoment),
+-    shots: shotRaws.map(toMoment),
+-    pressure,
+-    trail: spots.slice(-3),
+-  };
+-}
+diff --git a/src/lib/pitchView.ts b/src/lib/pitchView.ts
+deleted file mode 100644
+index df33e11..0000000
+--- a/src/lib/pitchView.ts
++++ /dev/null
+@@ -1,245 +0,0 @@
+-/**
+- * Pure maths for the live tactical view — a flat 2D pitch laid out horizontally,
+- * the classic broadcast map: the pitch length runs left to right, home defends
+- * the left goal and attacks right, away does the reverse.
+- *
+- * Field coordinates (0..1 everywhere, matching ESPN's 0..100 axes):
+- * - `lx` 0..1 along the LENGTH, 0 = home's own goal (left)
+- * - `ly` 0..1 across the WIDTH, 0 = the top sideline
+- */
+-
+-import type { LineupPlayer, MatchLineup, Position } from "../types";
+-import { fillFormation, isValidFormationId, pitchRows, type SlotCandidate } from "./formations";
+-
+-export interface TacticalViewport {
+-  /** Pixel size of the pitch surface. */
+-  width: number;
+-  height: number;
+-  /** Horizontal margin for the goal mouths; vertical margin for touchlines. */
+-  marginX: number;
+-  marginY: number;
+-}
+-
+-export const TACTICAL_VIEWPORT: TacticalViewport = {
+-  width: 340,
+-  height: 180,
+-  marginX: 16,
+-  marginY: 8,
+-};
+-
+-export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+-
+-export interface TacticalPoint {
+-  /** Screen px with the origin at the viewport's top-left. */
+-  x: number;
+-  y: number;
+-  /** Unused in the flat map; kept so callers stay written against one shape. */
+-  scale: number;
+-}
+-
+-const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+-
+-/** Map a field coordinate onto the 2D surface. */
+-export function project(lx: number, ly: number, vp: TacticalViewport = TACTICAL_VIEWPORT): TacticalPoint {
+-  const innerW = vp.width - vp.marginX * 2;
+-  const innerH = vp.height - vp.marginY * 2;
+-  return {
+-    x: vp.marginX + clamp01(lx) * innerW,
+-    y: vp.marginY + clamp01(ly) * innerH,
+-    scale: 1,
+-  };
+-}
+-
+-/**
+- * Corner points of a rectangle of the pitch (penalty area, six-yard box, goal
+- * mouth, mowing stripe) as `lx`/`ly` pairs, ready for an SVG polygon.
+- */
+-export function bandCorners(
+-  lx0: number,
+-  lx1: number,
+-  ly0: number,
+-  ly1: number,
+-  vp: TacticalViewport = TACTICAL_VIEWPORT,
+-): string {
+-  const a = project(lx0, ly0, vp);
+-  const b = project(lx1, ly0, vp);
+-  const c = project(lx1, ly1, vp);
+-  const d = project(lx0, ly1, vp);
+-  return `${a.x.toFixed(2)},${a.y.toFixed(2)} ${b.x.toFixed(2)},${b.y.toFixed(2)} ${c.x.toFixed(2)},${c.y.toFixed(2)} ${d.x.toFixed(2)},${d.y.toFixed(2)}`;
+-}
+-
+-/**
+- * The 9.15m penalty arc around a penalty spot, clipped to the part that bulges
+- * outside the 18m penalty area. Drawn with SVG arc flags rather than guessed
+- * control points. Home's spot sits 11m from the left goal line (lx 0.11), away's
+- * mirrors it; the bulge always faces the centre circle.
+- *
+- * The drawn pitch isn't to scale (340x180 vs 105x68 metres), so the radius is
+- * converted separately per axis.
+- */
+-export function penaltyArcPath(side: "home" | "away", vp: TacticalViewport = TACTICAL_VIEWPORT): string {
+-  const innerW = vp.width - vp.marginX * 2;
+-  const innerH = vp.height - vp.marginY * 2;
+-  const spot = project(side === "home" ? 0.11 : 0.89, 0.5, vp);
+-  const rx = (9.15 / 105) * innerW;
+-  const ry = (9.15 / 68) * innerH;
+-  // Half-chord where the arc meets the penalty-area edge (18m deep, lx 0.171
+-  // for home): sqrt(r² − d²) with d = 7m (spot 11m, edge 18m).
+-  const halfChordM = Math.sqrt(Math.max(0, 9.15 * 9.15 - 7 * 7));
+-  const halfY = (halfChordM / 68) * innerH;
+-  const edgeX = project(side === "home" ? 0.171 : 0.829, 0.5, vp).x;
+-  const top = `${edgeX.toFixed(2)},${(spot.y - halfY).toFixed(2)}`;
+-  const bottom = `${edgeX.toFixed(2)},${(spot.y + halfY).toFixed(2)}`;
+-  const sweep = side === "home" ? 0 : 1;
+-  return `M ${top} A ${rx.toFixed(2)} ${ry.toFixed(2)} 0 0 ${sweep} ${bottom}`;
+-}
+-
+-/**
+- * The 1m corner arc at a pitch corner, swept onto the field of play. `cx`/`cy`
+- * are 0 (top/left) or 1 (bottom/right) corner selectors.
+- */
+-export function cornerArcPath(cx: 0 | 1, cy: 0 | 1, vp: TacticalViewport = TACTICAL_VIEWPORT): string {
+-  const innerW = vp.width - vp.marginX * 2;
+-  const innerH = vp.height - vp.marginY * 2;
+-  const rx = (1 / 105) * innerW;
+-  const ry = (1 / 68) * innerH;
+-  const c = project(cx, cy, vp);
+-  const dx = cx === 0 ? 1 : -1;
+-  const dy = cy === 0 ? 1 : -1;
+-  const from = `${(c.x + dx * rx).toFixed(2)},${c.y.toFixed(2)}`;
+-  const to = `${c.x.toFixed(2)},${(c.y + dy * ry).toFixed(2)}`;
+-  const sweep = dx === dy ? 1 : 0;
+-  return `M ${from} A ${rx.toFixed(2)} ${ry.toFixed(2)} 0 0 ${sweep} ${to}`;
+-}
+-
+-export interface FormationSlot {
+-  /** Along the length, 0 (own goal) .. 1 (opponent's goal). */
+-  lx: number;
+-  /** Across the width, 0 (top) .. 1 (bottom). */
+-  ly: number;
+-}
+-
+-const HOME_LINE_X: Record<Position, number> = { GK: 0.055, DEF: 0.2, MID: 0.44, FWD: 0.74 };
+-
+-/** Where the keeper and the two outer outfield bands sit along the length. */
+-const KEEPER_LX = 0.055;
+-const DEEPEST_LX = 0.22;
+-const MOST_ADVANCED_LX = 0.78;
+-
+-/**
+- * Formation positions for a starting XI, on the drawn (length-first) pitch.
+- * Home presses toward the right goal; away mirrors along the length so they
+- * press left.
+- *
+- * When the match carries a real formation (ESPN publishes one per side) the
+- * shape is the real one: a 4-2-3-1 draws two separate midfield bands and a lone
+- * striker, and each player stands on their own side of the line from their
+- * granular role. This reuses the same tested filler the Lineup Predictor draws
+- * with, so the replay pitch and the picker can never disagree about a shape.
+- *
+- * Only when there is no usable formation does it fall back to four flat,
+- * evenly-spaced lines — the old approximation.
+- */
+-export function lineupSlots(lineup: MatchLineup, side: "home" | "away"): Record<string, FormationSlot> {
+-  const slots: Record<string, FormationSlot> = {};
+-  const mirror = (lx: number) => (side === "away" ? 1 - lx : lx);
+-
+-  if (isValidFormationId(lineup.formation) && lineup.starters.length > 0) {
+-    const candidates: SlotCandidate[] = lineup.starters.map((player) => ({
+-      id: player.id,
+-      espnPosition: player.espnPosition ?? null,
+-      jersey: player.number ?? null,
+-      unit: player.position,
+-    }));
+-    const filled = fillFormation(lineup.formation, candidates);
+-    // Rows run attack -> keeper, so the last index is the keeper and the
+-    // outfield bands count down in depth from there.
+-    const outfield = pitchRows(lineup.formation).length - 1;
+-    filled.forEach((row, rowIndex) => {
+-      const lx =
+-        rowIndex === outfield
+-          ? KEEPER_LX
+-          : lerp(DEEPEST_LX, MOST_ADVANCED_LX, (outfield - 1 - rowIndex) / Math.max(1, outfield - 1));
+-      const n = row.length;
+-      row.forEach((candidate, i) => {
+-        if (!candidate) return;
+-        slots[candidate.id] = { lx: mirror(lx), ly: (i + 1) / (n + 1) };
+-      });
+-    });
+-    if (Object.keys(slots).length > 0) return slots;
+-  }
+-
+-  const groups: Record<Position, LineupPlayer[]> = { GK: [], DEF: [], MID: [], FWD: [] };
+-  for (const player of lineup.starters) {
+-    (groups[player.position] ||= []).push(player);
+-  }
+-
+-  const order: Position[] = ["GK", "DEF", "MID", "FWD"];
+-  for (const position of order) {
+-    const group = groups[position];
+-    const n = group.length;
+-    for (let i = 0; i < n; i += 1) {
+-      const player = group[i];
+-      const spacing = n === 1 ? 0.5 : (i + 1) / (n + 1);
+-      const stagger = i % 2 === 1 ? 0.015 : -0.015;
+-      slots[player.id] = { lx: mirror(HOME_LINE_X[position]), ly: spacing + stagger * 0.5 };
+-    }
+-  }
+-  return slots;
+-}
+-
+-/* ---------------------------------------------------------------- momentum */
+-
+-/** `home` is -1..1; positive means the home side is on the front foot. */
+-export interface MomentumPoint {
+-  minute: number;
+-  home: number;
+-}
+-
+-/** Linear interpolation between script points; flat outside the range. */
+-export function momentumAt(script: MomentumPoint[], minute: number): number {
+-  if (script.length === 0) return 0;
+-  if (minute <= script[0].minute) return script[0].home;
+-  const last = script[script.length - 1];
+-  if (minute >= last.minute) return last.home;
+-
+-  for (let i = 0; i < script.length - 1; i += 1) {
+-    const a = script[i];
+-    const b = script[i + 1];
+-    if (minute < b.minute) {
+-      const t = (minute - a.minute) / (b.minute - a.minute);
+-      return a.home + (b.home - a.home) * t;
+-    }
+-  }
+-  return last.home;
+-}
+-
+-/** Deterministic 0..1 value from a string, for per-player wander phases. */
+-export function seedHash(input: string): number {
+-  let hash = 2166136261;
+-  for (let i = 0; i < input.length; i += 1) {
+-    hash ^= input.charCodeAt(i);
+-    hash = Math.imul(hash, 16777619);
+-  }
+-  return ((hash >>> 0) % 10000) / 10000;
+-}
+-
+-export interface FieldPoint {
+-  lx: number;
+-  ly: number;
+-}
+-
+-/**
+- * Map an ESPN shot position into our field coords for a given side.
+- * `fieldPositionX` runs 0 (own goal) to 100 (opponent's goal) along the length;
+- * `fieldPositionY` runs 0-100 across the width.
+- */
+-export function fieldPoint(
+-  side: "home" | "away",
+-  fieldPositionX: number,
+-  fieldPositionY: number,
+-): FieldPoint {
+-  const len = clamp01(fieldPositionX / 100);
+-  const wid = clamp01(fieldPositionY / 100);
+-  return side === "home" ? { lx: len, ly: wid } : { lx: 1 - len, ly: wid };
+-}
+diff --git a/src/lib/replay.ts b/src/lib/replay.ts
+deleted file mode 100644
+index 75585aa..0000000
+--- a/src/lib/replay.ts
++++ /dev/null
+@@ -1,314 +0,0 @@
+-/**
+- * Replay engine for the 2D pitch playback of a finished match.
+- *
+- * The stored `timeline_events` are the truth. This module fans them out into a
+- * per-minute "state of the match" (score, which side is pressing) and derives a
+- * plausible ball position between known moments, so a scrubber can render any
+- * minute of a match that was never tracked frame-by-frame.
+- *
+- * Everything here is pure and synchronous: the page owns the clock, this owns
+- * the meaning. Home always attacks left→right on the drawn pitch; ESPN's
+- * `fieldPositionX` runs 0 (own goal) → 100 (opponent goal), mirrored per side
+- * by `fieldPoint()` from pitchView.ts.
+- */
+-
+-import type { ApiReplay, ApiTimelineEvent } from "./api";
+-import { fieldPoint, lerp, type FieldPoint } from "./pitchView";
+-import { buildLiveModel, shotsFromCommentary } from "./livePitch";
+-
+-export const REPLAY_MINUTES = 94; // 90 + a buffer for stoppage-time events
+-
+-export type ReplayEventType =
+-  "goal" | "card" | "substitution" | "var" | "halftime" | "fulltime" | "kickoff" | "other";
+-
+-export interface ReplayEvent extends FieldPointSide {
+-  id: string;
+-  minute: number;
+-  minuteDisplay: string;
+-  type: ReplayEventType;
+-  teamId: string | null;
+-  side: "home" | "away" | null;
+-  description: string;
+-  participants: string[];
+-  /** True when ESPN published shot coordinates for this event. */
+-  hasCoords: boolean;
+-  /** Where the ball crossed the line, across the width (goals only). */
+-  goalY: number | null;
+-}
+-
+-interface FieldPointSide extends FieldPoint {
+-  /** False when no coordinates exist — callers draw a centre-spot fallback. */
+-  hasCoords: boolean;
+-}
+-
+-export interface ReplayTick {
+-  minute: number;
+-  homeScore: number;
+-  awayScore: number;
+-  /** Goals that have happened at or before this minute. */
+-  goals: ReplayEvent[];
+-  /** Next event after this minute, for the "incoming" strip. */
+-  upcoming: ReplayEvent | null;
+-  /** -1..1; positive = home on the front foot this minute. */
+-  momentum: number;
+-  /** Ball position on the drawn pitch (lx/ly in field coords). */
+-  ball: FieldPoint;
+-}
+-
+-/**
+- * One positioned moment of the match, in drawn-pitch coords (home attacks
+- * right). Built from the commentary and the tracked timeline together — the
+- * raw material for the ball path.
+- *
+- * The stored timeline only publishes coordinates for goals, so on its own it
+- * knows two or three spots per match and the ball has nowhere to travel. The
+- * commentary describes every shot, corner, free kick and foul with a zone, so
+- * folding it in gives the run of play its detail without inventing tracking.
+- */
+-export interface ReplayMoment {
+-  minute: number;
+-  lx: number;
+-  ly: number;
+-  side: "home" | "away" | null;
+-}
+-
+-/**
+- * A shot the stored commentary describes, with the spot it implies. The stored
+- * timeline only publishes coordinates for goals, so every other shot carries a
+- * zone-derived spot — the same parsing the live pitch uses, so the same line of
+- * commentary lands in the same place on either surface.
+- */
+-export interface ReplayShot {
+-  id: string;
+-  minute: number;
+-  minuteDisplay: string;
+-  side: "home" | "away" | null;
+-  actor: string | null;
+-  /** Drawn-pitch field coords (home attacks right). */
+-  lx: number;
+-  ly: number;
+-  /** Metres from the goal under attack. */
+-  distanceM: number | null;
+-  /** A goal, so callers can let the goal pins own it instead of double-marking. */
+-  goal: boolean;
+-  description: string;
+-}
+-
+-export interface ReplaySideInfo {
+-  id: string;
+-  /** Full club name — the form ESPN's commentary uses in "(Team)". */
+-  name: string;
+-  shortName: string;
+-  color: string;
+-}
+-
+-export interface ReplayModel {
+-  home: ReplaySideInfo;
+-  away: ReplaySideInfo;
+-  finalHomeScore: number;
+-  finalAwayScore: number;
+-  /** Expected goals per side (Understat), null when the fixture wasn't
+-   *  matched — never a guessed zero. */
+-  xgHome: number | null;
+-  xgAway: number | null;
+-  events: ReplayEvent[];
+-  /** The positioned moments the ball path interpolates between, in match
+-   *  order. Every shot, goal, corner, free kick and foul the commentary
+-   *  describes, plus any timeline event with real coordinates. */
+-  moments: ReplayMoment[];
+-  /** Every shot and goal the commentary describes, in match order — the
+-   *  persistent shot map's raw material. Empty when there was no commentary. */
+-  shots: ReplayShot[];
+-  /** Possession share for the home side 0..100, if the sync captured it. */
+-  possessionHome: number | null;
+-  ticks: ReplayTick[];
+-  totalMinutes: number;
+-}
+-
+-/** The five types the timeline tab already knows, plus kickoff/other. */
+-function eventTypeOf(raw: string): ReplayEventType {
+-  switch (raw) {
+-    case "goal":
+-    case "card":
+-    case "substitution":
+-    case "var":
+-    case "halftime":
+-    case "fulltime":
+-    case "kickoff":
+-      return raw;
+-    default:
+-      return "other";
+-  }
+-}
+-
+-function minuteOf(display: string): number {
+-  const m = /\d+/.exec(display ?? "");
+-  return m ? Number(m[0]) : 0;
+-}
+-
+-/**
+- * Deterministic per-event "pressure wave": a goal or card makes that side's
+- * momentum spike for a few minutes, then decay. Same input, same curve — no
+- * random re-render drift between scrub positions.
+- */
+-function eventPush(ev: ReplayEvent, minute: number): number {
+-  const minutesSince = minute - ev.minute;
+-  if (minutesSince < 0 || minutesSince > 6) return 0;
+-  const decay = 1 - minutesSince / 6;
+-  const weight =
+-    ev.type === "goal" ? 0.9 : ev.type === "card" ? 0.35 : ev.type === "substitution" ? 0.2 : 0.1;
+-  return weight * decay;
+-}
+-
+-/**
+- * Ball position for a minute: interpolated between the two positioned moments
+- * that surround it, so the ball travels the run of play instead of hopping
+- * between the few spots the tracked timeline knows. Before the first moment it
+- * holds the first spot and after the last it holds the last, so the dot never
+- * invents territory the feed never described. Deterministic: same minute, same
+- * spot, so scrubbing back and forth shows the same pitch.
+- */
+-function ballAt(minute: number, moments: ReplayMoment[]): FieldPoint {
+-  if (moments.length === 0) return { lx: 0.5, ly: 0.5 };
+-  let prev: ReplayMoment | null = null;
+-  let next: ReplayMoment | null = null;
+-  for (const moment of moments) {
+-    if (moment.minute <= minute) prev = moment;
+-    else {
+-      next = moment;
+-      break;
+-    }
+-  }
+-  if (!prev) return { lx: next!.lx, ly: next!.ly };
+-  if (!next) return { lx: prev.lx, ly: prev.ly };
+-  const span = Math.max(1, next.minute - prev.minute);
+-  const t = (minute - prev.minute) / span;
+-  return { lx: lerp(prev.lx, next.lx, t), ly: lerp(prev.ly, next.ly, t) };
+-}
+-
+-/** Build the full model once per fetch; ticks are precomputed for scrubbing. */
+-export function buildReplayModel(
+-  replay: ApiReplay,
+-  sides: { home: ReplaySideInfo; away: ReplaySideInfo },
+-): ReplayModel {
+-  const events: ReplayEvent[] = replay.events
+-    .filter((e) => e.type !== "kickoff" || minuteOf(e.minute_display) === 0)
+-    .map((e: ApiTimelineEvent) => {
+-      const type = eventTypeOf(e.type);
+-      const side = e.team_id === sides.home.id ? "home" : e.team_id === sides.away.id ? "away" : null;
+-      const hasCoords = e.field_x !== null && e.field_y !== null;
+-      // ESPN coordinates face each team's own attacking direction; mirror for
+-      // the away side so the drawn pitch stays home-left, away-right.
+-      const field = hasCoords
+-        ? fieldPoint(side ?? "home", e.field_x as number, e.field_y as number)
+-        : { lx: 0.5, ly: 0.5 };
+-      return {
+-        id: String(e.id),
+-        minute: minuteOf(e.minute_display),
+-        minuteDisplay: e.minute_display,
+-        type,
+-        teamId: e.team_id,
+-        side,
+-        description: e.description,
+-        participants: e.participants.map((p) => p.name),
+-        hasCoords,
+-        goalY: e.goal_y,
+-        lx: field.lx,
+-        ly: field.ly,
+-      };
+-    });
+-
+-  const goals = events.filter((e) => e.type === "goal");
+-
+-  // Shots have no coordinates in the stored timeline (only goals do), so they
+-  // come out of the commentary text via the same parser the live pitch uses.
+-  const shots: ReplayShot[] = shotsFromCommentary(replay.commentary, sides).map((shot) => ({
+-    id: `shot-${shot.sequence}`,
+-    minute: shot.minuteNum,
+-    minuteDisplay: shot.minuteDisplay,
+-    side: shot.side,
+-    actor: shot.actor,
+-    lx: shot.ball.lx,
+-    ly: shot.ball.ly,
+-    distanceM: shot.distanceM,
+-    goal: shot.goal,
+-    description: shot.detail,
+-  }));
+-
+-  // The ball path: every positioned moment the commentary and timeline
+-  // describe, in match order. Built with the live pitch's own model so a line
+-  // of commentary lands at the same spot on either surface (tracked goal
+-  // coordinates win over the commentary's same-minute zone guess).
+-  const live = buildLiveModel({
+-    home: sides.home,
+-    away: sides.away,
+-    events: replay.events,
+-    commentary: replay.commentary,
+-    currentMinute: 0,
+-  });
+-  const moments: ReplayMoment[] = live.events.map((m) => ({
+-    minute: m.minute,
+-    lx: m.ball.lx,
+-    ly: m.ball.ly,
+-    side: m.side,
+-  }));
+-
+-  const possessionStat = replay.teamStats.find((s) => s.team_id === sides.home.id);
+-  const possessionHome =
+-    possessionStat?.possession_pct != null ? Number(possessionStat.possession_pct) : null;
+-
+-  // Per-match expected goals, per side. Missing on both counts for a fixture
+-  // the sync never matched (or a non-big-five club) — the page says so.
+-  const xgFor = (teamId: string) => replay.xg?.find((r) => r.team_id === teamId)?.xg ?? null;
+-
+-  const ticks: ReplayTick[] = [];
+-  let homeScore = 0;
+-  let awayScore = 0;
+-  for (let minute = 0; minute <= REPLAY_MINUTES; minute += 1) {
+-    for (const goal of goals) {
+-      if (goal.minute === minute && goal.minute > 0) {
+-        if (goal.side === "home") homeScore += 1;
+-        else if (goal.side === "away") awayScore += 1;
+-      }
+-    }
+-    let momentum = 0;
+-    for (const ev of events) {
+-      if (!ev.side) continue;
+-      const push = eventPush(ev, minute);
+-      momentum += ev.side === "home" ? push : -push;
+-    }
+-    // Possession nudges the baseline, clamped so a 70% possession side still
+-    // concedes spells of away pressure.
+-    if (possessionHome != null) momentum += (possessionHome - 50) / 100;
+-    momentum = Math.min(0.95, Math.max(-0.95, momentum));
+-
+-    const upcoming = events.find((e) => e.minute > minute) ?? null;
+-    ticks.push({
+-      minute,
+-      homeScore,
+-      awayScore,
+-      goals: goals.filter((g) => g.minute <= minute),
+-      upcoming,
+-      momentum,
+-      ball: ballAt(minute, moments),
+-    });
+-  }
+-
+-  const finalMinute = Math.max(REPLAY_MINUTES, ...events.map((e) => e.minute));
+-  const final = ticks[Math.min(finalMinute, ticks.length - 1)];
+-
+-  return {
+-    home: sides.home,
+-    away: sides.away,
+-    finalHomeScore: final.homeScore,
+-    finalAwayScore: final.awayScore,
+-    xgHome: xgFor(sides.home.id),
+-    xgAway: xgFor(sides.away.id),
+-    events,
+-    moments,
+-    shots,
+-    possessionHome,
+-    ticks,
+-    totalMinutes: finalMinute,
+-  };
+-}
+diff --git a/src/pages/Cups.tsx b/src/pages/Cups.tsx
+index 66df1ac..d11b61a 100644
+--- a/src/pages/Cups.tsx
++++ b/src/pages/Cups.tsx
+@@ -17,7 +17,6 @@ import { useKnockoutCompetitions, useMatches } from "../hooks/useApi";
+ import { useI18n } from "../i18n/I18nProvider";
+ import { formatKickoff } from "../lib/format";
+ import { haptic } from "../lib/telegram";
+-import { PlayIcon } from "../components/icons";
+ import type { Match } from "../types";
+ 
+ /**
+@@ -251,8 +250,8 @@ export default function Cups() {
+ }
+ 
+ /**
+- * Cup fixture row: teams, score/clock, replay affordance. The whole footer is
+- * the touch surface — summary and replay links meet the 44px floor inside it.
++ * Cup fixture row: teams, score/clock, summary link. The whole footer is
++ * the touch surface — the link meets the 44px floor inside it.
+  * In `bare` mode the row drops its own card chrome: a TieCard supplies the
+  * border and the rows become the tie's legs, separated by hairlines.
+  */
+@@ -302,15 +301,6 @@ function CupMatchList({ matches, bare = false }: { matches: Match[]; bare?: bool
+             >
+               {t("match.summary")}
+             </Link>
+-            {match.status === "finished" ? (
+-              <Link
+-                to={`/match/${match.id}/replay`}
+-                className="inline-flex h-11 items-center gap-1 text-[11px] font-bold text-volt"
+-              >
+-                <PlayIcon />
+-                {t("replay.title")}
+-              </Link>
+-            ) : null}
+           </div>
+         </li>
+       ))}
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 935834e..d60c236 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -19,8 +19,7 @@ import { CommentaryPanel } from "../components/panels/CommentaryPanel";
+ import { CommentsSection, adaptComments } from "../components/panels/CommentsPanel";
+ import { LineupsPanel } from "../components/panels/LineupsPanel";
+ import { PredictionsHub } from "../components/panels/PredictionsHub";
+-import { LivePitch } from "../components/LivePitch";
+-import { ChartIcon, ChevronRightIcon, PlayIcon, StarIcon } from "../components/icons";
++import { ChartIcon, ChevronRightIcon, StarIcon } from "../components/icons";
+ import {
+   Button,
+   Card,
+@@ -36,7 +35,7 @@ import {
+ } from "../components/ui";
+ import { api, serverErrorKey, type ApiPlayerRating, type ApiTimelineEvent } from "../lib/api";
+ import { TEAM_FALLBACK } from "../lib/colors";
+-import { leagueIdOf, useCompetitionLabel, useReplay } from "../hooks/useApi";
++import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+ import { TaskAdCard } from "../components/TaskAdCard";
+ import { useAuth } from "../hooks/useAuth";
+ import { useI18n } from "../i18n/I18nProvider";
+@@ -99,19 +98,6 @@ export default function MatchDetail() {
+     return m ? Number(m[0]) : 0;
+   }, [match?.minute_display]);
+ 
+-  // Live pitch (PRODUCT.md rule 1): ball-only live view driven by the replay
+-  // payload — timeline events (goals with real coordinates), the full
+-  // commentary track, and the live boxscore are one response, so the page
+-  // polls it while the match is in play and the classifier in lib/livePitch.ts
+-  // turns the stream into ball spot + action annotations. 5s while live = the
+-  // pitch feels like a live feed; these are cheap SQLite reads on the server
+-  // (the ESPN-side sync cadence is separate — see server/sync/service.ts).
+-  // Halts when the tab is hidden so a backgrounded webview doesn't poll.
+-  const replayQuery = useReplay(id, live ? { refetchInterval: 5_000, staleTime: 0 } : undefined);
+-  const replayData = replayQuery.data;
+-  const liveCommentary = useMemo(() => replayData?.commentary ?? [], [replayData]);
+-  const liveEvents = useMemo(() => replayData?.events ?? [], [replayData]);
+-
+   // The deadline bar needs the pick count. Same query key as the Predict tab,
+   // so this shares its cache instead of costing a second round trip, and it
+   // warms the tab before the user opens it.
+@@ -237,24 +223,6 @@ export default function MatchDetail() {
+         </div>
+       </div>
+ 
+-      {/* Live pitch action: the 2D floodlit view while the match is in play.
+-          Renders as soon as the timeline exists; the score hero above and the
+-          tabs below stay untouched. */}
+-      {live ? (
+-        <div className="mt-4">
+-          <LivePitch
+-            home={{ id: home.id, name: home.name, shortName: home.shortName, color: home.color }}
+-            away={{ id: away.id, name: away.name, shortName: away.shortName, color: away.color }}
+-            currentMinute={currentMinute}
+-            homeScore={match.home_score ?? 0}
+-            awayScore={match.away_score ?? 0}
+-            events={liveEvents}
+-            commentary={liveCommentary}
+-            teamStats={replayData?.teamStats ?? []}
+-          />
+-        </div>
+-      ) : null}
+-
+       <div className="mt-4">
+         <Segmented
+           value={tab}
+@@ -281,27 +249,8 @@ export default function MatchDetail() {
+         {tab === "ratings" ? <RatingsTab matchId={id} live={live} league={match.league} /> : null}
+       </section>
+ 
+-      {/* Replay entry — the whole match on a 2D pitch, once it's finished. */}
+       {match.status === "finished" ? (
+         <>
+-          <div className="mt-6">
+-            <Link
+-              to={`/match/${match.id}/replay`}
+-              className="flex items-center gap-2 rounded-card border border-volt/50 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+-            >
+-              <span
+-                className="grid h-8 w-8 flex-none place-items-center rounded-full bg-volt text-black"
+-                aria-hidden="true"
+-              >
+-                <PlayIcon className="h-3.5 w-3.5" />
+-              </span>
+-              <span className="min-w-0 flex-1">
+-                <span className="block truncate text-xs font-bold text-ink">{t("replay.title")}</span>
+-                <span className="block text-[11px] text-ink-3">{t("replay.openHint")}</span>
+-              </span>
+-              <ChevronRightIcon className="flex-none text-ink-3" />
+-            </Link>
+-          </div>
+           {/* The full eye-test view (crowd vs stat, divergence sort) for finished games. */}
+           <div className="mt-3">
+             <Link
+diff --git a/src/pages/MatchReplayPage.tsx b/src/pages/MatchReplayPage.tsx
+deleted file mode 100644
+index a10d77c..0000000
+--- a/src/pages/MatchReplayPage.tsx
++++ /dev/null
+@@ -1,408 +0,0 @@
+-import { useEffect, useMemo, useRef, useState } from "react";
+-import { Link, useParams } from "react-router-dom";
+-import { useQuery } from "@tanstack/react-query";
+-import { ReplayPitch, ReplayMomentum } from "../components/ReplayPitch";
+-import { TopBar } from "../components/TopBar";
+-import { ReplaySkeleton } from "../components/Skeletons";
+-import { ConfettiBurst } from "../components/Confetti";
+-import { BallIcon, PauseIcon, PlayIcon } from "../components/icons";
+-import { Card, Chip, EmptyState, ErrorState, Num, Segmented, cx } from "../components/ui";
+-import { api } from "../lib/api";
+-import { TEAM_FALLBACK } from "../lib/colors";
+-import { useCompetitionLabel, useReplay } from "../hooks/useApi";
+-import { useI18n } from "../i18n/I18nProvider";
+-import { haptic, notifyHaptic } from "../lib/telegram";
+-import { buildReplayModel, type ReplayEvent } from "../lib/replay";
+-
+-type Track = "pitch" | "commentary";
+-
+-/**
+- * Replay of a finished match: a scrubbable 2D pitch driven by the stored
+- * timeline (goals with real shot coordinates when ESPN published them) plus a
+- * synced commentary track. Playback advances ~1 match-minute per second.
+- */
+-export default function MatchReplayPage() {
+-  const { id = "" } = useParams();
+-  const { t, localize } = useI18n();
+-
+-  const replayQuery = useReplay(id);
+-  const data = replayQuery.data;
+-  // Competition name (big-five alias, else the catalog name) — hooks must run
+-  // before the loading/empty returns below, hence it lives up here.
+-  const leagueLabel = useCompetitionLabel(data?.match.league ?? "");
+-
+-  const model = useMemo(() => {
+-    if (!data) return null;
+-    const m = data.match;
+-    return buildReplayModel(data, {
+-      home: {
+-        id: m.home_team_id,
+-        name: m.home_name,
+-        shortName: m.home_short ?? m.home_name,
+-        color: m.home_color ?? TEAM_FALLBACK,
+-      },
+-      away: {
+-        id: m.away_team_id,
+-        name: m.away_name,
+-        shortName: m.away_short ?? m.away_name,
+-        color: m.away_color ?? TEAM_FALLBACK,
+-      },
+-    });
+-  }, [data]);
+-
+-  // Lineups feed the formation chips on the pitch.
+-  const lineupsQuery = useQuery({
+-    queryKey: ["lineups", id],
+-    queryFn: () => api.getLineups(id),
+-    enabled: Boolean(id),
+-    staleTime: 10 * 60_000,
+-  });
+-
+-  const [minute, setMinute] = useState(0);
+-  const [playing, setPlaying] = useState(true);
+-  const [track, setTrack] = useState<Track>("pitch");
+-  const [burst, setBurst] = useState(0);
+-  const seenGoals = useRef<Set<string>>(new Set());
+-
+-  const total = model?.totalMinutes ?? 0;
+-
+-  // Reset when another match is opened.
+-  useEffect(() => {
+-    setMinute(0);
+-    setPlaying(true);
+-    seenGoals.current = new Set();
+-  }, [id]);
+-
+-  // Playback loop: one match-minute per second.
+-  useEffect(() => {
+-    if (!playing || total === 0) return;
+-    const timer = window.setInterval(() => {
+-      setMinute((m) => {
+-        if (m >= total) {
+-          setPlaying(false);
+-          return m;
+-        }
+-        return m + 1;
+-      });
+-    }, 1000);
+-    return () => window.clearInterval(timer);
+-  }, [playing, total]);
+-
+-  const tick = model?.ticks[Math.min(minute, model.ticks.length - 1)] ?? null;
+-
+-  // Goal moment: haptic + confetti, once per goal.
+-  const goalsUpTo = tick ? tick.goals.map((g) => g.id).join(",") : "";
+-  useEffect(() => {
+-    if (!tick) return;
+-    for (const goal of tick.goals) {
+-      if (!seenGoals.current.has(goal.id)) {
+-        seenGoals.current.add(goal.id);
+-        if (goal.minute > 0) {
+-          notifyHaptic("success");
+-          setBurst((v) => v + 1);
+-        }
+-      }
+-    }
+-    // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, [goalsUpTo]);
+-
+-  if (replayQuery.isLoading) {
+-    return (
+-      <>
+-        <TopBar title={t("replay.title")} back />
+-        <div className="mt-3">
+-          <ReplaySkeleton />
+-        </div>
+-      </>
+-    );
+-  }
+-
+-  if (replayQuery.isError) {
+-    return (
+-      <>
+-        <TopBar title={t("replay.title")} back />
+-        <div className="mt-4">
+-          <ErrorState onRetry={() => replayQuery.refetch()} />
+-        </div>
+-      </>
+-    );
+-  }
+-
+-  if (!data || !model || !tick) {
+-    return (
+-      <>
+-        <TopBar title={t("replay.title")} back />
+-        <div className="mt-4">
+-          <EmptyState
+-            title={t("replay.emptyTitle")}
+-            hint={t("replay.emptyHint")}
+-            action={
+-              <Link
+-                to="/matches"
+-                className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+-              >
+-                {t("replay.emptyAction")}
+-              </Link>
+-            }
+-          />
+-        </div>
+-      </>
+-    );
+-  }
+-
+-  const match = data.match;
+-  const finished = match.status === "finished";
+-
+-  const recentEvents = model.events
+-    .filter((e) => e.minute <= minute && e.minute > 0)
+-    .slice(-3)
+-    .reverse();
+-  const commentaryUpTo = data.commentary.filter((line) => (line.minute_seconds ?? 0) <= minute * 60 + 59);
+-  const commentaryTail = commentaryUpTo.slice(-6).reverse();
+-
+-  const homeStarters = (lineupsQuery.data?.players ?? [])
+-    .filter((p) => p.team_id === match.home_team_id && p.started === 1)
+-    .slice(0, 11)
+-    .map((p) => ({
+-      id: p.player_id,
+-      side: "home" as const,
+-      name: p.full_name,
+-      number: p.jersey_number ?? 0,
+-      position: (p.position ?? "MID") as "GK" | "DEF" | "MID" | "FWD",
+-      espnPosition: p.espn_position,
+-    }));
+-  const awayStarters = (lineupsQuery.data?.players ?? [])
+-    .filter((p) => p.team_id === match.away_team_id && p.started === 1)
+-    .slice(0, 11)
+-    .map((p) => ({
+-      id: p.player_id,
+-      side: "away" as const,
+-      name: p.full_name,
+-      number: p.jersey_number ?? 0,
+-      position: (p.position ?? "MID") as "GK" | "DEF" | "MID" | "FWD",
+-      espnPosition: p.espn_position,
+-    }));
+-
+-  const minuteLabel = (m: number) => (m > 90 ? `90+${m - 90}'` : `${m}'`);
+-
+-  // Expected goals, when Understat matched this fixture. The bar is the share
+-  // of the match's total xG, drawn in club colours (the numbers stay gold).
+-  const xgTotal = (model.xgHome ?? 0) + (model.xgAway ?? 0);
+-  const xgShare = xgTotal > 0 ? (model.xgHome ?? 0) / xgTotal : null;
+-
+-  return (
+-    <>
+-      <ConfettiBurst trigger={burst} />
+-      <TopBar
+-        title={t("replay.title")}
+-        subtitle={`${localize(match.home_short ?? match.home_name)} ${match.home_score ?? 0}–${match.away_score ?? 0} ${localize(match.away_short ?? match.away_name)}`}
+-        back
+-      />
+-
+-      {!finished ? (
+-        <Chip tone="muted" className="mt-3">
+-          {t("replay.notFinished")}
+-        </Chip>
+-      ) : null}
+-
+-      <div className="mt-3">
+-        <ReplayPitch
+-          model={model}
+-          tick={tick}
+-          homeStarters={homeStarters}
+-          awayStarters={awayStarters}
+-          homeFormation={lineupsQuery.data?.home.formation ?? ""}
+-          awayFormation={lineupsQuery.data?.away.formation ?? ""}
+-          playing={playing}
+-        />
+-      </div>
+-
+-      {/* Transport: play/pause, minute readout, scrubber */}
+-      <Card className="mt-3 p-3">
+-        <div className="flex items-center gap-3">
+-          <button
+-            type="button"
+-            onClick={() => {
+-              haptic("light");
+-              if (minute >= total) setMinute(0);
+-              setPlaying((p) => !p);
+-            }}
+-            aria-label={playing ? t("shot.pause") : t("shot.play")}
+-            className="grid h-11 w-11 flex-none place-items-center rounded-full bg-volt text-black transition-[filter] duration-[var(--t-fast)] hover:brightness-95"
+-          >
+-            {playing ? <PauseIcon className="h-4 w-4" /> : <PlayIcon className="h-4 w-4" />}
+-          </button>
+-          <div className="min-w-0 flex-1">
+-            <input
+-              type="range"
+-              min={0}
+-              max={total}
+-              value={Math.min(minute, total)}
+-              onChange={(e) => {
+-                setPlaying(false);
+-                setMinute(Number(e.target.value));
+-              }}
+-              className="range-scrub w-full"
+-              aria-label={t("replay.scrub")}
+-            />
+-            <div className="flex justify-between text-[10px] text-ink-3">
+-              <Num>{minuteLabel(minute)}</Num>
+-              <span>{t("replay.minutePerSecond")}</span>
+-              <Num>{minuteLabel(total)}</Num>
+-            </div>
+-          </div>
+-        </div>
+-
+-        <ReplayMomentum model={model} minute={minute} />
+-      </Card>
+-
+-      {/* Expected goals: the post-match read, drawn in the evaluation colour so
+-          it never competes with the volt scoreline. Missing means the fixture
+-          wasn't matched (or the club is outside Understat's big five) — the
+-          card says so instead of printing a zero. */}
+-      <Card className="mt-3 p-4">
+-        <div className="flex items-baseline justify-between gap-2">
+-          <span className="label text-ink-3">{t("xg.title")}</span>
+-          <span className="text-[10px] font-semibold text-ink-3">{t("replay.xgSource")}</span>
+-        </div>
+-        {model.xgHome != null || model.xgAway != null ? (
+-          <>
+-            <div className="mt-2 grid grid-cols-2 gap-3">
+-              <div className="text-center">
+-                <p className="truncate text-[11px] font-semibold text-ink-3">
+-                  {localize(model.home.shortName)}
+-                </p>
+-                <Num className="text-xl font-black text-gold">
+-                  {model.xgHome != null ? model.xgHome.toFixed(2) : "–"}
+-                </Num>
+-              </div>
+-              <div className="text-center">
+-                <p className="truncate text-[11px] font-semibold text-ink-3">
+-                  {localize(model.away.shortName)}
+-                </p>
+-                <Num className="text-xl font-black text-gold">
+-                  {model.xgAway != null ? model.xgAway.toFixed(2) : "–"}
+-                </Num>
+-              </div>
+-            </div>
+-            {xgShare != null ? (
+-              <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-elevated" aria-hidden="true">
+-                <span
+-                  className="h-full"
+-                  style={{ width: `${xgShare * 100}%`, backgroundColor: model.home.color }}
+-                />
+-                <span className="h-full flex-1" style={{ backgroundColor: model.away.color }} />
+-              </div>
+-            ) : null}
+-          </>
+-        ) : (
+-          <p className="mt-2 text-[11px] text-ink-3">{t("xg.emptyHint")}</p>
+-        )}
+-      </Card>
+-
+-      {/* Goal feed: the moments that decide the match, newest first */}
+-      <section className="mt-4">
+-        <Segmented
+-          value={track}
+-          onChange={setTrack}
+-          options={[
+-            { value: "pitch", label: t("replay.tabEvents") },
+-            { value: "commentary", label: t("replay.tabCommentary") },
+-          ]}
+-        />
+-
+-        {track === "pitch" ? (
+-          <ul className="mt-3 space-y-2">
+-            {recentEvents.length === 0 ? (
+-              <li className="rounded-card border border-dashed border-line px-3 py-4 text-center text-xs text-ink-3">
+-                {t("replay.kickoffSoon")}
+-              </li>
+-            ) : null}
+-            {recentEvents.map((event) => (
+-              <EventRow key={event.id} event={event} />
+-            ))}
+-          </ul>
+-        ) : (
+-          <Card className="mt-3 max-h-72 overflow-y-auto p-3">
+-            {commentaryTail.length === 0 ? (
+-              <p className="text-xs text-ink-3">{t("commentary.empty")}</p>
+-            ) : (
+-              <ul className="space-y-2">
+-                {commentaryTail.map((line) => (
+-                  <li key={line.sequence} className="flex gap-2 text-xs">
+-                    <Num className="w-8 flex-none text-ink-3">{line.minute_display ?? "·"}</Num>
+-                    <span className="text-ink-2">{line.text}</span>
+-                  </li>
+-                ))}
+-              </ul>
+-            )}
+-            {data.commentary.length === 0 ? (
+-              <p className="mt-2 text-[11px] text-ink-3">{t("replay.noCommentary")}</p>
+-            ) : null}
+-          </Card>
+-        )}
+-      </section>
+-
+-      {/* Deep links to the rest of the match story */}
+-      <div className="mt-4 grid grid-cols-2 gap-2">
+-        <Link
+-          to={`/match/${match.id}?tab=timeline`}
+-          className="flex min-h-11 items-center justify-center rounded-card border border-line bg-surface p-3 text-center text-xs font-bold text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+-        >
+-          {t("match.tabTimeline")}
+-        </Link>
+-        <Link
+-          to={`/match/${match.id}?tab=stats`}
+-          className="flex min-h-11 items-center justify-center rounded-card border border-line bg-surface p-3 text-center text-xs font-bold text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+-        >
+-          {t("match.tabStats")}
+-        </Link>
+-      </div>
+-
+-      <p className="mt-3 text-center text-[11px] text-ink-3">
+-        {leagueLabel} · {t("replay.sourceNote")}
+-      </p>
+-    </>
+-  );
+-}
+-
+-function EventRow({ event }: { event: ReplayEvent }) {
+-  const { t, localize } = useI18n();
+-  const isGoal = event.type === "goal";
+-  return (
+-    <li
+-      className={cx(
+-        "flex items-center gap-2 rounded-card border p-2.5",
+-        isGoal ? "border-volt/50 bg-elevated" : "border-line bg-surface",
+-      )}
+-    >
+-      <Num className="w-9 flex-none text-xs text-ink-3">{event.minuteDisplay}</Num>
+-      {isGoal ? (
+-        <BallIcon className="h-4 w-4 flex-none text-volt" />
+-      ) : (
+-        <span className="grid h-4 w-4 flex-none place-items-center text-[11px] text-ink-3">·</span>
+-      )}
+-      <span className="min-w-0 flex-1">
+-        <span className="block truncate text-xs font-bold text-ink">
+-          {event.participants.map(localize).join(" · ") || localize(event.description)}
+-        </span>
+-        <span className="block truncate text-[11px] text-ink-3">
+-          {t(
+-            isGoal
+-              ? "timeline.goal"
+-              : event.type === "card"
+-                ? "timeline.card"
+-                : event.type === "substitution"
+-                  ? "timeline.sub"
+-                  : "replay.otherEvent",
+-          )}
+-        </span>
+-      </span>
+-      {event.hasCoords ? (
+-        <Chip tone="volt" className="flex-none">
+-          {t("replay.onMap")}
+-        </Chip>
+-      ) : null}
+-    </li>
+-  );
+-}
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 485b20a..0a6388b 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -229,14 +229,6 @@ function FixturesTab({ fixtures }: { fixtures: ApiMatch[] }) {
+               <Num>{formatKickoffDate(new Date(match.kickoff_at), locale)}</Num>
+             </Chip>
+           )}
+-          {match.status === "finished" ? (
+-            <Link
+-              to={`/match/${match.id}/replay`}
+-              className="flex-none text-[11px] font-bold text-volt underline underline-offset-2"
+-            >
+-              {t("replay.title")}
+-            </Link>
+-          ) : null}
+         </li>
+       ))}
+     </ul>
+diff --git a/tests/livePitch.test.ts b/tests/livePitch.test.ts
+deleted file mode 100644
+index e853feb..0000000
+--- a/tests/livePitch.test.ts
++++ /dev/null
+@@ -1,323 +0,0 @@
+-/**
+- * The live pitch's brain: commentary → ball spot, action kind, actor/recipient,
+- * distance. Pins the ESPN house-style parsing so a feed wording change fails
+- * loudly here instead of rendering a wrong annotation.
+- */
+-import { strict as assert } from "node:assert";
+-import {
+-  buildLiveModel,
+-  classifyLine,
+-  distanceFromGoal,
+-  shotsFromCommentary,
+-  type LiveSide,
+-} from "../src/lib/livePitch.js";
+-
+-const SIDES = {
+-  home: { id: "462", name: "Bulgaria", shortName: "Bulgaria", color: "#ffffff" } as LiveSide,
+-  away: { id: "444", name: "Estonia", shortName: "Estonia", color: "#0072ce" } as LiveSide,
+-};
+-
+-function line(sequence: number, minute: string, text: string) {
+-  return { sequence, minute_display: minute, minute_seconds: null, text };
+-}
+-
+-function testClassify(): void {
+-  assert.equal(classifyLine("Attempt saved. Max (Estonia) right footed shot from outside the box."), "shot");
+-  assert.equal(classifyLine("Attempt missed. John (Bulgaria) header from the centre of the box."), "shot");
+-  assert.equal(
+-    classifyLine("Attempt blocked. Dan (Bulgaria) left footed shot from a difficult angle."),
+-    "shot",
+-  );
+-  assert.equal(classifyLine("Goal! Bulgaria 1, Estonia 0. Max (Estonia) from a free kick."), "goal");
+-  assert.equal(classifyLine("Own Goal by Sam (Estonia). Bulgaria 1, Estonia 0."), "goal");
+-  assert.equal(classifyLine("Corner, Bulgaria. Conceded by Sam."), "corner");
+-  assert.equal(classifyLine("Foul by Sam (Estonia)."), "foul");
+-  assert.equal(classifyLine("Max (Bulgaria) wins a free kick in the attacking half."), "freekick");
+-  assert.equal(classifyLine("Max (Bulgaria) is shown the yellow card for a bad foul."), "card");
+-  assert.equal(classifyLine("Substitution, Estonia. Max replaces Sam."), "substitution");
+-  // Tracked but unmappable restarts must not claim the annotation.
+-  assert.equal(classifyLine("Offside, Estonia. Sam is caught offside."), "none");
+-  assert.equal(classifyLine("Delay in match (Bulgaria)."), "none");
+-  assert.equal(classifyLine("Fourth official has announced 3 minutes of added time."), "none");
+-  assert.equal(classifyLine(""), null);
+-  assert.equal(classifyLine("Second Half begins Bulgaria 0, Estonia 0."), "none");
+-}
+-
+-function testNames(): void {
+-  const model = buildLiveModel({
+-    ...SIDES,
+-    events: [],
+-    commentary: [
+-      line(
+-        1,
+-        "64'",
+-        "Attempt saved. Maksim Paskotsi (Estonia) left footed shot from outside the box is saved.",
+-      ),
+-    ],
+-    currentMinute: 70,
+-  });
+-  assert.equal(model.moment?.kind, "shot");
+-  assert.equal(model.moment?.actor, "Maksim Paskotsi");
+-  assert.equal(model.moment?.side, "away");
+-  assert.ok(
+-    model.moment?.distanceM && model.moment.distanceM >= 19 && model.moment.distanceM <= 21,
+-    `outside-the-box shot ≈ 20m, got ${model.moment?.distanceM}`,
+-  );
+-  // Away side attacking: ball must sit on the home half of the drawn pitch.
+-  assert.ok(model.moment.ball.lx < 0.5, `away shot lands left, got lx=${model.moment.ball.lx}`);
+-}
+-
+-function testCorner(): void {
+-  const model = buildLiveModel({
+-    ...SIDES,
+-    events: [],
+-    commentary: [line(1, "86'", "Corner, Estonia. Conceded by Kristian Dimitrov.")],
+-    currentMinute: 86,
+-  });
+-  assert.equal(model.moment?.kind, "corner");
+-  assert.equal(model.moment?.recipient, "Kristian Dimitrov");
+-  assert.equal(model.moment?.side, "away");
+-  assert.ok(
+-    model.moment.ball.lx < 0.1,
+-    `corner ball sits at the away-attacked arc, got lx=${model.moment.ball.lx}`,
+-  );
+-}
+-
+-function testGoalOverridesCommentary(): void {
+-  const model = buildLiveModel({
+-    ...SIDES,
+-    events: [
+-      {
+-        id: 1,
+-        match_id: "m",
+-        minute_display: "78",
+-        minute_seconds: 4680,
+-        type: "goal",
+-        team_id: "462",
+-        description:
+-          "Goal! Bulgaria 1, Estonia 0. Lukas Petkov (Bulgaria) right footed shot from the centre of the box.",
+-        participants: [{ id: "p1", name: "Lukas Petkov" }],
+-        comment_count: 0,
+-        field_x: 88,
+-        field_y: 50,
+-        goal_y: 52,
+-      },
+-    ],
+-    commentary: [line(1, "78'", "Attempt saved. Someone (Estonia) shot from outside the box.")],
+-    currentMinute: 80,
+-  });
+-  assert.equal(model.moment?.kind, "goal");
+-  assert.equal(model.moment?.actor, "Lukas Petkov");
+-  // Real tracked coordinates win over any zone guess: 88% ≈ 12m from goal.
+-  assert.ok(model.moment.distanceM === 13, `tracked coords → 13m, got ${model.moment?.distanceM}`);
+-  assert.ok(model.moment.ball.lx > 0.8, `home goal spot on the right, got lx=${model.moment.ball.lx}`);
+-  // The celebration ring reads the same moment.
+-  assert.equal(model.lastGoal?.kind, "goal");
+-  assert.equal(model.lastGoal?.actor, "Lukas Petkov");
+-}
+-
+-function testLastGoalSurvivesLaterActions(): void {
+-  const model = buildLiveModel({
+-    ...SIDES,
+-    events: [],
+-    commentary: [
+-      line(
+-        1,
+-        "69'",
+-        "Goal! England 0, Czechia 2. Harry Kane (England) right footed shot from the centre of the box.",
+-      ),
+-      line(2, "71'", "Corner, England. Conceded by Pavel Sulc."),
+-      line(3, "74'", "Substitution, England. Max replaces Sam."),
+-    ],
+-    currentMinute: 75,
+-  });
+-  // The annotation follows the latest action…
+-  assert.equal(model.moment?.kind, "substitution");
+-  // …but the celebration stays pinned to the goal.
+-  assert.equal(model.lastGoal?.kind, "goal");
+-  assert.equal(model.lastGoal?.actor, "Harry Kane");
+-  assert.ok(
+-    model.lastGoal.ball.lx > 0.8,
+-    `goal spot in England's attack end, got lx=${model.lastGoal.ball.lx}`,
+-  );
+-}
+-
+-function testCoordlessGoalInheritsLocalBall(): void {
+-  const model = buildLiveModel({
+-    ...SIDES,
+-    events: [],
+-    commentary: [
+-      line(1, "30'", "Attempt saved. Max (Bulgaria) right footed shot from outside the box."),
+-      line(2, "31'", "Goal! Bulgaria 1, Estonia 0. Max (Bulgaria) scores."),
+-    ],
+-    currentMinute: 32,
+-  });
+-  // No field_x on this feed: the celebration uses the spot at the goal itself
+-  // (the shot's zone), not the centre fallback.
+-  assert.equal(model.lastGoal?.kind, "goal");
+-  assert.ok(model.lastGoal.ball.lx > 0.7, `goal sits at the shot spot, got lx=${model.lastGoal.ball.lx}`);
+-}
+-
+-function testSub(): void {
+-  const model = buildLiveModel({
+-    ...SIDES,
+-    events: [],
+-    commentary: [line(1, "45'", "Substitution, Bulgaria. Asen Chandarov replaces Borislav Tsonev.")],
+-    currentMinute: 46,
+-  });
+-  assert.equal(model.moment?.kind, "substitution");
+-  assert.equal(model.moment?.actor, "Asen Chandarov");
+-  assert.equal(model.moment?.recipient, "Borislav Tsonev");
+-}
+-
+-function testFutureGated(): void {
+-  const model = buildLiveModel({
+-    ...SIDES,
+-    events: [],
+-    commentary: [line(1, "90'", "Attempt missed. Max (Bulgaria) shot from outside the box.")],
+-    currentMinute: 75,
+-  });
+-  assert.equal(model.moment, null, "an action from the future never shows");
+-}
+-
+-function testTrail(): void {
+-  const model = buildLiveModel({
+-    ...SIDES,
+-    events: [],
+-    commentary: [
+-      line(1, "50'", "Foul by Max (Estonia)."),
+-      line(2, "50'", "Sam (Bulgaria) wins a free kick in the attacking half."),
+-      line(3, "64'", "Attempt saved. Maksim Paskotsi (Estonia) left footed shot from outside the box."),
+-      line(4, "70'", "Corner, Bulgaria. Conceded by Sam."),
+-    ],
+-    currentMinute: 72,
+-  });
+-  // Three spot-carrying moments: free kick (attacking half), shot, corner.
+-  assert.equal(model.trail.length, 3);
+-  const last = model.moment;
+-  assert.equal(last?.kind, "corner");
+-  // The trail runs oldest → newest across the halves: first spot from the
+-  // home free kick sits right of centre, the corner lands top-left.
+-  assert.ok(
+-    model.trail[0].lx > 0.6,
+-    `free-kick spot in Bulgaria's attacking half, got lx=${model.trail[0].lx}`,
+-  );
+-  assert.ok(model.trail[2].lx > 0.9, `home corner sits at the right arc, got lx=${model.trail[2].lx}`);
+-}
+-
+-function testDistanceHelper(): void {
+-  const home = distanceFromGoal("home", { lx: 0.4, ly: 0.5 });
+-  assert.equal(home, 63, "home at 40% length → 63m from the right goal");
+-  assert.equal(distanceFromGoal(null, { lx: 0.4, ly: 0.5 }), null);
+-}
+-
+-function testGoalsAndPressure(): void {
+-  // No tracked actions → neutral pressure, no pins.
+-  const empty = buildLiveModel({ ...SIDES, events: [], commentary: [], currentMinute: 10 });
+-  assert.equal(empty.moment, null);
+-  assert.equal(empty.pressure, 0.5);
+-  assert.deepEqual(empty.allGoals, []);
+-
+-  // Two Bulgaria goals then a Bulgaria sub: all pins kept, pressure tilted
+-  // home, lastGoal = the second goal, moment = the sub.
+-  const model = buildLiveModel({
+-    ...SIDES,
+-    events: [],
+-    commentary: [
+-      line(
+-        1,
+-        "20'",
+-        "Goal! Bulgaria 1, Estonia 0. Max (Bulgaria) right footed shot from the centre of the box.",
+-      ),
+-      line(2, "55'", "Goal! Bulgaria 2, Estonia 0. Max (Bulgaria) header from very close range."),
+-      line(3, "58'", "Substitution, Bulgaria. Asen replaces Borislav."),
+-    ],
+-    currentMinute: 60,
+-  });
+-  assert.equal(model.moment?.kind, "substitution");
+-  assert.equal(model.lastGoal?.minuteDisplay, "55'");
+-  assert.equal(model.lastGoal?.actor, "Max");
+-  assert.equal(model.allGoals.length, 2);
+-  // The rhythm tape gets every tracked moment, in match order.
+-  assert.deepEqual(
+-    model.events.map((e) => e.kind),
+-    ["goal", "goal", "substitution"],
+-  );
+-  // The shot map accrues goals + shots: both goals here.
+-  assert.equal(model.shots.length, 2);
+-  assert.ok(model.allGoals[0].ball.lx > 0.8, `goal pins carry spots, got lx=${model.allGoals[0].ball.lx}`);
+-  assert.ok(model.pressure > 0.55, `one-sided game tilts pressure, got ${model.pressure}`);
+-
+-  // Balanced action from both sides → pressure back near even.
+-  const even = buildLiveModel({
+-    ...SIDES,
+-    events: [],
+-    commentary: [
+-      line(1, "10'", "Attempt saved. Max (Bulgaria) shot from outside the box."),
+-      line(2, "20'", "Attempt saved. Sam (Estonia) shot from outside the box."),
+-    ],
+-    currentMinute: 25,
+-  });
+-  assert.ok(Math.abs(even.pressure - 0.5) < 0.05, `alternating actions stay near even, got ${even.pressure}`);
+-  // Every commentary shot lands in the map, goal shots included.
+-  assert.equal(even.shots.length, 2);
+-  assert.ok(even.shots.every((s) => s.distanceM != null));
+-}
+-
+-/** The replay's persistent shot map runs on the same parser as the live one. */
+-function testShotsFromCommentary(): void {
+-  const shots = shotsFromCommentary(
+-    [
+-      line(1, "12'", "Attempt saved. Max (Bulgaria) right footed shot from outside the box is saved."),
+-      line(2, "20'", "Foul by Sam (Estonia)."),
+-      line(
+-        3,
+-        "34'",
+-        "Goal! Bulgaria 1, Estonia 0. Max (Bulgaria) left footed shot from the centre of the box.",
+-      ),
+-      line(4, "55'", "Attempt missed. Sam (Estonia) header from very close range misses to the left."),
+-    ],
+-    SIDES,
+-  );
+-  assert.equal(shots.length, 3, "every shot and goal is kept, nothing else");
+-  assert.deepEqual(
+-    shots.map((s) => s.goal),
+-    [false, true, false],
+-    "goals are flagged so the pins can own them",
+-  );
+-  assert.deepEqual(
+-    shots.map((s) => s.minuteNum),
+-    [12, 34, 55],
+-    "shots stay in match order with their minute",
+-  );
+-  // Home attacks right, away attacks left — the same mirroring the pitch draws.
+-  assert.ok(shots[0].ball.lx > 0.7, `home shot sits on the right, got lx=${shots[0].ball.lx}`);
+-  assert.ok(shots[2].ball.lx < 0.3, `away shot sits on the left, got lx=${shots[2].ball.lx}`);
+-  assert.ok(
+-    shots[0].distanceM != null && shots[0].distanceM >= 19 && shots[0].distanceM <= 21,
+-    "outside-the-box shot ≈ 20m",
+-  );
+-  // Same input, same spot — the map must not drift between renders.
+-  assert.deepEqual(
+-    shotsFromCommentary(
+-      [line(1, "12'", "Attempt saved. Max (Bulgaria) right footed shot from outside the box.")],
+-      SIDES,
+-    )[0].ball,
+-    shots[0].ball,
+-  );
+-}
+-
+-export function runLivePitchTests(): void {
+-  testClassify();
+-  testNames();
+-  testCorner();
+-  testGoalOverridesCommentary();
+-  testLastGoalSurvivesLaterActions();
+-  testCoordlessGoalInheritsLocalBall();
+-  testSub();
+-  testFutureGated();
+-  testTrail();
+-  testDistanceHelper();
+-  testGoalsAndPressure();
+-  testShotsFromCommentary();
+-}
+diff --git a/tests/pitchArt.test.ts b/tests/pitchArt.test.ts
+deleted file mode 100644
+index 8364c0a..0000000
+--- a/tests/pitchArt.test.ts
++++ /dev/null
+@@ -1,145 +0,0 @@
+-/**
+- * The drawn pitch geometry: the penalty and corner arc helpers are pure maths
+- * both the live and replay surfaces paint with, so pin the shape here (valid
+- * SVG path, points inside the surface, bulge facing the right way) rather than
+- * eyeballing the render.
+- */
+-import { strict as assert } from "node:assert";
+-import {
+-  TACTICAL_VIEWPORT,
+-  cornerArcPath,
+-  lineupSlots,
+-  penaltyArcPath,
+-  project,
+-} from "../src/lib/pitchView.js";
+-import type { LineupPlayer, Position } from "../src/types.js";
+-
+-const VP = TACTICAL_VIEWPORT;
+-const ARC = /^M [\d.-]+,[\d.-]+ A [\d.]+ [\d.]+ 0 0 [01] [\d.-]+,[\d.-]+$/;
+-
+-/** Pull every "x,y" pair out of a path string (arc flags have no commas). */
+-function pointsOf(path: string): Array<{ x: number; y: number }> {
+-  return [...path.matchAll(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g)].map((m) => ({
+-    x: Number(m[1]),
+-    y: Number(m[2]),
+-  }));
+-}
+-
+-function assertInBounds(path: string, label: string): Array<{ x: number; y: number }> {
+-  const pts = pointsOf(path);
+-  assert.equal(pts.length, 2, `${label} has exactly two endpoints`);
+-  for (const p of pts) {
+-    assert.ok(p.x >= -0.01 && p.x <= VP.width + 0.01, `${label} x ${p.x} stays inside the surface`);
+-    assert.ok(p.y >= -0.01 && p.y <= VP.height + 0.01, `${label} y ${p.y} stays inside the surface`);
+-  }
+-  return pts;
+-}
+-
+-/** The 9.15m arc sits at the penalty-area edge and bulges away from the goal. */
+-function testPenaltyArc(): void {
+-  for (const side of ["home", "away"] as const) {
+-    const path = penaltyArcPath(side);
+-    assert.match(path, ARC, `${side} penalty arc is a well-formed SVG path`);
+-    const pts = assertInBounds(path, `${side} penalty arc`);
+-    const spotX = project(side === "home" ? 0.11 : 0.89, 0.5).x;
+-    for (const p of pts) {
+-      // The arc's ends lie beyond the spot, toward the centre circle.
+-      if (side === "home") assert.ok(p.x > spotX, "home arc bulges toward the centre");
+-      else assert.ok(p.x < spotX, "away arc bulges toward the centre");
+-    }
+-  }
+-}
+-
+-/** Every 1m corner arc meets both lines at its corner without leaving the pitch. */
+-function testCornerArcs(): void {
+-  const corners: Array<[0 | 1, 0 | 1]> = [
+-    [0, 0],
+-    [0, 1],
+-    [1, 0],
+-    [1, 1],
+-  ];
+-  for (const [cx, cy] of corners) {
+-    const path = cornerArcPath(cx, cy);
+-    assert.match(path, ARC, `corner ${cx},${cy} is a well-formed arc`);
+-    const pts = assertInBounds(path, `corner ${cx},${cy}`);
+-    const corner = project(cx, cy);
+-    assert.ok(
+-      pts.some((p) => Math.abs(p.x - corner.x) < 0.01),
+-      `corner ${cx},${cy} meets the goal line`,
+-    );
+-    assert.ok(
+-      pts.some((p) => Math.abs(p.y - corner.y) < 0.01),
+-      `corner ${cx},${cy} meets the touchline`,
+-    );
+-  }
+-}
+-
+-const p = (
+-  id: string,
+-  position: Position,
+-  number: number,
+-  espnPosition: string | null = null,
+-): LineupPlayer => ({ id, name: id, position, number, espnPosition });
+-
+-/** A 4-2-3-1 drawn on the replay pitch: four real bands, not flat lines. */
+-function testLineupSlotsRealFormation(): void {
+-  const lineup = {
+-    formation: "4-2-3-1",
+-    coach: "",
+-    subs: [],
+-    starters: [
+-      p("gk", "GK", 1),
+-      p("lb", "DEF", 3, "LB"),
+-      p("cb1", "DEF", 5, "CB"),
+-      p("cb2", "DEF", 4, "CB"),
+-      p("rb", "DEF", 2, "RB"),
+-      p("dm1", "MID", 6, "DM"),
+-      p("dm2", "MID", 8, "DM"),
+-      p("lw", "MID", 11, "LW"),
+-      p("am", "MID", 10, "CAM"),
+-      p("rw", "MID", 7, "RW"),
+-      p("st", "FWD", 9, "ST"),
+-    ],
+-  };
+-  const home = lineupSlots(lineup, "home");
+-  assert.equal(Object.keys(home).length, 11, "every starter gets a slot");
+-
+-  // Four separate outfield bands, deepest first: GK < DEF < holding mid <
+-  // attacking mid < striker. Flat lines would only produce three.
+-  assert.ok(home.gk.lx < home.cb1.lx, "keeper sits deepest");
+-  assert.ok(home.cb1.lx < home.dm1.lx, "defence sits behind the holding pair");
+-  assert.ok(home.dm1.lx < home.am.lx, "the 4-2-3-1 draws two midfield bands");
+-  assert.ok(home.am.lx < home.st.lx, "the loan striker is the most advanced");
+-
+-  // Within a line, the granular role decides the side of the pitch.
+-  assert.ok(home.lb.ly < home.rb.ly, "left-back stands left of right-back");
+-  assert.ok(home.lw.ly < home.rw.ly, "left winger stands left of right winger");
+-  assert.ok(home.dm1.ly !== home.dm2.ly, "the holding pair is spread, not stacked");
+-
+-  // Away mirrors along the length so they attack the other way.
+-  const away = lineupSlots(lineup, "away");
+-  for (const id of Object.keys(home)) {
+-    assert.ok(Math.abs(away[id].lx - (1 - home[id].lx)) < 1e-9, `${id} mirrors for the away side`);
+-  }
+-}
+-
+-/** No usable formation keeps the old flat-line fallback, never a blank pitch. */
+-function testLineupSlotsFallback(): void {
+-  const lineup = {
+-    formation: "",
+-    coach: "",
+-    subs: [],
+-    starters: [p("gk", "GK", 1), p("d1", "DEF", 2), p("d2", "DEF", 3), p("m1", "MID", 4), p("f1", "FWD", 9)],
+-  };
+-  const slots = lineupSlots(lineup, "home");
+-  assert.equal(Object.keys(slots).length, 5, "the fallback still places everyone");
+-  assert.ok(slots.gk.lx < slots.d2.lx && slots.d2.lx < slots.m1.lx, "flat lines stay in order");
+-}
+-
+-export function runPitchArtTests(): void {
+-  testPenaltyArc();
+-  testCornerArcs();
+-  testLineupSlotsRealFormation();
+-  testLineupSlotsFallback();
+-  console.log("  pitchArt: arcs in bounds + formation slots (real shape and fallback) OK");
+-}
+diff --git a/tests/replay.test.ts b/tests/replay.test.ts
+deleted file mode 100644
+index 96996d7..0000000
+--- a/tests/replay.test.ts
++++ /dev/null
+@@ -1,182 +0,0 @@
+-/**
+- * The replay's ball path. The stored timeline only publishes coordinates for
+- * goals, so the path must not be built from the timeline alone — a three-goal
+- * match would then shuttle the ball between three points for ninety minutes.
+- * These tests pin the commentary-derived moments as the path's raw material.
+- */
+-import { strict as assert } from "node:assert";
+-import { buildReplayModel, REPLAY_MINUTES } from "../src/lib/replay.js";
+-import type { ApiCommentaryLine, ApiReplay, ApiTimelineEvent } from "../src/lib/api.js";
+-
+-const SIDES = {
+-  home: { id: "h", name: "Bulgaria", shortName: "BUL", color: "#ffffff" },
+-  away: { id: "a", name: "Estonia", shortName: "EST", color: "#0072ce" },
+-};
+-
+-function line(sequence: number, minute: string, text: string): ApiCommentaryLine {
+-  return { sequence, minute_display: minute, minute_seconds: null, text };
+-}
+-
+-function goal(id: number, minute: string, teamId: string): ApiTimelineEvent {
+-  return {
+-    id,
+-    match_id: "m",
+-    minute_display: minute,
+-    minute_seconds: 0,
+-    type: "goal",
+-    team_id: teamId,
+-    description: `Goal! Bulgaria 1, Estonia 0. Max (Bulgaria) right footed shot from the centre of the box.`,
+-    participants: [{ id: "p1", name: "Max" }],
+-    comment_count: 0,
+-    field_x: 88,
+-    field_y: 50,
+-    goal_y: 52,
+-  };
+-}
+-
+-/** A realistic feed: goals carry real coordinates, nothing else does. */
+-function replayWithCommentary(
+-  comments: ApiCommentaryLine[],
+-  events: ApiTimelineEvent[],
+-  xg?: { team_id: string; xg: number | null; xga: number | null }[],
+-): ApiReplay {
+-  return {
+-    match: { id: "m", home_team_id: "h", away_team_id: "a" },
+-    events,
+-    commentary: comments,
+-    teamStats: [
+-      { team_id: "h", possession_pct: 55, shots: null, shots_on_target: null, corners: null, fouls: null },
+-      { team_id: "a", possession_pct: 45, shots: null, shots_on_target: null, corners: null, fouls: null },
+-    ],
+-    xg,
+-  } as unknown as ApiReplay;
+-}
+-
+-function testMomentsComeFromCommentary(): void {
+-  // Three goals on the timeline (the only coord-carrying events), but a dozen
+-  // described actions — the ball path must know about all of them.
+-  const comments = [
+-    line(1, "3'", "Attempt saved. Max (Bulgaria) right footed shot from outside the box is saved."),
+-    line(2, "9'", "Corner, Estonia. Conceded by Dan."),
+-    line(3, "17'", "Sam (Estonia) wins a free kick in the attacking half."),
+-    line(4, "24'", "Attempt missed. John (Estonia) header from the centre of the box."),
+-    line(5, "38'", "Shot on target. Max (Bulgaria) left footed shot from the left side of the box."),
+-    line(
+-      6,
+-      "45'",
+-      "Goal! Bulgaria 1, Estonia 0. Max (Bulgaria) right footed shot from the centre of the box.",
+-    ),
+-    line(7, "58'", "Attempt blocked. Dan (Bulgaria) right footed shot from outside the box."),
+-    line(8, "66'", "Corner, Bulgaria. Conceded by Sam."),
+-    line(9, "74'", "Attempt saved. John (Estonia) right footed shot from more than 35 yards."),
+-    line(10, "83'", "Sam (Estonia) wins a free kick in the defensive half."),
+-  ];
+-  const events = [goal(1, "45", "h"), goal(2, "70", "a"), goal(3, "90", "h")];
+-  const model = buildReplayModel(replayWithCommentary(comments, events), SIDES);
+-
+-  // Every commentary action lands, plus the two timeline goals the commentary
+-  // didn't describe (the 45' one was merged).
+-  assert.ok(model.moments.length >= 9, `expected a detailed path, got ${model.moments.length} moments`);
+-  assert.ok(model.moments.length > events.length, "the path is richer than the coord-carrying timeline");
+-
+-  // Deterministic and ordered.
+-  assert.deepEqual(
+-    [...model.moments].sort((a, b) => a.minute - b.minute),
+-    model.moments,
+-    "moments stay in match order",
+-  );
+-  for (const m of model.moments) {
+-    assert.ok(Number.isFinite(m.lx) && m.lx >= 0 && m.lx <= 1, `lx in range, got ${m.lx}`);
+-    assert.ok(Number.isFinite(m.ly) && m.ly >= 0 && m.ly <= 1, `ly in range, got ${m.ly}`);
+-  }
+-}
+-
+-/** The bug: the ball used to sit on ~3 points for the whole match. */
+-function testBallTravelsAcrossTheMatch(): void {
+-  const comments = [
+-    line(1, "3'", "Attempt saved. Max (Bulgaria) right footed shot from outside the box."),
+-    line(2, "9'", "Corner, Estonia. Conceded by Dan."),
+-    line(3, "17'", "Sam (Estonia) wins a free kick in the attacking half."),
+-    line(4, "24'", "Attempt missed. John (Estonia) header from the centre of the box."),
+-    line(5, "38'", "Shot on target. Max (Bulgaria) left footed shot from the left side of the box."),
+-    line(6, "58'", "Attempt blocked. Dan (Bulgaria) right footed shot from outside the box."),
+-    line(7, "66'", "Corner, Bulgaria. Conceded by Sam."),
+-    line(8, "74'", "Attempt saved. John (Estonia) right footed shot from more than 35 yards."),
+-    line(9, "83'", "Sam (Estonia) wins a free kick in the defensive half."),
+-  ];
+-  const model = buildReplayModel(replayWithCommentary(comments, [goal(1, "45", "h")]), SIDES);
+-
+-  const distinct = new Set(
+-    model.ticks.map((tick) => `${tick.ball.lx.toFixed(2)},${tick.ball.ly.toFixed(2)}`),
+-  );
+-  // A 90-minute path with a single tracked moment must still visit far more
+-  // than the handful of points a coordinates-only path produced.
+-  assert.ok(distinct.size >= 20, `ball must travel, got ${distinct.size} distinct spots`);
+-  // And it must cross both teams' halves, not hang around one box.
+-  const lxValues = model.ticks.map((tick) => tick.ball.lx);
+-  assert.ok(Math.min(...lxValues) < 0.35, "ball visits the left half");
+-  assert.ok(Math.max(...lxValues) > 0.65, "ball visits the right half");
+-  // The final tick is still inside the precomputed range.
+-  assert.equal(model.ticks.length, REPLAY_MINUTES + 1);
+-  assert.ok(model.ticks.every((tick) => Number.isFinite(tick.ball.lx) && Number.isFinite(tick.ball.ly)));
+-}
+-
+-/** Interpolation, not a hard jump: a minute between two moments sits between. */
+-function testBallInterpolatesBetweenMoments(): void {
+-  const comments = [
+-    line(1, "10'", "Attempt saved. Max (Bulgaria) right footed shot from outside the box."),
+-    line(2, "20'", "Corner, Estonia. Conceded by Dan."),
+-  ];
+-  const model = buildReplayModel(replayWithCommentary(comments, []), SIDES);
+-  const at10 = model.ticks[10].ball;
+-  const at20 = model.ticks[20].ball;
+-  const at15 = model.ticks[15].ball;
+-
+-  assert.ok(Math.abs(at10.lx - model.moments[0].lx) < 1e-9, "ball sits on the moment at its minute");
+-  assert.ok(Math.abs(at20.lx - model.moments[1].lx) < 1e-9, "ball sits on the moment at its minute");
+-  const lo = Math.min(at10.lx, at20.lx);
+-  const hi = Math.max(at10.lx, at20.lx);
+-  assert.ok(at15.lx > lo && at15.lx < hi, `mid-minute ball between the two spots, got ${at15.lx}`);
+-}
+-
+-/** No commentary at all: a single centre point, never a wandering invention. */
+-function testEmptyCommentary(): void {
+-  const model = buildReplayModel(replayWithCommentary([], [goal(1, "45", "h")]), SIDES);
+-  // The one tracked goal is the only moment.
+-  assert.equal(model.moments.length, 1);
+-  const before = model.ticks[10].ball;
+-  assert.ok(
+-    Math.abs(before.lx - model.moments[0].lx) < 1e-9,
+-    "before the only moment the ball holds its spot",
+-  );
+-}
+-
+-/** Per-match xG rides through to the model, and absence stays null. */
+-function testXgMapping(): void {
+-  const withXg = buildReplayModel(
+-    replayWithCommentary(
+-      [],
+-      [],
+-      [
+-        { team_id: "h", xg: 1.75, xga: 0.9 },
+-        { team_id: "a", xg: 0.9, xga: 1.75 },
+-      ],
+-    ),
+-    SIDES,
+-  );
+-  assert.equal(withXg.xgHome, 1.75, "the home row's own xG");
+-  assert.equal(withXg.xgAway, 0.9, "the away row's own xG");
+-
+-  const without = buildReplayModel(replayWithCommentary([], []), SIDES);
+-  assert.equal(without.xgHome, null, "an unmatched fixture has no xG, never a zero");
+-  assert.equal(without.xgAway, null);
+-}
+-
+-export function runReplayTests(): void {
+-  testMomentsComeFromCommentary();
+-  testBallTravelsAcrossTheMatch();
+-  testBallInterpolatesBetweenMoments();
+-  testEmptyCommentary();
+-  testXgMapping();
+-  console.log("  replay: commentary-derived ball path, interpolation, empty feed and xG OK");
+-}
+diff --git a/tests/run.ts b/tests/run.ts
+index 2c82666..14b4f75 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -11,12 +11,9 @@ import { runPredictionScoreTests } from "./predictionScore.test.js";
+ import { runMigrateTests } from "./migrate.test.js";
+ import { runPasswordTests } from "./password.test.js";
+ import { runNotificationTests } from "./notifications.test.js";
+-import { runLivePitchTests } from "./livePitch.test.js";
+-import { runPitchArtTests } from "./pitchArt.test.js";
+ import { runUnderstatTests } from "./understat.test.js";
+ import { runStandingsTests } from "./standings.test.js";
+ import { runFeedTests } from "./feed.test.js";
+-import { runReplayTests } from "./replay.test.js";
+ import { runSeasonTests } from "./season.test.js";
+ import { runClientTests } from "./client.test.js";
+ import { runRetentionTests } from "./retention.test.js";
+@@ -43,12 +40,9 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["migrate", runMigrateTests],
+   ["password", runPasswordTests],
+   ["notifications", runNotificationTests],
+-  ["livePitch", runLivePitchTests],
+-  ["pitchArt", runPitchArtTests],
+   ["understat", runUnderstatTests],
+   ["standings", runStandingsTests],
+   ["feed", runFeedTests],
+-  ["replay", runReplayTests],
+   ["season", runSeasonTests],
+   ["client", runClientTests],
+   ["retention", runRetentionTests],
+-- 
+2.54.0.windows.1
+

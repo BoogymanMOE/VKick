@@ -1,0 +1,87 @@
+From 666f63d70a29266a8dd7c440491d9e53f4fcf21f Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 20:26:57 +0330
+Subject: [PATCH 202/230] =?UTF-8?q?fix(deps):=20add=20@fontsource=20to=20p?=
+ =?UTF-8?q?ackage.json=20=E2=80=94=20Render=20build=20was=20failing?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ package-lock.json | 27 +++++++++++++++++++++++++--
+ package.json      |  2 ++
+ 2 files changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/package-lock.json b/package-lock.json
+index f8ba90b..a4d70f4 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,13 +1,15 @@
+ {
+   "name": "vkick",
+-  "version": "0.2.0",
++  "version": "0.3.0",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "vkick",
+-      "version": "0.2.0",
++      "version": "0.3.0",
+       "dependencies": {
++        "@fontsource/archivo": "^5.3.0",
++        "@fontsource/vazirmatn": "^5.3.0",
+         "@tanstack/react-query": "^5.62.7",
+         "express": "^5.2.1",
+         "grammy": "^1.35.0",
+@@ -37,6 +39,9 @@
+         "typescript": "^5.7.2",
+         "typescript-eslint": "^8.71.0",
+         "vite": "^6.0.5"
++      },
++      "engines": {
++        "node": ">=22.5"
+       }
+     },
+     "node_modules/@babel/code-frame": {
+@@ -931,6 +936,24 @@
+         "node": "^18.18.0 || ^20.9.0 || >=21.1.0"
+       }
+     },
++    "node_modules/@fontsource/archivo": {
++      "version": "5.3.0",
++      "resolved": "https://package-mirror.liara.ir/repository/npm/api/npm/npm/@fontsource/archivo/-/archivo-5.3.0.tgz",
++      "integrity": "sha512-5DIMgPVJRi62OqdOVoogCFxP73EkNM/E0YVTSDIQlDEJfDbxqZduwM/YoNZwC9Sx1CDgpKinqf8ckRY1QNIecw==",
++      "license": "OFL-1.1",
++      "funding": {
++        "url": "https://github.com/sponsors/ayuhito"
++      }
++    },
++    "node_modules/@fontsource/vazirmatn": {
++      "version": "5.3.0",
++      "resolved": "https://package-mirror.liara.ir/repository/npm/api/npm/npm/@fontsource/vazirmatn/-/vazirmatn-5.3.0.tgz",
++      "integrity": "sha512-XC/2yN2r5gwhFT3klSuWaqncODX2DOfRYfNmbyzgtWYxHxMC+tcoaX+tgggrm6hSkEgpR1TuSDEf1PiI91G7qg==",
++      "license": "OFL-1.1",
++      "funding": {
++        "url": "https://github.com/sponsors/ayuhito"
++      }
++    },
+     "node_modules/@grammyjs/types": {
+       "version": "5.0.0",
+       "resolved": "https://package-mirror.liara.ir/repository/npm/api/npm/npm/@grammyjs/types/-/types-5.0.0.tgz",
+diff --git a/package.json b/package.json
+index b0cccc0..725fe88 100644
+--- a/package.json
++++ b/package.json
+@@ -31,6 +31,8 @@
+     "import-logos": "node scripts/import-logos.mjs"
+   },
+   "dependencies": {
++    "@fontsource/archivo": "^5.3.0",
++    "@fontsource/vazirmatn": "^5.3.0",
+     "@tanstack/react-query": "^5.62.7",
+     "express": "^5.2.1",
+     "grammy": "^1.35.0",
+-- 
+2.54.0.windows.1
+

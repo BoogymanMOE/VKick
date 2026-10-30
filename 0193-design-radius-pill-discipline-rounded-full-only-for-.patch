@@ -1,0 +1,260 @@
+From 2bc2709f10b29f1a4cf60a43aeacb9916698a646 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 21 Oct 2026 02:54:19 +0330
+Subject: [PATCH 193/230] =?UTF-8?q?design(radius):=20pill=20discipline=20?=
+ =?UTF-8?q?=E2=80=94=20rounded-full=20only=20for=20tab=20bar=20+=20primary?=
+ =?UTF-8?q?=20CTA,=20lg=20for=20filters,=20md=20for=20chips?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Every pill-shaped text control downgrades to rounded-lg: the Segmented track
+and its tabs + sliding marker, the Matches league chips, show-all, and
+empty-day jump, the Table Tables/Browse switch and empty action, Cups back,
+Onboarding skip/back rows, Profile dismiss, the timeline comment pulls,
+PickerTabs and the LineupPicker side toggle, and the ErrorState retry.
+Circles stay circles: icon buttons (TopBar/Matches/BottomSheet/team badges),
+avatars and dots, progress-bar caps, skeleton circles, and the switch track
+(a switch stops being a switch at rounded-lg). Chips were already rounded-md.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/DateStrip.tsx           |  2 +-
+ src/components/PickerTabs.tsx          |  2 +-
+ src/components/TimelineList.tsx        |  4 ++--
+ src/components/panels/LineupPicker.tsx |  2 +-
+ src/components/ui.tsx                  | 13 ++++++++-----
+ src/pages/Cups.tsx                     |  2 +-
+ src/pages/Matches.tsx                  |  6 +++---
+ src/pages/Onboarding.tsx               |  4 ++--
+ src/pages/Profile.tsx                  |  2 +-
+ src/pages/Table.tsx                    |  6 +++---
+ 10 files changed, 23 insertions(+), 20 deletions(-)
+
+diff --git a/src/components/DateStrip.tsx b/src/components/DateStrip.tsx
+index 4955908..40272b2 100644
+--- a/src/components/DateStrip.tsx
++++ b/src/components/DateStrip.tsx
+@@ -82,7 +82,7 @@ export function DateStrip({ selected, onSelect, daysWithMatches }: DateStripProp
+             // so the user always knows where they are in the week.
+             aria-current={isToday ? "date" : undefined}
+             onClick={() => onSelect(day)}
+-            className={`min-h-11 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-[12px] border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.96] ${
++            className={`min-h-11 flex-1 flex flex-col items-center justify-center gap-0.5 rounded-lg border px-1 text-center transition-colors duration-[var(--t-fast)] active:scale-[0.96] ${
+               isSelected
+                 ? "border-volt bg-volt text-on-volt active:bg-volt/80"
+                 : isToday
+diff --git a/src/components/PickerTabs.tsx b/src/components/PickerTabs.tsx
+index 29e071a..ab1cdeb 100644
+--- a/src/components/PickerTabs.tsx
++++ b/src/components/PickerTabs.tsx
+@@ -37,7 +37,7 @@ export function PickerTabs({
+             onChange(group.value);
+           }}
+           className={cx(
+-            "min-h-11 flex-none rounded-full border px-3.5 text-xs font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
++            "min-h-11 flex-none rounded-lg border px-3.5 text-xs font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+             value === group.value ? "border-volt text-volt" : "border-line text-ink-3 hover:text-ink-2",
+           )}
+         >
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index bc080df..3527597 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -249,7 +249,7 @@ export function TimelineList({
+                     // 36px visual with an invisible 44px+ hit band (the same
+                     // pattern as the feed's league chips): a full 44px visual
+                     // control would balloon the row past the compact band.
+-                    className="relative inline-flex h-9 items-center gap-1 rounded-full px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
++                    className="relative inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
+                   >
+                     <span aria-hidden="true">💬</span>
+                     <Num>{count}</Num>
+@@ -336,7 +336,7 @@ export function TimelineList({
+                     // 36px visual with an invisible 44px+ hit band (the same
+                     // pattern as the feed's league chips): a full 44px visual
+                     // control would balloon the row past the compact band.
+-                    className="relative inline-flex h-9 items-center gap-1 rounded-full px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
++                    className="relative inline-flex h-9 items-center gap-1 rounded-lg px-2 text-xs font-bold text-gold after:absolute after:-inset-x-1 after:-inset-y-2.5 after:content-['']"
+                   >
+                     <span aria-hidden="true">💬</span>
+                     <Num>{count}</Num>
+diff --git a/src/components/panels/LineupPicker.tsx b/src/components/panels/LineupPicker.tsx
+index 657fbe6..a3a28a2 100644
+--- a/src/components/panels/LineupPicker.tsx
++++ b/src/components/panels/LineupPicker.tsx
+@@ -65,7 +65,7 @@ function LineupPitch({
+               <span
+                 key={player ? player.id : `empty-${rowIndex}-${index}`}
+                 className={cx(
+-                  "grid h-6 flex-1 place-items-center rounded-full border text-xs font-bold tabular-nums",
++                  "grid h-6 flex-1 place-items-center rounded-lg border text-xs font-bold tabular-nums",
+                   player ? "border-transparent bg-volt text-black" : "border-line border-dashed text-ink-3",
+                 )}
+               >
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index cecedfc..a21802e 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -547,7 +547,7 @@ export function Segmented<T extends string>({
+       ref={trackRef}
+       role="tablist"
+       className={cx(
+-        "relative flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1",
++        "relative flex gap-1 overflow-x-auto rounded-lg border border-line bg-surface p-1",
+         className,
+       )}
+     >
+@@ -569,7 +569,7 @@ export function Segmented<T extends string>({
+       {indicator ? (
+         <span
+           aria-hidden="true"
+-          className="pointer-events-none absolute top-1 bottom-1 rounded-full bg-elevated shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--volt)_35%,transparent)] transition-transform duration-[var(--t-fast)] ease-[var(--ease-pop)]"
++          className="pointer-events-none absolute top-1 bottom-1 rounded-lg bg-elevated shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--volt)_35%,transparent)] transition-transform duration-[var(--t-fast)] ease-[var(--ease-pop)]"
+           style={{ left: 0, width: indicator.width, transform: `translateX(${indicator.start}px)` }}
+         />
+       ) : null}
+@@ -593,7 +593,7 @@ export function Segmented<T extends string>({
+             // fills the track, and with whitespace-nowrap each tab's min-content
+             // width is its label, so a crowded row (the five match tabs in
+             // Persian) scrolls rather than breaking a word.
+-            "relative flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap transition-colors duration-[var(--t-fast)]",
++            "relative flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-bold whitespace-nowrap transition-colors duration-[var(--t-fast)]",
+             value === option.value ? "text-volt" : "text-ink-2 hover:text-ink",
+           )}
+         >
+@@ -819,7 +819,10 @@ export function Switch({
+         haptic("light");
+         onChange(!checked);
+       }}
+-      className="relative h-6 w-11 flex-none rounded-full border border-line transition-colors duration-[var(--t-fast)] after:absolute after:-inset-2.5 after:content-['']"
++      // The track is a control, not a badge: rounded-lg keeps it in the
++      // "secondary control" family with the other switches, and the knob
++      // stays a circle on top of it.
++      className="relative h-6 w-11 flex-none rounded-lg border border-line transition-colors duration-[var(--t-fast)] after:absolute after:-inset-2.5 after:content-['']"
+       style={{
+         backgroundColor: checked ? "var(--volt)" : "color-mix(in srgb, var(--text-muted) 35%, transparent)",
+       }}
+@@ -906,7 +909,7 @@ export function ErrorState({ title, hint, onRetry }: { title?: string; hint?: st
+           haptic("light");
+           onRetry();
+         }}
+-        className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-full border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++        className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-volt px-5 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+       >
+         <RefreshIcon />
+         {t("common.retry")}
+diff --git a/src/pages/Cups.tsx b/src/pages/Cups.tsx
+index 3f455ed..c483cde 100644
+--- a/src/pages/Cups.tsx
++++ b/src/pages/Cups.tsx
+@@ -154,7 +154,7 @@ export default function Cups() {
+                   haptic("light");
+                   setRoundsOverride((prev) => (prev === null ? false : !prev));
+                 }}
+-                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-xs font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
++                className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-xs font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
+               >
+                 {roundsOverride === false ? t("common.expandAll") : t("common.collapseAll")}
+               </button>
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index c9140e2..1d84ec5 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -37,7 +37,7 @@ import type { Match } from "../types";
+  * language wanted a tighter pill without shrinking what a thumb can hit.
+  */
+ const LEAGUE_CHIP =
+-  "relative h-9 flex-none rounded-full border px-3.5 text-sm font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97] after:absolute after:-inset-x-0.5 after:-inset-y-1 after:content-['']";
++  "relative h-9 flex-none rounded-lg border px-3.5 text-sm font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97] after:absolute after:-inset-x-0.5 after:-inset-y-1 after:content-['']";
+ 
+ /** Selected league chip: filled volt pill — the row's one "picked" affordance. */
+ const LEAGUE_CHIP_ON = "border-volt bg-volt/15 text-volt";
+@@ -383,7 +383,7 @@ export default function Matches() {
+                 haptic("light");
+                 navigate("/matches");
+               }}
+-              className="inline-flex min-h-11 flex-none items-center rounded-full border border-volt px-3 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++              className="inline-flex min-h-11 flex-none items-center rounded-lg border border-volt px-3 text-xs font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+             >
+               {t("matches.showAll")}
+             </button>
+@@ -454,7 +454,7 @@ export default function Matches() {
+                       haptic("light");
+                       setPicked(nextMatchDay);
+                     }}
+-                    className="min-h-11 rounded-full border border-volt px-5 text-sm font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++                    className="min-h-11 rounded-lg border border-volt px-5 text-sm font-bold text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                   >
+                     {t("matches.goToDay", { day: dayLabel(nextMatchDay) })}
+                   </button>
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 0604a00..01865be 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -494,7 +494,7 @@ export default function Onboarding() {
+           <button
+             type="button"
+             onClick={finish}
+-            className="inline-flex min-h-11 w-full items-center justify-center rounded-full text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
++            className="inline-flex min-h-11 w-full items-center justify-center rounded-lg text-xs font-bold text-ink-3 transition-colors hover:text-ink-2"
+           >
+             {t("onboarding.skip")}
+           </button>
+@@ -541,7 +541,7 @@ function Intro({ onDone }: { onDone: () => void }) {
+             haptic("light");
+             onDone();
+           }}
+-          className="min-h-11 rounded-full px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
++          className="min-h-11 rounded-lg px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
+         >
+           {t("intro.skip")}
+         </button>
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index a361234..107c1ab 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -672,7 +672,7 @@ function WhatsNew() {
+               haptic("light");
+               setSeenRelease(latest.version);
+             }}
+-            className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
++            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-bold text-ink-3 transition-colors duration-[var(--t-fast)] hover:text-ink-2"
+           >
+             <CloseIcon className="h-3 w-3" />
+             {t("whatsNew.dismiss")}
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index c96b8eb..326bc82 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -158,7 +158,7 @@ export default function Table() {
+                 action={
+                   <Link
+                     to="/onboarding"
+-                    className="min-h-11 rounded-full border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++                    className="min-h-11 rounded-lg border border-volt px-5 text-xs font-bold leading-[2.75rem] text-volt transition-colors duration-[var(--t-fast)] hover:bg-elevated"
+                   >
+                     {t("table.emptyAction")}
+                   </Link>
+@@ -277,7 +277,7 @@ function BrowseContent() {
+   return (
+     <>
+       <div
+-        className="mt-3 grid grid-cols-3 gap-1 rounded-full border border-line bg-surface p-1"
++        className="mt-3 grid grid-cols-3 gap-1 rounded-lg border border-line bg-surface p-1"
+         role="group"
+         aria-label={t("browse.filterLabel")}
+       >
+@@ -297,7 +297,7 @@ function BrowseContent() {
+               setFilter(value);
+             }}
+             className={cx(
+-              "min-h-11 rounded-full text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
++              "min-h-11 rounded-lg text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+               filter === value ? "bg-elevated text-volt" : "text-ink-2 hover:text-ink",
+             )}
+           >
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,3033 @@
+From eaa2ef5659e04d1dfad62409fbb7a1cffa35fb21 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 7 Oct 2026 01:24:02 +0330
+Subject: [PATCH 023/230] Extract the shared contexts and helpers out of the
+ component modules
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+New src/lib/cx.ts, src/lib/clubContext.ts, src/lib/adaptComments.ts,
+src/components/toastContext.ts, src/hooks/authContext.ts,
+src/hooks/usePullToRefresh.ts and src/i18n/context.ts. Consumers now import
+the context or helper they need (toast, auth, i18n, club list, comment
+adapter, class-name joiner, pull-to-refresh) instead of reaching through a
+component module, which is what let MatchDetail and friends drop their
+remaining pitch-era imports.
+
+The entrance stagger, the streak icon and the reflow of the touched files
+came in with the same pass.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/components/AppShell.tsx               |   2 +-
+ src/components/BottomSheet.tsx            |  30 +++-
+ src/components/ClubCard.tsx               |  30 ++--
+ src/components/Countdown.tsx              |   8 +-
+ src/components/ErrorBoundary.tsx          |  10 +-
+ src/components/LanguageSync.tsx           |   2 +-
+ src/components/MatchCard.tsx              |  14 +-
+ src/components/PickerTabs.tsx             |   6 +-
+ src/components/PullToRefresh.tsx          |  80 +---------
+ src/components/RatingRow.tsx              |  14 +-
+ src/components/RulesSheet.tsx             |   4 +-
+ src/components/ScoreOdometer.tsx          |   2 +-
+ src/components/Skeletons.tsx              |   2 +-
+ src/components/StreakWidget.tsx           |  10 +-
+ src/components/TabBar.tsx                 |  13 +-
+ src/components/TaskAdCard.tsx             |   2 +-
+ src/components/TimelineList.tsx           |  14 +-
+ src/components/Toast.tsx                  |  34 ++--
+ src/components/TopBar.tsx                 |   4 +-
+ src/components/icons.tsx                  |  10 +-
+ src/components/panels/CommentaryPanel.tsx |   4 +-
+ src/components/panels/CommentsPanel.tsx   |  26 +---
+ src/components/panels/LineupPicker.tsx    |  15 +-
+ src/components/panels/LineupsPanel.tsx    |   5 +-
+ src/components/panels/PredictionsHub.tsx  |  75 +++++++--
+ src/components/panels/RateSheet.tsx       |   7 +-
+ src/components/panels/ShotPredictor.tsx   |   5 +-
+ src/components/panels/StatsPanel.tsx      |   2 +-
+ src/components/panels/SubBoard.tsx        |   5 +-
+ src/components/toastContext.ts            |  28 ++++
+ src/components/ui.tsx                     | 181 +++++++++++++++++++---
+ src/hooks/authContext.ts                  |  47 ++++++
+ src/hooks/useApi.ts                       |  57 +++----
+ src/hooks/useAuth.tsx                     |  74 +++------
+ src/hooks/useFavorites.ts                 |   3 +-
+ src/hooks/usePullToRefresh.ts             |  83 ++++++++++
+ src/i18n/I18nProvider.tsx                 |  21 +--
+ src/i18n/context.ts                       |  26 ++++
+ src/lib/adaptComments.ts                  |  24 +++
+ src/lib/api.ts                            |  81 +++++++++-
+ src/lib/auth.ts                           |  19 ++-
+ src/lib/bracket.ts                        |   2 +-
+ src/lib/breakdown.ts                      |  13 +-
+ src/lib/clubContext.ts                    |  22 +++
+ src/lib/cx.ts                             |   9 ++
+ src/lib/optimistic.ts                     |   2 +-
+ src/lib/pickerGroups.ts                   |   4 +-
+ src/lib/predictionWindow.ts               |   5 +-
+ src/lib/teams.ts                          |   2 +-
+ src/pages/Browse.tsx                      |   9 +-
+ src/pages/Cups.tsx                        |   4 +-
+ src/pages/Leaderboards.tsx                |   5 +-
+ src/pages/Login.tsx                       |  10 +-
+ src/pages/MatchDetail.tsx                 |  61 ++++----
+ src/pages/Matches.tsx                     |  29 ++--
+ src/pages/NotFound.tsx                    |   2 +-
+ src/pages/Onboarding.tsx                  |  21 +--
+ src/pages/PlayerStats.tsx                 |   7 +-
+ src/pages/Predictions.tsx                 |  14 +-
+ src/pages/Profile.tsx                     |  10 +-
+ src/pages/Ratings.tsx                     |   7 +-
+ src/pages/Table.tsx                       |  46 ++++--
+ src/pages/TeamPage.tsx                    |   4 +-
+ 63 files changed, 902 insertions(+), 465 deletions(-)
+ create mode 100644 src/components/toastContext.ts
+ create mode 100644 src/hooks/authContext.ts
+ create mode 100644 src/hooks/usePullToRefresh.ts
+ create mode 100644 src/i18n/context.ts
+ create mode 100644 src/lib/adaptComments.ts
+ create mode 100644 src/lib/clubContext.ts
+ create mode 100644 src/lib/cx.ts
+
+diff --git a/src/components/AppShell.tsx b/src/components/AppShell.tsx
+index f53cf30..6327285 100644
+--- a/src/components/AppShell.tsx
++++ b/src/components/AppShell.tsx
+@@ -2,7 +2,7 @@ import { Suspense, useEffect } from "react";
+ import { Outlet, useLocation } from "react-router-dom";
+ import { initTelegram } from "../lib/telegram";
+ import { useBackNavigation } from "../hooks/useBackNavigation";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { LanguageSync } from "./LanguageSync";
+ import { RowSkeleton } from "./Skeletons";
+ import { TabBar } from "./TabBar";
+diff --git a/src/components/BottomSheet.tsx b/src/components/BottomSheet.tsx
+index f083791..fe9cb88 100644
+--- a/src/components/BottomSheet.tsx
++++ b/src/components/BottomSheet.tsx
+@@ -1,8 +1,8 @@
+ import { useEffect, useRef, useState } from "react";
+ import type { ReactNode } from "react";
+ import { createPortal } from "react-dom";
+-import { useI18n } from "../i18n/I18nProvider";
+-import { cx } from "./ui";
++import { useI18n } from "../i18n/context";
++import { cx } from "../lib/cx";
+ import { CloseIcon } from "./icons";
+ 
+ /**
+@@ -26,6 +26,13 @@ export function BottomSheet({
+ }) {
+   const { t } = useI18n();
+   const [dragY, setDragY] = useState(0);
++  // Enter/exit phase: keep the dialog mounted through the ~150ms leave, so it
++  // animates out instead of vanishing. Derived from `open` during render (the
++  // React-endorsed "adjust state when a prop changes" pattern), so the commit
++  // that flips `open` to false already knows it should play the exit.
++  const [phase, setPhase] = useState<"closed" | "open" | "closing">(open ? "open" : "closed");
++  if (open && phase !== "open") setPhase("open");
++  if (!open && phase === "open") setPhase("closing");
+   const dragStart = useRef<number | null>(null);
+   const sheetRef = useRef<HTMLDivElement | null>(null);
+   // Whatever had focus before the sheet opened gets it back on close.
+@@ -80,11 +87,16 @@ export function BottomSheet({
+     };
+   }, [open, onClose]);
+ 
+-  if (!open) return null;
++  if (phase === "closed") return null;
++  const closing = phase === "closing";
+ 
+   return createPortal(
+     <div className="fixed inset-0 z-50 flex items-end justify-center">
+-      <div className="backdrop-fade absolute inset-0 bg-black/65" onClick={onClose} aria-hidden="true" />
++      <div
++        className={cx("absolute inset-0 bg-black/65", closing ? "backdrop-fade-out" : "backdrop-fade")}
++        onClick={onClose}
++        aria-hidden="true"
++      />
+ 
+       <div
+         ref={sheetRef}
+@@ -92,7 +104,15 @@ export function BottomSheet({
+         aria-modal="true"
+         aria-label={title}
+         tabIndex={-1}
+-        className="sheet-in relative w-full max-w-[560px] rounded-t-[20px] border border-line bg-elevated outline-none"
++        onAnimationEnd={(event) => {
++          // Only the sheet's own leave animation ends the mount; child
++          // animations bubble (goal sweeps, pulses) and must not unmount it.
++          if (closing && event.target === event.currentTarget) setPhase("closed");
++        }}
++        className={cx(
++          "relative w-full max-w-[560px] rounded-t-[20px] border border-line bg-elevated outline-none",
++          closing ? "sheet-out" : "sheet-in",
++        )}
+         style={{
+           transform: dragY ? `translateY(${dragY}px)` : undefined,
+           paddingBottom: "max(env(safe-area-inset-bottom), 16px)",
+diff --git a/src/components/ClubCard.tsx b/src/components/ClubCard.tsx
+index f5e297f..8a44a74 100644
+--- a/src/components/ClubCard.tsx
++++ b/src/components/ClubCard.tsx
+@@ -2,26 +2,13 @@ import type { ReactNode } from "react";
+ import { Link } from "react-router-dom";
+ import { useMemo } from "react";
+ import { useMatches } from "../hooks/useApi";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { formatKickoff } from "../lib/format";
+-import type { Match, Team } from "../types";
+-import { LiveDot, Num, TeamBadge, cx } from "./ui";
++import type { Team } from "../types";
++import { cx } from "../lib/cx";
++import { LiveDot, Num, TeamBadge } from "./ui";
+ import { CloseIcon, StarFilledIcon } from "./icons";
+-
+-/** A club's context in the fixture list: live now, else next kickoff, else last result. */
+-export function clubContext(teamId: string, matches: Match[]) {
+-  const mine = matches.filter((m) => m.home.id === teamId || m.away.id === teamId);
+-  const newestFirst = (a: Match, b: Match) => +new Date(b.kickoffAt) - +new Date(a.kickoffAt);
+-  const soonestFirst = (a: Match, b: Match) => +new Date(a.kickoffAt) - +new Date(b.kickoffAt);
+-  const live = mine.find((m) => m.status === "live");
+-  const next = mine.filter((m) => m.status === "scheduled").sort(soonestFirst)[0];
+-  const last = mine.filter((m) => m.status === "finished").sort(newestFirst)[0];
+-  return { match: live ?? next ?? last, live, next, last };
+-}
+-
+-export function opponentOf(teamId: string, match: Match) {
+-  return match.home.id === teamId ? match.away : match.home;
+-}
++import { clubContext, opponentOf } from "../lib/clubContext";
+ 
+ /**
+  * Compact club tile with its fixture state — the shared atom behind the home
+@@ -102,7 +89,7 @@ export function ClubFixtureCard({
+       {match ? (
+         <Link
+           to={`/match/${match.id}`}
+-          className="block rounded-card transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++          className="block rounded-card transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
+         >
+           {body}
+         </Link>
+@@ -120,8 +107,11 @@ export function ClubFixtureCard({
+           <span
+             className={cx(
+               "grid h-5 w-5 place-items-center rounded-full border bg-elevated transition-colors duration-[var(--t-fast)]",
+-              anchored ? "border-gold text-gold" : "border-line text-ink-3",
++              // Keyed on `anchored`: promotion remounts the dot so the star
++              // replays star-pop instead of the fill just blinking on.
++              anchored ? "star-pop border-gold text-gold" : "border-line text-ink-3",
+             )}
++            key={anchored ? "on" : "off"}
+             aria-hidden="true"
+           >
+             <StarFilledIcon className="h-2.5 w-2.5" />
+diff --git a/src/components/Countdown.tsx b/src/components/Countdown.tsx
+index 8105ea0..bc9555f 100644
+--- a/src/components/Countdown.tsx
++++ b/src/components/Countdown.tsx
+@@ -1,12 +1,12 @@
+ import { useEffect, useState } from "react";
+-import { useI18n } from "../i18n/I18nProvider";
+-import { cx } from "./ui";
++import { useI18n } from "../i18n/context";
++import { cx } from "../lib/cx";
+ 
+ /**
+  * Signature animation 7: deadline heat.
+  * Under an hour it turns danger red; in the last ten seconds every tick pulses.
+  */
+-export function useCountdown(deadlineAt: string) {
++function useCountdown(deadlineAt: string) {
+   const [now, setNow] = useState(() => Date.now());
+ 
+   useEffect(() => {
+@@ -62,7 +62,7 @@ export function Countdown({
+       // Remounting per second in panic heat is what animates the pulse.
+       key={heat === "panic" ? totalSeconds : "steady"}
+       className={cx(
+-        "num-display tabular-nums inline-flex items-baseline",
++        "num-display tabular-nums inline-flex items-baseline transition-colors duration-[var(--t-slow)]",
+         color,
+         size === "lg" ? "text-2xl" : "text-base",
+         heat === "panic" && "tick-panic",
+diff --git a/src/components/ErrorBoundary.tsx b/src/components/ErrorBoundary.tsx
+index 6df24fa..947feb2 100644
+--- a/src/components/ErrorBoundary.tsx
++++ b/src/components/ErrorBoundary.tsx
+@@ -1,5 +1,5 @@
+ import { Component, type ErrorInfo, type ReactNode } from "react";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ 
+ /**
+  * Render-crash insurance. Without this, one throwing component white-screens
+@@ -40,7 +40,13 @@ export class ErrorBoundary extends Component<Props, State> {
+   }
+ }
+ 
+-function FallbackCard({ onRetry }: { onRetry: () => void }) {
++/**
++ * Exported rather than module-private so this file's export surface is
++ * components only: React Fast Refresh keys its HMR boundary off that, and
++ * eslint-plugin-react-refresh does not recognise a class export (`ErrorBoundary`)
++ * as a component — without this the file trips `only-export-components`.
++ */
++export function FallbackCard({ onRetry }: { onRetry: () => void }) {
+   const { t } = useI18n();
+   return (
+     <div role="alert" className="grid min-h-[100svh] place-items-center px-6">
+diff --git a/src/components/LanguageSync.tsx b/src/components/LanguageSync.tsx
+index 4b98635..520b5d0 100644
+--- a/src/components/LanguageSync.tsx
++++ b/src/components/LanguageSync.tsx
+@@ -1,5 +1,5 @@
+ import { useEffect, useRef } from "react";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { api } from "../lib/api";
+ 
+ /**
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index cfa94cc..fbf2bd6 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -1,12 +1,13 @@
+-import { memo } from "react";
++import { memo, type CSSProperties } from "react";
+ import { Link } from "react-router-dom";
+ import type { Match } from "../types";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { useFavorites } from "../hooks/useFavorites";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+ import { ScoreOdometer } from "./ScoreOdometer";
+-import { Chip, LiveDot, Num, PredictionIcons, TeamBadge, cx } from "./ui";
++import { cx } from "../lib/cx";
++import { Chip, LiveDot, Num, PredictionIcons, TeamBadge } from "./ui";
+ import { StarFilledIcon, TargetIcon } from "./icons";
+ 
+ function StatusChip({ match }: { match: Match }) {
+@@ -41,9 +42,12 @@ function StatusChip({ match }: { match: Match }) {
+ export const MatchCard = memo(function MatchCard({
+   match,
+   flash = false,
++  index = 0,
+ }: {
+   match: Match;
+   flash?: boolean;
++  /** Position in its list, for the entrance stagger. */
++  index?: number;
+ }) {
+   const { t, lang, localize } = useI18n();
+   const { isFavorite } = useFavorites();
+@@ -53,7 +57,7 @@ export const MatchCard = memo(function MatchCard({
+   const awayLeading = (match.awayScore ?? 0) > (match.homeScore ?? 0);
+ 
+   return (
+-    <li>
++    <li className="list-in" style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}>
+       {/* One transparent hit area covers the card body, so "tap anywhere opens
+           the match" survives while the deadline link in the footer can sit
+           above it as its own target (stretched-link pattern). The overlay is
+@@ -61,7 +65,7 @@ export const MatchCard = memo(function MatchCard({
+           card scrolling under the header never paints over it. */}
+       <div
+         className={cx(
+-          "relative overflow-hidden rounded-card border p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated",
++          "relative overflow-hidden rounded-card border p-3 transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
+           flash ? "goal-flash border-volt/50 bg-elevated" : "border-line bg-surface",
+         )}
+       >
+diff --git a/src/components/PickerTabs.tsx b/src/components/PickerTabs.tsx
+index 9824557..4cf51d5 100644
+--- a/src/components/PickerTabs.tsx
++++ b/src/components/PickerTabs.tsx
+@@ -6,8 +6,8 @@
+  * every tab reachable and make the active one obvious.
+  */
+ import { haptic } from "../lib/telegram";
+-import { useI18n } from "../i18n/I18nProvider";
+-import { cx } from "./ui";
++import { useI18n } from "../i18n/context";
++import { cx } from "../lib/cx";
+ import type { PickerGroup } from "../lib/pickerGroups";
+ 
+ export function PickerTabs({
+@@ -37,7 +37,7 @@ export function PickerTabs({
+             onChange(group.value);
+           }}
+           className={cx(
+-            "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
++            "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+             value === group.value ? "border-volt text-volt" : "border-line text-ink-3 hover:text-ink-2",
+           )}
+         >
+diff --git a/src/components/PullToRefresh.tsx b/src/components/PullToRefresh.tsx
+index 0f50579..32dee9f 100644
+--- a/src/components/PullToRefresh.tsx
++++ b/src/components/PullToRefresh.tsx
+@@ -1,86 +1,8 @@
+-import { useEffect, useRef, useState } from "react";
+ import { RefreshIcon } from "./icons";
++import { THRESHOLD } from "../hooks/usePullToRefresh";
+ 
+-/**
+- * Pull down from the top of the feed to resync it.
+- *
+- * The feed is the app's front door and its users are checking live scores
+- * one-handed on a phone, so the platform gesture has to work; the TopBar icon
+- * stays as the keyboard/screen-reader equivalent and never goes away.
+- *
+- * Design notes:
+- * - Listeners live on `window` with `touchmove` registered non-passive, so the
+- *   browser's own overscroll is suppressed while the gesture is ours. Without
+- *   that the feed rubber-bands and the indicator fights it.
+- * - The gesture is only claimed when the feed is already at the top and no
+- *   refresh is running; anywhere else the listeners stand down and normal
+- *   scrolling is untouched.
+- * - Distance is rubber-banded (x0.5) and capped, so a long drag feels resisted
+- *   rather than tracking the finger 1:1.
+- */
+-const THRESHOLD = 64;
+-const MAX_PULL = 96;
+ const TRAVEL = 56;
+ 
+-export function usePullToRefresh(onRefresh: () => void, enabled: boolean) {
+-  const [pull, setPull] = useState(0);
+-  const startY = useRef<number | null>(null);
+-  const distance = useRef(0);
+-  const latest = useRef(onRefresh);
+-
+-  // Keep the callback current without resubscribing the listeners every render.
+-  useEffect(() => {
+-    latest.current = onRefresh;
+-  }, [onRefresh]);
+-
+-  useEffect(() => {
+-    if (!enabled) return;
+-
+-    const atTop = () => (document.scrollingElement?.scrollTop ?? 0) <= 0;
+-
+-    const start = (event: TouchEvent) => {
+-      distance.current = 0;
+-      startY.current = atTop() ? (event.touches[0]?.clientY ?? null) : null;
+-    };
+-
+-    const move = (event: TouchEvent) => {
+-      if (startY.current === null) return;
+-      const y = event.touches[0]?.clientY ?? 0;
+-      const delta = y - startY.current;
+-      if (delta <= 0 || !atTop()) {
+-        // Swiped up (or the feed scrolled): hand the gesture back to the page.
+-        startY.current = null;
+-        distance.current = 0;
+-        setPull(0);
+-        return;
+-      }
+-      if (event.cancelable) event.preventDefault();
+-      distance.current = Math.min(delta * 0.5, MAX_PULL);
+-      setPull(distance.current);
+-    };
+-
+-    const end = () => {
+-      if (startY.current !== null && distance.current >= THRESHOLD) latest.current();
+-      startY.current = null;
+-      distance.current = 0;
+-      setPull(0);
+-    };
+-
+-    window.addEventListener("touchstart", start, { passive: true });
+-    window.addEventListener("touchmove", move, { passive: false });
+-    window.addEventListener("touchend", end, { passive: true });
+-    window.addEventListener("touchcancel", end, { passive: true });
+-    return () => {
+-      window.removeEventListener("touchstart", start);
+-      window.removeEventListener("touchmove", move);
+-      window.removeEventListener("touchend", end);
+-      window.removeEventListener("touchcancel", end);
+-    };
+-  }, [enabled]);
+-
+-  return pull;
+-}
+-
+ /**
+  * The pull progress marker. Transform-only (no height animation): it slides in
+  * under the sticky TopBar and snaps to volt once armed, so the drag costs a
+diff --git a/src/components/RatingRow.tsx b/src/components/RatingRow.tsx
+index b88f866..cd447cb 100644
+--- a/src/components/RatingRow.tsx
++++ b/src/components/RatingRow.tsx
+@@ -1,7 +1,9 @@
++import type { CSSProperties } from "react";
+ import type { PlayerRating, Team } from "../types";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { haptic, selectionHaptic } from "../lib/telegram";
+-import { Chip, Num, TeamBadge, cx } from "./ui";
++import { cx } from "../lib/cx";
++import { Chip, Num, TeamBadge } from "./ui";
+ 
+ /**
+  * The differentiator in one row: the stat score on one side, the crowd's
+@@ -12,12 +14,15 @@ export function RatingRow({
+   team,
+   onRate,
+   onTap,
++  index = 0,
+ }: {
+   rating: PlayerRating;
+   team: Team;
+   onRate?: (playerId: string, value: number) => void;
+   /** When set, the whole row opens the rating sheet instead of showing a slider. */
+   onTap?: (player: PlayerRating) => void;
++  /** Position in its list, for the entrance stagger. */
++  index?: number;
+ }) {
+   const { t, localize } = useI18n();
+   const hasCrowd = rating.crowdRating !== null;
+@@ -26,7 +31,7 @@ export function RatingRow({
+   const Tag = onTap ? "button" : "div";
+ 
+   return (
+-    <li>
++    <li className="list-in" style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}>
+       <Tag
+         {...(onTap
+           ? {
+@@ -39,7 +44,8 @@ export function RatingRow({
+           : {})}
+         className={cx(
+           "flex w-full items-center gap-3 rounded-card border border-line bg-surface p-3 text-start",
+-          onTap && "transition-colors duration-[var(--t-fast)] hover:bg-elevated",
++          onTap &&
++            "transition-[background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.99]",
+         )}
+       >
+         <TeamBadge team={team} size="sm" />
+diff --git a/src/components/RulesSheet.tsx b/src/components/RulesSheet.tsx
+index 4878610..0b86207 100644
+--- a/src/components/RulesSheet.tsx
++++ b/src/components/RulesSheet.tsx
+@@ -1,8 +1,8 @@
+ import { useState } from "react";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { BottomSheet } from "./BottomSheet";
+ import { InfoIcon } from "./icons";
+-import { cx } from "./ui";
++import { cx } from "../lib/cx";
+ 
+ const RULE_KEYS = [
+   "rules.lineup",
+diff --git a/src/components/ScoreOdometer.tsx b/src/components/ScoreOdometer.tsx
+index ac54497..28ff0b1 100644
+--- a/src/components/ScoreOdometer.tsx
++++ b/src/components/ScoreOdometer.tsx
+@@ -1,4 +1,4 @@
+-import { cx } from "./ui";
++import { cx } from "../lib/cx";
+ 
+ /**
+  * Signature animation 2: score odometer.
+diff --git a/src/components/Skeletons.tsx b/src/components/Skeletons.tsx
+index c0178d7..4e692fc 100644
+--- a/src/components/Skeletons.tsx
++++ b/src/components/Skeletons.tsx
+@@ -1,4 +1,4 @@
+-import { cx } from "./ui";
++import { cx } from "../lib/cx";
+ 
+ const bar = "shimmer rounded";
+ 
+diff --git a/src/components/StreakWidget.tsx b/src/components/StreakWidget.tsx
+index 841752e..8c6818e 100644
+--- a/src/components/StreakWidget.tsx
++++ b/src/components/StreakWidget.tsx
+@@ -1,7 +1,9 @@
+ import { useQuery } from "@tanstack/react-query";
+ import { api, type ApiStreak } from "../lib/api";
+-import { useI18n } from "../i18n/I18nProvider";
+-import { Card, Chip, cx } from "./ui";
++import { useI18n } from "../i18n/context";
++import { cx } from "../lib/cx";
++import { Card, Chip } from "./ui";
++import { FlameIcon } from "./icons";
+ 
+ /**
+  * Favorite-club streak (scoring-rules.md §6): how many consecutive anchor-club
+@@ -39,7 +41,7 @@ export function StreakWidget({ className }: { className?: string }) {
+           )}
+           aria-hidden="true"
+         >
+-          🔥
++          <FlameIcon className="h-4 w-4" />
+         </span>
+         <div className="min-w-0 flex-1">
+           <p className="truncate text-sm font-bold text-ink">{t("streak.title")}</p>
+@@ -63,7 +65,7 @@ export function StreakWidget({ className }: { className?: string }) {
+             key={i}
+             className={cx(
+               "h-1.5 flex-1 rounded-full",
+-              i < filled ? (streak.active ? "bg-volt" : "bg-ink-3/40") : "bg-line",
++              i < filled ? cx(streak.active ? "bg-volt" : "bg-ink-3/40", "dot-pop") : "bg-line",
+             )}
+           />
+         ))}
+diff --git a/src/components/TabBar.tsx b/src/components/TabBar.tsx
+index 1902da6..33e8542 100644
+--- a/src/components/TabBar.tsx
++++ b/src/components/TabBar.tsx
+@@ -1,8 +1,8 @@
+ import { NavLink } from "react-router-dom";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { haptic } from "../lib/telegram";
+ import { BallIcon, ChartIcon, TableIcon, UserIcon, ShirtIcon } from "./icons";
+-import { cx } from "./ui";
++import { cx } from "../lib/cx";
+ import type { StringKey } from "../i18n/strings";
+ 
+ /**
+@@ -34,8 +34,8 @@ export function TabBar() {
+               onClick={() => haptic("light")}
+               className={({ isActive }) =>
+                 cx(
+-                  "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
+-                  isActive ? "text-volt" : "text-ink-3 hover:text-ink-2",
++                  "relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-bold transition-[color,background-color] duration-[var(--t-fast)]",
++                  isActive ? "bg-elevated/70 text-volt" : "text-ink-3 hover:text-ink-2",
+                 )
+               }
+             >
+@@ -54,7 +54,10 @@ export function TabBar() {
+                   />
+                   <Icon
+                     strokeWidth={isActive ? 2.2 : 1.8}
+-                    className={cx("transition-transform duration-[var(--t-fast)]", isActive && "scale-105")}
++                    className={cx(
++                      "transition-transform duration-[var(--t-fast)]",
++                      isActive && "tab-pop scale-105",
++                    )}
+                   />
+                   <span className="truncate">{t(key)}</span>
+                 </>
+diff --git a/src/components/TaskAdCard.tsx b/src/components/TaskAdCard.tsx
+index 72c245a..5e5b2ad 100644
+--- a/src/components/TaskAdCard.tsx
++++ b/src/components/TaskAdCard.tsx
+@@ -11,7 +11,7 @@
+ import { useEffect, useRef, useState } from "react";
+ import { loadAdsgramScript, taskAdsAvailable, taskBlockId } from "../lib/ads";
+ import { notifyHaptic } from "../lib/telegram";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ 
+ export function TaskAdCard() {
+   const { t } = useI18n();
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index 0e9d075..fc1bd34 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -1,12 +1,13 @@
+ import { Fragment } from "react";
+-import type { ReactNode } from "react";
++import type { CSSProperties, ReactNode } from "react";
+ import type { Comment, TimelineEvent } from "../types";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import type { StringKey } from "../i18n/strings";
+ import { BallIcon } from "./icons";
+-import { Chip, Num, cx } from "./ui";
++import { cx } from "../lib/cx";
++import { Chip, Num } from "./ui";
+ 
+-export const typeKey: Record<TimelineEvent["type"], StringKey> = {
++const typeKey: Record<TimelineEvent["type"], StringKey> = {
+   goal: "timeline.goal",
+   card: "timeline.card",
+   substitution: "timeline.sub",
+@@ -130,7 +131,10 @@ export function TimelineList({
+ 
+         return (
+           <Fragment key={event.id}>
+-            <li className="timeline-in relative" style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}>
++            <li
++              className="timeline-in relative"
++              style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
++            >
+               {/* Node on the rail; goals get the volt fill. */}
+               <span
+                 className={cx(
+diff --git a/src/components/Toast.tsx b/src/components/Toast.tsx
+index 0e75b26..7648502 100644
+--- a/src/components/Toast.tsx
++++ b/src/components/Toast.tsx
+@@ -1,16 +1,8 @@
+-import { createContext, useCallback, useContext, useMemo, useState } from "react";
++import { useCallback, useMemo, useState } from "react";
+ import type { ReactNode } from "react";
+-import { cx } from "./ui";
++import { cx } from "../lib/cx";
+ import { AlertIcon, BallIcon, CloseIcon, RefreshIcon, StarFilledIcon } from "./icons";
+-
+-export type ToastTone = "volt" | "gold" | "danger" | "muted";
+-
+-interface ToastItem {
+-  id: string;
+-  text: string;
+-  tone: ToastTone;
+-  icon?: ReactNode;
+-}
++import { ToastContext, type ToastItem, type ToastTone } from "./toastContext";
+ 
+ /**
+  * Call sites pass a one-character glyph ("★", "✕"); they resolve to the same
+@@ -25,8 +17,6 @@ const GLYPHS: Record<string, ReactNode> = {
+   "⚽": <BallIcon className="h-4 w-4" />,
+ };
+ 
+-const ToastContext = createContext<{ push: (toast: Omit<ToastItem, "id">) => void } | null>(null);
+-
+ const toneClass: Record<ToastTone, string> = {
+   volt: "border-volt text-volt",
+   gold: "border-gold text-gold",
+@@ -49,7 +39,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
+     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+     setToasts((prev) => [...prev.slice(-2), { ...toast, id }]);
+     window.setTimeout(() => {
+-      setToasts((prev) => prev.filter((item) => item.id !== id));
++      // Mark leaving rather than remove: the exit animation tells the
++      // animationend handler below when it is actually safe to drop it.
++      setToasts((prev) => prev.map((item) => (item.id === id ? { ...item, leaving: true } : item)));
+     }, 3600);
+   }, []);
+ 
+@@ -66,8 +58,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
+         {toasts.map((toast) => (
+           <div
+             key={toast.id}
++            onAnimationEnd={() => {
++              // Only the leave reaps the toast; the enter animation also ends
++              // here and must be ignored.
++              if (toast.leaving) setToasts((prev) => prev.filter((item) => item.id !== toast.id));
++            }}
+             className={cx(
+-              "toast-in flex w-full max-w-[420px] items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold backdrop-blur-md",
++              "flex w-full max-w-[420px] items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold backdrop-blur-md",
++              toast.leaving ? "toast-out" : "toast-in",
+               toneClass[toast.tone],
+             )}
+             style={{ backgroundColor: toneTint[toast.tone] ?? "rgba(18,44,37,0.95)" }}
+@@ -84,9 +82,3 @@ export function ToastProvider({ children }: { children: ReactNode }) {
+     </ToastContext.Provider>
+   );
+ }
+-
+-export function useToast() {
+-  const ctx = useContext(ToastContext);
+-  if (!ctx) throw new Error("useToast must be used inside <ToastProvider>");
+-  return ctx;
+-}
+diff --git a/src/components/TopBar.tsx b/src/components/TopBar.tsx
+index 3c2fb32..6d648ae 100644
+--- a/src/components/TopBar.tsx
++++ b/src/components/TopBar.tsx
+@@ -1,8 +1,8 @@
+ import { useNavigate } from "react-router-dom";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { haptic } from "../lib/telegram";
+ import { ChevronLeftIcon, GlobeIcon } from "./icons";
+-import { cx } from "./ui";
++import { cx } from "../lib/cx";
+ 
+ export function TopBar({
+   title,
+diff --git a/src/components/icons.tsx b/src/components/icons.tsx
+index 03f7408..c1ae91f 100644
+--- a/src/components/icons.tsx
++++ b/src/components/icons.tsx
+@@ -1,5 +1,5 @@
+ import type { SVGProps } from "react";
+-import { cx } from "./ui";
++import { cx } from "../lib/cx";
+ 
+ const base = (props: SVGProps<SVGSVGElement>) => ({
+   width: 22,
+@@ -117,6 +117,14 @@ export const AlertIcon = (p: SVGProps<SVGSVGElement>) => (
+   </svg>
+ );
+ 
++/** Flame — the streak widget's run icon (replaces the 🔥 emoji glyph so it
++ *  draws in the shared icon weight and never shifts with the system font). */
++export const FlameIcon = (p: SVGProps<SVGSVGElement>) => (
++  <svg {...base(p)} width={16} height={16}>
++    <path d="M12 2.5c3 3.2 5.5 5.6 5.5 9.3A5.5 5.5 0 0112 21.5 5.5 5.5 0 016.5 11.8c0-1.9 1-3.2 2-4.3.2 1.4 1 2 1 2S11 7 12 2.5z" />
++  </svg>
++);
++
+ /** Refresh — Matches' sync action. Replaces the ↻ glyph so the whole icon set
+  *  shares one stroke weight and optical size. */
+ export const RefreshIcon = (p: SVGProps<SVGSVGElement>) => (
+diff --git a/src/components/panels/CommentaryPanel.tsx b/src/components/panels/CommentaryPanel.tsx
+index 15b8211..4847b5b 100644
+--- a/src/components/panels/CommentaryPanel.tsx
++++ b/src/components/panels/CommentaryPanel.tsx
+@@ -1,5 +1,5 @@
+-import { useI18n } from "../../i18n/I18nProvider";
+-import { cx } from "../ui";
++import { useI18n } from "../../i18n/context";
++import { cx } from "../../lib/cx";
+ 
+ /**
+  * Dense minute-by-minute readout of the match's key events — a read-only
+diff --git a/src/components/panels/CommentsPanel.tsx b/src/components/panels/CommentsPanel.tsx
+index 1c5f25f..35ba9e6 100644
+--- a/src/components/panels/CommentsPanel.tsx
++++ b/src/components/panels/CommentsPanel.tsx
+@@ -1,28 +1,14 @@
+ import { useState } from "react";
+ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+ import { api, serverErrorKey, type ApiComment } from "../../lib/api";
+-import { useI18n } from "../../i18n/I18nProvider";
++import { useI18n } from "../../i18n/context";
+ import type { StringKey } from "../../i18n/strings";
+ import { haptic, notifyHaptic } from "../../lib/telegram";
+-import { useToast } from "../Toast";
+-import { Button, Chip, EmptyState, Num, cx } from "../ui";
++import { useToast } from "../toastContext";
++import { cx } from "../../lib/cx";
++import { Button, Chip, EmptyState, Num } from "../ui";
+ import type { Comment } from "../../types";
+-
+-/** Server → view adapter: flags your own cards so they render amber. */
+-export function adaptComments(rows: ApiComment[], myUserId: number | undefined): Comment[] {
+-  return rows.map((c) => ({
+-    id: String(c.id),
+-    eventId: c.event_id !== null && c.event_id !== undefined ? String(c.event_id) : null,
+-    matchId: c.match_id,
+-    minuteDisplay: c.minute_display,
+-    minuteSeconds: c.minute_seconds,
+-    author: c.author,
+-    authorId: c.user_id,
+-    text: c.text,
+-    mediaLink: c.media_link,
+-    isMine: myUserId !== undefined && c.user_id === myUserId,
+-  }));
+-}
++import { adaptComments } from "../../lib/adaptComments";
+ 
+ function ClipSheet({ url, onClose }: { url: string; onClose: () => void }) {
+   const { t } = useI18n();
+@@ -149,7 +135,7 @@ export function CommentsSection({
+       ) : comments.length === 0 ? (
+         <EmptyState title={t("comments.empty")} hint={t("comments.emptyHint")} />
+       ) : (
+-        <ul className="space-y-2">
++        <ul className="space-y-2 fade-swap">
+           {comments.map((comment) => (
+             <li key={comment.id} className="rounded-card border border-line bg-surface p-3">
+               <div className="flex items-center gap-2">
+diff --git a/src/components/panels/LineupPicker.tsx b/src/components/panels/LineupPicker.tsx
+index 2f3b1d7..82c1e48 100644
+--- a/src/components/panels/LineupPicker.tsx
++++ b/src/components/panels/LineupPicker.tsx
+@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
+ import { useQuery } from "@tanstack/react-query";
+ import { api } from "../../lib/api";
+ import { useMatch, useSquad, type SquadRow } from "../../hooks/useApi";
+-import { useI18n } from "../../i18n/I18nProvider";
++import { useI18n } from "../../i18n/context";
+ import { haptic, selectionHaptic } from "../../lib/telegram";
+ import {
+   FORMATIONS,
+@@ -18,7 +18,8 @@ import {
+   type SlotCandidate,
+   type Unit,
+ } from "../../lib/formations";
+-import { Button, Chip, EmptyState, ErrorState, Num, TeamBadge, cx } from "../ui";
++import { cx } from "../../lib/cx";
++import { Button, Chip, EmptyState, ErrorState, Num, TeamBadge } from "../ui";
+ import { PanelSkeleton } from "../Skeletons";
+ import { CheckIcon } from "../icons";
+ 
+@@ -98,7 +99,7 @@ function PlayerRow({
+         onClick={onToggle}
+         aria-pressed={picked}
+         className={cx(
+-          "flex min-h-11 w-full items-center gap-2.5 rounded-card border p-2 text-start transition-colors duration-[var(--t-fast)]",
++          "flex min-h-11 w-full items-center gap-2.5 rounded-card border p-2 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+           picked ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
+         )}
+       >
+@@ -124,7 +125,7 @@ function PlayerRow({
+             {player.espnPosition}
+           </Chip>
+         ) : null}
+-        {picked ? <CheckIcon className="h-4 w-4 flex-none text-volt" /> : null}
++        {picked ? <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" /> : null}
+       </button>
+     </li>
+   );
+@@ -230,7 +231,7 @@ export function LineupPicker({
+                 }}
+                 aria-pressed={active}
+                 className={cx(
+-                  "flex min-h-11 items-center gap-2 rounded-card border px-2.5 text-start transition-colors duration-[var(--t-fast)]",
++                  "flex min-h-11 items-center gap-2 rounded-card border px-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+                   active ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
+                 )}
+               >
+@@ -238,7 +239,7 @@ export function LineupPicker({
+                 <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">
+                   {localize(club.shortName)}
+                 </span>
+-                {active ? <CheckIcon className="h-4 w-4 flex-none text-volt" /> : null}
++                {active ? <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" /> : null}
+               </button>
+             );
+           })}
+@@ -269,7 +270,7 @@ export function LineupPicker({
+               }}
+               aria-pressed={formation === f.id}
+               className={cx(
+-                "min-h-11 rounded-md border text-xs font-bold transition-colors duration-[var(--t-fast)]",
++                "min-h-11 rounded-md border text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+                 formation === f.id
+                   ? "border-volt bg-elevated text-volt"
+                   : "border-line bg-surface text-ink-2",
+diff --git a/src/components/panels/LineupsPanel.tsx b/src/components/panels/LineupsPanel.tsx
+index b6a8a9d..3623948 100644
+--- a/src/components/panels/LineupsPanel.tsx
++++ b/src/components/panels/LineupsPanel.tsx
+@@ -1,7 +1,8 @@
+ import { useState } from "react";
+-import { useI18n } from "../../i18n/I18nProvider";
++import { useI18n } from "../../i18n/context";
+ import type { LineupPlayer, MatchLineup, Position, Team } from "../../types";
+-import { Card, Chip, Num, Segmented, TeamBadge, cx } from "../ui";
++import { cx } from "../../lib/cx";
++import { Card, Chip, Num, Segmented, TeamBadge } from "../ui";
+ 
+ const order: Position[] = ["GK", "DEF", "MID", "FWD"];
+ 
+diff --git a/src/components/panels/PredictionsHub.tsx b/src/components/panels/PredictionsHub.tsx
+index adff181..10ce1a5 100644
+--- a/src/components/panels/PredictionsHub.tsx
++++ b/src/components/panels/PredictionsHub.tsx
+@@ -1,14 +1,15 @@
+-import { useRef, useState } from "react";
++import { useEffect, useRef, useState } from "react";
+ import { useMutation, useQuery, useQueryClient, type UseMutateFunction } from "@tanstack/react-query";
+ import { api, serverErrorKey, type ApiPrediction } from "../../lib/api";
+-import { useI18n } from "../../i18n/I18nProvider";
++import { useI18n } from "../../i18n/context";
+ import { haptic, notifyHaptic, selectionHaptic } from "../../lib/telegram";
+ import { pickSummary } from "../../lib/breakdown";
+-import { useToast } from "../Toast";
++import { useToast } from "../toastContext";
+ import { BottomSheet } from "../BottomSheet";
+ import { RulesButton } from "../RulesSheet";
+ import { PredictionsHubSkeleton, PanelSkeleton } from "../Skeletons";
+-import { Button, Card, Chip, EmptyState, ErrorState, Num, cx } from "../ui";
++import { cx } from "../../lib/cx";
++import { Button, Card, Chip, EmptyState, ErrorState, Num } from "../ui";
+ import { SubBoard } from "./SubBoard";
+ import { LineupPicker } from "./LineupPicker";
+ import { ShotPredictor } from "./ShotPredictor";
+@@ -95,10 +96,21 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+   const finished = matchStatus === "finished";
+ 
+   const [editor, setEditor] = useState<Mechanic | null>(null);
++  // Save confirmation: the just-saved card wears the volt goal sweep for one
++  // beat, so the optimistic row reads as "accepted" rather than "maybe".
++  const [flash, setFlash] = useState<Mechanic | null>(null);
+   // Ticking clock: the countdown strings below are derived, not polled, so
+   // without this they would freeze until an unrelated refetch.
+   const now = useNow(30_000);
+ 
++  // goal-flash paints over --t-slow (450ms); clear after the sweep lands so
++  // the class (and its ::after) can't replay on a later re-render.
++  useEffect(() => {
++    if (!flash) return;
++    const id = setTimeout(() => setFlash(null), 650);
++    return () => clearTimeout(id);
++  }, [flash]);
++
+   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ["predictions", matchId] });
+ 
+   /*
+@@ -157,9 +169,26 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+ 
+   const statusChip = (row: ApiPrediction | null) => {
+     if (!row) return null;
+-    if (row.status === "pending") return <Chip tone="muted">{t("predict.pending")}</Chip>;
+-    if (row.status === "correct") return <Chip tone="pitch">+{row.points_awarded}</Chip>;
+-    if (row.status === "partial") return <Chip tone="gold">+{row.points_awarded}</Chip>;
++    if (row.status === "pending")
++      return (
++        <Chip tone="muted" className="marker-pop">
++          {t("predict.pending")}
++        </Chip>
++      );
++    // Awards pop in (marker-pop, transform + opacity only) rather than
++    // appearing at full size — the one moment the pick paid off.
++    if (row.status === "correct")
++      return (
++        <Chip tone="pitch" className="marker-pop">
++          +{row.points_awarded}
++        </Chip>
++      );
++    if (row.status === "partial")
++      return (
++        <Chip tone="gold" className="marker-pop">
++          +{row.points_awarded}
++        </Chip>
++      );
+     if (row.status === "void") return <Chip tone="muted">±0</Chip>;
+     return <Chip tone="danger">+0</Chip>;
+   };
+@@ -189,9 +218,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+   // Open-and-unpicked first: the list reads as the next step, not a five-row
+   // checklist. Re-ranked ONLY when the open/picked picture actually changes —
+   // the 30s countdown tick must not shuffle cards under the user's thumb.
+-  const orderKey = mechanics
+-    .map((m) => `${opensNow(m) ? "o" : "-"}${byMechanic(m) ? "p" : "-"}`)
+-    .join("");
++  const orderKey = mechanics.map((m) => `${opensNow(m) ? "o" : "-"}${byMechanic(m) ? "p" : "-"}`).join("");
+   const orderedRef = useRef<Mechanic[]>(mechanics);
+   const orderKeyRef = useRef<string | null>(null);
+   if (orderKeyRef.current !== orderKey) {
+@@ -230,7 +257,18 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+           // rather than showing a kickoff countdown that hasn't started.
+           const lineupLocked = !finished && requiresLineup(m, windows[m]) && !lineupsPublished;
+           return (
+-            <Card key={m} className={cx("p-3", row && "border-volt/40")}>
++            <Card
++              key={m}
++              className={cx(
++                // Skeleton → content: the card crossfades in once when the
++                // hub finishes loading (its key is stable, so saves and the
++                // 30s countdown tick don't replay it).
++                "fade-swap p-3",
++                row && "border-volt/40",
++                // relative + overflow-hidden frame goal-flash's ::after sweep.
++                flash === m && "relative overflow-hidden goal-flash",
++              )}
++            >
+               <div className="flex items-center gap-2">
+                 <span
+                   className={cx(
+@@ -290,6 +328,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+           onSaved={() => {
+             // Invalidate (don't await): the optimistic row already shows; the
+             // refetch replaces it with server truth (lock windows, ids).
++            if (editor) setFlash(editor);
+             invalidate();
+             setEditor(null);
+           }}
+@@ -477,7 +516,7 @@ function WatchEditor({
+                 setPick(p.player_id);
+               }}
+               className={cx(
+-                "flex w-full items-center gap-3 rounded-card border p-2.5 text-start transition-colors duration-[var(--t-fast)]",
++                "flex w-full items-center gap-3 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+                 pick === p.player_id ? "border-gold bg-elevated" : "border-line bg-surface hover:bg-elevated",
+               )}
+             >
+@@ -487,7 +526,11 @@ function WatchEditor({
+               <Chip tone="muted" normalCase>
+                 {p.position}
+               </Chip>
+-              {pick === p.player_id ? <Chip tone="gold">{t("watch.selected")}</Chip> : null}
++              {pick === p.player_id ? (
++                <Chip tone="gold" className="marker-pop">
++                  {t("watch.selected")}
++                </Chip>
++              ) : null}
+             </button>
+           </li>
+         ))}
+@@ -566,7 +609,7 @@ function VersusEditor({
+                     else setSideB(p.player_id);
+                   }}
+                   className={cx(
+-                    "flex w-full items-center gap-3 rounded-card border p-2.5 text-start transition-colors duration-[var(--t-fast)]",
++                    "flex w-full items-center gap-3 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+                     (index === 0 ? sideA : sideB) === p.player_id
+                       ? "border-volt bg-elevated"
+                       : "border-line bg-surface hover:bg-elevated",
+@@ -576,7 +619,9 @@ function VersusEditor({
+                     {localize(p.full_name)}
+                   </span>
+                   {(index === 0 ? sideA : sideB) === p.player_id ? (
+-                    <Chip tone="volt">{t("watch.selected")}</Chip>
++                    <Chip tone="volt" className="marker-pop">
++                      {t("watch.selected")}
++                    </Chip>
+                   ) : null}
+                 </button>
+               </li>
+diff --git a/src/components/panels/RateSheet.tsx b/src/components/panels/RateSheet.tsx
+index 5be7e62..b0d8bab 100644
+--- a/src/components/panels/RateSheet.tsx
++++ b/src/components/panels/RateSheet.tsx
+@@ -1,9 +1,10 @@
+ import { useState } from "react";
+-import { useI18n } from "../../i18n/I18nProvider";
++import { useI18n } from "../../i18n/context";
+ import { haptic, notifyHaptic, selectionHaptic } from "../../lib/telegram";
+-import { useToast } from "../Toast";
++import { useToast } from "../toastContext";
+ import { BottomSheet } from "../BottomSheet";
+-import { Button, Chip, Num, Stars, cx } from "../ui";
++import { cx } from "../../lib/cx";
++import { Button, Chip, Num, Stars } from "../ui";
+ import type { PlayerRating } from "../../types";
+ 
+ /**
+diff --git a/src/components/panels/ShotPredictor.tsx b/src/components/panels/ShotPredictor.tsx
+index 9d4930b..20cc8e3 100644
+--- a/src/components/panels/ShotPredictor.tsx
++++ b/src/components/panels/ShotPredictor.tsx
+@@ -1,9 +1,10 @@
+ import { useState } from "react";
+ import { useQuery } from "@tanstack/react-query";
+ import { api } from "../../lib/api";
+-import { useI18n } from "../../i18n/I18nProvider";
++import { useI18n } from "../../i18n/context";
+ import { selectionHaptic } from "../../lib/telegram";
+-import { Button, Chip, EmptyState, ErrorState, cx } from "../ui";
++import { cx } from "../../lib/cx";
++import { Button, Chip, EmptyState, ErrorState } from "../ui";
+ import { PanelSkeleton } from "../Skeletons";
+ import { cellZone, GRID_COLS, GRID_ROWS, ZONE_LABEL_KEY } from "../../lib/zones";
+ 
+diff --git a/src/components/panels/StatsPanel.tsx b/src/components/panels/StatsPanel.tsx
+index b737f13..2c0770f 100644
+--- a/src/components/panels/StatsPanel.tsx
++++ b/src/components/panels/StatsPanel.tsx
+@@ -1,5 +1,5 @@
+ import type { StringKey } from "../../i18n/strings";
+-import { useI18n } from "../../i18n/I18nProvider";
++import { useI18n } from "../../i18n/context";
+ import type { Team, TeamStats } from "../../types";
+ import { Card, Num, StatBar, TeamBadge } from "../ui";
+ 
+diff --git a/src/components/panels/SubBoard.tsx b/src/components/panels/SubBoard.tsx
+index c01dad7..2121047 100644
+--- a/src/components/panels/SubBoard.tsx
++++ b/src/components/panels/SubBoard.tsx
+@@ -1,9 +1,10 @@
+ import { useState } from "react";
+ import { useQuery } from "@tanstack/react-query";
+ import { api } from "../../lib/api";
+-import { useI18n } from "../../i18n/I18nProvider";
++import { useI18n } from "../../i18n/context";
+ import { haptic, selectionHaptic } from "../../lib/telegram";
+-import { Button, Chip, EmptyState, ErrorState, Num, cx } from "../ui";
++import { cx } from "../../lib/cx";
++import { Button, Chip, EmptyState, ErrorState, Num } from "../ui";
+ import { PanelSkeleton } from "../Skeletons";
+ 
+ /**
+diff --git a/src/components/toastContext.ts b/src/components/toastContext.ts
+new file mode 100644
+index 0000000..0dbb008
+--- /dev/null
++++ b/src/components/toastContext.ts
+@@ -0,0 +1,28 @@
++import { createContext, useContext } from "react";
++import type { ReactNode } from "react";
++
++/**
++ * The toast context and its hook, kept OUT of `Toast.tsx` on purpose: React
++ * Fast Refresh only preserves component state when a module exports nothing
++ * but components, so the provider file exports its component alone and every
++ * call site reads `push` through `useToast` here.
++ */
++export type ToastTone = "volt" | "gold" | "danger" | "muted";
++
++export interface ToastItem {
++  id: string;
++  text: string;
++  tone: ToastTone;
++  icon?: ReactNode;
++  /** Set when the dwell time is up: the toast plays its leave, then unmounts. */
++  leaving?: boolean;
++}
++
++export const ToastContext = createContext<{ push: (toast: Omit<ToastItem, "id">) => void } | null>(null);
++
++/** App-wide transient alerts: goals, deadline warnings, saved confirmations. */
++export function useToast() {
++  const ctx = useContext(ToastContext);
++  if (!ctx) throw new Error("useToast must be used inside <ToastProvider>");
++  return ctx;
++}
+diff --git a/src/components/ui.tsx b/src/components/ui.tsx
+index 4e9b0f6..6b9d773 100644
+--- a/src/components/ui.tsx
++++ b/src/components/ui.tsx
+@@ -1,14 +1,20 @@
+-import { useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
++import {
++  useEffect,
++  useLayoutEffect,
++  useRef,
++  useState,
++  type ButtonHTMLAttributes,
++  type ReactNode,
++} from "react";
+ import type { Team } from "../types";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import type { StringKey } from "../i18n/strings";
++import { cx } from "../lib/cx";
+ import { crestSources } from "../lib/logos";
+ import { haptic } from "../lib/telegram";
+ import { useLocalState } from "../lib/useLocalState";
+ import { AlertIcon, ChevronDownIcon, RefreshIcon, StarFilledIcon, SwapIcon, TargetIcon } from "./icons";
+ 
+-export const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(" ");
+-
+ /* ------------------------------------------------------------------ surfaces */
+ 
+ export function Card({
+@@ -162,6 +168,13 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
+   const dims = { sm: "h-6 w-6 text-[10px]", md: "h-9 w-9 text-xs", lg: "h-12 w-12 text-sm" }[size];
+   const [broken, setBroken] = useState(false);
+   const [remoteBroken, setRemoteBroken] = useState(false);
++  // Crests that arrive over the network otherwise pop in from nothing; fade
++  // them up on load (bundled and remote share it) so the tile settles in.
++  const [loaded, setLoaded] = useState(false);
++  const crestImgClass = cx(
++    "h-full w-full object-contain transition-opacity duration-[var(--t-fast)] ease-[var(--ease-out)]",
++    loaded ? "opacity-100" : "opacity-0",
++  );
+   // Bundled crest first: it is normalized to one footprint so a row of badges
+   // reads evenly, and it needs no network. When a club has none, fall back to
+   // the ESPN crest URL carried on every team payload — that URL used to be
+@@ -195,9 +208,10 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
+             src={crest.png}
+             alt=""
+             onError={() => setBroken(true)}
++            onLoad={() => setLoaded(true)}
+             loading="lazy"
+             decoding="async"
+-            className="h-full w-full object-contain"
++            className={crestImgClass}
+           />
+         </picture>
+       ) : remote ? (
+@@ -205,9 +219,10 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
+           src={remote}
+           alt=""
+           onError={() => setRemoteBroken(true)}
++          onLoad={() => setLoaded(true)}
+           loading="lazy"
+           decoding="async"
+-          className="h-full w-full object-contain"
++          className={crestImgClass}
+         />
+       ) : (
+         team.abbreviation
+@@ -280,6 +295,48 @@ export function Num({ children, className }: { children: ReactNode; className?:
+   return <span className={cx("num-display tabular-nums", className)}>{children}</span>;
+ }
+ 
++/**
++ * Evaluative (gold) totals count up from zero on mount — season points,
++ * standings points, xPts — so a number that just appeared reads as earned
++ * rather than snapped in. Integer-only; a reduced-motion user sees the value
++ * immediately (no animation, no intermediate frames).
++ */
++export function CountUp({
++  value,
++  className,
++  duration = 650,
++  decimals = 0,
++}: {
++  value: number;
++  className?: string;
++  duration?: number;
++  /** Decimal places (xPts carry one); integers round instead. */
++  decimals?: number;
++}) {
++  const [progressValue, setProgressValue] = useState(value);
++  useLayoutEffect(() => {
++    const reduce =
++      typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
++    if (reduce) {
++      setProgressValue(value);
++      return;
++    }
++    // Runs before paint, so the first frame is already 0 — no flash of the
++    // final value before the count starts.
++    setProgressValue(0);
++    const start = performance.now();
++    let frame = requestAnimationFrame(function tick(now) {
++      const progress = Math.min(1, (now - start) / duration);
++      const eased = 1 - Math.pow(1 - progress, 3);
++      setProgressValue(value * eased);
++      if (progress < 1) frame = requestAnimationFrame(tick);
++    });
++    return () => cancelAnimationFrame(frame);
++  }, [value, duration]);
++  const shown = decimals > 0 ? progressValue.toFixed(decimals) : String(Math.round(progressValue));
++  return <Num className={className}>{shown}</Num>;
++}
++
+ /* ------------------------------------------------------------------- buttons */
+ 
+ type Variant = "primary" | "ghost" | "volt-outline";
+@@ -323,11 +380,58 @@ export function Segmented<T extends string>({
+   onChange: (value: T) => void;
+   className?: string;
+ }) {
++  const { dir } = useI18n();
++  const activeIndex = options.findIndex((option) => option.value === value);
++  // The selected pill slides along the track instead of the background
++  // snapping between tabs. Position and width are MEASURED from the active
++  // button (not derived from 1/n): a crowded track scrolls and its tabs can
++  // carry different widths (Cups, Ratings), so equal-width math would misalign.
++  // Only the travel is animated (transform); width settles instantly.
++  const trackRef = useRef<HTMLDivElement | null>(null);
++  const [indicator, setIndicator] = useState<{ start: number; width: number } | null>(null);
++  useLayoutEffect(() => {
++    const track = trackRef.current;
++    if (!track || activeIndex < 0) {
++      setIndicator(null);
++      return;
++    }
++    const measure = () => {
++      const tab = track.querySelectorAll<HTMLButtonElement>('[role="tab"]')[activeIndex];
++      if (!tab) return;
++      // The pill is position:absolute INSIDE the scroll container, so it scrolls
++      // with the content — its offset has to be measured in the track's CONTENT
++      // space, not its viewport space. A viewport offset is only correct while
++      // scrollLeft is 0: scroll a crowded row and switch tabs, and the pill lands
++      // `scrollLeft` pixels to the left of the active tab (off-screen entirely on
++      // the 8-tab Ratings row). Adding the scroll puts both on the same axis.
++      const origin = track.getBoundingClientRect().left + track.clientLeft;
++      const rect = tab.getBoundingClientRect();
++      setIndicator({ start: rect.left - origin + track.scrollLeft, width: rect.width });
++    };
++    measure();
++    // Guarded: legacy webviews without ResizeObserver still get a correct
++    // indicator, it just won't re-measure on container resize.
++    if (typeof ResizeObserver === "undefined") return;
++    const observer = new ResizeObserver(measure);
++    observer.observe(track);
++    return () => observer.disconnect();
++  }, [activeIndex, options.length, dir]);
+   return (
+     <div
++      ref={trackRef}
+       role="tablist"
+-      className={cx("flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1", className)}
++      className={cx(
++        "relative flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1",
++        className,
++      )}
+     >
++      {indicator ? (
++        <span
++          aria-hidden="true"
++          className="pointer-events-none absolute top-1 bottom-1 rounded-full bg-elevated shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--volt)_35%,transparent)] transition-transform duration-[var(--t-fast)] ease-[var(--ease-pop)]"
++          style={{ left: 0, width: indicator.width, transform: `translateX(${indicator.start}px)` }}
++        />
++      ) : null}
+       {options.map((option) => (
+         <button
+           key={option.value}
+@@ -339,13 +443,12 @@ export function Segmented<T extends string>({
+             onChange(option.value);
+           }}
+           className={cx(
+-            // flex-1 fills the track; with whitespace-nowrap each tab's
+-            // min-content width is its label, so a crowded row (the five match
+-            // tabs in Persian) scrolls rather than breaking a word.
+-            "flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap transition-all duration-[var(--t-fast)]",
+-            value === option.value
+-              ? "bg-elevated text-volt shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--volt)_35%,transparent)]"
+-              : "text-ink-2 hover:text-ink",
++            // relative keeps each label painted above the sliding pill; flex-1
++            // fills the track, and with whitespace-nowrap each tab's min-content
++            // width is its label, so a crowded row (the five match tabs in
++            // Persian) scrolls rather than breaking a word.
++            "relative flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 text-xs font-bold whitespace-nowrap transition-colors duration-[var(--t-fast)]",
++            value === option.value ? "text-volt" : "text-ink-2 hover:text-ink",
+           )}
+         >
+           {option.label}
+@@ -375,6 +478,13 @@ export function StatBar({
+ }) {
+   const total = home + away || 1;
+   const homePct = (home / total) * 100;
++  // Seed at 0 and grow on the next frame, so the width transition actually
++  // runs on mount instead of the final value painting in one step.
++  const [ready, setReady] = useState(false);
++  useEffect(() => {
++    const id = requestAnimationFrame(() => setReady(true));
++    return () => cancelAnimationFrame(id);
++  }, []);
+   return (
+     <li className="space-y-1">
+       <div className="flex items-center justify-between text-[11px]">
+@@ -385,7 +495,7 @@ export function StatBar({
+       <div className="flex h-1.5 overflow-hidden rounded-full bg-elevated">
+         <span
+           className="h-full rounded-s-full transition-[width] duration-[var(--t-std)] ease-[var(--ease-out)]"
+-          style={{ width: `${homePct}%`, backgroundColor: homeColor }}
++          style={{ width: ready ? `${homePct}%` : "0%", backgroundColor: homeColor }}
+         />
+         <span className="h-full flex-1 rounded-e-full" style={{ backgroundColor: awayColor }} />
+       </div>
+@@ -409,6 +519,12 @@ export function ProgressBar({
+ }) {
+   const pct = Math.max(0, Math.min(100, (value / max) * 100));
+   const colors = { volt: "var(--volt)", gold: "var(--gold)", live: "var(--live)" };
++  // Same as StatBar: paint full-width on mount, then animate down to value.
++  const [ready, setReady] = useState(false);
++  useEffect(() => {
++    const id = requestAnimationFrame(() => setReady(true));
++    return () => cancelAnimationFrame(id);
++  }, []);
+   return (
+     <div className="space-y-1">
+       {label || valueLabel ? (
+@@ -420,7 +536,7 @@ export function ProgressBar({
+       <div className="h-1.5 overflow-hidden rounded-full bg-elevated">
+         <span
+           className="block h-full rounded-full transition-[width] duration-[var(--t-slow)] ease-[var(--ease-out)]"
+-          style={{ width: `${pct}%`, backgroundColor: colors[tone] }}
++          style={{ width: ready ? `${pct}%` : "0%", backgroundColor: colors[tone] }}
+         />
+       </div>
+     </div>
+@@ -475,15 +591,24 @@ export function ListRow({
+   hint,
+   right,
+   onClick,
++  onToggle,
+   icon,
+ }: {
+   label: string;
+   hint?: string;
+   right?: ReactNode;
+   onClick?: () => void;
++  /**
++   * Whole-row tap for a row whose control is a switch on the right: users tap
++   * the label, not the 44×24 track. The row stays a <div> so the switch inside
++   * it is never a button nested in a button — the switch remains the real,
++   * keyboard-operable control.
++   */
++  onToggle?: () => void;
+   icon?: ReactNode;
+ }) {
+   const Tag = onClick ? "button" : "div";
++  const active = Boolean(onClick || onToggle);
+   return (
+     <Tag
+       {...(onClick
+@@ -494,10 +619,14 @@ export function ListRow({
+               onClick();
+             },
+           }
+-        : {})}
++        : onToggle
++          ? { onClick: onToggle }
++          : {})}
+       className={cx(
+-        "flex w-full items-center gap-3 rounded-card border border-line bg-surface p-3 text-start transition-colors duration-[var(--t-fast)]",
+-        onClick && "hover:bg-elevated",
++        "flex w-full items-center gap-3 rounded-card border border-line bg-surface p-3 text-start",
++        active
++          ? "cursor-pointer transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated active:scale-[0.98]"
++          : "transition-colors duration-[var(--t-fast)]",
+       )}
+     >
+       {icon ? <span className="flex-none text-ink-2">{icon}</span> : null}
+@@ -526,7 +655,10 @@ export function Switch({
+       role="switch"
+       aria-checked={checked}
+       aria-label={label}
+-      onClick={() => {
++      onClick={(e) => {
++        // The row can toggle too (ListRow.onToggle): without this the tap would
++        // reach both handlers and cancel itself out.
++        e.stopPropagation();
+         haptic("light");
+         onChange(!checked);
+       }}
+@@ -536,7 +668,7 @@ export function Switch({
+       }}
+     >
+       <span
+-        className="absolute top-0.5 h-4 w-4 rounded-full bg-black/80 transition-[inset-inline-start] duration-[var(--t-fast)]"
++        className="absolute top-0.5 h-4 w-4 rounded-full bg-black/80 transition-[inset-inline-start] duration-[var(--t-fast)] ease-[var(--ease-pop)]"
+         style={{ insetInlineStart: checked ? "22px" : "3px" }}
+       />
+     </button>
+@@ -547,7 +679,7 @@ export function Switch({
+ 
+ export function EmptyState({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
+   return (
+-    <div className="pitch-watermark rounded-card border border-dashed border-line px-4 py-10 text-center">
++    <div className="rise-in pitch-watermark rounded-card border border-dashed border-line px-4 py-10 text-center">
+       <p className="text-sm font-bold text-ink-2">{title}</p>
+       {hint ? <p className="mt-1 text-xs text-ink-3">{hint}</p> : null}
+       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+@@ -563,7 +695,10 @@ export function EmptyState({ title, hint, action }: { title: string; hint?: stri
+ export function ErrorState({ title, hint, onRetry }: { title?: string; hint?: string; onRetry: () => void }) {
+   const { t } = useI18n();
+   return (
+-    <div role="alert" className="pitch-watermark rounded-card border border-danger/40 px-4 py-10 text-center">
++    <div
++      role="alert"
++      className="rise-in pitch-watermark rounded-card border border-danger/40 px-4 py-10 text-center"
++    >
+       <p className="text-danger">
+         <AlertIcon className="mx-auto h-6 w-6" />
+       </p>
+diff --git a/src/hooks/authContext.ts b/src/hooks/authContext.ts
+new file mode 100644
+index 0000000..59313be
+--- /dev/null
++++ b/src/hooks/authContext.ts
+@@ -0,0 +1,47 @@
++import { createContext, useContext } from "react";
++
++/**
++ * Auth context and its hook, kept OUT of `useAuth.tsx` on purpose: React Fast
++ * Refresh only preserves component state when a module exports nothing but
++ * components, so that file exports `<AuthProvider>` and `<RequireAuth>` alone
++ * and every screen reads the session through `useAuth` here.
++ *
++ * The token itself lives in lib/auth.ts (localStorage session, or Telegram
++ * initData / dev fallback); this context exposes who you are via /api/me and
++ * is what the route guard reads.
++ */
++export interface AuthUser {
++  id: number;
++  displayName: string;
++  username: string | null;
++  authMode: "session" | "telegram" | "dev";
++}
++
++export interface AuthContextValue {
++  user: AuthUser | null;
++  isLoading: boolean;
++  /** True when the stored session survives a browser restart (remember me). */
++  remembered: boolean;
++  /** Silent entry: Telegram initData when available, else a guest account. */
++  enterApp: () => Promise<void>;
++  /** Sign in with username + password (wrong/unknown share one failure). */
++  loginWithUsername: (username: string, password: string, remember: boolean) => Promise<void>;
++  /** Explicit registration (the Login screen's "Create account" form). */
++  registerWithUsername: (
++    username: string,
++    password: string,
++    displayName: string,
++    remember: boolean,
++  ) => Promise<void>;
++  /** Rename the signed-in user; resolves once /me reflects the new name. */
++  updateDisplayName: (displayName: string) => Promise<void>;
++  logout: () => Promise<void>;
++}
++
++export const AuthContext = createContext<AuthContextValue | null>(null);
++
++export function useAuth(): AuthContextValue {
++  const ctx = useContext(AuthContext);
++  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
++  return ctx;
++}
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index 74be78f..f4bc11d 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -13,8 +13,8 @@ import {
+   type FavoritesPayload,
+   type NotificationPrefsPayload,
+ } from "../lib/optimistic";
+-import { useToast } from "../components/Toast";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useToast } from "../components/toastContext";
++import { useI18n } from "../i18n/context";
+ import type { StringKey } from "../i18n/strings";
+ import { haptic } from "../lib/telegram";
+ import type { LeagueId, Match, Team } from "../types";
+@@ -85,8 +85,15 @@ export function useMatches(
+     queryKey: ["matches", query],
+     queryFn: () => api.getMatches(query),
+     select: (data) => data.matches.map(matchFromApi),
+-    // Live scores: poll gently; the server polls ESPN on its own schedule.
+-    refetchInterval: 60_000,
++    // Poll on a clock that notices liveness. The server's own pulse hits ESPN
++    // every 15s, so a flat 60s client poll made a goal take up to a minute to
++    // reach the one screen that exists to show goals — while with nothing live
++    // there is nothing worth refetching at all.
++    refetchInterval: (q) => {
++      const live =
++        q.state.data?.matches?.some((m) => m.status === "live" || m.status === "halftime") ?? false;
++      return live ? 20_000 : 60_000;
++    },
+   });
+ }
+ 
+@@ -131,7 +138,21 @@ export function useStandings(league: string) {
+     queryFn: () => api.getStandings(league),
+     select: (data): StandingRow[] =>
+       data.standings.map((row) => ({
+-        team: teamFromApi(row as unknown as ApiTeam & ApiStandingFields),
++        // A standings row is not an ApiTeam: it carries `team_id`, not `id`.
++        // Building the team explicitly instead of casting the row is what keeps
++        // `/team/:id` links, React keys, isFavorite() and the bundled-crest
++        // lookup fed with a real id — teamFromApi reads t.id, so the old blind
++        // cast handed it undefined for every row in the table (every link on the
++        // Table screen pointed at /team/undefined).
++        team: teamFromApi({
++          id: row.team_id,
++          name: row.name,
++          short_name: row.short_name,
++          abbreviation: row.abbreviation,
++          color: row.color,
++          logo_url: row.logo_url,
++          league: row.league,
++        }),
+         rank: row.rank,
+         played: row.played,
+         wins: row.wins,
+@@ -150,21 +171,6 @@ export function useStandings(league: string) {
+   });
+ }
+ 
+-type ApiStandingFields = {
+-  rank: number | null;
+-  played: number | null;
+-  wins: number | null;
+-  draws: number | null;
+-  losses: number | null;
+-  points: number | null;
+-  goals_for: number | null;
+-  goals_against: number | null;
+-  xpts?: number | null;
+-  xg?: number | null;
+-  xga?: number | null;
+-  form?: string | null;
+-};
+-
+ /* ------------------------------------------------------------ favorites */
+ 
+ /**
+@@ -309,10 +315,7 @@ function currentTeamFromCache(teamId: string): ApiTeam | undefined {
+ export function useLeagueTabs(): LeagueTab[] {
+   const { t, localize } = useI18n();
+   const followed = useFollowedLeagues();
+-  return useMemo(
+-    () => buildLeagueTabs(followed.leagues, t, localize),
+-    [followed.leagues, t, localize],
+-  );
++  return useMemo(() => buildLeagueTabs(followed.leagues, t, localize), [followed.leagues, t, localize]);
+ }
+ 
+ /* ------------------------------------------------------------ referrals */
+@@ -515,7 +518,7 @@ export function useLeaguePlayers(league: string, sort: LeaderSort = "goals", lim
+     queryKey: ["leaguePlayers", league, sort, limit],
+     queryFn: () => api.getLeaguePlayers(league, sort, limit),
+     select: (data): LeaderPlayerRow[] =>
+-      data.players.map((p: any) => ({
++      data.players.map((p) => ({
+         playerId: p.player_id,
+         name: p.full_name,
+         shortName: p.short_name,
+@@ -571,7 +574,7 @@ export function useLeagueTeamStats(league: string) {
+     queryKey: ["leagueTeamStats", league],
+     queryFn: () => api.getLeagueTeamStats(league),
+     select: (data): LeagueTeamRow[] =>
+-      data.teams.map((t: any) => ({
++      data.teams.map((t) => ({
+         teamId: t.team_id,
+         name: t.name,
+         shortName: t.short_name,
+@@ -619,7 +622,7 @@ export function useTeamUnderstat(teamId: string) {
+   });
+ }
+ 
+-/* ------------------------------------------------------------ replay & squads */
++/* ------------------------------------------------------------------ squads */
+ 
+ export function useCommentary(matchId: string) {
+   return useQuery({
+diff --git a/src/hooks/useAuth.tsx b/src/hooks/useAuth.tsx
+index 603b682..52dd2d4 100644
+--- a/src/hooks/useAuth.tsx
++++ b/src/hooks/useAuth.tsx
+@@ -1,22 +1,15 @@
+ import { useQuery, useQueryClient } from "@tanstack/react-query";
+-import {
+-  createContext,
+-  useCallback,
+-  useContext,
+-  useEffect,
+-  useMemo,
+-  useRef,
+-  useState,
+-  type ReactNode,
+-} from "react";
++import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+ import { Navigate, Outlet, useLocation } from "react-router-dom";
+-import { api } from "../lib/api";
++import { AuthContext, type AuthContextValue, type AuthUser, useAuth } from "./authContext";
++import { api, type ApiRequestError } from "../lib/api";
+ import { isTelegram, waitForTelegram } from "../lib/telegram";
+ import {
+   clearSession,
+   currentAuthToken,
+   getDeviceId,
+   getSessionToken,
++  hasExplicitDevUser,
+   isLoggedOut,
+   isRemembered,
+   isSessionToken,
+@@ -39,44 +32,12 @@ import {
+  * sign-in and registration (after sign-out, or on a second device).
+  */
+ 
+-export interface AuthUser {
+-  id: number;
+-  displayName: string;
+-  username: string | null;
+-  authMode: "session" | "telegram" | "dev";
+-}
+-
+-interface AuthContextValue {
+-  user: AuthUser | null;
+-  isLoading: boolean;
+-  /** True when the stored session survives a browser restart (remember me). */
+-  remembered: boolean;
+-  /** Silent entry: Telegram initData when available, else a guest account. */
+-  enterApp: () => Promise<void>;
+-  /** Sign in with username + password (wrong/unknown share one failure). */
+-  loginWithUsername: (username: string, password: string, remember: boolean) => Promise<void>;
+-  /** Explicit registration (the Login screen's "Create account" form). */
+-  registerWithUsername: (
+-    username: string,
+-    password: string,
+-    displayName: string,
+-    remember: boolean,
+-  ) => Promise<void>;
+-  /** Rename the signed-in user; resolves once /me reflects the new name. */
+-  updateDisplayName: (displayName: string) => Promise<void>;
+-  logout: () => Promise<void>;
+-}
+-
+-const AuthContext = createContext<AuthContextValue | null>(null);
+-
+ function hasExternalIdentity(): boolean {
+   const token = currentAuthToken();
+   if (!token) return false; // explicit sign-out — force the Login screen
+   // Session tokens are checked via /api/me below; initData and dev:* count as
+   // direct identities (server validates them on the /me call anyway).
+-  return (
+-    isSessionToken(token) || token.startsWith("dev:") || Boolean((window as any).Telegram?.WebApp?.initData)
+-  );
++  return isSessionToken(token) || token.startsWith("dev:") || Boolean(window.Telegram?.WebApp?.initData);
+ }
+ 
+ export function AuthProvider({ children }: { children: ReactNode }) {
+@@ -92,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+   // A 401 from /me means the stored session is dead — drop it so the guard
+   // sends the user to /login instead of looping on a stale token.
+   useEffect(() => {
+-    if (meQuery.error && (meQuery.error as any).status === 401) {
++    if (meQuery.error && (meQuery.error as ApiRequestError).status === 401) {
+       const token = currentAuthToken();
+       if (isSessionToken(token)) setSessionToken("", false);
+     }
+@@ -114,8 +75,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+   // `entering` starts true when auto-entry is pending so the route guard waits
+   // instead of flashing the Login screen for a frame.
+   const enteredRef = useRef(false);
+-  const [entering, setEntering] = useState(() => !isSessionToken(getSessionToken()) && !isLoggedOut());
+-  const needsAutoEntry = !isSessionToken(getSessionToken()) && !isLoggedOut();
++  // An explicit ?devUser= opts out of device auto-entry (see hasExplicitDevUser).
++  // `entering` has to opt out too, or the guard would wait forever for an
++  // entry this branch deliberately never performs.
++  const devRequested = hasExplicitDevUser();
++  const [entering, setEntering] = useState(
++    () => !devRequested && !isSessionToken(getSessionToken()) && !isLoggedOut(),
++  );
++  const needsAutoEntry = !devRequested && !isSessionToken(getSessionToken()) && !isLoggedOut();
+ 
+   const enterApp = useCallback(async () => {
+     if (enteredRef.current) return;
+@@ -165,7 +132,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+   // reset) but initData is present, exchange it for a fresh session instead
+   // of showing a Login screen that makes no sense inside the webview.
+   useEffect(() => {
+-    if (meQuery.error && (meQuery.error as any).status === 401 && isTelegram() && !isLoggedOut()) {
++    if (
++      meQuery.error &&
++      (meQuery.error as ApiRequestError).status === 401 &&
++      isTelegram() &&
++      !isLoggedOut()
++    ) {
+       enteredRef.current = false;
+       void enterApp().catch(() => {
+         /* stay on the guard; Login remains the fallback */
+@@ -253,12 +225,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
+   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+ }
+ 
+-export function useAuth(): AuthContextValue {
+-  const ctx = useContext(AuthContext);
+-  if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
+-  return ctx;
+-}
+-
+ /**
+  * Route guard: renders the app only when /me succeeded (or an external
+  * identity exists and is still loading). Everything else bounces to /login,
+diff --git a/src/hooks/useFavorites.ts b/src/hooks/useFavorites.ts
+index 0460af6..f142e8f 100644
+--- a/src/hooks/useFavorites.ts
++++ b/src/hooks/useFavorites.ts
+@@ -20,7 +20,8 @@ function isInternational(team: Team): boolean {
+ }
+ 
+ export type FavoriteResult =
+-  { ok: true; added: boolean; team: Team } | { ok: false; reason: "cap" | "intlCap" | "server"; code?: string };
++  | { ok: true; added: boolean; team: Team }
++  | { ok: false; reason: "cap" | "intlCap" | "server"; code?: string };
+ 
+ /**
+  * Favorites live on the server; this hook keeps the synchronous-feeling API
+diff --git a/src/hooks/usePullToRefresh.ts b/src/hooks/usePullToRefresh.ts
+new file mode 100644
+index 0000000..88ce68a
+--- /dev/null
++++ b/src/hooks/usePullToRefresh.ts
+@@ -0,0 +1,83 @@
++import { useEffect, useRef, useState } from "react";
++
++/**
++ * Pull down from the top of the feed to resync it.
++ *
++ * The feed is the app's front door and its users are checking live scores
++ * one-handed on a phone, so the platform gesture has to work; the TopBar icon
++ * stays as the keyboard/screen-reader equivalent and never goes away.
++ *
++ * Design notes:
++ * - Listeners live on `window` with `touchmove` registered non-passive, so the
++ *   browser's own overscroll is suppressed while the gesture is ours. Without
++ *   that the feed rubber-bands and the indicator fights it.
++ * - The gesture is only claimed when the feed is already at the top and no
++ *   refresh is running; anywhere else the listeners stand down and normal
++ *   scrolling is untouched.
++ * - Distance is rubber-banded (x0.5) and capped, so a long drag feels resisted
++ *   rather than tracking the finger 1:1.
++ *
++ * Lives in hooks/ so `components/PullToRefresh` exports only components — Fast
++ * Refresh can't hot-patch a module that also exports a hook.
++ */
++export const THRESHOLD = 64;
++const MAX_PULL = 96;
++
++export function usePullToRefresh(onRefresh: () => void, enabled: boolean) {
++  const [pull, setPull] = useState(0);
++  const startY = useRef<number | null>(null);
++  const distance = useRef(0);
++  const latest = useRef(onRefresh);
++
++  // Keep the callback current without resubscribing the listeners every render.
++  useEffect(() => {
++    latest.current = onRefresh;
++  }, [onRefresh]);
++
++  useEffect(() => {
++    if (!enabled) return;
++
++    const atTop = () => (document.scrollingElement?.scrollTop ?? 0) <= 0;
++
++    const start = (event: TouchEvent) => {
++      distance.current = 0;
++      startY.current = atTop() ? (event.touches[0]?.clientY ?? null) : null;
++    };
++
++    const move = (event: TouchEvent) => {
++      if (startY.current === null) return;
++      const y = event.touches[0]?.clientY ?? 0;
++      const delta = y - startY.current;
++      if (delta <= 0 || !atTop()) {
++        // Swiped up (or the feed scrolled): hand the gesture back to the page.
++        startY.current = null;
++        distance.current = 0;
++        setPull(0);
++        return;
++      }
++      if (event.cancelable) event.preventDefault();
++      distance.current = Math.min(delta * 0.5, MAX_PULL);
++      setPull(distance.current);
++    };
++
++    const end = () => {
++      if (startY.current !== null && distance.current >= THRESHOLD) latest.current();
++      startY.current = null;
++      distance.current = 0;
++      setPull(0);
++    };
++
++    window.addEventListener("touchstart", start, { passive: true });
++    window.addEventListener("touchmove", move, { passive: false });
++    window.addEventListener("touchend", end, { passive: true });
++    window.addEventListener("touchcancel", end, { passive: true });
++    return () => {
++      window.removeEventListener("touchstart", start);
++      window.removeEventListener("touchmove", move);
++      window.removeEventListener("touchend", end);
++      window.removeEventListener("touchcancel", end);
++    };
++  }, [enabled]);
++
++  return pull;
++}
+diff --git a/src/i18n/I18nProvider.tsx b/src/i18n/I18nProvider.tsx
+index 94757d9..c924879 100644
+--- a/src/i18n/I18nProvider.tsx
++++ b/src/i18n/I18nProvider.tsx
+@@ -1,19 +1,8 @@
+-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
++import { useCallback, useEffect, useMemo, useState } from "react";
+ import type { ReactNode } from "react";
+ import { strings, type Lang, type StringKey } from "./strings";
+ import { toFa } from "./names";
+-
+-interface I18nValue {
+-  lang: Lang;
+-  dir: "ltr" | "rtl";
+-  setLang: (lang: Lang) => void;
+-  toggleLang: () => void;
+-  t: (key: StringKey, vars?: Record<string, string | number>) => string;
+-  /** Team / player / coach names: Persian in `fa`, identity in `en`. */
+-  localize: (name: string) => string;
+-}
+-
+-const I18nContext = createContext<I18nValue | null>(null);
++import { I18nContext, type I18nValue } from "./context";
+ 
+ const STORAGE_KEY = "matchday.lang";
+ 
+@@ -77,9 +66,3 @@ export function I18nProvider({ children }: { children: ReactNode }) {
+ 
+   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+ }
+-
+-export function useI18n(): I18nValue {
+-  const ctx = useContext(I18nContext);
+-  if (!ctx) throw new Error("useI18n must be used inside <I18nProvider>");
+-  return ctx;
+-}
+diff --git a/src/i18n/context.ts b/src/i18n/context.ts
+new file mode 100644
+index 0000000..dd7a655
+--- /dev/null
++++ b/src/i18n/context.ts
+@@ -0,0 +1,26 @@
++import { createContext, useContext } from "react";
++import { type Lang, type StringKey } from "./strings";
++
++/**
++ * The i18n context and its hook, kept OUT of `I18nProvider.tsx` on purpose:
++ * React Fast Refresh only preserves component state when a module exports
++ * nothing but components, so the provider file exports its component alone
++ * and everything that reads translations comes through `useI18n` here.
++ */
++export interface I18nValue {
++  lang: Lang;
++  dir: "ltr" | "rtl";
++  setLang: (lang: Lang) => void;
++  toggleLang: () => void;
++  t: (key: StringKey, vars?: Record<string, string | number>) => string;
++  /** Team / player / coach names: Persian in `fa`, identity in `en`. */
++  localize: (name: string) => string;
++}
++
++export const I18nContext = createContext<I18nValue | null>(null);
++
++export function useI18n(): I18nValue {
++  const ctx = useContext(I18nContext);
++  if (!ctx) throw new Error("useI18n must be used inside <I18nProvider>");
++  return ctx;
++}
+diff --git a/src/lib/adaptComments.ts b/src/lib/adaptComments.ts
+new file mode 100644
+index 0000000..e357fa2
+--- /dev/null
++++ b/src/lib/adaptComments.ts
+@@ -0,0 +1,24 @@
++import type { ApiComment } from "./api";
++import type { Comment } from "../types";
++
++/**
++ * Server → view adapter: flags your own cards so they render amber.
++ *
++ * Sits in lib rather than in `components/panels/CommentsPanel` so that file
++ * exports only components (Fast Refresh can't hot-patch a module that also
++ * exports plain helpers), and because MatchDetail calls it directly too.
++ */
++export function adaptComments(rows: ApiComment[], myUserId: number | undefined): Comment[] {
++  return rows.map((c) => ({
++    id: String(c.id),
++    eventId: c.event_id !== null && c.event_id !== undefined ? String(c.event_id) : null,
++    matchId: c.match_id,
++    minuteDisplay: c.minute_display,
++    minuteSeconds: c.minute_seconds,
++    author: c.author,
++    authorId: c.user_id,
++    text: c.text,
++    mediaLink: c.media_link,
++    isMine: myUserId !== undefined && c.user_id === myUserId,
++  }));
++}
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 1811ea6..cf56f6e 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -13,6 +13,16 @@ import { currentAuthToken, getDeviceId } from "./auth";
+ 
+ const BASE = "/api";
+ 
++/**
++ * Every non-2xx response is thrown as one of these, so callers can branch on
++ * `status` (401 = the stored session is dead) instead of re-deriving it from a
++ * message string or casting through `any`.
++ */
++export interface ApiRequestError extends Error {
++  code?: string;
++  status?: number;
++}
++
+ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
+   const res = await fetch(`${BASE}${path}`, {
+     ...opts,
+@@ -24,7 +34,7 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
+   });
+   if (!res.ok) {
+     const body = (await res.json().catch(() => ({}))) as { error?: string };
+-    const err = new Error(body.error ?? `HTTP ${res.status}`) as Error & { code?: string; status?: number };
++    const err = new Error(body.error ?? `HTTP ${res.status}`) as ApiRequestError;
+     err.code = body.error;
+     err.status = res.status;
+     throw err;
+@@ -209,8 +219,65 @@ export interface ApiCompetition {
+   comingSoon?: boolean;
+ }
+ 
++/**
++ * Row behind GET /api/leagues/:league/players. Fields the client maps through
++ * a `??` default are optional — the server only sends a stat the competition
++ * actually tracks — while the identity columns the mapper reads directly are
++ * required, so a payload drift becomes a compile error here rather than a
++ * `undefined` rendered in a leaderboard.
++ */
++export interface LeaguePlayerStatRow {
++  player_id: string;
++  full_name: string;
++  short_name: string | null;
++  position?: string | null;
++  team_id: string;
++  team_name: string;
++  team_short: string | null;
++  team_color: string | null;
++  headshot_url: string | null;
++  jersey_number: number | null;
++  appearances?: number | null;
++  goals?: number | null;
++  assists?: number | null;
++  minutes?: number | null;
++  shots?: number | null;
++  shots_on_target?: number | null;
++  yellow_cards?: number | null;
++  red_cards?: number | null;
++  saves?: number | null;
++  goals_conceded?: number | null;
++  own_goals?: number | null;
++  stat_score_total?: number | null;
++  stat_score_avg?: number | null;
++}
++
++/** Row behind GET /api/leagues/:league/teams — same optional-stat convention. */
++export interface LeagueTeamStatRow {
++  team_id: string;
++  name: string;
++  short_name: string | null;
++  color: string | null;
++  logo_url: string | null;
++  played?: number | null;
++  wins?: number | null;
++  draws?: number | null;
++  losses?: number | null;
++  goals_for?: number | null;
++  goals_against?: number | null;
++  clean_sheets?: number | null;
++  avg_possession?: number | null;
++  avg_pass_accuracy?: number | null;
++  total_shots?: number | null;
++  total_shots_on_target?: number | null;
++  total_corners?: number | null;
++  total_fouls?: number | null;
++}
++
+ export interface ApiStanding {
+   team_id: string;
++  /** The competition this table belongs to — also feeds teamFromApi's league mapping. */
++  league: string;
+   rank: number | null;
+   played: number | null;
+   wins: number | null;
+@@ -488,13 +555,11 @@ export const api = {
+     request<{
+       season: string;
+       sort: string;
+-      players: Record<string, unknown>[];
++      players: LeaguePlayerStatRow[];
+     }>(`/leagues/${encodeURIComponent(league)}/players?sort=${encodeURIComponent(sort)}&limit=${limit}`),
+ 
+   getLeagueTeamStats: (league: string) =>
+-    request<{ season: string; teams: Record<string, unknown>[] }>(
+-      `/leagues/${encodeURIComponent(league)}/teams`,
+-    ),
++    request<{ season: string; teams: LeagueTeamStatRow[] }>(`/leagues/${encodeURIComponent(league)}/teams`),
+ 
+   getMatchPlayers: (matchId: string) =>
+     request<{ players: Record<string, unknown>[] }>(`/matches/${matchId}/players`),
+@@ -547,7 +612,9 @@ export const api = {
+    * (live now + recent results + the next fortnight); pass `from`/`to`
+    * (YYYY-MM-DD) for an explicit fixture range instead.
+    */
+-  getMatches: (query: { league?: string; date?: string; from?: string; to?: string; limit?: number } = {}) => {
++  getMatches: (
++    query: { league?: string; date?: string; from?: string; to?: string; limit?: number } = {},
++  ) => {
+     const qs = new URLSearchParams();
+     if (query.league) qs.set("league", query.league);
+     if (query.date) qs.set("date", query.date);
+@@ -585,8 +652,6 @@ export const api = {
+ 
+   getTimeline: (id: string) => request<{ events: ApiTimelineEvent[] }>(`/matches/${id}/timeline`),
+ 
+-  /** Full replay bundle for the 2D pitch playback of a finished match. */
+-
+   getCommentary: (id: string) => request<{ commentary: ApiCommentaryLine[] }>(`/matches/${id}/commentary`),
+ 
+   getSquad: (teamId: string) =>
+diff --git a/src/lib/auth.ts b/src/lib/auth.ts
+index 0b035b7..8fabaa9 100644
+--- a/src/lib/auth.ts
++++ b/src/lib/auth.ts
+@@ -113,7 +113,7 @@ function clearLoggedOut(): void {
+ 
+ /** The Telegram initData, when the app actually runs inside Telegram. */
+ export function telegramInitData(): string | null {
+-  const tg = (window as any).Telegram?.WebApp;
++  const tg = window.Telegram?.WebApp;
+   return typeof tg?.initData === "string" && tg.initData ? tg.initData : null;
+ }
+ 
+@@ -135,6 +135,23 @@ export function currentAuthToken(): string {
+   return dev ? `dev:${dev}` : "dev:1";
+ }
+ 
++/**
++ * True when the URL explicitly asks to be a particular user (`?devUser=<id>`).
++ *
++ * Auto-entry has to stand down in that case. It exchanges the device id for a
++ * `mg_` session, and a stored session outranks every other token family — so
++ * without this guard the freshly minted guest account replaced the dev
++ * identity on its first request and `?devUser=` did nothing at all, despite
++ * being the documented way to preview another account.
++ */
++export function hasExplicitDevUser(): boolean {
++  try {
++    return new URLSearchParams(window.location.search).has("devUser");
++  } catch {
++    return false;
++  }
++}
++
+ /** Clear every client-side credential (remembered + tab + sign-out flag). */
+ export function clearSession(): void {
+   setSessionToken("", false);
+diff --git a/src/lib/bracket.ts b/src/lib/bracket.ts
+index 3184465..43fd11a 100644
+--- a/src/lib/bracket.ts
++++ b/src/lib/bracket.ts
+@@ -113,7 +113,7 @@ export function buildBracket(matches: Match[]): Bracket {
+   // Connectivity: for each tie, trace every participant back through earlier
+   // rounds to the nearest tie it won. Missing intermediate rounds (partial
+   // sync windows) don't break the chain — the nearest win is the honest
+- // feeder we can show.
++  // feeder we can show.
+   const winIndex: Array<Map<string, BracketTie>> = [];
+   for (const round of rounds) {
+     const winners = new Map<string, BracketTie>();
+diff --git a/src/lib/breakdown.ts b/src/lib/breakdown.ts
+index ae35c62..6974b27 100644
+--- a/src/lib/breakdown.ts
++++ b/src/lib/breakdown.ts
+@@ -140,11 +140,7 @@ export interface PickSummaryCtx {
+ /** ESPN athlete ids only — keeps formation strings and grid cells out. */
+ const asId = (v: unknown): string => (typeof v === "string" && /^\d{1,15}$/.test(v) ? v : "");
+ 
+-export function pickSummary(
+-  mechanic: string,
+-  payload: string | null,
+-  ctx: PickSummaryCtx,
+-): string | null {
++export function pickSummary(mechanic: string, payload: string | null, ctx: PickSummaryCtx): string | null {
+   if (!payload) return null;
+   let parsed: unknown;
+   try {
+@@ -168,8 +164,7 @@ export function pickSummary(
+       const y = typeof grid?.gridY === "number" ? grid.gridY : NaN;
+       // The zone is half the pick: a shot prediction is "this player, from
+       // here". Naming only the player hid the half the user actually chose.
+-      const zone =
+-        Number.isInteger(x) && Number.isInteger(y) ? ctx.t(ZONE_LABEL_KEY[cellZone(x, y)]) : null;
++      const zone = Number.isInteger(x) && Number.isInteger(y) ? ctx.t(ZONE_LABEL_KEY[cellZone(x, y)]) : null;
+       const who = id ? ctx.nameOf(id) : null;
+       if (who && zone) return `${who} · ${zone}`;
+       return who ?? zone;
+@@ -195,7 +190,9 @@ export function pickSummary(
+       const limit = Math.max(1, ctx.maxPairs ?? 1);
+       const shown = pairs.slice(0, limit);
+       const rest = pairs.length - shown.length;
+-      return rest > 0 ? `${shown.join(" · ")} · ${ctx.t("predict.morePairs", { n: rest })}` : shown.join(" · ");
++      return rest > 0
++        ? `${shown.join(" · ")} · ${ctx.t("predict.morePairs", { n: rest })}`
++        : shown.join(" · ");
+     }
+ 
+     case "lineup": {
+diff --git a/src/lib/clubContext.ts b/src/lib/clubContext.ts
+new file mode 100644
+index 0000000..4a8ce6a
+--- /dev/null
++++ b/src/lib/clubContext.ts
+@@ -0,0 +1,22 @@
++import type { Match } from "../types";
++
++/**
++ * A club's context in the fixture list: live now, else next kickoff, else last result.
++ *
++ * Lives apart from `components/ClubCard` so that file exports only components —
++ * Fast Refresh can't patch a module that also exports plain helpers, and these
++ * two are pure data lookups used by the matchday feed as well as the card.
++ */
++export function clubContext(teamId: string, matches: Match[]) {
++  const mine = matches.filter((m) => m.home.id === teamId || m.away.id === teamId);
++  const newestFirst = (a: Match, b: Match) => +new Date(b.kickoffAt) - +new Date(a.kickoffAt);
++  const soonestFirst = (a: Match, b: Match) => +new Date(a.kickoffAt) - +new Date(b.kickoffAt);
++  const live = mine.find((m) => m.status === "live");
++  const next = mine.filter((m) => m.status === "scheduled").sort(soonestFirst)[0];
++  const last = mine.filter((m) => m.status === "finished").sort(newestFirst)[0];
++  return { match: live ?? next ?? last, live, next, last };
++}
++
++export function opponentOf(teamId: string, match: Match) {
++  return match.home.id === teamId ? match.away : match.home;
++}
+diff --git a/src/lib/cx.ts b/src/lib/cx.ts
+new file mode 100644
+index 0000000..b090942
+--- /dev/null
++++ b/src/lib/cx.ts
+@@ -0,0 +1,9 @@
++/**
++ * Class-name joiner for conditional Tailwind classes.
++ *
++ * Deliberately NOT in `components/ui.tsx`: React Fast Refresh only preserves
++ * component state when a module exports nothing but components, and a shared
++ * helper exported from the primitive kit invalidated that file's refresh
++ * boundary on every edit — remounting every card, chip and button in dev.
++ */
++export const cx = (...parts: Array<string | false | null | undefined>) => parts.filter(Boolean).join(" ");
+diff --git a/src/lib/optimistic.ts b/src/lib/optimistic.ts
+index b71bd0b..7e3bd37 100644
+--- a/src/lib/optimistic.ts
++++ b/src/lib/optimistic.ts
+@@ -97,4 +97,4 @@ export function mergePrefsOptimistic(
+ ): NotificationPrefsPayload | undefined {
+   if (!prev) return prev;
+   return { prefs: { ...prev.prefs, ...partial } };
+-}
+\ No newline at end of file
++}
+diff --git a/src/lib/pickerGroups.ts b/src/lib/pickerGroups.ts
+index a6aa4b1..656f29b 100644
+--- a/src/lib/pickerGroups.ts
++++ b/src/lib/pickerGroups.ts
+@@ -128,9 +128,7 @@ export function buildLeagueTabs(
+ ): LeagueTab[] {
+   const bigFive = PICKER_GROUPS.filter((g) => g.key !== OTHER_GROUP && g.key !== INTERNATIONAL_GROUP);
+   const aliasBySlug = new Map(Object.entries(SLUG_BY_LEAGUE).map(([slug, alias]) => [slug, alias]));
+-  const extras = followed.filter(
+-    (row) => row.kind === "league" && !aliasBySlug.has(row.league),
+-  );
++  const extras = followed.filter((row) => row.kind === "league" && !aliasBySlug.has(row.league));
+   const seen = new Set<string>();
+   return [
+     ...bigFive.map((g) => ({ value: g.key, label: t(g.label) })),
+diff --git a/src/lib/predictionWindow.ts b/src/lib/predictionWindow.ts
+index 9f7a0b0..b0edc02 100644
+--- a/src/lib/predictionWindow.ts
++++ b/src/lib/predictionWindow.ts
+@@ -44,10 +44,7 @@ export const LINEUP_GATED: readonly Mechanic[] = ["sub", "shot_predict", "player
+  * self-describing `requires` flag; falls back to the canonical set when the
+  * payload predates the flag (or windows are empty).
+  */
+-export function requiresLineup(
+-  mechanic: Mechanic,
+-  window?: PredictionWindow | null,
+-): boolean {
++export function requiresLineup(mechanic: Mechanic, window?: PredictionWindow | null): boolean {
+   if (window && window.requires !== undefined) return window.requires === "lineup";
+   return LINEUP_GATED.includes(mechanic);
+ }
+diff --git a/src/lib/teams.ts b/src/lib/teams.ts
+index f97381a..04469fd 100644
+--- a/src/lib/teams.ts
++++ b/src/lib/teams.ts
+@@ -28,4 +28,4 @@ export function teamFromApi(t: ApiTeam): Team {
+   };
+ }
+ 
+-export type { LeagueId, Team };
+\ No newline at end of file
++export type { LeagueId, Team };
+diff --git a/src/pages/Browse.tsx b/src/pages/Browse.tsx
+index cf54128..8543a54 100644
+--- a/src/pages/Browse.tsx
++++ b/src/pages/Browse.tsx
+@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
+ import { TopBar } from "../components/TopBar";
+ import { CompRowSkeleton } from "../components/Skeletons";
+ import { ChevronRightIcon } from "../components/icons";
+-import { Chip, Num, SectionHeading, cx } from "../components/ui";
++import { cx } from "../lib/cx";
++import { Chip, Num, SectionHeading } from "../components/ui";
+ import { useCompetitions } from "../hooks/useApi";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { haptic } from "../lib/telegram";
+ 
+ /**
+@@ -69,7 +70,7 @@ export default function Browse() {
+               setFilter(value);
+             }}
+             className={cx(
+-              "min-h-11 rounded-full text-xs font-bold transition-colors duration-[var(--t-fast)]",
++              "min-h-11 rounded-full text-xs font-bold transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+               filter === value ? "bg-elevated text-volt" : "text-ink-2 hover:text-ink",
+             )}
+           >
+@@ -86,7 +87,7 @@ export default function Browse() {
+         sections.map(
+           ({ title, rows }) =>
+             rows.length > 0 && (
+-              <section key={title} className="mt-5">
++              <section key={title} className="mt-5 fade-swap">
+                 <SectionHeading
+                   title={title}
+                   action={
+diff --git a/src/pages/Cups.tsx b/src/pages/Cups.tsx
+index d11b61a..b4bc89f 100644
+--- a/src/pages/Cups.tsx
++++ b/src/pages/Cups.tsx
+@@ -14,7 +14,7 @@ import {
+ } from "../components/ui";
+ import { buildBracket, type BracketTie } from "../lib/bracket";
+ import { useKnockoutCompetitions, useMatches } from "../hooks/useApi";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { formatKickoff } from "../lib/format";
+ import { haptic } from "../lib/telegram";
+ import type { Match } from "../types";
+@@ -146,7 +146,7 @@ export default function Cups() {
+                   haptic("light");
+                   setRoundsOverride((prev) => (prev === null ? false : !prev));
+                 }}
+-                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-[11px] font-bold text-ink-2 transition-colors duration-[var(--t-fast)] hover:bg-elevated hover:text-ink"
++                className="inline-flex min-h-11 items-center rounded-full border border-line px-3 text-[11px] font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
+               >
+                 {roundsOverride === false ? t("common.expandAll") : t("common.collapseAll")}
+               </button>
+diff --git a/src/pages/Leaderboards.tsx b/src/pages/Leaderboards.tsx
+index 1979a55..68e6a6c 100644
+--- a/src/pages/Leaderboards.tsx
++++ b/src/pages/Leaderboards.tsx
+@@ -3,10 +3,11 @@ import { Link } from "react-router-dom";
+ import { TopBar } from "../components/TopBar";
+ import { RulesButton } from "../components/RulesSheet";
+ import { ChartIcon } from "../components/icons";
+-import { Avatar, Chip, EmptyState, ErrorState, Num, SectionHeading, Segmented, cx } from "../components/ui";
++import { Avatar, Chip, EmptyState, ErrorState, Num, SectionHeading, Segmented } from "../components/ui";
++import { cx } from "../lib/cx";
+ import { slugForLeague, useLeaderboard, useLeagueTabs, type LeaderboardScope } from "../hooks/useApi";
+ import { useFavorites } from "../hooks/useFavorites";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { viewerStanding } from "../lib/leaderboard";
+ 
+ type BoardTab = "global" | "league" | "club";
+diff --git a/src/pages/Login.tsx b/src/pages/Login.tsx
+index 099a8d6..d47d154 100644
+--- a/src/pages/Login.tsx
++++ b/src/pages/Login.tsx
+@@ -1,9 +1,9 @@
+-import { useEffect, useState, type FormEvent } from "react";
++import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
+ import { Navigate, useLocation } from "react-router-dom";
+ import { LanguageToggle } from "../components/TopBar";
+ import { Button, Card, Segmented } from "../components/ui";
+-import { useAuth } from "../hooks/useAuth";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useAuth } from "../hooks/authContext";
++import { useI18n } from "../i18n/context";
+ import { serverErrorKey } from "../lib/api";
+ import { isTelegram, haptic, telegramDisplayName } from "../lib/telegram";
+ import type { StringKey } from "../i18n/strings";
+@@ -110,7 +110,7 @@ export default function Login() {
+           <p className="mx-auto mt-2 max-w-[34ch] text-sm leading-relaxed text-ink-2">{t("auth.subtitle")}</p>
+         </section>
+ 
+-        <Card className="rise-in p-4 sm:p-5" style={{ animationDelay: "70ms" }}>
++        <Card className="rise-in p-4 sm:p-5" style={{ "--stagger": "70ms" } as CSSProperties}>
+           {showUsername ? (
+             <form onSubmit={submitUsername} className="space-y-3">
+               <Segmented
+@@ -239,7 +239,7 @@ export default function Login() {
+ 
+         <p
+           className="rise-in mt-5 px-2 text-center text-[11px] leading-relaxed text-ink-3"
+-          style={{ animationDelay: "140ms" }}
++          style={{ "--stagger": "140ms" } as CSSProperties}
+         >
+           {t("auth.legal")}
+         </p>
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index d60c236..3db5334 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -14,9 +14,10 @@ import { RateSheet } from "../components/panels/RateSheet";
+ import type { PlayerRating } from "../types";
+ import { TimelineList } from "../components/TimelineList";
+ import { TopBar } from "../components/TopBar";
+-import { useToast } from "../components/Toast";
++import { useToast } from "../components/toastContext";
+ import { CommentaryPanel } from "../components/panels/CommentaryPanel";
+-import { CommentsSection, adaptComments } from "../components/panels/CommentsPanel";
++import { CommentsSection } from "../components/panels/CommentsPanel";
++import { adaptComments } from "../lib/adaptComments";
+ import { LineupsPanel } from "../components/panels/LineupsPanel";
+ import { PredictionsHub } from "../components/panels/PredictionsHub";
+ import { ChartIcon, ChevronRightIcon, StarIcon } from "../components/icons";
+@@ -31,14 +32,14 @@ import {
+   SectionHeading,
+   Segmented,
+   TeamBadge,
+-  cx,
+ } from "../components/ui";
++import { cx } from "../lib/cx";
+ import { api, serverErrorKey, type ApiPlayerRating, type ApiTimelineEvent } from "../lib/api";
+ import { TEAM_FALLBACK } from "../lib/colors";
+ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+ import { TaskAdCard } from "../components/TaskAdCard";
+-import { useAuth } from "../hooks/useAuth";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useAuth } from "../hooks/authContext";
++import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+ import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+@@ -169,7 +170,8 @@ export default function MatchDetail() {
+   // and closes non-Sub mechanics the moment kickoff passes.
+   const pickStillOpen = Object.entries(predictionsQuery.data?.windows ?? {}).some(
+     ([mechanic, w]) =>
+-      !picked.has(mechanic) && isOpen(mechanic as Mechanic, w, { matchStatus: predictionStatus, lineupsPublished }),
++      !picked.has(mechanic) &&
++      isOpen(mechanic as Mechanic, w, { matchStatus: predictionStatus, lineupsPublished }),
+   );
+   const picksMade = predictionsQuery.data?.predictions.length ?? 0;
+   const showPickCta = match.status !== "finished" && tab !== "predict" && pickStillOpen;
+@@ -249,29 +251,27 @@ export default function MatchDetail() {
+         {tab === "ratings" ? <RatingsTab matchId={id} live={live} league={match.league} /> : null}
+       </section>
+ 
++      {/* The full eye-test view (crowd vs stat, divergence sort) for finished games. */}
+       {match.status === "finished" ? (
+-        <>
+-          {/* The full eye-test view (crowd vs stat, divergence sort) for finished games. */}
+-          <div className="mt-3">
+-            <Link
+-              to={`/ratings?match=${match.id}`}
+-              className="flex items-center gap-2 rounded-card border border-gold/50 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++        <div className="mt-4">
++          <Link
++            to={`/ratings?match=${match.id}`}
++            className="flex items-center gap-2 rounded-card border border-gold/50 bg-surface p-3 transition-colors duration-[var(--t-fast)] hover:bg-elevated"
++          >
++            <span
++              className="grid h-8 w-8 flex-none place-items-center rounded-full border border-gold text-gold"
++              style={{ backgroundColor: "color-mix(in srgb, var(--gold) 12%, transparent)" }}
++              aria-hidden="true"
+             >
+-              <span
+-                className="grid h-8 w-8 flex-none place-items-center rounded-full border border-gold text-gold"
+-                style={{ backgroundColor: "color-mix(in srgb, var(--gold) 12%, transparent)" }}
+-                aria-hidden="true"
+-              >
+-                <StarIcon className="h-4 w-4" />
+-              </span>
+-              <span className="min-w-0 flex-1">
+-                <span className="block truncate text-xs font-bold text-ink">{t("ratings.title")}</span>
+-                <span className="block text-[11px] text-ink-3">{t("ratings.subtitle")}</span>
+-              </span>
+-              <ChevronRightIcon className="flex-none text-ink-3" />
+-            </Link>
+-          </div>
+-        </>
++              <StarIcon className="h-4 w-4" />
++            </span>
++            <span className="min-w-0 flex-1">
++              <span className="block truncate text-xs font-bold text-ink">{t("ratings.title")}</span>
++              <span className="block text-[11px] text-ink-3">{t("ratings.subtitle")}</span>
++            </span>
++            <ChevronRightIcon className="flex-none text-ink-3" />
++          </Link>
++        </div>
+       ) : null}
+ 
+       {/* Thumb-zone action for the only thing on this page with a deadline.
+@@ -428,8 +428,8 @@ function StatsTab({
+     <div className="space-y-3">
+       <MatchPlayerTable title={home.shortName} color={home.color} rows={homeRows} />
+       <MatchPlayerTable title={away.shortName} color={away.color} rows={awayRows} />
+-      {/* Match stats → season stats: the same cross-link pattern as the replay
+-          and crowd-rating cards below the tabs, so a stat-curious reader has
++      {/* Match stats → season stats: the same cross-link pattern as the
++          crowd-rating card below the tabs, so a stat-curious reader has
+           somewhere to go instead of a table that just ends. */}
+       <Link
+         to="/stats"
+@@ -667,9 +667,10 @@ function RatingsList({
+   return (
+     <>
+       <ul className="space-y-2">
+-        {players.map((rating) => (
++        {players.map((rating, index) => (
+           <RatingRow
+             key={rating.playerId}
++            index={index}
+             rating={rating}
+             team={(rating as PlayerRating & { _team: Team })._team}
+             onTap={(player) => {
+diff --git a/src/pages/Matches.tsx b/src/pages/Matches.tsx
+index 7ba51f5..331319c 100644
+--- a/src/pages/Matches.tsx
++++ b/src/pages/Matches.tsx
+@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+ import { Link, useNavigate, useSearchParams } from "react-router-dom";
+ import { useQueryClient } from "@tanstack/react-query";
+ import { ConfettiBurst } from "../components/Confetti";
+-import { clubContext, opponentOf } from "../components/ClubCard";
++import { clubContext, opponentOf } from "../lib/clubContext";
+ import { MatchCard } from "../components/MatchCard";
+ import { MatchCardSkeleton } from "../components/Skeletons";
+ import { TopBar } from "../components/TopBar";
+-import { useToast } from "../components/Toast";
++import { useToast } from "../components/toastContext";
+ import {
+   Card,
+   Chip,
+@@ -17,17 +17,18 @@ import {
+   Num,
+   SectionHeading,
+   TeamBadge,
+-  cx,
+ } from "../components/ui";
++import { cx } from "../lib/cx";
+ import { useMatches, useFollowedLeagues } from "../hooks/useApi";
+ import { useFavorites } from "../hooks/useFavorites";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { formatClock, formatKickoff } from "../lib/format";
+ import { LEAGUE_BY_SLUG } from "../lib/leagues";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+ import { BallIcon, ChartIcon, ChevronRightIcon, RefreshIcon, StarFilledIcon } from "../components/icons";
+ import { TaskAdCard } from "../components/TaskAdCard";
+-import { PullIndicator, usePullToRefresh } from "../components/PullToRefresh";
++import { usePullToRefresh } from "../hooks/usePullToRefresh";
++import { PullIndicator } from "../components/PullToRefresh";
+ import type { Match, Team } from "../types";
+ 
+ export default function Matches() {
+@@ -183,8 +184,8 @@ export default function Matches() {
+           fire: while the feed loads there is simply no Live section yet, and
+           a quiet matchday gets no header at all. */}
+       <ul className="space-y-2">
+-        {live.map((match) => (
+-          <MatchCard key={match.id} match={match} flash={flashId === match.id} />
++        {live.map((match, index) => (
++          <MatchCard key={match.id} match={match} flash={flashId === match.id} index={index} />
+         ))}
+       </ul>
+     </CollapsibleSection>
+@@ -229,7 +230,7 @@ export default function Matches() {
+               }}
+               aria-pressed={leagueFilter === null}
+               className={cx(
+-                "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
++                "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+                 leagueFilter === null ? "border-volt text-volt" : "border-line text-ink-3",
+               )}
+             >
+@@ -245,7 +246,7 @@ export default function Matches() {
+                 }}
+                 aria-pressed={leagueFilter === l.league}
+                 className={cx(
+-                  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-colors duration-[var(--t-fast)]",
++                  "min-h-11 flex-none rounded-full border px-3.5 text-[11px] font-bold transition-[color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+                   leagueFilter === l.league ? "border-volt text-volt" : "border-line text-ink-3",
+                 )}
+               >
+@@ -309,7 +310,7 @@ export default function Matches() {
+                 onRetry={() => matchesQuery.refetch()}
+               />
+             ) : (
+-              <ul className="space-y-2">
++              <ul className="space-y-2 fade-swap">
+                 {teamRows.map(({ team, context }) => (
+                   <TeamRow key={team.id} team={team} context={context} anchored={team.id === anchorId} />
+                 ))}
+@@ -356,8 +357,8 @@ export default function Matches() {
+             />
+           ) : upcomingShown.length > 0 ? (
+             <ul className="space-y-2">
+-              {upcomingShown.map((match) => (
+-                <MatchCard key={match.id} match={match} />
++              {upcomingShown.map((match, index) => (
++                <MatchCard key={match.id} match={match} index={index} />
+               ))}
+             </ul>
+           ) : (
+@@ -389,8 +390,8 @@ export default function Matches() {
+               />
+             ) : (
+               <ul className="space-y-2">
+-                {finished.map((match) => (
+-                  <MatchCard key={match.id} match={match} />
++                {finished.map((match, index) => (
++                  <MatchCard key={match.id} match={match} index={index} />
+                 ))}
+               </ul>
+             )}
+diff --git a/src/pages/NotFound.tsx b/src/pages/NotFound.tsx
+index 7316805..fcc414a 100644
+--- a/src/pages/NotFound.tsx
++++ b/src/pages/NotFound.tsx
+@@ -1,7 +1,7 @@
+ import { useLocation } from "react-router-dom";
+ import { TopBar } from "../components/TopBar";
+ import { Button, Card } from "../components/ui";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ 
+ /**
+  * Unknown route. The wildcard used to redirect to /browse silently, which hid
+diff --git a/src/pages/Onboarding.tsx b/src/pages/Onboarding.tsx
+index 1f82c63..6c6676b 100644
+--- a/src/pages/Onboarding.tsx
++++ b/src/pages/Onboarding.tsx
+@@ -1,12 +1,13 @@
+ import { useMemo, useState } from "react";
+ import { useNavigate } from "react-router-dom";
+ import { TopBar } from "../components/TopBar";
+-import { useToast } from "../components/Toast";
+-import { Button, Chip, Num, Segmented, TeamBadge, cx } from "../components/ui";
++import { useToast } from "../components/toastContext";
++import { cx } from "../lib/cx";
++import { Button, Chip, Num, Segmented, TeamBadge } from "../components/ui";
+ import { ArrowIcon, CheckIcon, CloseIcon, PencilIcon, StarFilledIcon, TargetIcon } from "../components/icons";
+ import { useTeams, useCompetitions } from "../hooks/useApi";
+ import { MAX_FAVORITES, MAX_INTERNATIONALS, useFavorites, useFollowedLeagues } from "../hooks/useFavorites";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import type { StringKey } from "../i18n/strings";
+ import { serverErrorKey } from "../lib/api";
+ import { haptic, selectionHaptic, notifyHaptic } from "../lib/telegram";
+@@ -202,7 +203,7 @@ export default function Onboarding() {
+               <div className="min-w-0 flex-1">
+                 <p className="truncate text-sm font-bold text-ink">{anchorName}</p>
+                 <p className="flex items-center gap-1 text-[11px] font-bold text-gold">
+-                  <StarFilledIcon className="h-3 w-3 flex-none" />
++                  <StarFilledIcon className="star-pop h-3 w-3 flex-none" />
+                   {t("onboarding.isFavorite")}
+                 </p>
+               </div>
+@@ -223,7 +224,7 @@ export default function Onboarding() {
+                     type="button"
+                     onClick={() => pickClub(team)}
+                     className={cx(
+-                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-colors duration-[var(--t-fast)]",
++                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+                       pickedHere
+                         ? isAnchor
+                           ? "border-gold bg-elevated"
+@@ -236,9 +237,9 @@ export default function Onboarding() {
+                       {localize(team.shortName)}
+                     </span>
+                     {isAnchor ? (
+-                      <StarFilledIcon className="h-4 w-4 flex-none text-gold" />
++                      <StarFilledIcon className="star-pop h-4 w-4 flex-none text-gold" />
+                     ) : pickedHere ? (
+-                      <CheckIcon className="h-4 w-4 flex-none text-volt" />
++                      <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" />
+                     ) : null}
+                   </button>
+                 </li>
+@@ -269,7 +270,7 @@ export default function Onboarding() {
+                     </div>
+                     {team.id === anchorId ? (
+                       <span
+-                        className="absolute -top-1 -start-1 grid h-5 w-5 place-items-center rounded-full border border-gold bg-elevated text-gold"
++                        className="star-pop absolute -top-1 -start-1 grid h-5 w-5 place-items-center rounded-full border border-gold bg-elevated text-gold"
+                         aria-label={t("onboarding.isFavorite")}
+                       >
+                         <StarFilledIcon className="h-2.5 w-2.5" />
+@@ -306,7 +307,7 @@ export default function Onboarding() {
+                     type="button"
+                     onClick={() => pickClub(team)}
+                     className={cx(
+-                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-colors duration-[var(--t-fast)]",
++                      "flex w-full items-center gap-2 rounded-card border p-2.5 text-start transition-[color,background-color,transform] duration-[var(--t-fast)] active:scale-[0.98]",
+                       pickedHere ? "border-volt bg-elevated" : "border-line bg-surface hover:bg-elevated",
+                     )}
+                   >
+@@ -315,7 +316,7 @@ export default function Onboarding() {
+                       {localize(team.shortName)}
+                     </span>
+                     {pickedHere ? (
+-                      <CheckIcon className="h-4 w-4 flex-none text-volt" aria-hidden="true" />
++                      <CheckIcon className="marker-pop h-4 w-4 flex-none text-volt" aria-hidden="true" />
+                     ) : null}
+                   </button>
+                 </li>
+diff --git a/src/pages/PlayerStats.tsx b/src/pages/PlayerStats.tsx
+index 3487f67..0125cc8 100644
+--- a/src/pages/PlayerStats.tsx
++++ b/src/pages/PlayerStats.tsx
+@@ -2,7 +2,8 @@ import { useState } from "react";
+ import { TopBar } from "../components/TopBar";
+ import { RowSkeleton } from "../components/Skeletons";
+ import { EmptyState, ErrorState } from "../components/ui";
+-import { Card, Chip, Num, SectionHeading, Segmented, TeamBadge, cx } from "../components/ui";
++import { cx } from "../lib/cx";
++import { Card, Chip, Num, SectionHeading, Segmented, TeamBadge } from "../components/ui";
+ import {
+   slugForLeague,
+   useLeaguePlayers,
+@@ -12,7 +13,7 @@ import {
+   type LeaderSort,
+ } from "../hooks/useApi";
+ import { TEAM_FALLBACK, readableInk } from "../lib/colors";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { Link } from "react-router-dom";
+ import { haptic } from "../lib/telegram";
+ import type { StringKey } from "../i18n/strings";
+@@ -140,7 +141,7 @@ function PlayerBoard({
+           }
+         />
+       ) : (
+-        <ul className="mt-3 space-y-2">
++        <ul className="mt-3 space-y-2 fade-swap">
+           {rows.map((row, index) => (
+             <li
+               key={row.playerId}
+diff --git a/src/pages/Predictions.tsx b/src/pages/Predictions.tsx
+index a631a27..143a0a2 100644
+--- a/src/pages/Predictions.tsx
++++ b/src/pages/Predictions.tsx
+@@ -3,8 +3,14 @@ import { TopBar } from "../components/TopBar";
+ import { CompRowSkeleton } from "../components/Skeletons";
+ import { Chip, EmptyState, ErrorState, Num, SectionHeading } from "../components/ui";
+ import { useMyPredictionHistory, type PredictionHistoryRow } from "../hooks/useApi";
+-import { useI18n } from "../i18n/I18nProvider";
+-import { breakdownItems, pickSummary, MECHANIC_LABELS, STATUS_LABELS, type BreakdownLang } from "../lib/breakdown";
++import { useI18n } from "../i18n/context";
++import {
++  breakdownItems,
++  pickSummary,
++  MECHANIC_LABELS,
++  STATUS_LABELS,
++  type BreakdownLang,
++} from "../lib/breakdown";
+ import { formatCountdown, isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
+ import { useNow } from "../hooks/useNow";
+ import { formatKickoff } from "../lib/format";
+@@ -45,7 +51,7 @@ export default function Predictions() {
+         </div>
+       ) : (
+         <>
+-          <section className="mt-4">
++          <section className="mt-4 fade-swap">
+             <SectionHeading
+               title={t("predictions.settled")}
+               action={
+@@ -66,7 +72,7 @@ export default function Predictions() {
+           </section>
+ 
+           {pending.length > 0 ? (
+-            <section className="mt-6">
++            <section className="mt-6 fade-swap">
+               <SectionHeading
+                 title={t("predictions.pending")}
+                 action={
+diff --git a/src/pages/Profile.tsx b/src/pages/Profile.tsx
+index 404e83c..2cf16f6 100644
+--- a/src/pages/Profile.tsx
++++ b/src/pages/Profile.tsx
+@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
+ import { BottomSheet, SheetActions } from "../components/BottomSheet";
+ import { TopBar } from "../components/TopBar";
+ import { ChevronRightIcon, CloseIcon, PencilIcon } from "../components/icons";
+-import { useToast } from "../components/Toast";
++import { useToast } from "../components/toastContext";
+ import { Avatar, Button, Card, Chip, ListRow, SectionHeading, Switch } from "../components/ui";
+-import { useAuth } from "../hooks/useAuth";
++import { useAuth } from "../hooks/authContext";
+ import { useNotificationPrefs, useReferral } from "../hooks/useApi";
+ import { LANG_LABEL, type Lang } from "../i18n/strings";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { serverErrorKey } from "../lib/api";
+ import { APP_VERSION, WHATS_NEW } from "../lib/appInfo";
+ import { useLocalState } from "../lib/useLocalState";
+@@ -198,6 +198,7 @@ export default function Profile() {
+           <ListRow
+             label={t("profile.haptics")}
+             hint={t("profile.hapticsHint")}
++            onToggle={() => setHapticsOn(!hapticsOn)}
+             right={<Switch checked={hapticsOn} label={t("profile.haptics")} onChange={setHapticsOn} />}
+           />
+           <ListRow
+@@ -266,6 +267,7 @@ export default function Profile() {
+           <ListRow
+             label={t("profile.notifGoals")}
+             hint={t("profile.notifGoalsHint")}
++            onToggle={() => setPref("goals")(!serverPrefs.goals)}
+             right={
+               <Switch
+                 checked={serverPrefs.goals}
+@@ -277,6 +279,7 @@ export default function Profile() {
+           <ListRow
+             label={t("profile.notifDeadline")}
+             hint={t("profile.notifDeadlineHint")}
++            onToggle={() => setPref("deadline")(!serverPrefs.deadline)}
+             right={
+               <Switch
+                 checked={serverPrefs.deadline}
+@@ -288,6 +291,7 @@ export default function Profile() {
+           <ListRow
+             label={t("profile.notifRatings")}
+             hint={t("profile.notifRatingsHint")}
++            onToggle={() => setPref("ratings")(!serverPrefs.ratings)}
+             right={
+               <Switch
+                 checked={serverPrefs.ratings}
+diff --git a/src/pages/Ratings.tsx b/src/pages/Ratings.tsx
+index 543e03a..1527c9a 100644
+--- a/src/pages/Ratings.tsx
++++ b/src/pages/Ratings.tsx
+@@ -8,10 +8,10 @@ import { Card, Chip, EmptyState, ErrorState, SectionHeading, Segmented } from ".
+ import { api, serverErrorKey } from "../lib/api";
+ import { TEAM_FALLBACK } from "../lib/colors";
+ import { useMatches } from "../hooks/useApi";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import type { PlayerRating } from "../types";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+-import { useToast } from "../components/Toast";
++import { useToast } from "../components/toastContext";
+ import type { StringKey } from "../i18n/strings";
+ import { useSearchParams, Link } from "react-router-dom";
+ 
+@@ -214,9 +214,10 @@ function MatchRatings({
+           action={<span className="text-[11px] text-ink-3">{t("ratings.tapToRate")}</span>}
+         />
+         <ul className="mt-2 space-y-2">
+-          {rows.map((rating) => (
++          {rows.map((rating, index) => (
+             <RatingRow
+               key={rating.playerId}
++              index={index}
+               rating={rating}
+               team={rating._team}
+               onTap={(player) => {
+diff --git a/src/pages/Table.tsx b/src/pages/Table.tsx
+index 6d02019..8cbe75e 100644
+--- a/src/pages/Table.tsx
++++ b/src/pages/Table.tsx
+@@ -1,15 +1,16 @@
+-import { useState } from "react";
++import { useState, type CSSProperties } from "react";
+ import { Link } from "react-router-dom";
+ import { TopBar } from "../components/TopBar";
+ import { RowSkeleton } from "../components/Skeletons";
+ import { EmptyState, ErrorState } from "../components/ui";
+-import { Chip, Num, SectionHeading, Segmented, TeamBadge, cx } from "../components/ui";
++import { cx } from "../lib/cx";
++import { Chip, CountUp, Num, SectionHeading, Segmented, TeamBadge } from "../components/ui";
+ import { StarFilledIcon } from "../components/icons";
+ import { slugForLeague, useLeagueTabs, useStandings, type StandingRow } from "../hooks/useApi";
+ 
+ type TableView = "actual" | "expected";
+ import { useFavorites } from "../hooks/useFavorites";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ 
+ /**
+  * League tables for the synced domestic leagues — straight from the standings.
+@@ -82,7 +83,7 @@ export default function Table() {
+                   type="button"
+                   onClick={() => setLeague(club.league)}
+                   className={cx(
+-                    "flex w-[76px] flex-col items-center gap-1 rounded-card border p-2.5 text-center transition-colors duration-[var(--t-fast)]",
++                    "flex w-[76px] flex-col items-center gap-1 rounded-card border p-2.5 text-center transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.97]",
+                     club.league === active
+                       ? "border-volt bg-elevated"
+                       : "border-line bg-surface hover:bg-elevated",
+@@ -173,6 +174,7 @@ export default function Table() {
+                         <ExpectedItem
+                           key={row.team.id}
+                           row={row}
++                          index={index}
+                           rank={row.xpts == null ? null : index + 1}
+                           mine={isFavorite(row.team.id)}
+                         />
+@@ -221,9 +223,10 @@ function StandingItem({ row, index, mine }: { row: StandingRow; index: number; m
+   return (
+     <li
+       className={cx(
+-        "relative grid grid-cols-[1.75rem_1fr_2rem_2.5rem_2.5rem] items-center gap-2 px-3 py-2 transition-colors duration-[var(--t-fast)]",
++        "list-in relative grid grid-cols-[1.75rem_1fr_2rem_2.5rem_2.5rem] items-center gap-2 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
+         mine ? "bg-elevated" : "hover:bg-elevated/60",
+       )}
++      style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
+     >
+       <Num className={cx("text-sm", mine ? "text-volt" : index < 3 ? "text-gold" : "text-ink-3")}>
+         {row.rank ?? index + 1}
+@@ -246,7 +249,11 @@ function StandingItem({ row, index, mine }: { row: StandingRow; index: number; m
+       <Num className={cx("text-end text-xs", gd >= 0 ? "text-ink-2" : "text-ink-3")}>
+         {gd > 0 ? `+${gd}` : gd}
+       </Num>
+-      <Num className="text-end text-sm text-ink">{row.points ?? "–"}</Num>
++      {row.points != null ? (
++        <CountUp value={row.points} className="text-end text-sm text-ink" />
++      ) : (
++        <Num className="text-end text-sm text-ink">–</Num>
++      )}
+       <span className="sr-only">{t("table.pts")}</span>
+     </li>
+   );
+@@ -290,7 +297,17 @@ function FormStrip({ form }: { form: string }) {
+  * it is still listed, unranked and dimmed, because dropping it would quietly
+  * make this look like a different league.
+  */
+-function ExpectedItem({ row, rank, mine }: { row: StandingRow; rank: number | null; mine: boolean }) {
++function ExpectedItem({
++  row,
++  index,
++  rank,
++  mine,
++}: {
++  row: StandingRow;
++  index: number;
++  rank: number | null;
++  mine: boolean;
++}) {
+   const { t, localize } = useI18n();
+   const expected = row.xpts;
+   const actual = row.points;
+@@ -298,10 +315,11 @@ function ExpectedItem({ row, rank, mine }: { row: StandingRow; rank: number | nu
+   return (
+     <li
+       className={cx(
+-        "relative grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] items-center gap-1.5 px-3 py-2 transition-colors duration-[var(--t-fast)]",
++        "list-in relative grid grid-cols-[1.5rem_1fr_1.75rem_2.25rem_2.25rem_2.25rem] items-center gap-1.5 px-3 py-2 transition-[background-color,transform] duration-[var(--t-fast)] active:scale-[0.99]",
+         mine ? "bg-elevated" : "hover:bg-elevated/60",
+         expected == null && "opacity-55",
+       )}
++      style={{ "--stagger": `${Math.min(index, 8) * 40}ms` } as CSSProperties}
+     >
+       <Num className="text-xs text-ink-3">{rank ?? "–"}</Num>
+       <Link
+@@ -318,11 +336,19 @@ function ExpectedItem({ row, rank, mine }: { row: StandingRow; rank: number | nu
+       {/* The header grid is decorative (aria-hidden, as in the real table), so
+           every figure names itself; the wrappers keep the cell count even. */}
+       <span className="text-end">
+-        <Num className="text-xs font-bold text-gold">{expected != null ? expected.toFixed(1) : "–"}</Num>
++        {expected != null ? (
++          <CountUp value={expected} decimals={1} className="text-xs font-bold text-gold" />
++        ) : (
++          <Num className="text-xs font-bold text-gold">–</Num>
++        )}
+         <span className="sr-only"> {t("table.xpts")}</span>
+       </span>
+       <span className="text-end">
+-        <Num className="text-xs text-ink">{actual ?? "–"}</Num>
++        {actual != null ? (
++          <CountUp value={actual} className="text-xs text-ink" />
++        ) : (
++          <Num className="text-xs text-ink">–</Num>
++        )}
+         <span className="sr-only"> {t("table.pts")}</span>
+       </span>
+       <span className="text-end">
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 0a6388b..8b02783 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -11,13 +11,13 @@ import {
+   SectionHeading,
+   Segmented,
+   TeamBadge,
+-  cx,
+ } from "../components/ui";
++import { cx } from "../lib/cx";
+ import { useSquad, useTeamDetail, useTeamUnderstat } from "../hooks/useApi";
+ import type { StringKey } from "../i18n/strings";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { TEAM_FALLBACK } from "../lib/colors";
+-import { useI18n } from "../i18n/I18nProvider";
++import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
+ import type { ApiMatch } from "../lib/api";
+ import type { Position } from "../types";
+-- 
+2.54.0.windows.1
+

@@ -1,0 +1,40 @@
+{
+  "generated": "2026-10-29T12:58:32.028Z",
+  "missing": [
+    {
+      "id": "420899",
+      "name": "Erblin Osmani",
+      "league": "",
+      "probeUrl": "https://a.espncdn.com/i/headshots/soccer/players/full/420899.png",
+      "status": 404
+    },
+    {
+      "id": "330409",
+      "name": "Dion Kacuri",
+      "league": "",
+      "probeUrl": "https://a.espncdn.com/i/headshots/soccer/players/full/330409.png",
+      "status": 404
+    },
+    {
+      "id": "288729",
+      "name": "Amir Saipi",
+      "league": "",
+      "probeUrl": "https://a.espncdn.com/i/headshots/soccer/players/full/288729.png",
+      "status": 404
+    },
+    {
+      "id": "391735",
+      "name": "Dion Gallapeni",
+      "league": "",
+      "probeUrl": "https://a.espncdn.com/i/headshots/soccer/players/full/391735.png",
+      "status": 404
+    },
+    {
+      "id": "338256",
+      "name": "Baton Zabërgja",
+      "league": "",
+      "probeUrl": "https://a.espncdn.com/i/headshots/soccer/players/full/338256.png",
+      "status": 404
+    }
+  ]
+}

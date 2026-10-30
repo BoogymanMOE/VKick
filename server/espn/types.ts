@@ -44,7 +44,17 @@ export function pollWindow(_league: string): { back: number; forward: number } {
  * lock rule needs it. ESPN stays state:"in" through the break — the
  * description/shortDetail ("Halftime" / "HT") is the only reliable signal.
  */
-export type OurStatus = "scheduled" | "live" | "halftime" | "finished";
+export type OurStatus =
+  | "scheduled"
+  | "live"
+  | "halftime"
+  | "finished"
+  // Not played. ESPN sends all three under state "post", which used to be
+  // enough to call them finished (a called-off fixture rendered as a 0-0
+  // result). They carry no score and must never count as a result.
+  | "postponed"
+  | "abandoned"
+  | "cancelled";
 
 export interface NormTeam {
   id: string;
@@ -71,6 +81,14 @@ export interface NormMatch {
   round: string | null;
   home_formation: string | null;
   away_formation: string | null;
+  /** Shootout score when a knockout tie went to penalties; null otherwise. */
+  home_pens: number | null;
+  away_pens: number | null;
+  /** How a level tie was separated: 'penalties' | 'extra-time' | null. */
+  decided_by: "penalties" | "extra-time" | null;
+  venue: string | null;
+  referee: string | null;
+  attendance: number | null;
 }
 
 export interface NormPlayer {

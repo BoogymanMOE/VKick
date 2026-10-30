@@ -1,0 +1,295 @@
+From 4f77a96186c9497943c12ff5d9d26adbf3965d9c Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 00:05:41 +0330
+Subject: [PATCH 144/230] =?UTF-8?q?fix(api):=20enforce=20league=20allowlis?=
+ =?UTF-8?q?t=20=E2=80=94=20banned=20leagues=20no=20longer=20return=20match?=
+ =?UTF-8?q?es=20or=20teams?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ server/espn/catalog.ts    | 11 ++++++
+ server/routes/football.ts | 71 ++++++++++++++++++++++++++++++---------
+ src/i18n/strings.ts       |  2 ++
+ src/lib/api.ts            |  3 ++
+ src/pages/TeamPage.tsx    | 10 +++++-
+ 5 files changed, 80 insertions(+), 17 deletions(-)
+
+diff --git a/server/espn/catalog.ts b/server/espn/catalog.ts
+index 98075d1..f4927a7 100644
+--- a/server/espn/catalog.ts
++++ b/server/espn/catalog.ts
+@@ -16,6 +16,17 @@ export interface CatalogEntry {
+   comingSoon: boolean;
+ }
+ 
++/**
++ * The only leagues the API serves. The catalog was trimmed to these five, so
++ * anything else still sitting in the DB (older, wider syncs) is treated as
++ * unsupported: routes filter it out or 404 instead of serving it.
++ */
++export const LEAGUE_ALLOWLIST: ReadonlySet<string> = new Set(["eng.1", "esp.1", "ger.1", "ita.1", "fra.1"]);
++
++export function isAllowedLeague(slug: string): boolean {
++  return LEAGUE_ALLOWLIST.has(slug);
++}
++
+ export function competitionCatalog(): CatalogEntry[] {
+   return COMPETITIONS.map((c) => ({
+     slug: c.slug,
+diff --git a/server/routes/football.ts b/server/routes/football.ts
+index 21e43f1..f400bcb 100644
+--- a/server/routes/football.ts
++++ b/server/routes/football.ts
+@@ -4,11 +4,11 @@
+  * leaderboards, standings. Public routes stay public (web preview); the
+  * Understat read keeps its requireUser gate. Behavior unchanged.
+  */
+-import express from "express";
++import express, { type Response } from "express";
+ import { getDb, all, get } from "../db/index.js";
+ import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
+ 
+-import { competitionCatalog } from "../espn/catalog.js";
++import { competitionCatalog, isAllowedLeague } from "../espn/catalog.js";
+ import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
+ import { foldForm, type FormMatchRow } from "../standings/form.js";
+ import { buildFeedQuery } from "../matches/feed.js";
+@@ -46,6 +46,25 @@ function matchWithTeams(id: string): unknown {
+   );
+ }
+ 
++/**
++ * Shared guard for match-scoped reads (detail, commentary, lineups, timeline):
++ * an unknown id 404s "not found"; a match from a league outside the five-league
++ * catalog 404s "LEAGUE_NOT_SUPPORTED" so the client shows its "league no longer
++ * supported" empty state instead of a page it is not supposed to see.
++ */
++function assertMatchAllowed(res: Response, matchId: string): boolean {
++  const row = get<{ league: string }>(db, "SELECT league FROM matches WHERE id = ?", [matchId]);
++  if (!row) {
++    bad(res, "not found", 404);
++    return false;
++  }
++  if (!isAllowedLeague(row.league)) {
++    bad(res, "LEAGUE_NOT_SUPPORTED", 404);
++    return false;
++  }
++  return true;
++}
++
+ /* ------------------------------------------------------------ catalog */
+ 
+ /** All competitions: synced ones plus extra ESPN ones marked coming-soon. */
+@@ -74,34 +93,41 @@ matchesRouter.get("/api/matches", (req, res) => {
+     to: req.query.to ? String(req.query.to) : null,
+     limit: req.query.limit ? String(req.query.limit) : null,
+   });
+-  const rows = all(
++  const rows = all<{ league: string }>(
+     db,
+     `SELECT m.*,
+        th.name AS home_name, th.short_name AS home_short, th.abbreviation AS home_abbr, th.color AS home_color, th.logo_url AS home_logo,
+        ta.name AS away_name, ta.short_name AS away_short, ta.abbreviation AS away_abbr, ta.color AS away_color, ta.logo_url AS away_logo
+-     FROM matches m
+-     JOIN teams th ON th.id = m.home_team_id
+-     JOIN teams ta ON ta.id = m.away_team_id
+-     WHERE ${feed.where}
+-     ORDER BY ${feed.orderBy}
+-     LIMIT ?`,
++      FROM matches m
++      JOIN teams th ON th.id = m.home_team_id
++      JOIN teams ta ON ta.id = m.away_team_id
++      WHERE ${feed.where}
++      ORDER BY ${feed.orderBy}
++      LIMIT ?`,
+     [...feed.params, feed.limit],
+   );
+-  res.json({ matches: rows });
++  // The allow-list is enforced HERE, not only in SQL: the catalog is trimmed to
++  // the five big leagues, and stale rows from older, wider syncs must never
++  // reach the feed even if a filter regresses.
++  res.json({ matches: rows.filter((m) => isAllowedLeague(m.league)) });
+ });
+ 
+ matchesRouter.get("/api/matches/:id", (req, res) => {
+-  const match = matchWithTeams(String(req.params.id));
+-  if (!match) return bad(res, "not found", 404);
++  const matchId = String(req.params.id);
++  if (!assertMatchAllowed(res, matchId)) return;
++  const match = matchWithTeams(matchId);
++  if (!match) return; // unreachable: assertMatchAllowed already 404'd
+   res.json({ match });
+ });
+ 
+ /** Full minute-by-minute commentary for one match (blow-by-blow tab). */
+ matchesRouter.get("/api/matches/:id/commentary", (req, res) => {
++  const matchId = String(req.params.id);
++  if (!assertMatchAllowed(res, matchId)) return;
+   const lines = all(
+     db,
+     "SELECT sequence, minute_display, minute_seconds, text FROM match_commentary WHERE match_id = ? ORDER BY sequence ASC",
+-    [String(req.params.id)],
++    [matchId],
+   );
+   res.json({ commentary: lines });
+ });
+@@ -109,6 +135,7 @@ matchesRouter.get("/api/matches/:id/commentary", (req, res) => {
+ // All players who appeared in a given match (the match stats table).
+ matchesRouter.get("/api/matches/:id/players", (req, res) => {
+   const matchId = String(req.params.id);
++  if (!assertMatchAllowed(res, matchId)) return;
+   const rows = all(
+     db,
+     `SELECT s.*, p.full_name, p.short_name, p.position, p.jersey_number, p.headshot_url,
+@@ -125,6 +152,7 @@ matchesRouter.get("/api/matches/:id/players", (req, res) => {
+ 
+ matchesRouter.get("/api/matches/:id/lineups", (req, res) => {
+   const matchId = String(req.params.id);
++  if (!assertMatchAllowed(res, matchId)) return;
+   const match = get<{
+     home_team_id: string;
+     away_team_id: string;
+@@ -157,6 +185,7 @@ matchesRouter.get("/api/matches/:id/lineups", (req, res) => {
+ 
+ matchesRouter.get("/api/matches/:id/timeline", (req, res) => {
+   const matchId = String(req.params.id);
++  if (!assertMatchAllowed(res, matchId)) return;
+   const events = all(
+     db,
+     `SELECT e.*,
+@@ -194,14 +223,16 @@ matchesRouter.get("/api/teams", (req, res) => {
+     res.json({ teams: filterOutBlockedTeams(teams) });
+     return;
+   }
+-  const rows = all<{ id: string }>(
++  const rows = all<{ id: string; league: string }>(
+     db,
+     `SELECT t.*, ${TEAM_GROUP_SQL} AS group_key
+      FROM teams t
+      ORDER BY t.league ASC, t.name ASC`,
+     [...TEAM_GROUP_PARAMS],
+   );
+-  res.json({ teams: filterOutBlockedTeams(rows) });
++  res.json({
++    teams: filterOutBlockedTeams(rows).filter((team) => isAllowedLeague(team.league)),
++  });
+ });
+ 
+ // A single team with its season stat line.
+@@ -209,8 +240,9 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
+   const teamId = String(req.params.id);
+   // A blocked club has no team page either — same 404 as any unknown id.
+   if (isBlockedTeamId(teamId)) return bad(res, "not found", 404);
+-  const team = get(db, "SELECT * FROM teams WHERE id = ?", [teamId]);
++  const team = get<{ league: string }>(db, "SELECT * FROM teams WHERE id = ?", [teamId]);
+   if (!team) return bad(res, "not found", 404);
++  if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+   const seasonStats = get(
+     db,
+     `SELECT * FROM team_season_stats WHERE team_id = ? ORDER BY season DESC LIMIT 1`,
+@@ -246,6 +278,7 @@ matchesRouter.get("/api/teams/:id/players", (req, res) => {
+   const teamId = String(req.params.id);
+   const team = get<{ league: string }>(db, "SELECT league FROM teams WHERE id = ?", [teamId]);
+   if (!team) return bad(res, "not found", 404);
++  if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+   const seasonRow = get<{ season: string }>(
+     db,
+     "SELECT season FROM player_season_stats WHERE league = ? ORDER BY season DESC LIMIT 1",
+@@ -270,6 +303,9 @@ matchesRouter.get("/api/teams/:id/players", (req, res) => {
+ /** Understat xG/xA data for a team (season-aggregated). */
+ matchesRouter.get("/api/teams/:id/understat", requireUser, (req, res) => {
+   const teamId = String(req.params.id);
++  const team = get<{ league: string }>(db, "SELECT league FROM teams WHERE id = ?", [teamId]);
++  if (!team) return bad(res, "not found", 404);
++  if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+   const season = Number(req.query.season ?? 2026);
+ 
+   const players = all(
+@@ -308,6 +344,7 @@ matchesRouter.get("/api/teams/:id/understat", requireUser, (req, res) => {
+ // goals and… everything" tables).
+ matchesRouter.get("/api/leagues/:league/players", (req, res) => {
+   const league = String(req.params.league);
++  if (!isAllowedLeague(league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+   const sort = String(req.query.sort ?? "goals");
+   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
+   const sortable = new Set([
+@@ -346,6 +383,7 @@ matchesRouter.get("/api/leagues/:league/players", (req, res) => {
+ // Season team stats table per league.
+ matchesRouter.get("/api/leagues/:league/teams", (req, res) => {
+   const league = String(req.params.league);
++  if (!isAllowedLeague(league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+   const season = getSeasonKeyDb(league);
+   const rows = all(
+     db,
+@@ -375,6 +413,7 @@ function getSeasonKeyDb(league: string): string {
+ 
+ matchesRouter.get("/api/standings/:league", (req, res) => {
+   const league = String(req.params.league);
++  if (!isAllowedLeague(league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+   const season = req.query.season ? String(req.query.season) : latestSeason(league);
+   const rows = all(
+     db,
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 4a600ac..92c35e0 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -224,6 +224,7 @@ export const strings = {
+     "commentary.empty": "No commentary yet",
+     "commentary.title": "Commentary",
+     "team.title": "Team",
++    "team.leagueUnsupported": "This league is no longer supported",
+     "team.tabSquad": "Squad",
+     "team.tabFixtures": "Fixtures",
+     "team.tabStats": "Season",
+@@ -836,6 +837,7 @@ export const strings = {
+     "commentary.empty": "هنوز گزارش زنده‌ای نیست",
+     "commentary.title": "گزارش زنده",
+     "team.title": "تیم",
++    "team.leagueUnsupported": "این لیگ دیگر پشتیبانی نمی‌شود",
+     "team.tabSquad": "بازیکنان",
+     "team.tabFixtures": "بازی‌ها",
+     "team.tabStats": "فصل",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 164d068..9dd5693 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -92,6 +92,9 @@ export function serverErrorKey(err: unknown): string {
+     TOO_MANY_REQUESTS: "auth.errRateLimited",
+     // cup standings endpoint (404): knockout competitions have no table
+     NO_TABLE_FOR_CUP: "cups.noTable",
++    // team/match/standings read (404): the competition is outside the
++    // five-league catalog, so it has no page in this app
++    LEAGUE_NOT_SUPPORTED: "team.leagueUnsupported",
+     // Telegram/initData verification failures on the login route (the Login
+     // screen's Telegram path): malformed or stale initData, or the server has
+     // no bot token configured. Never the generic fallback — the client cannot
+diff --git a/src/pages/TeamPage.tsx b/src/pages/TeamPage.tsx
+index 45321f0..95f169f 100644
+--- a/src/pages/TeamPage.tsx
++++ b/src/pages/TeamPage.tsx
+@@ -45,11 +45,19 @@ export default function TeamPage() {
+   // branch is deliberate — a failed background refetch keeps the data already
+   // on screen instead of replacing a good page with an error card.
+   if (detailQuery.isError && !detailQuery.data) {
++    // A banned-league club 404s LEAGUE_NOT_SUPPORTED: that is a permanent
++    // state, not a retryable failure, so it gets the empty state rather than
++    // the error/retry card.
++    const code = (detailQuery.error as { code?: string } | null)?.code;
+     return (
+       <>
+         <TopBar title={t("team.title")} back />
+         <div className="mt-3">
+-          <ErrorState onRetry={() => detailQuery.refetch()} />
++          {code === "LEAGUE_NOT_SUPPORTED" ? (
++            <EmptyState title={t("team.leagueUnsupported")} />
++          ) : (
++            <ErrorState onRetry={() => detailQuery.refetch()} />
++          )}
+         </div>
+       </>
+     );
+-- 
+2.54.0.windows.1
+

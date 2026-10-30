@@ -1,0 +1,70 @@
+From 5f87df4d7a5cbf957305e2fb38cea0291b37682d Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 10 Oct 2026 00:30:04 +0330
+Subject: [PATCH 044/230] Add a regression test for the comment composer
+ aria-label keys
+
+---
+ tests/a11yKeys.test.ts | 29 +++++++++++++++++++++++++++++
+ tests/run.ts           |  2 ++
+ 2 files changed, 31 insertions(+)
+ create mode 100644 tests/a11yKeys.test.ts
+
+diff --git a/tests/a11yKeys.test.ts b/tests/a11yKeys.test.ts
+new file mode 100644
+index 0000000..15c0b2e
+--- /dev/null
++++ b/tests/a11yKeys.test.ts
+@@ -0,0 +1,29 @@
++/**
++ * Screen-reader label keys: the two aria-label strings the comment composer
++ * depends on must exist and be non-empty in BOTH languages.
++ *
++ * The composer passes these keys straight to `aria-label`, so a missing or
++ * blank entry silently ships an unlabelled textarea / clip-link input to
++ * assistive tech. This test is the tripwire that catches someone deleting or
++ * emptying `comments.textAria` / `comments.mediaAria` in EN or FA.
++ */
++import { strict as assert } from "node:assert";
++import { strings } from "../src/i18n/strings.js";
++
++const LANGS = ["en", "fa"] as const;
++const A11Y_KEYS = ["comments.textAria", "comments.mediaAria"] as const;
++
++export function runA11yKeysTests(): void {
++  for (const lang of LANGS) {
++    const t = strings[lang] as Record<string, string>;
++    for (const key of A11Y_KEYS) {
++      const value = t[key];
++      assert.ok(
++        typeof value === "string" && value.trim().length > 0,
++        `${lang}: aria-label key ${key} is missing or empty`,
++      );
++    }
++  }
++
++  console.log("  a11yKeys: comments.textAria + comments.mediaAria present in EN/FA OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 7d888ba..db5ffbe 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -35,6 +35,7 @@ import { runBackupTests } from "./backup.test.js";
+ import { runBackupScheduleTests } from "./backupSchedule.test.js";
+ import { runAccountDeletionTests } from "./accountDeletion.test.js";
+ import { runLegalTests } from "./legal.test.js";
++import { runA11yKeysTests } from "./a11yKeys.test.js";
+ import { runModerationTests } from "./moderation.test.js";
+ import { runErrorsTests } from "./errors.test.js";
+ 
+@@ -74,6 +75,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["backupSchedule", runBackupScheduleTests],
+   ["accountDeletion", runAccountDeletionTests],
+   ["legal", runLegalTests],
++  ["a11yKeys", runA11yKeysTests],
+   ["moderation", runModerationTests],
+   ["errors", runErrorsTests],
+ ];
+-- 
+2.54.0.windows.1
+

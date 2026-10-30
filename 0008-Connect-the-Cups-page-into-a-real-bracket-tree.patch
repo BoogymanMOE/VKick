@@ -1,0 +1,667 @@
+From 0db599f3486bd9225b2b68f900d7665ad5fc00ad Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 3 Oct 2026 03:37:35 +0330
+Subject: [PATCH 008/230] Connect the Cups page into a real bracket tree
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Pure bracket.ts infers the tournament from synced round labels: rounds in
+play order, two-legged pairings folded into one tie with an aggregate,
+winners inferred (level ties stay honestly undecided), and feeder links
+tracing each tie back to the round that produced it. The Cups page renders
+ties with aggregate headers and winner/feeder edges instead of flat
+per-round fixture lists; live matches still surface once at the top.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/i18n/strings.ts   |   8 ++
+ src/lib/bracket.ts    | 201 ++++++++++++++++++++++++++++++++++++++++++
+ src/pages/Cups.tsx    | 142 +++++++++++++++++------------
+ tests/bracket.test.ts | 162 ++++++++++++++++++++++++++++++++++
+ tests/run.ts          |   2 +
+ 5 files changed, 457 insertions(+), 58 deletions(-)
+ create mode 100644 src/lib/bracket.ts
+ create mode 100644 tests/bracket.test.ts
+
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index a3ffb15..056729a 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -353,6 +353,10 @@ export const strings = {
+     "cups.empty": "No fixtures in this window right now.",
+     "cups.emptyHint": "Fixtures land here as soon as the draw is scheduled — check back or retry.",
+     "cups.noTable": "Knockout competitions have no league table.",
++    "cups.tieAgg": "Agg.",
++    "cups.tiePending": "Undecided",
++    "cups.winnerAdvances": "Winner advances",
++    "cups.feedsFrom": "Winners from {round}",
+ 
+     "predict.lineup": "Lineup Predictor",
+     "predict.lineupHint": "Predict the starting XI",
+@@ -1009,6 +1013,10 @@ export const strings = {
+     "cups.empty": "در این بازه بازی‌ای ثبت نشده است.",
+     "cups.emptyHint": "بازی‌ها به محض اعلام برنامه اینجا قرار می‌گیرند — بعداً سر بزن یا دوباره تلاش کن.",
+     "cups.noTable": "مسابقات حذفی جدول لیگ ندارند.",
++    "cups.tieAgg": "مجموع",
++    "cups.tiePending": "برنده مشخص نیست",
++    "cups.winnerAdvances": "برنده صعود می‌کند",
++    "cups.feedsFrom": "برندگان از {round}",
+ 
+     "predict.lineup": "پیش‌بینی ترکیب",
+     "predict.lineupHint": "ترکیب اصلی رو حدس بزن",
+diff --git a/src/lib/bracket.ts b/src/lib/bracket.ts
+new file mode 100644
+index 0000000..3184465
+--- /dev/null
++++ b/src/lib/bracket.ts
+@@ -0,0 +1,201 @@
++/**
++ * Cup bracket inference, pure and DOM-free so the node runner can pin it.
++ *
++ * The sync carries a round label on every cup match ("Quarter-final"). That is
++ * enough to rebuild the tournament's shape — which pairings exist per round,
++ * who advanced (aggregate across legs for two-legged ties), and which pairing
++ * fed which — without any extra endpoint. What it can NOT tell us stays
++ * unknown on purpose: penalty shootouts, away-goals ties and abandonments all
++ * resolve to "undecided" rather than a guess.
++ *
++ * Live matches are excluded by the caller before this runs (the Cups page
++ * surfaces them once, in the live section) — mirroring the old byRound map.
++ */
++import type { Match } from "../types";
++
++/** One pairing inside a round — a tie, possibly over two legs. */
++export interface BracketTie {
++  /** Stable key: `"<round>|<smaller team id>|<larger team id>"`. */
++  key: string;
++  /** The round label this tie belongs to. */
++  round: string;
++  /** First-leg orientation (by kickoff); aggregate counts by team id. */
++  homeId: string;
++  awayId: string;
++  homeName: string;
++  awayName: string;
++  /** Matches in this tie, kickoff order (length 1 for single-leg). */
++  legs: Match[];
++  /** Goals across finished legs, oriented home/away of the first leg. */
++  aggHome: number | null;
++  aggAway: number | null;
++  /** Inferred advancing team — null while any leg is open, level or unscored. */
++  winnerId: string | null;
++  winnerName: string | null;
++  /** Tie keys of earlier rounds this tie's participants advanced from. */
++  feeds: string[];
++  /** Round label of the nearest feeder, for the "← Round of 16" caption. */
++  feedRound: string | null;
++}
++
++export interface BracketRound {
++  label: string;
++  ties: BracketTie[];
++}
++
++export interface Bracket {
++  /** Bracket play order: early rounds first, the Final last. */
++  rounds: BracketRound[];
++  /** True when some tie beyond the first traces back to an earlier round. */
++  connected: boolean;
++}
++
++/**
++ * Bracket order for round headings: Final last, semis before it, then the
++ * earlier rounds. Ties fall back to alphabetical so any unexpected label
++ * still groups deterministically. (Moved verbatim from the Cups page so the
++ * page and the bracket builder can never disagree on an ordering.)
++ */
++export function roundRank(label: string): number {
++  const l = label.toLowerCase();
++  // Order matters: "quarter-final" and "semi-final" both contain "final".
++  if (l.includes("semi")) return 1;
++  if (l.includes("quarter")) return 2;
++  if (l.includes("final") && !l.includes("qual")) return 0;
++  const n = parseInt(l.match(/(?:round of|round)\s*(\d+)$/)?.[1] ?? "", 10);
++  if (!Number.isNaN(n)) return 2 + n; // Round of 16 → 18, of 32 → 34…
++  if (l.includes("round")) return 40; // unnumbered rounds after the numbered ones
++  if (l.includes("qual") || l.includes("play")) return 60; // qualifying last
++  return 50;
++}
++
++/** Round labels in the order the cup is played (early rounds first). */
++export function orderRounds(labels: Iterable<string>): string[] {
++  return [...labels].sort((a, b) => roundRank(b) - roundRank(a) || a.localeCompare(b));
++}
++
++function pairKey(a: string, b: string): string {
++  return a < b ? `${a}|${b}` : `${b}|${a}`;
++}
++
++/**
++ * Build the bracket from one competition's matches (live excluded upstream).
++ * Legs of the same tie — ESPN lists two-legged knockout rounds as two separate
++ * matches with the same pair — fold into one tie with an aggregate.
++ */
++export function buildBracket(matches: Match[]): Bracket {
++  // Round → (unordered pair → legs), preserving first-seen order; kickoff
++  // sorting below makes it deterministic regardless of fetch order.
++  const byRound = new Map<string, Map<string, Match[]>>();
++  for (const m of matches) {
++    const round = m.round?.trim();
++    if (!round || m.status === "live") continue;
++    let pairs = byRound.get(round);
++    if (!pairs) {
++      pairs = new Map();
++      byRound.set(round, pairs);
++    }
++    const key = pairKey(m.home.id, m.away.id);
++    const legs = pairs.get(key);
++    if (legs) legs.push(m);
++    else pairs.set(key, [m]);
++  }
++
++  const rounds: BracketRound[] = orderRounds(byRound.keys()).map((label) => {
++    const pairs = byRound.get(label)!;
++    const ties = [...pairs.values()]
++      .map((legs) => legs.sort((a, b) => a.kickoffAt.localeCompare(b.kickoffAt)))
++      .sort((a, b) => a[0].kickoffAt.localeCompare(b[0].kickoffAt))
++      .map((legs) => makeTie(label, legs));
++    return { label, ties };
++  });
++
++  // Connectivity: for each tie, trace every participant back through earlier
++  // rounds to the nearest tie it won. Missing intermediate rounds (partial
++  // sync windows) don't break the chain — the nearest win is the honest
++ // feeder we can show.
++  const winIndex: Array<Map<string, BracketTie>> = [];
++  for (const round of rounds) {
++    const winners = new Map<string, BracketTie>();
++    for (const tie of round.ties) {
++      if (tie.winnerId) winners.set(tie.winnerId, tie);
++    }
++    winIndex.push(winners);
++  }
++
++  let connected = false;
++  rounds.forEach((round, i) => {
++    for (const tie of round.ties) {
++      const feeds: string[] = [];
++      let feedRound: string | null = null;
++      for (const teamId of [tie.homeId, tie.awayId]) {
++        // Search backwards: nearest round where this team won a tie.
++        for (let j = i - 1; j >= 0; j -= 1) {
++          const feeder = winIndex[j]?.get(teamId);
++          if (feeder && feeder.key !== tie.key) {
++            if (!feeds.includes(feeder.key)) feeds.push(feeder.key);
++            feedRound = feedRound ?? rounds[j].label;
++            break;
++          }
++        }
++      }
++      tie.feeds = feeds;
++      tie.feedRound = feedRound;
++      if (feeds.length > 0) connected = true;
++    }
++  });
++
++  return { rounds, connected };
++}
++
++function makeTie(round: string, legs: Match[]): BracketTie {
++  const first = legs[0];
++  const homeId = first.home.id;
++  const awayId = first.away.id;
++  // Aggregate across finished, scored legs — by team id, then re-oriented to
++  // the first leg, because the second leg swaps venues.
++  let homeGoals = 0;
++  let awayGoals = 0;
++  let scored = false;
++  for (const leg of legs) {
++    if (leg.status !== "finished" || leg.homeScore == null || leg.awayScore == null) continue;
++    scored = true;
++    if (leg.home.id === homeId) {
++      homeGoals += leg.homeScore;
++      awayGoals += leg.awayScore;
++    } else {
++      homeGoals += leg.awayScore;
++      awayGoals += leg.homeScore;
++    }
++  }
++  const aggHome = scored ? homeGoals : null;
++  const aggAway = scored ? awayGoals : null;
++
++  let winnerId: string | null = null;
++  if (scored && legs.every((leg) => leg.status === "finished")) {
++    if (aggHome! > aggAway!) winnerId = homeId;
++    else if (aggAway! > aggHome!) winnerId = awayId;
++    // Level aggregate: penalties/away-goals decided it, and we don't know how.
++  }
++
++  const winner = winnerId
++    ? (legs.find((leg) => leg.home.id === winnerId)?.home ??
++      legs.find((leg) => leg.away.id === winnerId)?.away)
++    : undefined;
++
++  return {
++    key: `${round}|${pairKey(homeId, awayId)}`,
++    round,
++    homeId,
++    awayId,
++    homeName: first.home.shortName,
++    awayName: first.away.shortName,
++    legs,
++    aggHome,
++    aggAway,
++    winnerId,
++    winnerName: winner?.shortName ?? null,
++    feeds: [],
++    feedRound: null,
++  };
++}
+diff --git a/src/pages/Cups.tsx b/src/pages/Cups.tsx
+index bc18c70..fadd73f 100644
+--- a/src/pages/Cups.tsx
++++ b/src/pages/Cups.tsx
+@@ -12,6 +12,7 @@ import {
+   SectionHeading,
+   Segmented,
+ } from "../components/ui";
++import { buildBracket, type BracketTie } from "../lib/bracket";
+ import { useKnockoutCompetitions, useMatches } from "../hooks/useApi";
+ import { useI18n } from "../i18n/I18nProvider";
+ import { formatKickoff } from "../lib/format";
+@@ -64,35 +65,16 @@ export default function Cups() {
+   // singly (the override is transient, the per-round choice is the truth).
+   const [roundsOverride, setRoundsOverride] = useState<boolean | null>(null);
+ 
+-  // Knockout structure from the sync's round labels. Every match in the window
+-  // carries its round ("Quarter-final"…), so the sections render as a mini
+-  // bracket — first round at the top, the final last — instead of one flat
+-  // fixture list. Cups with no round data (early qualifying) fall back to the
+-  // status sections below, unchanged.
+-  const byRound = useMemo(() => {
+-    if (matchesQuery.isLoading || matchesQuery.isError) return new Map<string, Match[]>();
+-    const map = new Map<string, Match[]>();
+-    for (const m of matches) {
+-      const key = m.round?.trim();
+-      // Live matches surface once, in the live section above the bracket —
+-      // they don't repeat inside their round group.
+-      if (key && m.status !== "live") {
+-        const list = map.get(key);
+-        if (list) list.push(m);
+-        else map.set(key, [m]);
+-      }
+-    }
+-    return map;
++  // Knockout structure from the sync's round labels: rounds in play order,
++  // two-legged pairings folded into one tie with an aggregate, winners
++  // inferred (honestly undecided when penalties decided a level tie), and
++  // feeder links connecting each tie back to the round that produced it —
++  // that is what turns five flat fixture lists into one bracket. Cups with
++  // no round data fall back to the status sections below, unchanged.
++  const bracket = useMemo(() => {
++    if (matchesQuery.isLoading || matchesQuery.isError) return { rounds: [], connected: false };
++    return buildBracket(matches);
+   }, [matches, matchesQuery.isLoading, matchesQuery.isError]);
+-  const roundOrder = useMemo(
+-    () =>
+-      [...byRound.keys()].sort(
+-        // Descending rank: qualifying/early rounds first, the Final last —
+-        // the bracket reads in the order the cup is actually played.
+-        (a, b) => roundRank(b) - roundRank(a) || a.localeCompare(b),
+-      ),
+-    [byRound],
+-  );
+ 
+   return (
+     <>
+@@ -126,7 +108,7 @@ export default function Cups() {
+         </div>
+       )}
+ 
+-      {byRound.size > 0 ? (
++      {bracket.rounds.length > 0 ? (
+         /* Round structure when the sync carries it: live first, then the
+            bracket from the first round to the final. */
+         <>
+@@ -154,7 +136,7 @@ export default function Cups() {
+               <CupMatchList matches={live} />
+             </section>
+           ) : null}
+-          {roundOrder.length > 1 ? (
++          {bracket.rounds.length > 1 ? (
+             // Bulk control for the bracket: folds or unfolds every round at
+             // once. The label names the action ahead — "Expand all" once the
+             // rounds are collapsed, "Collapse all" otherwise.
+@@ -171,22 +153,26 @@ export default function Cups() {
+               </button>
+             </div>
+           ) : null}
+-          {roundOrder.map((round) => {
+-            const list = byRound.get(round)!;
++          {bracket.rounds.map((round) => {
++            const legCount = round.ties.reduce((n, tie) => n + tie.legs.length, 0);
+             return (
+               // Collapsible like the status sections; the fold state keys off
+               // the round label, so collapsing "Qualifying" once keeps it
+               // folded in every cup. Toggling one round releases the bulk
+               // override so the per-round choice is the ongoing truth.
+               <CollapsibleSection
+-                key={round}
+-                id={`cups-round-${roundId(round)}`}
+-                title={localize(round)}
+-                count={list.length}
++                key={round.label}
++                id={`cups-round-${roundId(round.label)}`}
++                title={localize(round.label)}
++                count={legCount}
+                 openOverride={roundsOverride === null ? undefined : { open: roundsOverride }}
+                 onUserToggle={roundsOverride === null ? undefined : () => setRoundsOverride(null)}
+               >
+-                <CupMatchList matches={list} />
++                <div className="space-y-2">
++                  {round.ties.map((tie) => (
++                    <TieCard key={tie.key} tie={tie} />
++                  ))}
++                </div>
+               </CollapsibleSection>
+             );
+           })}
+@@ -261,13 +247,20 @@ export default function Cups() {
+ /**
+  * Cup fixture row: teams, score/clock, replay affordance. The whole footer is
+  * the touch surface — summary and replay links meet the 44px floor inside it.
++ * In `bare` mode the row drops its own card chrome: a TieCard supplies the
++ * border and the rows become the tie's legs, separated by hairlines.
+  */
+-function CupMatchList({ matches }: { matches: Match[] }) {
++function CupMatchList({ matches, bare = false }: { matches: Match[]; bare?: boolean }) {
+   const { t, lang, localize } = useI18n();
+   return (
+-    <ul className="space-y-2">
++    <ul className={bare ? undefined : "space-y-2"}>
+       {matches.map((match) => (
+-        <li key={match.id} className="rounded-card border border-line bg-surface p-3">
++        <li
++          key={match.id}
++          className={
++            bare ? "border-t border-line px-3 py-2 first:border-t-0" : "rounded-card border border-line bg-surface p-3"
++          }
++        >
+           <div className="flex items-center gap-2">
+             <span className="min-w-0 flex-1 truncate text-end text-sm font-bold text-ink">
+               {localize(match.home.shortName)}
+@@ -317,6 +310,57 @@ function CupMatchList({ matches }: { matches: Match[] }) {
+   );
+ }
+ 
++/**
++ * One tie of the bracket — the node that connects rounds. The card carries
++ * the pairing's aggregate header when the tie spans two legs, the legs
++ * themselves (bare rows), and a footer that states what the data proves:
++ * who advances (an honest "undecided" when penalties decided a level tie)
++ * and which round the participants came from — the visible edge of the tree.
++ * A first-round tie with nothing to say renders as a plain fixture card.
++ */
++function TieCard({ tie }: { tie: BracketTie }) {
++  const { t, localize } = useI18n();
++  const twoLegs = tie.legs.length > 1;
++  const showFooter = twoLegs || tie.winnerId != null || tie.feedRound != null;
++  return (
++    <div className="overflow-hidden rounded-card border border-line bg-surface">
++      {twoLegs ? (
++        <div className="flex items-center gap-2 border-b border-line bg-elevated px-3 py-2">
++          <span className="min-w-0 flex-1 truncate text-end text-xs font-bold text-ink">{tie.homeName}</span>
++          <span className="label flex-none text-ink-3">
++            {t("cups.tieAgg")}{" "}
++            <Num className="text-xs text-ink">
++              {tie.aggHome ?? "–"}–{tie.aggAway ?? "–"}
++            </Num>
++          </span>
++          <span className="min-w-0 flex-1 truncate text-xs font-bold text-ink">{tie.awayName}</span>
++        </div>
++      ) : null}
++      <CupMatchList matches={tie.legs} bare />
++      {showFooter ? (
++        <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-2 text-[11px]">
++          {tie.winnerId ? (
++            <span className="min-w-0 truncate font-bold text-volt">
++              <span aria-hidden="true">→ </span>
++              {tie.winnerName}
++              <span className="sr-only"> — {t("cups.winnerAdvances")}</span>
++            </span>
++          ) : (
++            <span className="text-ink-3">{t("cups.tiePending")}</span>
++          )}
++          {tie.feedRound ? (
++            <span className="flex-none text-ink-3">
++              <span aria-hidden="true">← </span>
++              {localize(tie.feedRound)}
++              <span className="sr-only"> — {t("cups.feedsFrom", { round: localize(tie.feedRound) })}</span>
++            </span>
++          ) : null}
++        </div>
++      ) : null}
++    </div>
++  );
++}
++
+ /**
+  * Stable, DOM-id-safe key for a round label, so its fold state survives
+  * reloads and is shared across cups with the same round naming. Latin labels
+@@ -337,24 +381,6 @@ function roundId(label: string): string {
+   return `r${(hash >>> 0).toString(36)}`;
+ }
+ 
+-/**
+- * Bracket order for round headings: Final last, semis before it, then the
+- * earlier rounds. Ties fall back to alphabetical so any unexpected label
+- * still groups deterministically.
+- */
+-function roundRank(label: string): number {
+-  const l = label.toLowerCase();
+-  // Order matters: "quarter-final" and "semi-final" both contain "final".
+-  if (l.includes("semi")) return 1;
+-  if (l.includes("quarter")) return 2;
+-  if (l.includes("final") && !l.includes("qual")) return 0;
+-  const n = parseInt(l.match(/(?:round of|round)\s*(\d+)$/)?.[1] ?? "", 10);
+-  if (!Number.isNaN(n)) return 2 + n; // Round of 16 → 18, of 32 → 34…
+-  if (l.includes("round")) return 40; // unnumbered rounds after the numbered ones
+-  if (l.includes("qual") || l.includes("play")) return 60; // qualifying last
+-  return 50;
+-}
+-
+ function RowPlaceholder() {
+   return <CompRowSkeleton rows={3} />;
+ }
+diff --git a/tests/bracket.test.ts b/tests/bracket.test.ts
+new file mode 100644
+index 0000000..cf1a8d5
+--- /dev/null
++++ b/tests/bracket.test.ts
+@@ -0,0 +1,162 @@
++/**
++ * Cup-bracket inference. These rules drive the connected tree on the Cups
++ * page, so they are pinned the way the server rules are: aggregate across
++ * legs, honest "undecided" when shootouts/away-goals decided a level tie,
++ * and feeder links that survive partial sync windows.
++ */
++import { strict as assert } from "node:assert";
++import { buildBracket, orderRounds, roundRank } from "../src/lib/bracket.js";
++import type { Match, Team } from "../src/types.js";
++
++let seq = 0;
++
++function team(id: string, short: string): Team {
++  return {
++    id,
++    name: short,
++    shortName: short,
++    abbreviation: short.slice(0, 3).toUpperCase(),
++    color: "#123456",
++    league: "PL",
++  };
++}
++
++function match(opts: {
++  home: Team;
++  away: Team;
++  round: string;
++  kickoff: string;
++  status?: Match["status"];
++  homeScore?: number | null;
++  awayScore?: number | null;
++}): Match {
++  seq += 1;
++  return {
++    id: `m${seq}`,
++    gameweek: 0,
++    home: opts.home,
++    away: opts.away,
++    kickoffAt: opts.kickoff,
++    status: opts.status ?? "finished",
++    homeScore: opts.homeScore ?? null,
++    awayScore: opts.awayScore ?? null,
++    minute: null,
++    predictions: [],
++    round: opts.round,
++  };
++}
++
++const ARS = team("ars", "Arsenal");
++const BAY = team("bay", "Bayern");
++const RMA = team("rma", "Real Madrid");
++const PSG = team("psg", "PSG");
++const AJX = team("ajx", "Ajax");
++const BEN = team("ben", "Benfica");
++
++function testOrderRounds(): void {
++  const labels = ["Semi-final", "Final", "Quarter-final", "Round of 16", "Round of 32", "1st Qualifying Round"];
++  assert.deepEqual(orderRounds(labels), [
++    "1st Qualifying Round",
++    "Round of 32",
++    "Round of 16",
++    "Quarter-final",
++    "Semi-final",
++    "Final",
++  ], "the bracket plays qualifying first and the Final last");
++  assert.equal(roundRank("Final"), 0);
++  assert.ok(roundRank("Quarter-final") > roundRank("Semi-final"), "later rounds rank lower (the final is 0)");
++}
++
++function testSingleLegWinner(): void {
++  const b = buildBracket([
++    match({ home: ARS, away: BAY, round: "Quarter-final", kickoff: "2026-03-10T20:00:00Z", homeScore: 2, awayScore: 1 }),
++    match({ home: RMA, away: PSG, round: "Quarter-final", kickoff: "2026-03-11T20:00:00Z", homeScore: 0, awayScore: 0 }),
++    match({ home: AJX, away: BEN, round: "Quarter-final", kickoff: "2026-03-12T20:00:00Z", status: "scheduled" }),
++  ]);
++  assert.equal(b.rounds.length, 1);
++  const [qf] = b.rounds;
++  assert.equal(qf?.ties.length, 3);
++  assert.equal(qf?.ties[0]?.winnerId, "ars", "higher score advances");
++  assert.equal(qf?.ties[0]?.winnerName, "Arsenal");
++  assert.equal(qf?.ties[1]?.winnerId, null, "a level single leg is undecided (shootout unknown)");
++  assert.equal(qf?.ties[2]?.winnerId, null, "unscheduled ties are undecided");
++  assert.equal(b.connected, false, "the first round has no feeder");
++}
++
++function testTwoLegAggregate(): void {
++  const b = buildBracket([
++    // First leg, home Arsenal: 2-0. Second leg, venues swapped: 0-1 → agg 2-1.
++    match({ home: ARS, away: BAY, round: "Semi-final", kickoff: "2026-04-10T20:00:00Z", homeScore: 2, awayScore: 0 }),
++    match({ home: BAY, away: ARS, round: "Semi-final", kickoff: "2026-04-20T20:00:00Z", homeScore: 1, awayScore: 0 }),
++    // RMA vs PSG: level aggregate (1-0, 0-1) → undecided.
++    match({ home: RMA, away: PSG, round: "Semi-final", kickoff: "2026-04-11T20:00:00Z", homeScore: 1, awayScore: 0 }),
++    match({ home: PSG, away: RMA, round: "Semi-final", kickoff: "2026-04-21T20:00:00Z", homeScore: 1, awayScore: 0 }),
++  ]);
++  const [sf] = b.rounds;
++  assert.equal(sf?.ties.length, 2, "two legs fold into one tie");
++  const arsBay = sf?.ties[0];
++  assert.equal(arsBay?.aggHome, 2, "aggregate orients to the first leg's home team");
++  assert.equal(arsBay?.aggAway, 1);
++  assert.equal(arsBay?.winnerId, "ars");
++  assert.equal(arsBay?.legs.length, 2);
++  const rmaPsg = sf?.ties[1];
++  assert.equal(rmaPsg?.aggHome, 1);
++  assert.equal(rmaPsg?.aggAway, 1);
++  assert.equal(rmaPsg?.winnerId, null, "level aggregate stays undecided");
++}
++
++function testOpenSecondLegKeepsTieUndecided(): void {
++  const b = buildBracket([
++    match({ home: ARS, away: BAY, round: "Quarter-final", kickoff: "2026-03-10T20:00:00Z", homeScore: 3, awayScore: 0 }),
++    match({ home: BAY, away: ARS, round: "Quarter-final", kickoff: "2026-04-01T20:00:00Z", status: "scheduled" }),
++  ]);
++  const tie = b.rounds[0]?.ties[0];
++  assert.equal(tie?.aggHome, 3, "finished legs count toward the aggregate");
++  assert.equal(tie?.winnerId, null, "an open second leg keeps the tie open");
++}
++
++function testFeederLinks(): void {
++  const b = buildBracket([
++    // Round of 16: Arsenal and Bayern advance.
++    match({ home: ARS, away: PSG, round: "Round of 16", kickoff: "2026-02-10T20:00:00Z", homeScore: 2, awayScore: 0 }),
++    match({ home: BAY, away: BEN, round: "Round of 16", kickoff: "2026-02-11T20:00:00Z", homeScore: 1, awayScore: 0 }),
++    // Quarter-final: winners meet.
++    match({ home: ARS, away: BAY, round: "Quarter-final", kickoff: "2026-03-10T20:00:00Z", homeScore: 1, awayScore: 2 }),
++  ]);
++  assert.equal(b.connected, true);
++  const [r16, qf] = b.rounds;
++  assert.equal(qf?.ties[0]?.feeds.length, 2, "both slots trace to R16 ties");
++  assert.equal(qf?.ties[0]?.feedRound, "Round of 16");
++  assert.equal(r16?.ties[0]?.feeds.length, 0);
++}
++
++function testFeederSurvivesMissingRound(): void {
++  const b = buildBracket([
++    match({ home: ARS, away: PSG, round: "Round of 16", kickoff: "2026-02-10T20:00:00Z", homeScore: 2, awayScore: 0 }),
++    // The sync window is missing the quarter-final; Arsenal reappears in the semi.
++    match({ home: ARS, away: BAY, round: "Semi-final", kickoff: "2026-04-10T20:00:00Z", homeScore: 1, awayScore: 0 }),
++  ]);
++  assert.equal(b.connected, true, "the chain reaches back over a missing round");
++  const sf = b.rounds.find((r) => r.label === "Semi-final");
++  assert.equal(sf?.ties[0]?.feedRound, "Round of 16");
++}
++
++function testLiveExcludedAndEmpty(): void {
++  const b = buildBracket([
++    match({ home: ARS, away: BAY, round: "Final", kickoff: "2026-05-30T20:00:00Z", status: "live", homeScore: 0, awayScore: 0 }),
++  ]);
++  assert.equal(b.rounds.length, 0, "live matches never form ties (the page shows them separately)");
++  assert.equal(b.connected, false);
++  assert.deepEqual(buildBracket([]).rounds, []);
++}
++
++export function runBracketTests(): void {
++  testOrderRounds();
++  testSingleLegWinner();
++  testTwoLegAggregate();
++  testOpenSecondLegKeepsTieUndecided();
++  testFeederLinks();
++  testFeederSurvivesMissingRound();
++  testLiveExcludedAndEmpty();
++  console.log("  bracket: round order, tie folding, winner inference and feeder links OK");
++}
+diff --git a/tests/run.ts b/tests/run.ts
+index 4c9e73c..86fed50 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -21,6 +21,7 @@ import { runClientTests } from "./client.test.js";
+ import { runRetentionTests } from "./retention.test.js";
+ import { runTeamGroupsTests } from "./teamGroups.test.js";
+ import { runVerifyTests } from "./verify.test.js";
++import { runBracketTests } from "./bracket.test.js";
+ 
+ let failed = 0;
+ const groups: Array<[string, () => void | Promise<void>]> = [
+@@ -42,6 +43,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["retention", runRetentionTests],
+   ["teamGroups", runTeamGroupsTests],
+   ["verify", runVerifyTests],
++  ["bracket", runBracketTests],
+ ];
+ 
+ for (const [name, run] of groups) {
+-- 
+2.54.0.windows.1
+

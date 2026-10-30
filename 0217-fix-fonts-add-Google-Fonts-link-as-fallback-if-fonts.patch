@@ -1,0 +1,29 @@
+From 05f690607eeef12af0f8690848b76145d9d5b924 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Thu, 22 Oct 2026 16:31:12 +0330
+Subject: [PATCH 217/230] fix(fonts): add Google Fonts link as fallback if
+ fontsource fails on Render
+
+---
+ index.html | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/index.html b/index.html
+index 1f7913c..69a291f 100644
+--- a/index.html
++++ b/index.html
+@@ -20,6 +20,11 @@
+         background: #081613;
+         color-scheme: dark;
+       }
++    <!-- Google Fonts fallback: used if fontsource CDN is blocked on Render -->
++    <link rel="preconnect" href="https://fonts.googleapis.com" />
++    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
++    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
++    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+       /* Boot splash: sits INSIDE #root (React's first render replaces it).
+          Literal brand colours, not tokens — this runs before the CSS bundle.
+          The 150ms animation delay keeps fast loads flash-free; reduced motion
+-- 
+2.54.0.windows.1
+

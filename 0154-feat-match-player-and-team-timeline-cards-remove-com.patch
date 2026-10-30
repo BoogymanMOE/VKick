@@ -1,0 +1,297 @@
+From f5fe2f5a4e5f6a91061eab3f8ba84198381c12b7 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Mon, 19 Oct 2026 02:15:55 +0330
+Subject: [PATCH 154/230] feat(match): player-and-team timeline cards, remove
+ commentary
+
+---
+ src/components/TimelineList.tsx           | 36 ++++++++++++++++---
+ src/components/panels/CommentaryPanel.tsx | 41 ----------------------
+ src/hooks/useApi.ts                       |  9 -----
+ src/i18n/strings.ts                       |  4 ---
+ src/lib/api.ts                            |  9 -----
+ src/pages/MatchDetail.tsx                 | 42 ++++++++---------------
+ src/types.ts                              |  7 ----
+ 7 files changed, 46 insertions(+), 102 deletions(-)
+ delete mode 100644 src/components/panels/CommentaryPanel.tsx
+
+diff --git a/src/components/TimelineList.tsx b/src/components/TimelineList.tsx
+index 09d09c2..b29cbd9 100644
+--- a/src/components/TimelineList.tsx
++++ b/src/components/TimelineList.tsx
+@@ -112,6 +112,7 @@ export function TimelineList({
+   liveMinute,
+   onOpenClip,
+   teamColor,
++  teamNames,
+   homeTeamId,
+   awayTeamId,
+ }: {
+@@ -126,6 +127,12 @@ export function TimelineList({
+    * caused the moment, so a two-column read of who did what needs no names.
+    */
+   teamColor?: Record<string, string>;
++  /**
++   * teamId → localized club name. A card names the player(s) and the side, not
++   * the English sentence the feed carries ("… Yellow Card at 12'"), which in a
++   * Persian page scrambles the bidi run and repeats the player name.
++   */
++  teamNames?: Record<string, string>;
+   /** The match's two sides, so a goal can carry the scoreline it produced. */
+   homeTeamId?: string;
+   awayTeamId?: string;
+@@ -221,11 +228,30 @@ export function TimelineList({
+                   ) : null}
+                 </div>
+ 
+-                <p className="mt-2 text-sm text-ink">{event.description}</p>
+-
+-                {event.participants.length > 0 ? (
+-                  <p className="mt-1 text-xs text-ink-2">{event.participants.map(localize).join(" · ")}</p>
+-                ) : null}
++                {/* Player(s) and side — never the feed's English sentence. For a
++                    break (half-time/full-time) with no participants, the chip and
++                    minute above are the whole card; the raw description is the
++                    fallback only for a VAR/unknown moment, where it is the sole
++                    information. */}
++                {(() => {
++                  const who = event.participants.map(localize).join(" · ");
++                  const team = event.teamId ? teamNames?.[event.teamId] : undefined;
++                  const showSentence = !who && event.type === "var";
++                  return (
++                    <>
++                      {who || showSentence ? (
++                        <p className="mt-2 text-sm font-bold text-ink" dir="auto">
++                          {who || <bdi>{event.description}</bdi>}
++                        </p>
++                      ) : null}
++                      {team ? (
++                        <p className="mt-1 text-xs text-ink-2">
++                          <bdi>{team}</bdi>
++                        </p>
++                      ) : null}
++                    </>
++                  );
++                })()}
+               </div>
+ 
+               {/* Pinned reactions live INSIDE the event's slot, directly under it. */}
+diff --git a/src/components/panels/CommentaryPanel.tsx b/src/components/panels/CommentaryPanel.tsx
+deleted file mode 100644
+index 4847b5b..0000000
+--- a/src/components/panels/CommentaryPanel.tsx
++++ /dev/null
+@@ -1,41 +0,0 @@
+-import { useI18n } from "../../i18n/context";
+-import { cx } from "../../lib/cx";
+-
+-/**
+- * Dense minute-by-minute readout of the match's key events — a read-only
+- * layer under the timeline. (The pinned-comment composer was cut with the
+- * timeline-comments feature in the v2 concept.)
+- */
+-export interface CommentaryLine {
+-  id: string;
+-  minuteDisplay: string;
+-  text: string;
+-  isKey?: boolean;
+-}
+-
+-export function CommentaryPanel({ lines }: { lines: CommentaryLine[] }) {
+-  const { t } = useI18n();
+-
+-  if (lines.length === 0) {
+-    return <p className="text-center text-xs text-ink-3">{t("commentary.empty")}</p>;
+-  }
+-
+-  return (
+-    <ul className="space-y-1">
+-      {lines.map((line) => (
+-        <li
+-          key={line.id}
+-          className={cx(
+-            "flex gap-2 rounded-card px-2 py-1.5 text-xs",
+-            line.isKey ? "bg-elevated font-bold text-ink" : "text-ink-2",
+-          )}
+-        >
+-          <span className="num-display w-10 flex-none text-end text-[11px] text-ink-3 tabular-nums">
+-            {line.minuteDisplay}
+-          </span>
+-          <span className="min-w-0 flex-1">{line.text}</span>
+-        </li>
+-      ))}
+-    </ul>
+-  );
+-}
+diff --git a/src/hooks/useApi.ts b/src/hooks/useApi.ts
+index b842855..0e2618e 100644
+--- a/src/hooks/useApi.ts
++++ b/src/hooks/useApi.ts
+@@ -650,15 +650,6 @@ export function useTeamUnderstat(teamId: string) {
+ 
+ /* ------------------------------------------------------------------ squads */
+ 
+-export function useCommentary(matchId: string) {
+-  return useQuery({
+-    queryKey: ["commentary", matchId],
+-    queryFn: () => api.getCommentary(matchId),
+-    enabled: Boolean(matchId),
+-    staleTime: 10 * 60_000,
+-  });
+-}
+-
+ export interface SquadRow {
+   id: string;
+   name: string;
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 19147d4..65ebcb2 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -227,8 +227,6 @@ export const strings = {
+     "report.button": "Report",
+     "report.done": "Reported",
+     "report.failed": "Couldn't report",
+-    "commentary.empty": "No commentary yet",
+-    "commentary.title": "Commentary",
+     "team.title": "Team",
+     "team.leagueUnsupported": "This league is no longer supported",
+     "team.tab.squad": "Squad",
+@@ -850,8 +848,6 @@ export const strings = {
+     "report.button": "گزارش",
+     "report.done": "گزارش شد",
+     "report.failed": "گزارش نشد",
+-    "commentary.empty": "هنوز گزارش زنده‌ای نیست",
+-    "commentary.title": "گزارش زنده",
+     "team.title": "تیم",
+     "team.leagueUnsupported": "این لیگ دیگر پشتیبانی نمی‌شود",
+     "team.tab.squad": "ترکیب",
+diff --git a/src/lib/api.ts b/src/lib/api.ts
+index 6442228..667e9a6 100644
+--- a/src/lib/api.ts
++++ b/src/lib/api.ts
+@@ -319,13 +319,6 @@ export interface ApiTimelineEvent {
+   goal_y: number | null;
+ }
+ 
+-export interface ApiCommentaryLine {
+-  sequence: number;
+-  minute_display: string | null;
+-  minute_seconds: number | null;
+-  text: string;
+-}
+-
+ export interface ApiSquadPlayer {
+   id: string;
+   full_name: string;
+@@ -679,8 +672,6 @@ export const api = {
+ 
+   getTimeline: (id: string) => request<{ events: ApiTimelineEvent[] }>(`/matches/${id}/timeline`),
+ 
+-  getCommentary: (id: string) => request<{ commentary: ApiCommentaryLine[] }>(`/matches/${id}/commentary`),
+-
+   getSquad: (teamId: string) =>
+     request<{
+       season: string;
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index e68ad1f..6cbe897 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -9,7 +9,6 @@ import { LineupsSkeleton,
+ } from "../components/Skeletons";
+ import { TimelineList } from "../components/TimelineList";
+ import { TopBar } from "../components/TopBar";
+-import { CommentaryPanel } from "../components/panels/CommentaryPanel";
+ import { LineupsPanel } from "../components/panels/LineupsPanel";
+ 
+ import {
+@@ -20,7 +19,6 @@ import {
+   ErrorState,
+   LiveDot,
+   Num,
+-  SectionHeading,
+   Segmented,
+   TeamBadge,
+ } from "../components/ui";
+@@ -309,10 +307,10 @@ function TimelineTab({
+   matchId: string;
+   live: boolean;
+   minute: number;
+-  /** Both sides, for the timeline markers' club tint. */
+-  teams: Array<{ id: string; color: string }>;
++  /** Both sides, for the timeline markers' club tint and the team label. */
++  teams: Array<{ id: string; shortName: string; color: string }>;
+ }) {
+-  const { t } = useI18n();
++  const { t, localize } = useI18n();
+   const query = useQuery({
+     queryKey: ["timeline", matchId],
+     queryFn: () => api.getTimeline(matchId),
+@@ -321,6 +319,9 @@ function TimelineTab({
+   const events = query.data?.events ?? [];
+   const adapted = events.map(adaptTimelineEvent);
+   const teamColor = Object.fromEntries(teams.map((team) => [team.id, team.color]));
++  // teamId → localized club name, so a card names the side without printing the
++  // English event sentence the feed carries.
++  const teamNames = Object.fromEntries(teams.map((team) => [team.id, localize(team.shortName)]));
+ 
+   if (query.isLoading) return <TimelineSkeleton rows={4} />;
+   if (query.isError) {
+@@ -331,28 +332,15 @@ function TimelineTab({
+   }
+ 
+   return (
+-    <>
+-      <TimelineList
+-        events={adapted}
+-        comments={[]}
+-        liveMinute={live ? minute : undefined}
+-        teamColor={teamColor}
+-        homeTeamId={teams[0]?.id}
+-        awayTeamId={teams[1]?.id}
+-      />
+-
+-      <div className="mt-4">
+-        <SectionHeading title={t("commentary.title")} />
+-        <CommentaryPanel
+-          lines={adapted.map((e) => ({
+-            id: e.id,
+-            minuteDisplay: e.minuteDisplay,
+-            text: e.description,
+-            isKey: e.type === "goal" || e.type === "card" || e.type === "substitution",
+-          }))}
+-        />
+-      </div>
+-    </>
++    <TimelineList
++      events={adapted}
++      comments={[]}
++      liveMinute={live ? minute : undefined}
++      teamColor={teamColor}
++      teamNames={teamNames}
++      homeTeamId={teams[0]?.id}
++      awayTeamId={teams[1]?.id}
++    />
+   );
+ }
+ 
+diff --git a/src/types.ts b/src/types.ts
+index 63cda7b..26b754c 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -160,13 +160,6 @@ export interface Comment {
+   isMine?: boolean;
+ }
+ 
+-export interface CommentaryLine {
+-  id: string;
+-  minuteDisplay: string;
+-  text: string;
+-  isKey?: boolean;
+-}
+-
+ /* -------------------------------------------------------- predictions hub */
+ 
+ export type PredictionStatus = "done" | "pending" | "correct" | "wrong" | "open";
+-- 
+2.54.0.windows.1
+

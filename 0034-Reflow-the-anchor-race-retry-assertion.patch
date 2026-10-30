@@ -1,0 +1,29 @@
+From 987a96be2c15039c842c184b7eb84bae5388fd61 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Fri, 9 Oct 2026 02:22:18 +0330
+Subject: [PATCH 034/230] Reflow the anchor-race retry assertion
+
+Formatting-only change to match the file's line-width style.
+---
+ tests/anchorRace.test.ts | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/tests/anchorRace.test.ts b/tests/anchorRace.test.ts
+index 6ff5878..7cba8e3 100644
+--- a/tests/anchorRace.test.ts
++++ b/tests/anchorRace.test.ts
+@@ -131,7 +131,10 @@ export async function runAnchorRaceTests(): Promise<void> {
+ 
+   // 6. Retry classification: transient (no status / 5xx / 429) vs terminal 4xx.
+   {
+-    assert.equal(isRetryableAnchorError(Object.assign(new Error("fetch failed"), { status: undefined })), true);
++    assert.equal(
++      isRetryableAnchorError(Object.assign(new Error("fetch failed"), { status: undefined })),
++      true,
++    );
+     assert.equal(isRetryableAnchorError(httpError(500)), true);
+     assert.equal(isRetryableAnchorError(httpError(502)), true);
+     assert.equal(isRetryableAnchorError(httpError(429)), true);
+-- 
+2.54.0.windows.1
+

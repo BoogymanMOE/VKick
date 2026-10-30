@@ -1,0 +1,128 @@
+From 8cdfc01cd9e47f467c20367452d5a5ba0053b3c2 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 15:32:31 +0330
+Subject: [PATCH 086/230] Add live countdown, lock warning, and how-to empty
+ state to predictions
+
+---
+ src/components/panels/PredictionsHub.tsx | 21 +++++++++++++++++++++
+ src/i18n/strings.ts                      | 10 ++++++++++
+ src/pages/MatchDetail.tsx                | 21 +++++++++++++++++++++
+ 3 files changed, 52 insertions(+)
+
+diff --git a/src/components/panels/PredictionsHub.tsx b/src/components/panels/PredictionsHub.tsx
+index 10ce1a5..8690c35 100644
+--- a/src/components/panels/PredictionsHub.tsx
++++ b/src/components/panels/PredictionsHub.tsx
+@@ -233,6 +233,16 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+   // with no next step, which is the opposite of a deadline.
+   const primaryMechanic = ordered.find((m) => !byMechanic(m) && opensNow(m));
+ 
++  const kickoffMs = windows.shot_predict ? new Date(windows.shot_predict.lockAt).getTime() : null;
++  const minutesToKickoff = kickoffMs ? (kickoffMs - now) / 60_000 : null;
++  const showLockSoon =
++    matchStatus === "scheduled" &&
++    minutesToKickoff !== null &&
++    minutesToKickoff > 0 &&
++    minutesToKickoff <= 60 &&
++    rows.length < 5;
++  const showHowTo = matchStatus === "scheduled" && rows.length === 0;
++
+   return (
+     <div className="space-y-2">
+       <div className="flex items-center justify-between gap-3">
+@@ -240,6 +250,17 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
+         {/* The scoring tables live in the app now, not only in scoring-rules.md. */}
+         <RulesButton variant="link" />
+       </div>
++      {showLockSoon ? (
++        <Card className="border-danger/50 bg-danger/5 p-2.5">
++          <span className="text-[11px] font-bold text-danger animate-pulse">{t("predict.lockSoon")}</span>
++        </Card>
++      ) : null}
++      {showHowTo ? (
++        <Card className="border-volt/40 bg-elevated p-3">
++          <p className="text-xs font-bold text-ink">{t("predict.howToTitle")}</p>
++          <p className="mt-1 text-[11px] text-ink-2">{t("predict.howToBody")}</p>
++        </Card>
++      ) : null}
+       {halftime ? (
+         <Card className="border-live/40 p-2.5">
+           <span className="text-[11px] font-bold text-live">{t("sub.halftimeBanner")}</span>
+diff --git a/src/i18n/strings.ts b/src/i18n/strings.ts
+index 33ce5a2..3008816 100644
+--- a/src/i18n/strings.ts
++++ b/src/i18n/strings.ts
+@@ -519,6 +519,11 @@ export const strings = {
+     "predict.lockLineup": "Locks 2h before kickoff",
+     "predict.lockKickoff": "Locks at kickoff",
+     "predict.lockHT": "Opens at lineup, editable until half-time",
++    "predict.startsIn": "Starts in {time}",
++    "predict.startingSoon": "Starting soon",
++    "predict.lockSoon": "⏰ Picks lock soon! Make your picks now.",
++    "predict.howToTitle": "Welcome to Predictions!",
++    "predict.howToBody": "Make up to 5 predictions for this match to earn points and climb the leaderboard!",
+     "predict.waitLineup": "Opens with the official lineup",
+     "predict.waitLineupHint": "Opens with the official lineup — usually about an hour before kickoff",
+     "predict.awaitLineupTitle": "Waiting on the official lineup",
+@@ -1071,6 +1076,11 @@ export const strings = {
+     "predict.lockLineup": "۲ ساعت قبل از شروع قفل می‌شود",
+     "predict.lockKickoff": "در شروع بازی قفل می‌شود",
+     "predict.lockHT": "با اعلام ترکیب باز می‌شود، تا پایان نیمه اول قابل ویرایش است",
++    "predict.startsIn": "شروع تا {time}",
++    "predict.startingSoon": "به‌زودی شروع می‌شود",
++    "predict.lockSoon": "⏰ انتخاب‌ها به‌زودی قفل می‌شوند! همین حالا پیش‌بینی کن.",
++    "predict.howToTitle": "به پیش‌بینی‌ها خوش آمدی!",
++    "predict.howToBody": "تا ۵ پیش‌بینی برای این بازی ثبت کن تا امتیاز بگیری و در تابلوی فصل بالا بروی!",
+     "predict.waitLineup": "با اعلام ترکیب رسمی باز می‌شود",
+     "predict.waitLineupHint": "با اعلام ترکیب رسمی باز می‌شود — معمولاً حدود یک ساعت قبل از شروع بازی",
+     "predict.awaitLineupTitle": "در انتظار ترکیب رسمی",
+diff --git a/src/pages/MatchDetail.tsx b/src/pages/MatchDetail.tsx
+index 1a2641a..3a42c54 100644
+--- a/src/pages/MatchDetail.tsx
++++ b/src/pages/MatchDetail.tsx
+@@ -40,6 +40,7 @@ import { leagueIdOf, useCompetitionLabel } from "../hooks/useApi";
+ import { useAuth } from "../hooks/authContext";
+ import { useI18n } from "../i18n/context";
+ import { formatKickoff, formatKickoffDate } from "../lib/format";
++import { useNow } from "../hooks/useNow";
+ import { isOpen, type MatchStatus, type Mechanic } from "../lib/predictionWindow";
+ import { haptic, notifyHaptic } from "../lib/telegram";
+ import type { Team } from "../types";
+@@ -98,6 +99,22 @@ export default function MatchDetail() {
+     return m ? Number(m[0]) : 0;
+   }, [match?.minute_display]);
+ 
++  const now = useNow(30_000);
++
++  const countdownLabel = useMemo(() => {
++    if (!match || match.status !== "scheduled") return null;
++    const ms = new Date(match.kickoff_at).getTime() - now;
++    if (ms <= 0) return null;
++    const totalMinutes = Math.floor(ms / 60_000);
++    if (totalMinutes < 1) return t("predict.startingSoon");
++    const hours = Math.floor(totalMinutes / 60);
++    const minutes = totalMinutes % 60;
++    if (hours > 0) {
++      return t("predict.startsIn", { time: `${hours}h ${minutes}m` });
++    }
++    return t("predict.startsIn", { time: `${minutes}m` });
++  }, [match, now, t]);
++
+   // The deadline bar needs the pick count. Same query key as the Predict tab,
+   // so this shares its cache instead of costing a second round trip, and it
+   // warms the tab before the user opens it.
+@@ -206,6 +223,10 @@ export default function MatchDetail() {
+                 <LiveDot />
+                 {t("status.live")} <Num>{currentMinute}&#39;</Num>
+               </Chip>
++            ) : countdownLabel ? (
++              <Chip tone="volt" className="animate-pulse">
++                {countdownLabel}
++              </Chip>
+             ) : (
+               <Chip tone={match.status === "finished" ? "muted" : "volt"}>
+                 {match.status === "finished" ? (
+-- 
+2.54.0.windows.1
+

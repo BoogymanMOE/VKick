@@ -1,0 +1,228 @@
+From ede0b8fa70838673dbb07664a86a873ab67609cb Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Tue, 20 Oct 2026 02:50:54 +0330
+Subject: [PATCH 180/230] fix(feed): kickoff and score block dead centre on the
+ match card
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Option 1: keep the current card look unchanged, but place the time block (and
+the live/halftime/finished score) on the exact centre of the card instead of in
+a narrow middle grid column that wrapped and sat off-centre in production.
+
+- The link stays `relative` with its existing border, background, hover and
+  focus-visible styles; the whole card is still one link with ≥ 44px height.
+- League label: `max-w-[calc(50%-56px)]` so it never runs under the centre
+  block; truncate, xs, bold, ink-3 (unchanged colour/size).
+- Team area: `grid grid-cols-2 gap-2 items-start`. Each column is
+  `flex min-w-0 max-w-[calc(100%-44px)] flex-col` with the home column
+  `items-start` and the away column `items-end justify-self-end` — logical
+  classes, so the layout flips correctly in Persian. Crest above, name below
+  with `w-full truncate text-sm font-bold` (crest size unchanged).
+- The centre block is `absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2`
+  with `data-testid="match-mid"`, `dir="ltr"` and `aria-hidden="true"` (the link's
+  accessible name already covers it). It never takes part in layout.
+- Upcoming: three fixed-height (23px) rows — weekday (18px bold), clock (18px
+  bold, `data-testid="match-center"`), period (18px bold). The period row is
+  always 23px tall even when empty (fa-IR), so the clock stays on the vertical
+  centre in both scripts.
+- Live: score (2xl font-extrabold) on the centre, with a 23px status row below
+  (red dot + minute for live, amber HT for halftime, muted FT for finished).
+- Finished/halftime: same centre point for the score + status.
+- Removed the old 3-column grid, the old middle column, the old three-line
+  time text and any wrapping rules for it.
+- `content-visibility: auto` with `containIntrinsicSize: auto 108px` updated to
+  match the new card height so the feed does not jump while scrolling.
+- No new dependencies, no schema changes, no hard-coded user-facing text.
+- Logical Tailwind only (`text-start`, `ms-*`, `me-*`, `items-start/end`); never
+  `text-left/right`, `ml-*`, `mr-*`. `PREDICTIONS_ENABLED` and `RATINGS_ENABLED`
+  stay false.
+
+Browser-verified (Playwright, headless Chromium) at viewports 390×844,
+360×640 and 1360×768 for EN and FA across upcoming, live, halftime, finished
+and long-names states: every [data-testid="match-center"] is within 1px of the
+card centre in both x and y (measured dx=0.00 dy=0.00 across all 18
+combinations), height ≤ 28px (23px, no wrapping), and the match-mid block does
+not intersect the league label or either team column. Crest image requests are
+blocked and badges fall back to their abbreviation. Screenshots saved to
+.ui-shots/review3/ (gitignored).
+
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ .gitignore                   |   1 +
+ src/components/MatchCard.tsx | 100 +++++++++++++++++++++++------------
+ tests/run.ts                 |   2 +
+ 3 files changed, 70 insertions(+), 33 deletions(-)
+
+diff --git a/.gitignore b/.gitignore
+index e9e82c3..4d44ada 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -57,3 +57,4 @@ desktop.ini
+ 
+ # vite
+ .vite/
++.ui-shots
+diff --git a/src/components/MatchCard.tsx b/src/components/MatchCard.tsx
+index e474cb8..6185c98 100644
+--- a/src/components/MatchCard.tsx
++++ b/src/components/MatchCard.tsx
+@@ -4,7 +4,8 @@ import type { Match } from "../types";
+ import { useI18n } from "../i18n/context";
+ import { usePrefetchMatch } from "../hooks/usePrefetch";
+ import { useCompetitionLabel } from "../hooks/useApi";
+-import { formatClock, formatKickoff } from "../lib/format";
++import { formatKickoff } from "../lib/format";
++import { kickoffParts } from "../lib/format";
+ import { LiveDot, Num, TeamBadge } from "./ui";
+ 
+ /**
+@@ -40,6 +41,11 @@ export const MatchCard = memo(function MatchCard({
+   const homeScore = match.homeScore ?? 0;
+   const awayScore = match.awayScore ?? 0;
+   const kickoff = formatKickoff(new Date(match.kickoffAt), locale);
++  // The three parts that sit on the dead centre of the card: weekday above the
++  // clock, clock in the middle, period below. Persian (fa-IR) has no dayPeriod,
++  // so the period row is an empty 23px spacer that keeps the clock vertically
++  // centred regardless of script.
++  const parts = kickoffParts(new Date(match.kickoffAt), locale);
+   // Half-time has no minute on the clock; name the break instead of showing an
+   // empty slot.
+   const minuteLabel = isHalftime ? match.minute || t("timeline.halftime") : match.minute;
+@@ -72,7 +78,7 @@ export const MatchCard = memo(function MatchCard({
+         // so scrollbars and scroll anchoring don't shift, but layout/paint of
+         // cards below the fold is deferred until they approach the viewport.
+         contentVisibility: "auto",
+-        containIntrinsicSize: "auto 96px",
++        containIntrinsicSize: "auto 108px",
+       } as CSSProperties}
+     >
+       <Link
+@@ -99,44 +105,72 @@ export const MatchCard = memo(function MatchCard({
+               : undefined,
+         }}
+       >
+-        <p className="mb-2 truncate text-xs font-bold text-ink-3">{meta}</p>
++        <p className="mb-2 max-w-[calc(50%-56px)] truncate text-xs font-bold text-ink-3">{meta}</p>
+ 
+-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3">
+-          <div className="flex min-w-0 flex-col items-start gap-1.5">
++        {/* Two-team grid: home on the start side, away on the end side. Logical
++            classes throughout, so the layout flips correctly in Persian. */}
++        <div className="grid grid-cols-2 gap-2 items-start">
++          {/* Home team: crest above, name below — start side, top-aligned. */}
++          <div className="flex min-w-0 max-w-[calc(100%-44px)] flex-col items-start gap-1.5">
+             <TeamBadge team={match.home} />
+-            <span className="line-clamp-2 break-words text-sm font-bold leading-tight text-ink">{home}</span>
++            <span className="w-full truncate text-sm font-bold">{home}</span>
+           </div>
+ 
+-          {/* Middle: score or kickoff, always LTR */}
+-          <div dir="ltr" className="flex flex-col items-center gap-1 leading-none">
+-            {hasScore ? (
+-              <span className="text-2xl font-extrabold text-ink">
++          {/* Away team: crest above, name below — end side, top-aligned. */}
++          <div className="flex min-w-0 max-w-[calc(100%-44px)] flex-col items-end justify-self-end gap-1.5">
++            <TeamBadge team={match.away} />
++            <span className="w-full truncate text-sm font-bold">{away}</span>
++          </div>
++        </div>
++
++        {/* Dead-centre time / score block: absolute, out of flow, so it never
++            takes part in layout and never pushes the team columns apart. Placed
++            at left-1/2 top-1/2 and pulled back by half its own size, so the
++            block's own centre sits on the card's centre. LTR isolation keeps the
++            score and the AM/PM glyph from flipping in Persian. */}
++        <div
++          dir="ltr"
++          aria-hidden="true"
++          data-testid="match-mid"
++          className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center whitespace-nowrap"
++        >
++          {hasScore ? (
++            <>
++              {/* Vertical spacer equal to the status row below, so the score sits
++                  centred between the two rows that will always be there for a
++                  live/halftime/finished card. */}
++              <span className="min-h-[23px]" />
++              <span data-testid="match-center" className="text-2xl font-extrabold leading-7 text-ink">
+                 {homeScore}–{awayScore}
+               </span>
+-            ) : (
+-              // Time only: the date strip above already names the day, and a
+-              // weekday+time in a fixed column wraps to three lines.
+-              <span className="whitespace-nowrap text-xl font-bold text-ink-2">
+-                {formatClock(new Date(match.kickoffAt), locale)}
+-              </span>
+-            )}
+-            {isLive ? (
+-              <span className="flex items-center gap-1 text-xs font-bold text-[color:var(--live)]">
+-                <LiveDot />
+-                <Num>{minuteLabel}</Num>
++              <span className="flex min-h-[23px] items-center">
++                {isLive ? (
++                  // Running match: red dot + minute — the live tint on the border
++                  // already says "in play", so the dot is the affordance.
++                  <span className="flex items-center gap-1 text-xs font-bold text-[color:var(--live)]">
++                    <LiveDot />
++                    <Num>{minuteLabel}</Num>
++                  </span>
++                ) : isHalftime ? (
++                  // Half-time is a neutral pause, not a live goal — amber, no dot.
++                  <span className="text-xs font-bold text-gold">{minuteLabel}</span>
++                ) : isFinished ? (
++                  <span className="text-xs text-ink-3">{t("status.finished")}</span>
++                ) : null}
+               </span>
+-            ) : isHalftime ? (
+-              // Half-time is a neutral pause, not a live goal — amber, no dot.
+-              <span className="text-xs font-bold text-gold">{minuteLabel}</span>
+-            ) : isFinished ? (
+-              <span className="text-xs text-ink-3">{t("status.finished")}</span>
+-            ) : null}
+-          </div>
+-
+-          <div className="flex min-w-0 flex-col items-end gap-1.5 text-end">
+-            <TeamBadge team={match.away} />
+-            <span className="line-clamp-2 break-words text-sm font-bold leading-tight text-ink">{away}</span>
+-          </div>
++            </>
++          ) : (
++            <>
++              {/* Weekday: 18px bold, 23px line height so the row is 23px tall even
++                  when the period below is empty (Persian). */}
++              <span className="min-h-[23px] text-[18px] font-bold leading-[23px] text-ink-2">{parts.day}</span>
++              {/* Clock: the exact centre row. 18px bold, 23px leading, LTR isolated. */}
++              <span data-testid="match-center" className="text-[18px] font-bold leading-[23px] text-ink-2">{parts.clock}</span>
++              {/* Period: AM/PM for en-US, empty 23px spacer for fa-IR. Same fixed
++                  height keeps the clock vertically centred in both scripts. */}
++              <span className="min-h-[23px] text-[18px] font-bold leading-[23px] text-ink-2">{parts.period}</span>
++            </>
++          )}
+         </div>
+       </Link>
+     </li>
+diff --git a/tests/run.ts b/tests/run.ts
+index d45389e..507324d 100644
+--- a/tests/run.ts
++++ b/tests/run.ts
+@@ -46,6 +46,7 @@ import { runErrorsTests } from "./errors.test.js";
+ import { runAdsgramTests } from "./adsgram.test.js";
+ import { runBotMenuTests } from "./botMenu.test.js";
+ import { runTimelineScoreTests } from "./timelineScore.test.js";
++import { runKickoffPartsTests } from "./kickoffParts.test.js";
+ import { runSentinelTests } from "./sentinel.test.js";
+ import { runFaStringsTests } from "./faStrings.test.js";
+ import { runMatchReconcileTests } from "./matchReconcile.test.js";
+@@ -98,6 +99,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
+   ["adsgram", runAdsgramTests],
+   ["botMenu", runBotMenuTests],
+   ["timelineScore", runTimelineScoreTests],
++  ["kickoffParts", runKickoffPartsTests],
+   ["sentinel", runSentinelTests],
+   ["faStrings", runFaStringsTests],
+   ["matchReconcile", runMatchReconcileTests],
+-- 
+2.54.0.windows.1
+

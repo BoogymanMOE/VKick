@@ -1,0 +1,36 @@
+From a8f858575a1e96876b036a5a08396febfde960e8 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sun, 18 Oct 2026 18:27:23 +0330
+Subject: [PATCH 135/230] fix(feed): proper Persian names for sco.1 and bel.1
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+sco.1 read "doreh-Scotland", which is not a league name, and bel.1 had
+a garbled string (mixed Korean characters). Use the native-standard
+Persian league names.
+
+🤖 Generated with Codebuff
+Co-Authored-By: Codebuff <noreply@codebuff.com>
+---
+ src/lib/leagues.ts | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/lib/leagues.ts b/src/lib/leagues.ts
+index 6de6f2b..496400a 100644
+--- a/src/lib/leagues.ts
++++ b/src/lib/leagues.ts
+@@ -54,8 +54,8 @@ export const COMPETITION_NAMES: Record<string, { en: string; fa: string }> = {
+   "tur.1": { en: "Süper Lig", fa: "سوپرلیگ ترکیه" },
+   "por.1": { en: "Primeira Liga", fa: "لیگ پرتغال" },
+   "gre.1": { en: "Super League Greece", fa: "سوپر لیگ یونان" },
+-  "sco.1": { en: "Scottish Premiership", fa: "دوره اسکاتلند" },
+-  "bel.1": { en: "Belgian Pro League", fa: "لیگ برزیل 프로" },
++  "sco.1": { en: "Scottish Premiership", fa: "لیگ برتر اسکاتلند" },
++  "bel.1": { en: "Belgian Pro League", fa: "لیگ برتر بلژیک" },
+ };
+ 
+ /** Last resort for unknown slugs: never show the raw code. */
+-- 
+2.54.0.windows.1
+

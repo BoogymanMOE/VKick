@@ -1,0 +1,31 @@
+From 3e4e247ed84429c46ec549b50bfe32965088158e Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Sat, 10 Oct 2026 01:12:03 +0330
+Subject: [PATCH 047/230] Install rclone during the Render build for off-site
+ R2 backups
+
+---
+ render.yaml | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/render.yaml b/render.yaml
+index f953a75..769011c 100644
+--- a/render.yaml
++++ b/render.yaml
+@@ -9,7 +9,12 @@ services:
+     # tsc -b emits the client (dist/) and the server (dist-server/); vite
+     # build refreshes the client bundle. No --noEmit here: dist/server/index.js
+     # IS the deployable server.
+-    buildCommand: npm install && npm run build
++    #
++    # rclone ships with neither the Render Node image nor npm, but the nightly
++    # backup loop shells out to it to push snapshots off-site to R2
++    # (server/offsiteBackup.ts). Install it in the build so it is on PATH at
++    # start; the loop degrades to local-only backups if it is ever missing.
++    buildCommand: sudo apt-get update && sudo apt-get install -y rclone && npm install && npm run build
+     # One process serves both the API and the built frontend (server/index.ts
+     # mounts dist/ + SPA fallback). File-based SQLite + in-process cron sync
+     # loops mean exactly one instance; do not scale horizontally. Explicit here
+-- 
+2.54.0.windows.1
+

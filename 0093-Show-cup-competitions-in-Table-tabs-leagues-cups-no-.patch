@@ -1,0 +1,33 @@
+From f108156de823b3690855b89acff21337cfba0af8 Mon Sep 17 00:00:00 2001
+From: verkur46 <mohamadrezasahami1999@gmail.com>
+Date: Wed, 14 Oct 2026 21:29:38 +0330
+Subject: [PATCH 093/230] Show cup competitions in Table tabs (leagues + cups,
+ no tournaments)
+
+---
+ src/lib/pickerGroups.ts | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/lib/pickerGroups.ts b/src/lib/pickerGroups.ts
+index 26e6a40..f0233e4 100644
+--- a/src/lib/pickerGroups.ts
++++ b/src/lib/pickerGroups.ts
+@@ -112,11 +112,15 @@ export function buildLeagueTabs(
+   const bigFive = PICKER_GROUPS.filter((g) => g.key !== OTHER_GROUP && g.key !== INTERNATIONAL_GROUP);
+   const aliasBySlug = new Map(Object.entries(SLUG_BY_LEAGUE).map(([slug, alias]) => [slug, alias]));
+   const extras = followed.filter((row) => row.kind === "league" && !aliasBySlug.has(row.league));
++  const cups = followed.filter((row) => row.kind === "cup");
+   const seen = new Set<string>();
+   return [
+     ...bigFive.map((g) => ({ value: g.key, label: t(g.label) })),
+     ...extras
+       .filter((row) => (seen.has(row.league) ? false : (seen.add(row.league), true)))
+       .map((row) => ({ value: row.league, label: localize(row.name ?? row.league) })),
++    ...cups
++      .filter((row) => (seen.has(row.league) ? false : (seen.add(row.league), true)))
++      .map((row) => ({ value: row.league, label: localize(row.name ?? row.league) })),
+   ];
+ }
+-- 
+2.54.0.windows.1
+

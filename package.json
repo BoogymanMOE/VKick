@@ -28,7 +28,8 @@
     "backup:restore": "tsx server/backupCli.ts restore",
     "sync:dry": "tsx server/cli.ts --dry-run",
     "fetch-logos": "node scripts/fetch-logos.mjs",
-    "import-logos": "node scripts/import-logos.mjs"
+    "import-logos": "node scripts/import-logos.mjs",
+    "download-headshots": "tsx scripts/download-headshots.ts"
   },
   "dependencies": {
     "@fontsource/archivo": "^5.3.0",
