@@ -80,7 +80,7 @@ export default function Onboarding() {
   // Counts inside Arabic-script copy carry Persian digits («گام ۲ از ۳») —
   // Latin numerals break the bidi run the way they did in match countdowns.
   // EN locale (undefined) passes plain digits straight through.
-  const nf = useMemo(() => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : undefined), [lang]);
+  const nf = useMemo(() => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : undefined), [lang]);
 
   // Android hardware back walks the picker back instead of closing the app.
   // The global hook treats /onboarding as a root (it hides Telegram's back

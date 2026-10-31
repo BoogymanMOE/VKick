@@ -62,7 +62,7 @@ function botPages(): BotPage[] {
 export function registerHandlers(bot: Bot): void {
   bot.command("start", async (ctx) => {
     const from = ctx.from;
-    let lang: "en" | "fa" = "en";
+    let lang: PushLang = "en";
     if (from) {
       const db = getDb();
       const existing = get<{ id: number; language: string | null }>(
@@ -228,6 +228,7 @@ export async function registerCommands(bot: Bot): Promise<void> {
   try {
     await bot.api.setMyCommands(botCommandMenu("en"));
     await bot.api.setMyCommands(botCommandMenu("fa"), { language_code: "fa" });
+    await bot.api.setMyCommands(botCommandMenu("de"), { language_code: "de" });
   } catch (err) {
     console.error(`[bot] could not register the command menu: ${String(err).slice(0, 120)}`);
   }

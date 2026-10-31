@@ -36,6 +36,7 @@ import {
   jalaliToGregorian,
   toJalali,
 } from "../lib/jalali";
+import type { Lang } from "../i18n/strings";
 import type { Match } from "../types";
 
 /**
@@ -71,7 +72,7 @@ const FEED_RANGE_LIMIT = 2000;
  * across a month boundary would rebolt the range on reload, and the mid-band
  * days it misses next session are caught by the cache-busting refetch.
  */
-function feedRange(lang: "en" | "fa"): { from: string; to: string } {
+function feedRange(lang: Lang): { from: string; to: string } {
   const now = new Date();
   if (lang === "fa") {
     const t = toJalali(now);
@@ -119,7 +120,7 @@ export default function Matches() {
   const { t, lang, localize } = useI18n();
   const { push } = useToast();
   const navigate = useNavigate();
-  const locale = lang === "fa" ? "fa-IR" : undefined;
+  const locale = lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : undefined;
   /** Localized short day label ("Wed 21" / "پ، ۲۱") for the empty-day copy. */
   const dayLabel = (d: Date) =>
     new Intl.DateTimeFormat(locale, { weekday: "short", day: "numeric" }).format(d);  const queryClient = useQueryClient();
@@ -142,7 +143,12 @@ export default function Matches() {
 
   // The calendar's full reach, not just the relevance window: the day feed and
   // the sheet's fixture dots both read this one list.
-  const range = useMemo(() => feedRange(lang), [lang]);
+  const range = useMemo(() => {
+    if (lang === "en" || lang === "fa" || lang === "de") {
+      return feedRange(lang === "en" || lang === "fa" ? lang : "en");
+    }
+    return feedRange("en");
+  }, [lang]);
   const matchesQuery = useMatches({
     league: activeLeague,
     from: range.from,
@@ -287,7 +293,7 @@ export default function Matches() {
     [locale],
   );
   const digitsFormatter = useMemo(
-    () => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en", { useGrouping: false }),
+    () => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : "en", { useGrouping: false }),
     [lang],
   );
 

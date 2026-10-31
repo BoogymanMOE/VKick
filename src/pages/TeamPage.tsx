@@ -109,8 +109,8 @@ export default function TeamPage() {
 
   const { team, seasonStats, standing, fixtures } = detailQuery.data;
   // Persian reads every number in the Persian script; English keeps the ordinal.
-  const num = (value: number | string) => (lang === "fa" ? toFaDigits(value) : String(value));
-  const positionLabel = (rank: number) => (lang === "fa" ? `${toFaDigits(rank)}م` : ordinal(rank));
+  const num = (value: number | string) => String(lang === "fa" ? toFaDigits(value) : lang === "de" ? value : value);
+  const positionLabel = (rank: number) => (lang === "fa" ? `${toFaDigits(rank)}م` : lang === "de" ? `${rank}`.slice(0, 1) : ordinal(rank));
   const leagueId =
     team.league && ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"].includes(team.league)
       ? (
@@ -307,7 +307,7 @@ function SquadBlock({
 
   // Persian reads every number in the Persian script — jersey, counts and stats
   // alike. Mixing ۱۳ with 00/01 in one row was the bug this fixes.
-  const num = (value: number | string) => (lang === "fa" ? toFaDigits(value) : String(value));
+  const num = (value: number | string) => String(lang === "fa" ? toFaDigits(value) : lang === "de" ? value : value);
 
   return (
     <div className="space-y-lg">
@@ -453,7 +453,7 @@ function SquadSection({
 function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: string }) {
   const { t, lang, localize } = useI18n();
   const prefetchMatch = usePrefetchMatch();
-  const locale = lang === "fa" ? "fa-IR" : undefined;
+  const locale = lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : undefined;
   if (fixtures.length === 0) return <EmptyState title={t("team.noFixtures")} />;
 
   const played = fixtures.filter((match) => match.status === "finished");
@@ -562,7 +562,7 @@ function StatsTab({
   teamId: string;
 }) {
   const { t, lang, localize } = useI18n();
-  const locale = lang === "fa" ? "fa-IR" : undefined;
+  const locale = lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : undefined;
   const dateFmt = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" });
   const recentResults = fixtures.filter((match) => match.status === "finished").slice(0, 5);
   if (!stats && recentResults.length === 0) {
@@ -705,9 +705,9 @@ function RecentLineupBlock({
   if (query.isError) return <ErrorState onRetry={() => query.refetch()} />;
   const data = query.data;
   if (!data?.match) return <EmptyState title={t("team.lineupEmpty")} hint={t("team.lineupEmptyHint")} />;
-  const locale = lang === "fa" ? "fa-IR" : undefined;
+  const locale = lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : undefined;
   const dateFmt = new Intl.DateTimeFormat(locale, { weekday: "short", month: "short", day: "numeric" });
-  const number = (value: number) => (lang === "fa" ? toFaDigits(value) : value);
+  const number = (value: number) => (lang === "fa" ? toFaDigits(value) : lang === "de" ? value : value);
   const playerRows = (players: LineupPlayer[]) =>
     players.map((player) => (
       <li key={player.id} className="flex flex-wrap items-center gap-2 py-2">
@@ -804,7 +804,7 @@ function NewsTab({ teamId, league }: { teamId: string; league: string }) {
     return <EmptyState title={t("team.news.empty")} hint={t("team.news.emptyHint")} />;
   }
 
-  const locale = lang === "fa" ? "fa-IR" : undefined;
+  const locale = lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : undefined;
   return (
     <ul className="space-y-2">
       {articles.map((article) => (

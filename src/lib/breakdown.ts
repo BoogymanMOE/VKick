@@ -12,7 +12,7 @@
 import { cellZone, ZONE_LABEL_KEY } from "./zones";
 import type { StringKey } from "../i18n/strings";
 
-export type BreakdownLang = "en" | "fa";
+export type BreakdownLang = "en" | "fa" | "de";
 
 /**
  * Gates and flags, not score contributions — rendered as ✓ / — instead of a
@@ -28,52 +28,52 @@ const FLAG_KEYS = new Set([
   "forcedByWindow",
 ]);
 
-const LABELS: Record<string, { en: string; fa: string }> = {
+const LABELS: Record<string, { en: string; fa: string; de: string }> = {
   // lineup
-  startersCorrect: { en: "Starters called right", fa: "بازیکنان ترکیب درست" },
-  formationBonus: { en: "Formation bonus", fa: "پاداش آرایش" },
+  startersCorrect: { en: "Starters called right", fa: "بازیکنان ترکیب درست" , de: "Starter richtig benannt" },
+  formationBonus: { en: "Formation bonus", fa: "پاداش آرایش", de: "Formation-Bonus" },
   // sub board
-  pairsPredicted: { en: "Sub pairs predicted", fa: "تعویض‌های پیش‌بینی‌شده" },
-  offCorrect: { en: "Player coming off right", fa: "بازیکن خارج‌شده درست" },
-  onCorrect: { en: "Player coming on right", fa: "بازیکن واردشده درست" },
-  fullPairs: { en: "Complete pairs", fa: "تعویض‌های کامل" },
+  pairsPredicted: { en: "Sub pairs predicted", fa: "تعویض‌های پیش‌بینی‌شده", de: "Sub-Paare prognostiziert" },
+  offCorrect: { en: "Player coming off right", fa: "بازیکن خارج‌شده درست", de: "Richtig herausgetreten" },
+  onCorrect: { en: "Player coming on right", fa: "بازیکن واردشده درست", de: "Richtig hereingetreten" },
+  fullPairs: { en: "Complete pairs", fa: "تعویض‌های کامل", de: "Vollständige Paare" },
   // shot predictor
-  zonePoints: { en: "Zone points", fa: "امتیاز ناحیه" },
-  zoneExact: { en: "Exact zone", fa: "ناحیه دقیق" },
-  zoneAdjacent: { en: "Adjacent zone", fa: "ناحیه مجاور" },
-  onTargetBonus: { en: "On-target bonus", fa: "پاداش ضربه در چارچوب" },
-  goalBonus: { en: "Goal bonus", fa: "پاداش گل" },
-  lenientSoT: { en: "Stat sheet only (no zone hit)", fa: "فقط برگه آمار (بدون برخورد ناحیه)" },
-  zoneFromFallback: { en: "Zone from a teammate's shot", fa: "ناحیه از شوت هم‌تیمی" },
+  zonePoints: { en: "Zone points", fa: "امتیاز ناحیه", de: "Naben-Punkte" },
+  zoneExact: { en: "Exact zone", fa: "ناحیه دقیق", de: "Exakte Zone" },
+  zoneAdjacent: { en: "Adjacent zone", fa: "ناحیه مجاور", de: "Nachbarzone" },
+  onTargetBonus: { en: "On-target bonus", fa: "پاداش ضربه در چارچوب", de: "Zielrichtung-Bonus" },
+  goalBonus: { en: "Goal bonus", fa: "پاداش گل", de: "Torschuss-Bonus" },
+  lenientSoT: { en: "Stat sheet only (no zone hit)", fa: "فقط برگه آمار (بدون برخورد ناحیه)", de: "Nur Statistik (ohne Nadeln)" },
+  zoneFromFallback: { en: "Zone from a teammate's shot", fa: "ناحیه از شوت هم‌تیمی", de: "Zone vom Schuss eines Teamkollegen" },
   // player to watch
-  statScore: { en: "Stat score", fa: "امتیاز آماری" },
-  statAvg: { en: "Position average", fa: "میانگین پست" },
-  statGate: { en: "Beat the stat gate", fa: "عبور از دروازه آمار" },
-  crowdAvg: { en: "Crowd rating", fa: "امتیاز تماشاگران" },
-  crowdPosAvg: { en: "Position crowd average", fa: "میانگین تماشاگران همان پست" },
-  crowdGate: { en: "Beat the crowd gate", fa: "عبور از دروازه تماشاگران" },
-  mvpBonus: { en: "MVP bonus", fa: "پاداش بهترین بازیکن" },
-  forcedByWindow: { en: "Settled at the deadline", fa: "تسویه در پایان مهلت" },
-  note: { en: "Nothing to score", fa: "چیزی برای امتیازدهی نبود" },
+  statScore: { en: "Stat score", fa: "امتیاز آماری", de: "Statistik-Punktzahl" },
+  statAvg: { en: "Position average", fa: "میانگین پست", de: "Positions-Durchschnitt" },
+  statGate: { en: "Beat the stat gate", fa: "عبور از دروازه آمار", de: "Statistik-Schwellenwert überschritten" },
+  crowdAvg: { en: "Crowd rating", fa: "امتیاز تماشاگران", de: "Publikum-Bewertung" },
+  crowdPosAvg: { en: "Position crowd average", fa: "میانگین تماشاگران همان پست", de: "Positions-Publikum-Durchschnitt" },
+  crowdGate: { en: "Beat the crowd gate", fa: "عبور از دروازه تماشاگران", de: "Publikum-Schwellenwert überschritten" },
+  mvpBonus: { en: "MVP bonus", fa: "پاداش بهترین بازیکن", de: "MVP-Bonus" },
+  forcedByWindow: { en: "Settled at the deadline", fa: "تسویه در پایان مهلت", de: "Vor Zeitablauf abgeschlossen" },
+  note: { en: "Nothing to score", fa: "چیزی برای امتیازدهی نبود", de: "Wenig zu bewerten" },
   // versus
-  playerA: { en: "Your pick's stat score", fa: "امتیاز آماری انتخاب شما" },
-  playerB: { en: "Rival's stat score", fa: "امتیاز آماری رقیب" },
+  playerA: { en: "Your pick's stat score", fa: "امتیاز آماری انتخاب شما", de: "Ihre Auswahl: Statistik-Punktzahl" },
+  playerB: { en: "Rival's stat score", fa: "امتیاز آماری رقیب", de: "Gegner: Statistik-Punktzahl" },
 };
 
-export const MECHANIC_LABELS: Record<string, { en: string; fa: string }> = {
-  lineup: { en: "Lineup", fa: "ترکیب" },
-  shot_predict: { en: "Shot", fa: "شوت" },
-  sub: { en: "Subs", fa: "تعویض" },
-  player_watch: { en: "Player to watch", fa: "بازیکن تحت نظر" },
-  versus: { en: "Versus", fa: "رودررو" },
+export const MECHANIC_LABELS: Record<string, { en: string; fa: string; de: string }> = {
+  lineup: { en: "Lineup", fa: "ترکیب", de: "Trainerbench" },
+  shot_predict: { en: "Shot", fa: "شوت", de: "Schuss" },
+  sub: { en: "Subs", fa: "تعویض", de: "Substitution" },
+  player_watch: { en: "Player to watch", fa: "بازیکن تحت نظر", de: "Aufmerksamkeitsspielerin" },
+  versus: { en: "Versus", fa: "رودررو", de: "Gegner" },
 };
 
-export const STATUS_LABELS: Record<string, { en: string; fa: string }> = {
-  pending: { en: "Pending", fa: "در انتظار" },
-  correct: { en: "Correct", fa: "درست" },
-  partial: { en: "Partial", fa: "ناقص" },
-  wrong: { en: "Wrong", fa: "نادرست" },
-  void: { en: "Void", fa: "باطل" },
+export const STATUS_LABELS: Record<string, { en: string; fa: string; de: string }> = {
+  pending: { en: "Pending", fa: "در انتظار", de: "Ausstehend" },
+  correct: { en: "Correct", fa: "درست", de: "Richtig" },
+  partial: { en: "Partial", fa: "ناقص", de: "Teilweise" },
+  wrong: { en: "Wrong", fa: "نادرست", de: "Falsch" },
+  void: { en: "Void", fa: "باطل", de: "Nichtig" },
 };
 
 /** camelCase -> "Camel case", for keys this file doesn't know yet. */

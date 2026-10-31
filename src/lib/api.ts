@@ -10,6 +10,7 @@
  */
 
 import { currentAuthToken, getDeviceId } from "./auth";
+import type { Lang } from "../i18n/strings";
 import type { LineupPlayer, MatchForm, MatchH2H, NewsArticle } from "../types";
 
 const BASE = "/api";
@@ -597,7 +598,7 @@ export const api = {
         display_name: string;
         username?: string | null;
         /** The language last reported by a device (drives bot push copy). */
-        language?: "en" | "fa";
+        language?: Lang;
         isAdmin?: boolean;
       };
       favorites: number;
@@ -630,7 +631,7 @@ export const api = {
    * written in it (`server/messages.ts`). Fire-and-forget: a failed sync is
    * retried on the next app open, never surfaced to the user.
    */
-  setLanguage: (language: "en" | "fa") =>
+  setLanguage: (language: Lang) =>
     request<{ ok: boolean; language: string }>("/me/language", {
       method: "POST",
       body: JSON.stringify({ language }),

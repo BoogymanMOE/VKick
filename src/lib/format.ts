@@ -45,23 +45,23 @@ export function parseMinute(value: string | null | undefined): MinuteParts | nul
   return { base, added: Number.isFinite(added) ? added : 0 };
 }
 
-/** Wall-clock label for "last synced" affordances. Pass `fa-IR` under Persian. */
+/** Wall-clock label for "last synced" affordances. Pass `fa-IR` under Persian, `de-DE` under German. */
 export function formatClock(date: Date, locale?: string): string {
-  return date.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString(locale ?? "en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
-/** Kickoff label: short weekday + time. Pass `fa-IR` under Persian. */
+/** Kickoff label: short weekday + time. Pass `fa-IR` under Persian, `de-DE` under German. */
 export function formatKickoff(date: Date, locale?: string): string {
-  return date.toLocaleString(locale, {
+  return date.toLocaleString(locale ?? "en-US", {
     weekday: "short",
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-/** Kickoff calendar date (day + month) for status badges. Pass `fa-IR` under Persian. */
+/** Kickoff calendar date (day + month) for status badges. Pass `fa-IR` under Persian, `de-DE` under German. */
 export function formatKickoffDate(date: Date, locale?: string): string {
-  return date.toLocaleDateString(locale, {
+  return date.toLocaleDateString(locale ?? "en-US", {
     day: "numeric",
     month: "short",
   });
@@ -69,12 +69,12 @@ export function formatKickoffDate(date: Date, locale?: string): string {
 
 /**
  * Splits a kickoff into weekday, clock and day period (AM/PM).
- * The period is "" for 24-hour locales such as Persian (fa-IR), where
+ * The period is "" for 24-hour locales such as Persian (fa-IR) and German (de-DE), where
  * `toLocaleTimeString` does not emit a dayPeriod part.
  */
 export function kickoffParts(date: Date, locale?: string): { day: string; clock: string; period: string } {
-  const day = new Intl.DateTimeFormat(locale, { weekday: "short" }).format(date);
-  const parts = new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).formatToParts(date);
+  const day = new Intl.DateTimeFormat(locale ?? "en-US", { weekday: "short" }).format(date);
+  const parts = new Intl.DateTimeFormat(locale ?? "en-US", { hour: "2-digit", minute: "2-digit" }).formatToParts(date);
   const period = parts.find((p) => p.type === "dayPeriod")?.value ?? "";
   const clock = parts
     .filter((p) => p.type !== "dayPeriod")
@@ -88,19 +88,20 @@ export function kickoffParts(date: Date, locale?: string): { day: string; clock:
  * Short kickoff label: weekday + 24h time, one line.
  * EN: Sun 15:00
  * FA: یکشنبه ۱۵:۰۰ (Persian day name + Persian digits)
+ * DE: So 15:00 (German day name + 24h time)
  * For LIVE matches this is combined with the score/minute below.
  * For FINISHED matches this is the final score + "FT" on one line.
  */
 export function formatKickoffShort(date: Date, locale?: string): string {
-  const day = new Intl.DateTimeFormat(locale ?? "en", { weekday: "short" }).format(date);
-  const time = new Intl.DateTimeFormat(locale ?? "en", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  const day = new Intl.DateTimeFormat(locale ?? "en-US", { weekday: "short" }).format(date);
+  const time = new Intl.DateTimeFormat(locale ?? "en-US", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
   return `${day} ${time}`;
 }
 
 /**
  * Sticky date header label for grouped upcoming feeds.
  * Returns "Today" / "Tomorrow" for near dates, or a full weekday + date for
- * anything further out (e.g. "Saturday, Oct 12"). Pass `fa-IR` under Persian.
+ * anything further out (e.g. "Saturday, Oct 12"). Pass `fa-IR` under Persian, `de-DE` under German.
  */
 export function formatDayHeader(date: Date, locale?: string): string {
   const now = new Date();
@@ -111,7 +112,7 @@ export function formatDayHeader(date: Date, locale?: string): string {
   if (diff === 0) return "Today";
   if (diff === 1) return "Tomorrow";
 
-  return date.toLocaleDateString(locale, {
+  return date.toLocaleDateString(locale ?? "en-US", {
     weekday: "long",
     day: "numeric",
     month: "short",

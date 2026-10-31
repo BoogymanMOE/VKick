@@ -122,7 +122,7 @@ meRouter.post("/api/me/display-name", requireUser, writeLimiter, (req, res) => {
  */
 meRouter.post("/api/me/language", requireUser, writeLimiter, (req, res) => {
   const language = String(req.body?.language ?? "");
-  if (language !== "en" && language !== "fa") return bad(res, "BAD_LANGUAGE");
+  if (language !== "en" && language !== "fa" && language !== "de") return bad(res, "BAD_LANGUAGE");
   run(db, "UPDATE users SET language = ? WHERE id = ?", [language, currentUser(req).id]);
   res.json({ ok: true, language });
 });

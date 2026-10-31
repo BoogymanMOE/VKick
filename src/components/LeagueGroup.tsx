@@ -38,7 +38,7 @@ function LeagueHeader({ label, count }: { label: string; count: number }) {
       <span aria-hidden="true" className="h-2 w-2 flex-none rounded-sm bg-volt" />
       <span className="min-w-0 flex-1 truncate text-[12px] font-bold text-ink-2">{label}</span>
       <span className="flex-none whitespace-nowrap text-[11px] leading-4 text-ink-3">
-        <Num>{t(count === 1 ? "matches.matchCountOne" : "matches.matchCount", { count: digitFormatter(lang === "fa" ? "fa-IR" : "en").format(count) })}</Num>
+        <Num>{t(count === 1 ? "matches.matchCountOne" : "matches.matchCount", { count: digitFormatter(lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : "en").format(count) })}</Num>
       </span>
     </div>
   );
@@ -132,12 +132,12 @@ export const MatchRow = memo(function MatchRow({
       : null;
   const home = localize(match.home.shortName);
   const away = localize(match.away.shortName);
-  const clock = clockFormatter(lang === "fa" ? "fa-IR" : "en").format(new Date(match.kickoffAt));
+  const clock = clockFormatter(lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : "en").format(new Date(match.kickoffAt));
   // Live minute, Persian digits under fa: "۴۴′". The feed's `minute` is the
   // server's normalised clock ("44'"); only the numeric part is localized.
   // Added time is part of the clock: "90'+3'" is 90+3, not 90.
   const minute = parseMinute(match.minute);
-  const digits = digitFormatter(lang === "fa" ? "fa-IR" : "en");
+  const digits = digitFormatter(lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : "en");
   const minuteLabel = minute
     ? `${digits.format(minute.base)}${minute.added ? `+${digits.format(minute.added)}` : ""}`
     : null;

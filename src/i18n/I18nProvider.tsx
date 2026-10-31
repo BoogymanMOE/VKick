@@ -9,17 +9,21 @@ const STORAGE_KEY = "matchday.lang";
 function detectLang(): Lang {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved === "en" || saved === "fa") return saved;
+    if (saved === "en" || saved === "fa" || saved === "de") return saved as Lang;
   } catch {
     /* private mode */
   }
   // Persian is the v1 launch audience, so it wins the tie when the device asks for it.
-  return navigator.language?.toLowerCase().startsWith("fa") ? "fa" : "en";
+  const t = navigator.language?.toLowerCase();
+  if (t?.startsWith("fa")) return "fa";
+  if (t?.startsWith("de")) return "de";
+  return "en";
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(detectLang);
   const dir: "ltr" | "rtl" = lang === "fa" ? "rtl" : "ltr";
+  // de and en are ltr; only fa is rtl.
 
   // Drive direction from the document root so logical CSS properties (ms/me, ps/pe)
   // and native RTL text handling both flip with a single attribute.
@@ -35,6 +39,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+  }, []);
+
+  const toggleLang = useCallback(() => {
+    setLangState((prev) => (prev === "en" ? "fa" : prev === "fa" ? "de" : "en"));
   }, []);
 
   const t = useCallback(
@@ -57,7 +65,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       lang,
       dir,
       setLang,
-      toggleLang: () => setLang(lang === "en" ? "fa" : "en"),
+      toggleLang,
       t,
       localize,
     }),

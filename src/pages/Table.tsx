@@ -205,7 +205,7 @@ export default function Table() {
 
   // League heading, far end: "هفته ۸" — locale digits throughout.
   const weekFormatter = useMemo(
-    () => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en", { useGrouping: false }),
+    () => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : "en", { useGrouping: false }),
     [lang],
   );
   const gwLabel = rows.length ? t("table.gw", { gw: weekFormatter.format(rows[0]?.played ?? 0) }) : null;
@@ -390,7 +390,7 @@ export default function Table() {
                               </span>
                               <Num className="flex-none text-sm font-extrabold text-ink">
                                 {lang === "fa"
-                                  ? new Intl.NumberFormat("fa-IR").format(scorer.goals)
+                                  ? new Intl.NumberFormat(lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : "en").format(scorer.goals)
                                   : scorer.goals}
                               </Num>
                               <span className="sr-only">{t("table.goals")}</span>
@@ -471,7 +471,7 @@ function StandingItem({
   // gives the Persian-Indic glyphs (۱, +۱۱, ٫ separator for decimals); EN
   // keeps Latin digits and the counting animation.
   const fmt = (v: number, decimals = 0) =>
-    new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en", {
+    new Intl.NumberFormat(lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : "en", {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     }).format(v);
@@ -622,7 +622,7 @@ function ExpectedItem({
 }) {
   const { t, localize, lang } = useI18n();
   const fmt = (v: number, decimals = 0) =>
-    new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en", {
+    new Intl.NumberFormat(lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : "en", {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     }).format(v);
