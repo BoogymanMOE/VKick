@@ -72,8 +72,8 @@ export async function fetchTeamInjuries(league: LeagueSlug, teamId: string): Pro
 }
 
 /**
- * League news feed. Returns up to ~6 articles per league, refreshed
- * throughout the day. Each article carries headline, description,
+ * League news feed, refreshed throughout the day. Each article carries
+ * headline, description,
  * published (ISO), byline, images[] (with a.espncdn.com URLs), and a
  * links.web.href (full ESPN URL for "read on ESPN →"), plus a
  * categories[] array where each article tags the teams it covers with
@@ -82,9 +82,14 @@ export async function fetchTeamInjuries(league: LeagueSlug, teamId: string): Pro
  * The team-specific path /teams/{id}/news returns 0 articles for
  * soccer (ESPN only populates it for US sports), so callers fetch the
  * league feed and filter by team.id themselves.
+ *
+ * `limit=50` is required, not decoration: ESPN's default page is 6 articles,
+ * which tag only ~6 clubs — so a club page for any of the other 14 showed "No
+ * recent news" while the league feed sat right there. The larger page tags
+ * 30-76 clubs per league, so every club page has its own articles.
  */
 export async function fetchLeagueNews(league: LeagueSlug): Promise<unknown> {
-  return fetchJson(`${BASE}/${league}/news`);
+  return fetchJson(`${BASE}/${league}/news?limit=50`);
 }
 
 export function allLeagueSlugs(): LeagueSlug[] {

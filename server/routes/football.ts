@@ -176,7 +176,12 @@ matchesRouter.get("/api/matches/:id/players", (req, res) => {
   if (!assertMatchAllowed(res, matchId)) return;
   const rows = all(
     db,
-    `SELECT s.*, p.full_name, p.short_name, p.position, p.jersey_number, p.headshot_url,
+    // This match's own position wins over the club roster's coarse label — the
+    // same rule the lineup read follows, so the stats table and the pitch can
+    // never disagree about where a player played.
+    `SELECT s.*, p.full_name, p.short_name,
+            COALESCE(s.position, p.position) AS position,
+            p.jersey_number, p.headshot_url,
             t.name AS team_name, t.short_name AS team_short
      FROM match_player_stats s
      JOIN players p ON p.id = s.player_id
@@ -276,6 +281,8 @@ function matchReadState(matchId: string): MatchReadState | undefined {
 interface MatchPlayerRow extends Record<string, unknown> {
   player_id: string;
   team_id: string;
+  position: string | null;
+  espn_position: string | null;
   headshot_url: string | null;
   availability_status: string | null;
   availability_reason: string | null;
@@ -285,8 +292,14 @@ interface MatchPlayerRow extends Record<string, unknown> {
 function lineupRows(matchId: string): MatchPlayerRow[] {
   return all<MatchPlayerRow>(
     db,
-    `SELECT s.*, p.full_name, p.short_name, p.position, p.jersey_number, p.headshot_url,
-            p.espn_position, a.status AS availability_status, a.reason AS availability_reason,
+    // `s.*` already carries this match's own position (the boxscore XI's);
+    // the aliases below prefer it and fall back to the club roster only when
+    // ESPN published no real code for the appearance.
+    `SELECT s.*, p.full_name, p.short_name,
+            COALESCE(s.position, p.position) AS position,
+            COALESCE(s.espn_position, p.espn_position) AS espn_position,
+            p.jersey_number, p.headshot_url,
+            a.status AS availability_status, a.reason AS availability_reason,
             a.expected_return AS availability_expected_return
      FROM match_player_stats s JOIN players p ON p.id = s.player_id
      LEFT JOIN team_availability a ON a.team_id = s.team_id AND a.player_id = s.player_id
@@ -550,10 +563,18 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
   const team = get<{ league: string }>(db, "SELECT * FROM teams WHERE id = ?", [teamId]);
   if (!team) return bad(res, "not found", 404);
   if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+  // One season line for THIS club's own competition. 36 clubs also hold a row
+  // for their cup or European campaign, and those rows share the season label —
+  // so `ORDER BY season DESC` alone returned whichever row SQLite reached first,
+  // a one-game cup line where the league season (the nine games the rest of
+  // this page counts) should be. The club's own league wins; a cup-only club
+  // falls back to its freshest, most-played row.
   const seasonStats = get(
     db,
-    `SELECT * FROM team_season_stats WHERE team_id = ? ORDER BY season DESC LIMIT 1`,
-    [teamId],
+    `SELECT * FROM team_season_stats WHERE team_id = ?
+     ORDER BY CASE WHEN league = ? THEN 0 ELSE 1 END, updated_at DESC, played DESC
+     LIMIT 1`,
+    [teamId, team.league],
   );
   // The info card's one-line summary needs the league-table position and points;
   // team_season_stats carries the record but no rank, so the row comes from
@@ -668,19 +689,35 @@ matchesRouter.get("/api/teams/:id/players", (req, res) => {
     [team.league],
   );
   const season = seasonRow?.season ?? currentSeasonLabel();
+  // Where a player stands is taken from his most recent appearance, not from
+  // ESPN's roster label: the roster is coarse and sometimes plainly wrong (it
+  // lists keepers as defenders) and reads wingers as midfielders, which put 60+
+  // players in the wrong section of this list while the pitch beside it drew
+  // them correctly. The match's own position/code wins; the roster is the
+  // fallback for players with no appearance yet.
   const rows = all(
     db,
-    `SELECT p.id, p.full_name, p.short_name, p.position, p.espn_position, p.jersey_number, p.headshot_url,
+    `SELECT p.id, p.full_name, p.short_name,
+            COALESCE(latest.position, p.position) AS position,
+            COALESCE(latest.espn_position, p.espn_position) AS espn_position,
+            p.jersey_number, p.headshot_url,
             s.appearances, s.goals AS season_goals, s.assists AS season_assists,
             p.active,
             a.status AS availability_status, a.reason AS availability_reason, a.expected_return AS availability_expected_return
      FROM players p
      LEFT JOIN player_season_stats s ON s.player_id = p.id AND s.league = ? AND s.season = ?
      LEFT JOIN team_availability a ON a.team_id = p.team_id AND a.player_id = p.id
+     LEFT JOIN (
+       SELECT ms.player_id, ms.position, ms.espn_position,
+              ROW_NUMBER() OVER (PARTITION BY ms.player_id ORDER BY m.kickoff_at DESC) AS rn
+       FROM match_player_stats ms JOIN matches m ON m.id = ms.match_id
+       WHERE ms.team_id = ? AND ms.position IS NOT NULL
+     ) latest ON latest.player_id = p.id AND latest.rn = 1
      WHERE p.team_id = ?
-     ORDER BY CASE p.position WHEN 'GK' THEN 0 WHEN 'DEF' THEN 1 WHEN 'MID' THEN 2 ELSE 3 END,
+     ORDER BY CASE COALESCE(latest.position, p.position)
+                WHEN 'GK' THEN 0 WHEN 'DEF' THEN 1 WHEN 'MID' THEN 2 ELSE 3 END,
               p.active DESC, p.jersey_number ASC, p.full_name ASC`,
-    [team.league, season, teamId],
+    [team.league, season, teamId, teamId],
   );
   const coach = get<{ name: string }>(db, "SELECT name FROM team_coaches WHERE team_id = ?", [teamId]);
   res.json({

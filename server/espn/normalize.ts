@@ -412,6 +412,7 @@ const POS_MAP: Record<string, "GK" | "DEF" | "MID" | "FWD"> = {
   SS: "FWD",
   "ST-L": "FWD",
   "ST-R": "FWD",
+  SW: "DEF",
   "F-L": "FWD",
   "F-R": "FWD",
   "F-C": "FWD",
@@ -434,9 +435,14 @@ const NON_POSITIONAL = new Set(["SUB", "N/A", "NA", "-", "--", "NONE", "OUT", "R
 export function normalizePosition(abbr: string | undefined | null): string {
   if (!abbr) return "OTHER";
   const raw = String(abbr).trim();
-  const mapped = POS_MAP[raw.toUpperCase()] ?? POS_MAP[raw];
-  if (mapped) return mapped;
   const a = raw.toUpperCase();
+  const mapped = POS_MAP[a] ?? POS_MAP[raw];
+  if (mapped) return mapped;
+  // Codes carry a side suffix the table need not repeat ("CM-L", "CF-R",
+  // "CD-M"): retry on the stem, so a new side variant is not an unknown. A
+  // whole midfield read as OTHER before this and the pitch had no row for it.
+  const stem = a.replace(/-[A-Z]+$/, "");
+  if (stem !== a && POS_MAP[stem]) return POS_MAP[stem];
   if (a.includes("GK") || a.includes("GOALKEEPER") || /GOAL.?KEEPER/.test(a)) return "GK";
   if (a.includes("BACK") || /^(C|L|R)?[DB]/.test(a)) return "DEF";
   if (a.includes("FWD") || a.includes("STRIKER") || a.endsWith("F")) return "FWD";
@@ -845,6 +851,11 @@ export function normalizeRosters(raw: unknown): {
         started: entry.starter === true,
         subbed_in: entry.subbedIn === true,
         subbed_out: entry.subbedOut === true,
+        // Only the boxscore's own code counts here: a bench row ESPN tagged
+        // "SUB" says nothing about where the player lines up, so leave both
+        // null and let the reader fall back to the club roster.
+        position: storedPos ? normalizePosition(storedPos) : null,
+        espn_position: storedPos,
         formation_place:
           entry.formationPlace !== undefined && entry.formationPlace !== null
             ? String(entry.formationPlace)

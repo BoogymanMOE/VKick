@@ -336,10 +336,11 @@ function SquadBlock({
 }
 
 /**
- * One position group (GK / DEF / MID / FWD) with a collapsible header. The MID
- * group is 17 rows on its own — a scroll wall — so each group folds under its
- * heading; the choice persists per position so a collapsed group stays folded
- * across reloads. GK and DEF start open, MID and FWD closed.
+ * One position group (GK / DEF / MID / FWD) with a collapsible header. Each
+ * group folds under its heading and the choice persists per position, so a
+ * reader can fold one away and keep it folded across reloads. Every group
+ * starts OPEN: the tab's promise is the whole squad, and a folded MID section
+ * (17 rows on its own) read as "the rest of the players are missing".
  */
 function SquadSection({
   pos,
@@ -353,10 +354,7 @@ function SquadSection({
   teamColor: string;
 }) {
   const { t, dir, localize } = useI18n();
-  const [collapsed, setCollapsed] = useLocalState<boolean>(
-    `team.squad.collapsed.${pos}`,
-    pos === "MID" || pos === "FWD",
-  );
+  const [collapsed, setCollapsed] = useLocalState<boolean>(`team.squad.collapsed.${pos}`, false);
 
   return (
     <div>
@@ -708,6 +706,12 @@ function RecentLineupBlock({
   const locale = lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : undefined;
   const dateFmt = new Intl.DateTimeFormat(locale, { weekday: "short", month: "short", day: "numeric" });
   const number = (value: number) => (lang === "fa" ? toFaDigits(value) : lang === "de" ? value : value);
+  // The server answers `subs` and `bench` with the same non-starters (everyone
+  // who did not start is on the bench), so joining them listed each substitute
+  // twice. Dedupe by id: one row per player, whatever the two lists hold.
+  const benchPlayers = [...data.subs, ...data.bench].filter(
+    (player, index, all) => all.findIndex((other) => other.id === player.id) === index,
+  );
   const playerRows = (players: LineupPlayer[]) =>
     players.map((player) => (
       <li key={player.id} className="flex flex-wrap items-center gap-2 py-2">
@@ -752,11 +756,11 @@ function RecentLineupBlock({
           </>
         ) : <EmptyState title={t("team.lineupUnavailable")} />}
       </Card>
-      {data.bench.length + data.subs.length > 0 ? (
+      {benchPlayers.length > 0 ? (
         <Card className="p-3">
           <SectionHeading title={t("team.lineupSubs")} />
           <ul className="divide-y divide-line">
-            {[...data.subs, ...data.bench].map((player) => (
+            {benchPlayers.map((player) => (
               <li key={player.id} className="flex flex-wrap items-center gap-2 py-2">
                 <span className="grid h-7 w-7 flex-none place-items-center rounded-full bg-elevated text-xs font-bold text-ink-2">
                   {player.number > 0 ? number(player.number) : "–"}

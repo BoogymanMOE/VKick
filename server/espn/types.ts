@@ -114,6 +114,14 @@ export interface NormPlayerStats {
   started: boolean;
   subbed_in: boolean;
   subbed_out: boolean;
+  /**
+   * This appearance's own position, from the boxscore XI: the granular ESPN code
+   * ("G", "CD-L", "AM") and its GK/DEF/MID/FWD bucket. Null when ESPN marked
+   * the row "SUB" and published no real code — the squad roster is the only
+   * source then, so readers fall back to the player row instead of guessing.
+   */
+  position: string | null;
+  espn_position: string | null;
   formation_place: string | null;
   minutes_played: number | null;
   goals: number;

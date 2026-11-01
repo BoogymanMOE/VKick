@@ -254,6 +254,12 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
           started: s.started ? 1 : 0,
           subbed_in: s.subbed_in ? 1 : 0,
           subbed_out: s.subbed_out ? 1 : 0,
+          // The XI's own positions for this match, kept apart from the club
+          // roster: it is coarser and occasionally wrong (ESPN lists
+          // Bournemouth's keeper as a Defender), and the lineup pitch needs
+          // the keeper in the keeper row.
+          position: s.position,
+          espn_position: s.espn_position,
           formation_place: s.formation_place,
           minutes_played: s.minutes_played,
           goals: s.goals,

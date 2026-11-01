@@ -102,6 +102,8 @@ export function migrate(db: DatabaseSync): void {
       own_goals       INTEGER NOT NULL DEFAULT 0,
       stat_score      INTEGER,                 -- display-only, from scoring-rules.md
       stat_breakdown  TEXT,                    -- JSON of per-rule line items
+      position        TEXT,                    -- this match's GK/DEF/MID/FWD
+      espn_position   TEXT,                    -- the boxscore's granular code ("G", "CD-L")
       PRIMARY KEY (match_id, player_id)
     );
     CREATE INDEX IF NOT EXISTS idx_mps_team ON match_player_stats(team_id);
@@ -833,6 +835,20 @@ export function migrate(db: DatabaseSync): void {
   }>;
   if (!standingsCols.some((c) => c.name === "group_name")) {
     db.exec("ALTER TABLE standings ADD COLUMN group_name TEXT;");
+  }
+
+  // Per-match positions arrived after match_player_stats shipped. The club
+  // roster is not good enough for the lineup pitch: it is coarser and ESPN
+  // sometimes gets it plainly wrong (Bournemouth's keeper is listed as a
+  // "Defender" there), which dropped the keeper out of the XI on the pitch.
+  // The boxscore carries the XI's real positions, so store them per match.
+  const mpsCols = db.prepare("SELECT name FROM pragma_table_info('match_player_stats')").all() as Array<{
+    name: string;
+  }>;
+  for (const col of ["position", "espn_position"]) {
+    if (!mpsCols.some((c) => c.name === col)) {
+      db.exec(`ALTER TABLE match_player_stats ADD COLUMN ${col} TEXT;`);
+    }
   }
 
   // versus_pairs removal (curated Versus pairs never shipped as a mechanic —
