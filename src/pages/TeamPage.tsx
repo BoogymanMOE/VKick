@@ -107,7 +107,7 @@ export default function TeamPage() {
     );
   }
 
-  const { team, seasonStats, standing, fixtures } = detailQuery.data;
+  const { team, standing, fixtures } = detailQuery.data;
   // Persian reads every number in the Persian script; English keeps the ordinal.
   const num = (value: number | string) => String(lang === "fa" ? toFaDigits(value) : lang === "de" ? value : value);
   const positionLabel = (rank: number) => (lang === "fa" ? `${toFaDigits(rank)}م` : lang === "de" ? `${rank}`.slice(0, 1) : ordinal(rank));
@@ -254,7 +254,7 @@ export default function TeamPage() {
           <TeamSheetTab teamId={team.id} teamColor={teamView.color} squadQuery={squadQuery} />
         ) : null}
         {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
-        {tab === "season" ? <StatsTab stats={seasonStats} fixtures={fixtures} teamId={team.id} /> : null}
+        {tab === "season" ? <StatsTab fixtures={fixtures} teamId={team.id} /> : null}
         {tab === "news" ? <NewsTab teamId={team.id} league={team.league ?? ""} /> : null}
       </section>
     </>
@@ -546,16 +546,12 @@ function FixturesTab({ fixtures, teamId }: { fixtures: ApiMatch[]; teamId: strin
   );
 }
 
-/* ------------------------------------------------------------ season stats */
-
-type SeasonStats = NonNullable<ReturnType<typeof useTeamDetail>["data"]>["seasonStats"];
+/* ------------------------------------------------------------ form (recent results) */
 
 function StatsTab({
-  stats,
   fixtures,
   teamId,
 }: {
-  stats: SeasonStats;
   fixtures: ApiMatch[];
   teamId: string;
 }) {
@@ -563,129 +559,60 @@ function StatsTab({
   const locale = lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : undefined;
   const dateFmt = new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" });
   const recentResults = fixtures.filter((match) => match.status === "finished").slice(0, 5);
-  if (!stats && recentResults.length === 0) {
+
+  if (recentResults.length === 0) {
     return <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />;
   }
 
-  // Two reads instead of one dump: what the side creates, and what it concedes
-  // or controls. The flat list said everything at once and ranked nothing.
-  const attackRows: Array<{ label: string; value: string }> = stats
-    ? [
-        { label: t("stats.goals"), value: `${stats.goals_for}` },
-        { label: t("stats.shots"), value: `${stats.total_shots}` },
-        { label: t("stats.onTarget"), value: `${stats.total_shots_on_target}` },
-        { label: t("stats.corners"), value: `${stats.total_corners}` },
-      ]
-    : [];
-  const controlRows: Array<{ label: string; value: string }> = stats
-    ? [
-        { label: t("stats.conceded"), value: `${stats.goals_against}` },
-        { label: t("stats.possession"), value: `${Math.round(stats.avg_possession)}%` },
-        { label: t("stats.passAccuracy"), value: `${Math.round(stats.avg_pass_accuracy)}%` },
-        { label: t("stats.fouls"), value: `${stats.total_fouls}` },
-      ]
-    : [];
-
-  // The season in one line. The grouped cards below say what the side does;
-  // only the record says how it went, so it leads the tab rather than hiding
-  // as row one of a list nobody scanned to the bottom of.
-  const record: Array<{ letter: string; value: number }> = stats
-    ? [
-        { letter: "W", value: stats.wins },
-        { letter: "D", value: stats.draws },
-        { letter: "L", value: stats.losses },
-      ]
-    : [];
-
   return (
     <div className="space-y-lg">
-      {recentResults.length > 0 ? (
-        <Card className="p-3">
-          <SectionHeading title={t("team.recentResults")} />
-          <ul className="divide-y divide-line">
-            {recentResults.map((match) => {
-              const { home, away } = matchFromApi(match);
-              const isHome = home.id === teamId;
-              const gf = isHome ? match.home_score ?? 0 : match.away_score ?? 0;
-              const ga = isHome ? match.away_score ?? 0 : match.home_score ?? 0;
-              const result = gf > ga ? "W" : gf < ga ? "L" : "D";
-              const opponent = isHome ? away : home;
-              const resultLabel =
-                result === "W"
-                  ? t("table.formWShort")
-                  : result === "L"
-                    ? t("table.formLShort")
-                    : t("table.formDShort");
-              return (
-                <li key={match.id} className="flex items-center gap-2 py-2">
-                  <span
-                    className={cx(
-                      "grid h-6 w-6 flex-none place-items-center rounded text-[10px] font-bold",
-                      result === "W"
-                        ? "bg-pitch/20 text-pitch"
-                        : result === "L"
-                          ? "bg-danger/20 text-danger"
-                          : "bg-ink-3/15 text-ink-3",
-                    )}
-                  >
-                    {resultLabel}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-xs text-ink-2">
-                    {isHome ? `${t("team.vs")} ` : ""}
-                    {localize(opponent.shortName)}
-                    {!isHome ? ` ${t("team.vs")}` : ""}
-                  </span>
-                  <span dir="ltr" className="flex-none text-xs font-bold text-ink">
-                    {lang === "fa" ? toFaDigits(`${gf}–${ga}`) : `${gf}–${ga}`}
-                  </span>
-                  <span className="flex-none text-[10px] text-ink-3">
-                    {dateFmt.format(new Date(match.kickoff_at))}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-      ) : null}
-      {stats ? (
-        <>
-          <Card className="flex items-center justify-between gap-3 p-4">
-            <span className="label text-ink-3">{t("statsPage.teams")}</span>
-            <span className="flex items-baseline gap-2">
-              {record.map(({ letter, value }) => (
-                <span key={letter} className="flex items-baseline gap-0.5">
-                  <Num className="text-lg font-black text-ink">{value}</Num>
-                  <span className="label text-ink-3">{letter}</span>
+      <Card className="p-3">
+        <SectionHeading title={t("team.recentResults")} />
+        <ul className="divide-y divide-line">
+          {recentResults.map((match) => {
+            const { home, away } = matchFromApi(match);
+            const isHome = home.id === teamId;
+            const gf = isHome ? match.home_score ?? 0 : match.away_score ?? 0;
+            const ga = isHome ? match.away_score ?? 0 : match.home_score ?? 0;
+            const result = gf > ga ? "W" : gf < ga ? "L" : "D";
+            const opponent = isHome ? away : home;
+            const resultLabel =
+              result === "W"
+                ? t("table.formWShort")
+                : result === "L"
+                  ? t("table.formLShort")
+                  : t("table.formDShort");
+            return (
+              <li key={match.id} className="flex items-center gap-2 py-2">
+                <span
+                  className={cx(
+                    "grid h-6 w-6 flex-none place-items-center rounded text-[10px] font-bold",
+                    result === "W"
+                      ? "bg-pitch/20 text-pitch"
+                      : result === "L"
+                        ? "bg-danger/20 text-danger"
+                        : "bg-ink-3/15 text-ink-3",
+                  )}
+                >
+                  {resultLabel}
                 </span>
-              ))}
-            </span>
-          </Card>
-          <StatCard title={t("team.statsAttack")} rows={attackRows} />
-          <StatCard title={t("team.statsDefense")} rows={controlRows} />
-        </>
-      ) : (
-        <EmptyState title={t("team.statsEmpty")} hint={t("team.statsEmptyHint")} />
-      )}
+                <span className="min-w-0 flex-1 truncate text-xs text-ink-2">
+                  {isHome ? `${t("team.vs")} ` : ""}
+                  {localize(opponent.shortName)}
+                  {!isHome ? ` ${t("team.vs")}` : ""}
+                </span>
+                <span dir="ltr" className="flex-none text-xs font-bold text-ink">
+                  {lang === "fa" ? toFaDigits(`${gf}-${ga}`) : `${gf}-${ga}`}
+                </span>
+                <span className="flex-none text-[10px] text-ink-3">
+                  {dateFmt.format(new Date(match.kickoff_at))}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </Card>
     </div>
-  );
-}
-
-/** One grouped stat sheet: a heading, then label/value rows on a hairline. */
-function StatCard({ title, rows }: { title: string; rows: Array<{ label: string; value: string }> }) {
-  return (
-    <Card className="p-4">
-      <SectionHeading title={title} />
-      <dl className="divide-y divide-line">
-        {rows.map((row) => (
-          <div key={row.label} className="flex items-center justify-between gap-3 py-2.5">
-            <dt className="text-xs text-ink-3">{row.label}</dt>
-            <dd>
-              <Num className="text-md font-bold text-ink">{row.value}</Num>
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </Card>
   );
 }
 
