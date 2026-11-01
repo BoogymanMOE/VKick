@@ -20,11 +20,6 @@
         background: #081613;
         color-scheme: dark;
       }
-    <!-- Google Fonts fallback: used if fontsource CDN is blocked on Render -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
       /* Boot splash: sits INSIDE #root (React's first render replaces it).
          Literal brand colours, not tokens — this runs before the CSS bundle.
          The 150ms animation delay keeps fast loads flash-free; reduced motion
@@ -63,6 +58,12 @@
         }
       }
     </style>
+    <!-- Google Fonts fallback (non-render-blocking): used if fontsource CDN is blocked on Render -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800&display=swap" />
+    <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Vazirmatn:wght@400;500;600;700;800&display=swap" /></noscript>
     <meta
       name="description"
       content="Follow your clubs and check live scores, fixtures and every table — live matchday for every league ESPN covers."
