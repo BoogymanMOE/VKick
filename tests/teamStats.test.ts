@@ -28,6 +28,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { closeDb, getDb, run } from "../server/db/index.js";
+import { recomputeSeasonTeamStats, getSeasonKey } from "../server/sync/teamStats.js";
 
 const CHILD_FLAG = "VKICK_TEAMSTATS_CHILD";
 
@@ -97,6 +98,7 @@ async function suite(): Promise<void> {
       `INSERT INTO matches (id, league, home_team_id, away_team_id, kickoff_at, status, home_score, away_score)
        VALUES
          ('m_stats', 'eng.1', 'th1', 'ta1', '2026-10-18T15:00:00.000Z', 'finished', 2, 1),
+          ('m_nobox', 'eng.1', 'th1', 'ta1', '2026-10-19T15:00:00.000Z', 'finished', 1, 0),
          ('m_nostats', 'eng.1', 'th2', 'ta2', '2026-10-20T15:00:00.000Z', 'scheduled', NULL, NULL),
          ('m_turk', 'tur.1', 'th3', 'ta3', '2026-10-18T17:00:00.000Z', 'finished', 1, 1);`,
     );
@@ -157,6 +159,16 @@ async function suite(): Promise<void> {
       // 4. Unknown match id: 404 as well.
       const missing = await get(port, "/api/matches/nope/team-stats");
       assert.equal(missing.status, 404, "unknown match answers 404");
+
+      // 5. Season team stats: averages ignore NULL boxscore rows (no COALESCE to 0).
+      const season = getSeasonKey(db, "eng.1");
+      recomputeSeasonTeamStats(db, "eng.1", season);
+      const th1 = db
+        .prepare("SELECT played, avg_possession, avg_pass_accuracy FROM team_season_stats WHERE team_id = 'th1' AND league = 'eng.1'")
+        .get() as { played: number; avg_possession: number; avg_pass_accuracy: number };
+      assert.equal(th1.played, 2, "both finished matches counted for th1");
+      assert.equal(th1.avg_possession, 62.4, "avg_possession averages only non-null boxscore rows");
+      assert.equal(th1.avg_pass_accuracy, 87, "avg_pass_accuracy averages only non-null boxscore rows");
     } finally {
       await close();
     }
