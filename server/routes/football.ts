@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Football-data reads: competitions, matches, match detail, commentary,
  * teams (+season line), squads, Understat, season stat
  * leaderboards, standings. Public routes stay public (web preview); the
@@ -873,6 +873,7 @@ matchesRouter.get("/api/leagues/:league/teams", (req, res) => {
      ORDER BY s.goals_for DESC`,
     [league, season],
   );
+  res.set("Cache-Control", "public, max-age=30, stale-while-revalidate=60");
   res.json({ season, teams: rows });
 });
 
