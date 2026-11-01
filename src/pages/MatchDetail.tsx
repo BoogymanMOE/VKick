@@ -336,7 +336,7 @@ export default function MatchDetail() {
               // A called-off fixture is a state, not a 0-0 score.
               <Chip tone="muted">{notPlayedLabel}</Chip>
             ) : countdownLabel ? (
-              <Chip tone="volt" className="motion-safe:animate-pulse">
+              <Chip tone="volt">
                 {countdownLabel}
               </Chip>
             ) : (

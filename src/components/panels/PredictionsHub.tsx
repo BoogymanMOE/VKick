@@ -252,7 +252,7 @@ export function PredictionsHub({ matchId }: { matchId: string }) {
       </div>
       {showLockSoon ? (
         <Card className="border-danger/50 bg-danger/5 p-2.5">
-          <span className="text-xs font-bold text-danger animate-pulse">{t("predict.lockSoon")}</span>
+          <span className="text-xs font-bold text-danger">{t("predict.lockSoon")}</span>
         </Card>
       ) : null}
       {showHowTo ? (
