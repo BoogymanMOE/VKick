@@ -1,4 +1,4 @@
-﻿// GENERATED — German dictionary (do not hand-edit; regenerate with scripts/gen-de-strings.cjs).
+﻿// German dictionary. Hand-edited; scripts/gen-de-strings.cjs is a starting-point generator only.
 // Every key must exist in `en` (checked by the `StringKey` type).
 
 export type Lang = "en" | "fa" | "de";
