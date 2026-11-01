@@ -25,7 +25,7 @@ the same UI element.
 | Token | Hex | Meaning — and nothing else |
 |---|---|---|
 | `--volt` | #1FBFA0 | broadcast teal: primary actions, your predictions, CTAs, goal flashes |
-| `--live` | #35E0BC | LIVE state only — live dot, live timeline, sub predictor (brighter teal) |
+| `--live` | #FF5A4D | LIVE state only - live dot, live timeline, sub predictor (coral red) |
 | `--gold` | #F2B705 | evaluative amber: Crowd Ratings, stat points, bonus, Player to Watch |
 | `--danger` | #FF4D5E | errors, wrong predictions, red cards |
 | `--pitch` | #23A066 | turf green: positive stat chips, Shot Plotter grid (tinted, never dominant) |
