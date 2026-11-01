@@ -102,6 +102,19 @@
     outline-offset: 2px;
   }
 
+  /* R-39: interactive elements advertise clickability; disabled controls do not. */
+  button,
+  [role="button"],
+  a,
+  summary,
+  [tabindex]:not([tabindex="-1"]) {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
   /* Latin numerals get tight tracking; Persian text must never (breaks joining). */
   html[lang="en"] .num-display {
     letter-spacing: -0.02em;
