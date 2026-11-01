@@ -105,6 +105,7 @@ export default function Login() {
             alt=""
             width={84}
             height={84}
+            fetchPriority="high"
             className="mx-auto mb-3 h-16 w-auto sm:h-[84px]"
           />
           <h1 className="font-num text-[clamp(2.25rem,11vw,3.25rem)] leading-tight font-black tracking-[-0.03em] text-ink">

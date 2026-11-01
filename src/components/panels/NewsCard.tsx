@@ -42,7 +42,7 @@ export function NewsCard({ article, locale }: { article: NewsArticle; locale?: s
           src={article.imageUrl}
           alt=""
           loading="lazy"
-          className="mb-2 h-32 w-full rounded-lg object-cover"
+          className="mb-2 aspect-[5/2] h-32 w-full rounded-lg object-cover"
         />
       ) : null}
       <h3
