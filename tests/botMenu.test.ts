@@ -20,7 +20,7 @@ import { botCommandMenu, botPageCopy, type BotPage } from "../server/messages.js
 import { setPredictionsEnabledForTest } from "../server/features.js";
 
 const PAGES: BotPage[] = ["matches", "profile", "leaderboards"];
-const LANGS = ["en", "fa"] as const;
+const LANGS = ["en", "fa", "de"] as const;
 
 /** A syntactically valid token — this bot never talks to Telegram. */
 const TEST_TOKEN = "123456:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
@@ -158,17 +158,20 @@ export async function runBotMenuTests(): Promise<void> {
     }
   }
 
-  // The registration itself: one setMyCommands for the default language and one
-  // for Persian. A missing call means the menu never appears in Telegram.
+  // The registration itself: one setMyCommands per language Telegram knows —
+  // unscoped English, then one scoped list for each translated menu. A missing
+  // call means that language's menu never appears in Telegram.
   {
     const { bot, calls } = testBot();
     await registerCommands(bot);
     const sets = calls.filter((c) => c.method === "setMyCommands");
-    assert.equal(sets.length, 2, "setMyCommands runs once per language");
+    assert.equal(sets.length, LANGS.length, "setMyCommands runs once per language");
     assert.deepEqual(sets[0].payload.commands, botCommandMenu("en"), "the default menu is English");
     assert.equal(sets[0].payload.language_code, undefined, "the default menu is unscoped");
     assert.deepEqual(sets[1].payload.commands, botCommandMenu("fa"), "the second menu is Persian");
     assert.equal(sets[1].payload.language_code, "fa", "the second menu is scoped to fa");
+    assert.deepEqual(sets[2].payload.commands, botCommandMenu("de"), "the third menu is German");
+    assert.equal(sets[2].payload.language_code, "de", "the third menu is scoped to de");
   }
 
   // The deep link: hash route, one slash, and a trailing slash on the env var

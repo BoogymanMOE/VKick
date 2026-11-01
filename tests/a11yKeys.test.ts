@@ -1,16 +1,16 @@
 /**
  * Screen-reader label keys: the two aria-label strings the comment composer
- * depends on must exist and be non-empty in BOTH languages.
+ * depends on must exist and be non-empty in every configured language.
  *
  * The composer passes these keys straight to `aria-label`, so a missing or
  * blank entry silently ships an unlabelled textarea / clip-link input to
  * assistive tech. This test is the tripwire that catches someone deleting or
- * emptying `comments.textAria` / `comments.mediaAria` in EN or FA.
+ * emptying `comments.textAria` / `comments.mediaAria` in any language.
  */
 import { strict as assert } from "node:assert";
 import { strings } from "../src/i18n/strings.js";
 
-const LANGS = ["en", "fa"] as const;
+const LANGS = ["en", "fa", "de"] as const;
 const A11Y_KEYS = ["comments.textAria", "comments.mediaAria"] as const;
 
 export function runA11yKeysTests(): void {
@@ -25,5 +25,5 @@ export function runA11yKeysTests(): void {
     }
   }
 
-  console.log("  a11yKeys: comments.textAria + comments.mediaAria present in EN/FA OK");
+  console.log("  a11yKeys: comments.textAria + comments.mediaAria present in all configured languages OK");
 }

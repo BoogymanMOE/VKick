@@ -192,7 +192,7 @@ function testPerRecipientLanguage() {
   addMatch(db, "m_ft", "finished", minutesFromNow(-120), { home: 1, away: 0 });
   queueMatchdayAlerts(db, NOW);
 
-  // Same stage, same match, two languages — so compare the lineup row of each.
+  // Same stage, same match, two of our three supported languages — so compare the lineup row of each.
   const stageText = (id: string, kind: string): string | undefined =>
     queued(db).find((r) => r.telegram_id === id && r.kind === kind)?.text;
   assert.ok(
@@ -224,11 +224,14 @@ function testPerRecipientLanguage() {
     "no English leaked into the Persian rows",
   );
 
-  // Anything that is not `fa` reads as English, matching the column default.
+  // `fa` and `de` keep their own copy (each push renders a branch per language);
+  // anything else — including no value at all — reads as English, matching the
+  // `users.language` column default.
   assert.equal(asPushLang("fa"), "fa");
+  assert.equal(asPushLang("de"), "de");
   assert.equal(asPushLang("en"), "en");
   assert.equal(asPushLang(null), "en");
-  assert.equal(asPushLang("de"), "en");
+  assert.equal(asPushLang("xx"), "en");
   db.close();
 }
 
@@ -739,7 +742,7 @@ export async function runNotificationTests(): Promise<void> {
   testPushTrustLink();
   console.log("  notifications: per-user dedupe, both-clubs dedupe, sweep idempotence OK");
   console.log("  notifications: per-kind queue + send-time gating, window gates OK");
-  console.log("  notifications: per-recipient EN/FA copy, users.language backfill OK");
+  console.log("  notifications: per-recipient per-language copy (en/fa/de), users.language backfill OK");
   console.log("  notifications: followed leagues deliver stages + goals, deduped against clubs OK");
   console.log("  notifications: guest/pwd/dev accounts never enter the push queue OK");
   console.log("  notifications: PREDICTIONS_ENABLED gates lineup/lock/halftime, goals+ratings survive OK");

@@ -1,11 +1,11 @@
 /**
  * Privacy and Terms: the route paths and every string the pages render.
  *
- * The pages are data-driven (src/lib/legal.ts), so "the page renders in both
- * languages" reduces to a checkable property: each registered route resolves to
- * a title plus a non-empty {title, body} section list, in BOTH EN and FA, with
- * the Persian prose genuinely different from the English (a forgotten
- * translation is a build-breaking blank section, not a silent one).
+ * The pages are data-driven (src/lib/legal.ts), so "the page renders in every
+ * language" reduces to a checkable property: each registered route resolves to
+ * a title plus a non-empty {title, body} section list in every configured
+ * language, with the non-English prose genuinely different from the English (a
+ * forgotten translation is a build-breaking blank section, not a silent one).
  *
  * App.tsx imports LEGAL_ROUTES for the <Route path> values, so asserting those
  * constants also pins where the pages live.
@@ -14,7 +14,7 @@ import { strict as assert } from "node:assert";
 import { strings } from "../src/i18n/strings.js";
 import { LEGAL_ROUTES, LEGAL_SECTIONS, LEGAL_TITLES, type LegalKind } from "../src/lib/legal.js";
 
-const LANGS = ["en", "fa"] as const;
+const LANGS = ["en", "fa", "de"] as const;
 
 export function runLegalTests(): void {
   assert.deepEqual(
@@ -47,14 +47,17 @@ export function runLegalTests(): void {
     }
   }
 
-  // No untranslated prose: every FA body must differ from the EN one.
+  // No untranslated prose: every non-English body must differ from the EN one.
   for (const kind of kinds) {
     for (const section of LEGAL_SECTIONS[kind]) {
-      assert.notEqual(
-        strings.en[section.body],
-        strings.fa[section.body],
-        `${section.body} is identical in EN and FA (untranslated)`,
-      );
+      for (const lang of LANGS) {
+        if (lang === "en") continue;
+        assert.notEqual(
+          strings.en[section.body],
+          strings[lang][section.body],
+          `${section.body} is identical in EN and ${lang} (untranslated)`,
+        );
+      }
     }
   }
 
@@ -76,5 +79,5 @@ export function runLegalTests(): void {
     }
   }
 
-  console.log("  legal: /privacy + /terms routes, EN/FA sections present, distinct and complete OK");
+  console.log("  legal: /privacy + /terms routes, sections present in all configured languages, distinct and complete OK");
 }
