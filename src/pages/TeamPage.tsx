@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { TopBar } from "../components/TopBar";
 import { PanelSkeleton } from "../components/Skeletons";
@@ -70,10 +70,6 @@ export default function TeamPage() {
   const squadQuery = useSquad(id);
 
   const [tab, setTab] = useState<Tab>("sheet");
-  // Which form badge the reader last tapped: its opponent + score is spelled
-  // out under the strip (mobile taps have no hover tooltip).
-  const [formDetail, setFormDetail] = useState<string | null>(null);
-
   // Error BEFORE the loading check: `data` is undefined when the request
   // fails, so a `isLoading || !data` branch placed first would swallow the error
   // and leave the skeleton on screen forever. `!detailQuery.data` on the error
@@ -132,28 +128,6 @@ export default function TeamPage() {
 
   const teamLeagueLabel = leagueId ? t(`league.${leagueId}`) : competitionName(team.league, lang);
 
-  // The club's last five finished results, newest first (the server serves the
-  // finished segment newest-first too). Kept as full match records — not a
-  // letters string — so each badge can name its opponent and score. Fewer than
-  // five finished matches simply means a shorter strip: nothing is padded.
-  const formMatches = fixtures
-    .filter((match) => match.status === "finished" && match.home_score != null && match.away_score != null)
-    .slice(0, 5);
-  const formResult = (match: ApiMatch) => {
-    const forHome = match.home_team_id === team.id;
-    const goalsFor = (forHome ? match.home_score : match.away_score) ?? 0;
-    const goalsAgainst = (forHome ? match.away_score : match.home_score) ?? 0;
-    return goalsFor > goalsAgainst ? "W" : goalsFor < goalsAgainst ? "L" : "D";
-  };
-  const formTooltip = (match: ApiMatch) => {
-    const forHome = match.home_team_id === team.id;
-    const opponent = forHome ? match.away_short ?? match.away_name : match.home_short ?? match.home_name;
-    const score = forHome
-      ? `${match.home_score}–${match.away_score}`
-      : `${match.away_score}–${match.home_score}`;
-    return `${localize(opponent)} · ${lang === "fa" ? toFaDigits(score) : score}`;
-  };
-
   return (
     <>
       <TopBar
@@ -187,45 +161,6 @@ export default function TeamPage() {
             </p>
           </div>
         </div>
-
-        {/* Form: the club's last five results, newest first, each badge naming
-            its opponent and score on tap (title covers desktop hover). The
-            detail line has a reserved height, so tapping never shifts the
-            layout below. */}
-        {formMatches.length > 0 ? (
-          <div className="mt-3 border-t border-line pt-3">
-            <div className="flex items-center justify-between gap-3">
-              <span aria-hidden="true" className="text-xs font-bold text-ink-3">{t("table.form")}</span>
-              <div className="flex items-center gap-2">
-                {formMatches.map((match) => {
-                  const result = formResult(match);
-                  const title = formTooltip(match);
-                  const selected = formDetail === match.id;
-                  return (
-                    <button
-                      key={match.id}
-                      type="button"
-                      title={title}
-                      aria-pressed={selected}
-                      aria-label={`${result === "W" ? t("table.formW") : result === "L" ? t("table.formL") : t("table.formD")}: ${title}`}
-                      onClick={() => setFormDetail(selected ? null : match.id)}
-                      className={cx(
-                        "grid h-6 w-6 place-items-center rounded text-[10px] font-bold transition-colors duration-[var(--t-fast)]",
-                        selected ? "ring-1 ring-current" : "",
-                        result === "W" ? "bg-pitch/20 text-pitch" : result === "L" ? "bg-danger/20 text-danger" : "bg-ink-3/15 text-ink-3",
-                      )}
-                    >
-                      {result === "W" ? t("table.formWShort") : result === "L" ? t("table.formLShort") : t("table.formDShort")}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <p className="mt-1 min-h-4 text-end text-[10px] text-ink-3">
-              {formTooltip((fixtures.find((match) => match.id === formDetail) ?? formMatches[0]) as ApiMatch)}
-            </p>
-          </div>
-        ) : null}
       </div>
 
       <div className="mt-lg">
