@@ -181,6 +181,7 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
     xl: "h-16 w-16 text-md rounded-md",
   };
   const box = dims[size];
+  const sizePx = ({ xs: 22, sm: 24, md: 36, lg: 48, xl: 64 } as Record<string, number>)[size] ?? 36;
   const [broken, setBroken] = useState(false);
   const [remoteBroken, setRemoteBroken] = useState(false);
   // Crests that arrive over the network otherwise pop in from nothing; fade
@@ -226,6 +227,8 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
           <img
             src={crest.png}
             alt=""
+            width={sizePx}
+            height={sizePx}
             onError={() => setBroken(true)}
             onLoad={() => setLoaded(true)}
             loading="lazy"
@@ -237,6 +240,8 @@ export function TeamBadge({ team, size = "md" }: { team: Team; size?: "sm" | "md
         <img
           src={remote}
           alt=""
+          width={sizePx}
+          height={sizePx}
           onError={() => setRemoteBroken(true)}
           onLoad={() => setLoaded(true)}
           loading="lazy"
@@ -364,6 +369,7 @@ export function PlayerAvatar({
   const [brokenSources, setBrokenSources] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const dims = { sm: "h-8 w-8 text-xs", md: "h-10 w-10 text-xs", lg: "h-12 w-12 text-sm" }[size];
+  const avatarPx = ({ sm: 32, md: 40, lg: 48 } as Record<string, number>)[size] ?? 40;
   // The API selects local before remote; a failed source advances to fallback.
   const candidates = [src, fallbackSrc].filter((candidate): candidate is string => Boolean(candidate));
   const resolved = candidates.find((candidate) => !brokenSources.includes(candidate)) ?? null;
@@ -388,6 +394,8 @@ export function PlayerAvatar({
         <img
           src={resolved}
           alt=""
+          width={avatarPx}
+          height={avatarPx}
           onError={onImageError}
           onLoad={() => setLoaded(true)}
           loading="lazy"
