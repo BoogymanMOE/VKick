@@ -55,8 +55,8 @@ export const COMPETITION_NAMES: Record<string, { en: string; fa: string; de: str
   "tur.1": { en: "Süper Lig", fa: "سوपरلیگ ترکیه", de: "1. Bundesliga" },
   "por.1": { en: "Primeira Liga", fa: "لیگ برتر پرتغال", de: "Bundesliga" },
   "gre.1": { en: "Super League Greece", fa: "سوپر لیگ یونان", de: "Serie A" },
-  "sco.1": { en: "Scottish Premiership", fa: "لیگ برتر اسکاتلند", de: "La Liga" },
-  "bel.1": { en: "Belgian Pro League", fa: "لیگ برتر بلژیک", de: "Premier League" },
+  "sco.1": { en: "Scottish Premiership", fa: "لیگ برتر اسکاتلند", de: "Schottischer Premier League" },
+  "bel.1": { en: "Belgian Pro League", fa: "لیگ برتر بلژیک", de: "Pro League Belgien" },
 };
 
 

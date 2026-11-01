@@ -72,8 +72,12 @@ export function runFaStringsTests(): void {
   // The reviewed competition names are pinned: a rename must show up here and
   // be agreed, not drift in through a data edit.
   const leagues = fs.readFileSync(path.join(ROOT, "src/lib/leagues.ts"), "utf8");
-  assert.ok(leagues.includes('"sco.1": { en: "Scottish Premiership", fa: "لیگ برتر اسکاتلند" }'),
-    "sco.1 Persian name drifted from the reviewed value");
-  assert.ok(leagues.includes('"bel.1": { en: "Belgian Pro League", fa: "لیگ برتر بلژیک" }'),
-    "bel.1 Persian name drifted from the reviewed value");
+  const sco1Expected = '"sco.1": { en: "Scottish Premiership", fa: "لیگ برتر اسکاتلند", de: "Schottischer Premier League" }';
+  const bel1Expected = '"bel.1": { en: "Belgian Pro League", fa: "لیگ برتر بلژیک", de: "Pro League Belgien" }';
+  const sco1Ok = leagues.includes(sco1Expected);
+  const bel1Ok = leagues.includes(bel1Expected);
+  if (!sco1Ok) console.error('[faStrings] sco.1 missing; src/lib/leagues.ts slice near sco.1:\n' + leagues.split('"sco.1"')[1].slice(0, 500).replaceAll('\n', '\\n'));
+  if (!bel1Ok) console.error('[faStrings] bel.1 missing; src/lib/leagues.ts slice near bel.1:\n' + leagues.split('"bel.1"')[1].slice(0, 400).replaceAll('\n', '\\n'));
+  assert.ok(sco1Ok, `sco.1 pinned entry drifted: ${JSON.stringify(sco1Expected)}`);
+  assert.ok(bel1Ok, `bel.1 pinned entry drifted: ${JSON.stringify(bel1Expected)}`);
 }
