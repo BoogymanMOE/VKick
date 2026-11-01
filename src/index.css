@@ -810,23 +810,9 @@
      The keyframe body uses `var(--live)` directly (not color-mix) so Tailwind v4's
      CSS processor keeps the @keyframes block — color-mix() inside keyframe bodies
      is stripped by the processor, which would leave the class animationless. */
-  .timeline-live-pulse {
-    animation: timeline-live-pulse 1.6s var(--ease-out) infinite;
-  }
-  @keyframes timeline-live-pulse {
-    0%, 100% {
-      box-shadow: 0 0 0 0 var(--live);
-    }
-    50% {
-      box-shadow: 0 0 0 6px transparent;
-    }
-  }
+  /* removed: unused .timeline-live-pulse */
 
-  @media (prefers-reduced-motion: reduce) {
-    .timeline-live-pulse {
-      animation: none;
-    }
-  }
+  /* reduced-motion override for .timeline-live-pulse removed with it */
 
   /* Generic panel reveal for expanding sections. */
   .panel-in {
