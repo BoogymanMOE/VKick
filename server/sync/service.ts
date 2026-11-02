@@ -618,12 +618,6 @@ export function startSyncLoop(): void {
       understatRunning = false;
     });
 
-  // Boot repair: make sure no club is left without a squad or a latest
-  // formation on a partially-synced database. Runs in the background.
-  void backfillMissingDataOnBoot().catch((err) =>
-    console.error("[sync] boot backfill error:", String(err)),
-  );
-
   // The live loop: summary of live matches every LIVE_SUMMARY_SECONDS.
   // A plain interval (not cron) because the cadence is env-configurable and
   // cron's finest useful step granularity doesn't fit arbitrary seconds.

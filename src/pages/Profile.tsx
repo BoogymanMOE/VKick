@@ -252,6 +252,7 @@ export default function Profile() {
           />
           <GroupRow label={t("legal.privacyTitle")} onClick={() => navigate(LEGAL_ROUTES.privacy)} />
           <GroupRow label={t("legal.termsTitle")} onClick={() => navigate(LEGAL_ROUTES.terms)} />
+          <GroupRow label="Photo credits" onClick={() => window.open("/faces/credits.json", "_blank", "noopener,noreferrer")} />
         </div>
         {/* Version line: the About prose card is gone; one muted line under
             the group suffices and doesn't compete with the rows. The commit

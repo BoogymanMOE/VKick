@@ -24,6 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdir, writeFile } from "node:fs/promises";
+import sharp from "sharp";
 import { getDb } from "../server/db/index.ts";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -31,11 +32,12 @@ const FACES_DIR = path.join(ROOT, "public", "faces");
 const MANIFEST_PATH = path.join(FACES_DIR, "manifest.json");
 const MAP_PATH = path.join(ROOT, "scripts", "team-qid-map.json");
 const CHECKPOINT_PATH = path.join(ROOT, "scripts", "download-faces-wiki-progress.json");
+const CREDITS_PATH = path.join(FACES_DIR, "credits.json");
 const LEAGUES = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"] as const;
 const UA = "VKickBot/1.0 (contact: github.com/BoogymanMOE/VKick)";
 const FOOTBALL_OCCUPATIONS = new Set(["Q937143", "Q11515143"]);
-const SEARCH_DELAY_MS = 2000;
-const WIKI_API_DELAY_MS = 500;
+const SEARCH_DELAY_MS = 1000;
+const WIKI_API_DELAY_MS = 250;
 const IMAGE_CONCURRENCY = 5;
 const IMAGE_STAGGER_MS = 200;
 
@@ -293,6 +295,34 @@ function isFootballContext(hit: SearchHit, claims: Claims, top5Qids: Set<string>
   return occ || hasTop5 || hasCurrent || descFootball;
 }
 
+async function fetchCredit(url: string): Promise<{ source_url: string; author: string | null; license: string | null }> {
+  const out = { source_url: url, author: null as string | null, license: null as string | null };
+  try {
+    const u = new URL(url);
+    const segments = u.pathname.split("/").filter(Boolean);
+    let filename = segments[segments.length - 1] ?? "";
+    if (/^\\d+px-/i.test(filename) && segments.length >= 2) {
+      filename = segments[segments.length - 2];
+    }
+    filename = decodeURIComponent(filename);
+    if (!filename) return out;
+    const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=File:${encodeURIComponent(filename)}&prop=imageinfo&iiprop=extmetadata&format=json`;
+    const res = await fetch(apiUrl, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20_000) });
+    if (!res.ok) return out;
+    const json = (await res.json()) as any;
+    const pages = json?.query?.pages ?? {};
+    const page = Object.values(pages)[0] as any;
+    const meta = page?.imageinfo?.[0]?.extmetadata ?? {};
+    const artist = meta?.Artist?.value;
+    const license = meta?.LicenseShortName?.value ?? meta?.License?.value ?? meta?.UsageTerms?.value;
+    if (typeof artist === "string") out.author = artist.replace(/<[^>]+>/g, "").trim() || null;
+    if (typeof license === "string") out.license = license.replace(/<[^>]+>/g, "").trim() || null;
+  } catch {
+    // leave nulls
+  }
+  return out;
+}
+
 async function downloadImage(url: string, dest: string, txtDest: string, name: string): Promise<boolean> {
   return pool.run(async () => {
     for (let attempt = 0; attempt <= 2; attempt++) {
@@ -315,7 +345,9 @@ async function downloadImage(url: string, dest: string, txtDest: string, name: s
           await sleep(1000 * (attempt + 1));
           continue;
         }
-        await writeFile(dest, buf);
+        // Resize to max 192px and convert to webp.
+        const webp = await sharp(buf).resize(192, 192, { fit: "inside", withoutEnlargement: true }).webp({ quality: 80 }).toBuffer();
+        await writeFile(dest, webp);
         const rtl = isRtl(name);
         const content = (rtl ? "\uFEFF" : "") + name + (rtl ? "\n" : "");
         await writeFile(txtDest, content, "utf8");
@@ -488,12 +520,13 @@ async function main(): Promise<void> {
   const ambiguousSample: Array<{ espn_id: string; name: string; team: string }> = [];
 
   const matchedIds = new Set<string>();
+  const creditPromises: Array<Promise<{ player_id: string; source_url: string; author: string | null; license: string | null }>> = [];
   const startedAt = Date.now();
 
   for (let i = 0; i < players.length; i++) {
     const player = players[i];
     const espnId = player.id;
-    const dest = path.join(FACES_DIR, `${espnId}.png`);
+    const dest = path.join(FACES_DIR, `${espnId}.webp`);
     const txtDest = path.join(FACES_DIR, `${espnId}.txt`);
 
     // resumability: skip existing
@@ -549,6 +582,7 @@ async function main(): Promise<void> {
               matchedIds.add(espnId);
               downloaded += 1;
               resolved = true;
+              creditPromises.push(fetchCredit(imgUrl).then((c) => ({ player_id: espnId, ...c })));
             } else {
               missing += 1;
               if (missingSample.length < 10) missingSample.push({ espn_id: espnId, name: chosen.title, team: tName });
@@ -570,11 +604,13 @@ async function main(): Promise<void> {
       const qid = result.qid;
 
       if (p18) {
-        const ok = await downloadImage(commonsDownloadUrl(wikiFilenameFromImageValue(p18)), dest, txtDest, wikiName);
+        const p18Url = commonsDownloadUrl(wikiFilenameFromImageValue(p18));
+        const ok = await downloadImage(p18Url, dest, txtDest, wikiName);
         if (ok) {
           wikidataP18Count += 1;
           matchedIds.add(espnId);
           downloaded += 1;
+          creditPromises.push(fetchCredit(p18Url).then((c) => ({ player_id: espnId, ...c })));
         } else {
           missing += 1;
           if (missingSample.length < 10) missingSample.push({ espn_id: espnId, name: wikiName, team: tName });
@@ -593,6 +629,7 @@ async function main(): Promise<void> {
                 matchedIds.add(espnId);
                 downloaded += 1;
                 resolved = true;
+                creditPromises.push(fetchCredit(imgUrl).then((c) => ({ player_id: espnId, ...c })));
               } else {
                 missing += 1;
                 if (missingSample.length < 10) missingSample.push({ espn_id: espnId, name: title, team: tName });
@@ -618,6 +655,21 @@ async function main(): Promise<void> {
     }
 
     await sleep(SEARCH_DELAY_MS);
+  }
+
+  // resolve credits (rate-limited batches)
+  const credits: Array<{ player_id: string; source_url: string; author: string | null; license: string | null }> = [];
+  for (let i = 0; i < creditPromises.length; i += 20) {
+    const batch = creditPromises.slice(i, i + 20);
+    const results = await Promise.allSettled(batch);
+    for (const r of results) {
+      if (r.status === "fulfilled") credits.push(r.value);
+    }
+  }
+  try {
+    await writeFile(CREDITS_PATH, JSON.stringify(credits, null, 2) + "\\n");
+  } catch (e) {
+    console.error("Failed to write credits:", e);
   }
 
   // final disk stats for matched
