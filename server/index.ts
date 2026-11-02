@@ -31,6 +31,7 @@ import { getDb, get } from "./db/index.js";
 import { APP_BUILT_AT, APP_COMMIT } from "./appInfo.js";
 import { pruneFootballDetail, pruneSessions, logCapKb, RotatingLogger } from "./db/retention.js";
 import { backfillMissingDataOnBoot, backfillSeasonResults, startSyncLoop, syncSeasonFull } from "./sync/service.js";
+import { runNightlyBackup } from "./backupSchedule.js";
 import { startBot } from "./bot/index.js";
 import { startResolverLoop } from "./predictions/resolver.js";
 import { startBackupLoop } from "./backupSchedule.js";
@@ -53,6 +54,29 @@ import { apiNotFound, apiErrorHandler } from "./http/middleware.js";
 
 const app = express();
 const db = getDb();
+
+// Backup-on-first-request-after-midnight: free Render sleeps overnight, so the
+// cron schedule may never fire. Trigger a snapshot the first time any request
+// arrives more than 24h after the last one.
+let lastBackupAt = Date.now();
+app.use((req, res, next) => {
+  const now = Date.now();
+  if (now - lastBackupAt > 24 * 60 * 60 * 1000) {
+    lastBackupAt = now;
+    const dbPath = process.env.SQLITE_PATH ?? "./data/matchday.db";
+    const dir = process.env.BACKUP_DIR ?? "./backups";
+    const keep = Number(process.env.BACKUP_KEEP ?? "7");
+    setImmediate(() => {
+      try {
+        const r = runNightlyBackup(dbPath, dir, keep, new Date(now));
+        console.log(`[backup] on-request snapshot: ${r.file} (${r.bytes} bytes)`);
+      } catch (err) {
+        console.error("[backup] on-request snapshot failed:", String(err).slice(0, 200));
+      }
+    });
+  }
+  next();
+});
 
 // Restore-on-boot: if DB is empty, fetch latest snapshot from GitHub releases.
 async function restoreFromGitHubIfEmpty(): Promise<void> {
