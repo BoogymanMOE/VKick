@@ -1,0 +1,1522 @@
+153613	Matt Crooks	Hull City	eng.1	no football page
+168424	John Egan	Hull City	eng.1	no football page
+193010	Oliver McBurnie	Hull City	eng.1	no football page
+243576	Ryan Giles	Hull City	eng.1	no football page
+249851	Regan Slater	Hull City	eng.1	no football page
+306055	Eliot Matazo	Hull City	eng.1	no football page
+308216	Darko Gyabi	Hull City	eng.1	no football page
+310599	Tim Iroegbunam	Hull City	eng.1	no football page
+311173	Brooke Norton-Cuffy	Hull City	eng.1	no football page
+326187	Charlie Hughes	Hull City	eng.1	no football page
+328740	Óscar Zambrano	Hull City	eng.1	no football page
+354149	Jens Hjerto Dahl	Hull City	eng.1	no football page
+356212	Nobel Mendy	Hull City	eng.1	no football page
+366363	Ilyas Ansah	Hull City	eng.1	no football page
+387657	Christos Mouzakitis	Hull City	eng.1	no football page
+414372	Archie Howard	Hull City	eng.1	no football page
+132659	Pascal Gross	Brighton & Hove Albion	eng.1	no football page
+182573	Steven Hall	Brighton & Hove Albion	eng.1	no football page
+192278	Diego Gómez	Brighton & Hove Albion	eng.1	no football page
+238318	Ferdi Kadioglu	Brighton & Hove Albion	eng.1	no football page
+248761	Tom McGill	Brighton & Hove Albion	eng.1	no football page
+327170	Amario Cozier-Duberry	Brighton & Hove Albion	eng.1	no football page
+357165	Stefanos Tzimas	Brighton & Hove Albion	eng.1	no football page
+359097	Malick Yalcouyé	Brighton & Hove Albion	eng.1	no football page
+359400	Ibrahim Osman	Brighton & Hove Albion	eng.1	no football page
+364962	Luka Vuskovic	Brighton & Hove Albion	eng.1	no football page
+387489	Chema Andrés	Brighton & Hove Albion	eng.1	no football page
+387655	Charalambos Kostoulas	Brighton & Hove Albion	eng.1	no football page
+399697	Nehemiah Oriola	Brighton & Hove Albion	eng.1	no football page
+407059	Zadok Yohanna	Brighton & Hove Albion	eng.1	no football page
+411697	Shane Nti	Brighton & Hove Albion	eng.1	no football page
+413274	Younes Ibrahim	Brighton & Hove Albion	eng.1	no football page
+228547	Mamadou Sangare	Brentford	eng.1	no football page
+231049	Fábio Carvalho	Brentford	eng.1	no football page
+246309	Josh Dasilva	Brentford	eng.1	no football page
+249527	Ellery Balcombe	Brentford	eng.1	no football page
+342029	Yehor Yarmoliuk	Brentford	eng.1	no football page
+362203	Kim Ji-Soo	Brentford	eng.1	no football page
+362266	Benjamin Fredrick	Brentford	eng.1	no football page
+394418	Kaye Furo	Brentford	eng.1	no football page
+102368	Evanilson	AFC Bournemouth	eng.1	no football page
+122268	Adam Smith	AFC Bournemouth	eng.1	no football page
+223452	Lewis Cook	AFC Bournemouth	eng.1	no football page
+279155	James Hill	AFC Bournemouth	eng.1	no football page
+289824	Djordje Petrovic	AFC Bournemouth	eng.1	no football page
+291269	William Dennis	AFC Bournemouth	eng.1	no football page
+303804	Juanlu Sanchez	AFC Bournemouth	eng.1	no football page
+312182	Daniel Jebbison	AFC Bournemouth	eng.1	no football page
+3130136	Mack Allan	AFC Bournemouth	eng.1	no football page
+314790	Alex Scott	AFC Bournemouth	eng.1	no football page
+353151	Álvaro Rodríguez	AFC Bournemouth	eng.1	no football page
+357719	Rayan	AFC Bournemouth	eng.1	no football page
+361809	Junior Kroupi	AFC Bournemouth	eng.1	no football page
+377736	Veljko Milosavljevic	AFC Bournemouth	eng.1	no football page
+194801	Harry Wilson	Leeds United	eng.1	no football page
+30116	Ilia Gruev	Leeds United	eng.1	no football page
+318390	Tarik Muharemovic	Leeds United	eng.1	no football page
+346662	Jean-Mattéo Bahoya	Leeds United	eng.1	no football page
+346913	Darryl Ombang	Leeds United	eng.1	no football page
+407583	Rory Mahady	Leeds United	eng.1	no football page
+407584	Rhys Chadwick	Leeds United	eng.1	no football page
+408489	Alfie Cresswell	Leeds United	eng.1	no football page
+408959	Jayden Lienou	Leeds United	eng.1	no football page
+381341	Ceadach O’Neill	Arsenal	eng.1	no football page
+390975	Andre Annous	Arsenal	eng.1	no football page
+393424	Theo Julienne	Arsenal	eng.1	no football page
+399007	Maalik Hashi	Arsenal	eng.1	no football page
+399893	Marcell Washington	Arsenal	eng.1	no football page
+399894	Ife Ibrahim	Arsenal	eng.1	no football page
+400284	Marli Salmon	Arsenal	eng.1	no football page
+205081	Jack Fletcher	Manchester United	eng.1	no football page
+289155	Benjamin Sesko	Manchester United	eng.1	no football page
+325550	Dermot Mee	Manchester United	eng.1	no football page
+358180	Shea Lacey	Manchester United	eng.1	no football page
+381055	Daniel Armer	Manchester United	eng.1	no football page
+386199	Jaydan Kamason	Manchester United	eng.1	no football page
+393138	Tyler Fletcher	Manchester United	eng.1	no football page
+397881	Tynan Thompson	Manchester United	eng.1	no football page
+308979	Amar Dedic	Newcastle United	eng.1	no football page
+319267	Lukás Hornícek	Newcastle United	eng.1	no football page
+323986	Nico González	Newcastle United	eng.1	no football page
+346776	Miodrag Pivas	Newcastle United	eng.1	no football page
+347523	Ewen Jaouen	Newcastle United	eng.1	no football page
+353304	Aidan Harris	Newcastle United	eng.1	no football page
+374219	Leo Shahar	Newcastle United	eng.1	no football page
+385593	Vakho Salia	Newcastle United	eng.1	no football page
+414116	Kyran Thompson	Newcastle United	eng.1	no football page
+416448	Mason Miley	Newcastle United	eng.1	no football page
+418769	Michael Mills	Newcastle United	eng.1	no football page
+235319	James Wright	Aston Villa	eng.1	no football page
+301524	João Gomes	Aston Villa	eng.1	no football page
+349075	Triston Rowe	Aston Villa	eng.1	no football page
+366248	George Hemmings	Aston Villa	eng.1	no football page
+380307	Luka Lynch	Aston Villa	eng.1	no football page
+382839	Alysson	Aston Villa	eng.1	no football page
+386992	Johan Manzambi	Aston Villa	eng.1	no football page
+392682	Modou Cissé	Aston Villa	eng.1	no football page
+393425	Bradley Burrowes	Aston Villa	eng.1	no football page
+409310	Owen Asemota	Aston Villa	eng.1	no football page
+284960	João Pedro	Chelsea	eng.1	no football page
+286774	Gaga Slonina	Chelsea	eng.1	no football page
+300331	Pep Chavarría	Chelsea	eng.1	no football page
+308217	Romeo Lavia	Chelsea	eng.1	no football page
+339879	Jamie Gittens	Chelsea	eng.1	no football page
+362486	Marco Palestra	Chelsea	eng.1	no football page
+363218	Aaron Anselmino	Chelsea	eng.1	no football page
+368317	Josh Acheampong	Chelsea	eng.1	no football page
+376274	Geovany Quenda	Chelsea	eng.1	no football page
+376481	Estêvão	Chelsea	eng.1	no football page
+399562	Mahdi Nicoll-Jazuli	Chelsea	eng.1	no football page
+399564	Reggie Watson	Chelsea	eng.1	no football page
+408508	Olutayo Subuloye	Chelsea	eng.1	no football page
+270821	Ronald Araujo	Liverpool	eng.1	no football page
+289840	Vitezslav Jaros	Liverpool	eng.1	no football page
+326230	James McConnell	Liverpool	eng.1	no football page
+354737	Jayden Danns	Liverpool	eng.1	no football page
+379855	Wellity Lucky	Liverpool	eng.1	no football page
+380082	Giovanni Leoni	Liverpool	eng.1	no football page
+380624	Michael Laffey	Liverpool	eng.1	no football page
+395890	Joshua Lambie	Liverpool	eng.1	no football page
+397545	Víctor Muñoz	Liverpool	eng.1	no football page
+236211	Jack Whittaker	Sunderland	eng.1	no football page
+243578	Jenson Arron Jones	Sunderland	eng.1	no football page
+282645	Danny Ballard	Sunderland	eng.1	no football page
+3111009	Felix Scott	Sunderland	eng.1	no football page
+3111010	Tom Proctor	Sunderland	eng.1	no football page
+387460	Tymur Tutierov	Sunderland	eng.1	no football page
+392107	Trey Ogunsuyi	Sunderland	eng.1	no football page
+417825	Jocelin Ta Bi	Sunderland	eng.1	no football page
+48106	Juan Angulo	Sunderland	eng.1	no football page
+304470	Sávio	Tottenham Hotspur	eng.1	no football page
+324393	Antonín Kinsky	Tottenham Hotspur	eng.1	no football page
+372016	Callum Olusesi	Tottenham Hotspur	eng.1	no football page
+6327	Ben Davies	Tottenham Hotspur	eng.1	no football page
+148515	Tom King	Everton	eng.1	no football page
+276220	James Garner	Everton	eng.1	no football page
+301166	Thierno Barry	Everton	eng.1	no football page
+311963	Merlin Röhl	Everton	eng.1	no football page
+340640	Tyler Dibling	Everton	eng.1	no football page
+367559	Braiden Graham	Everton	eng.1	no football page
+378458	Harrison Armstrong	Everton	eng.1	no football page
+392052	Harvey Foster	Everton	eng.1	no football page
+410322	Malik Olayiwola	Everton	eng.1	no football page
+4946	Michael Keane	Everton	eng.1	no football page
+12172	César Palacios	Fulham	eng.1	no football page
+301525	Rodrigo Muniz	Fulham	eng.1	no football page
+313230	David Affengruber	Fulham	eng.1	no football page
+330764	Kevin	Fulham	eng.1	no football page
+362553	Alex Borto	Fulham	eng.1	no football page
+365351	Chibuzo Nwoko	Fulham	eng.1	no football page
+376050	Bradley Slade	Fulham	eng.1	no football page
+392697	Macauley Zepa	Fulham	eng.1	no football page
+409541	Josh King	Fulham	eng.1	no football page
+87297	Gonzalo García	Fulham	eng.1	no football page
+139744	Jack Taylor	Ipswich Town	eng.1	no football page
+183326	Cameron Humphreys	Ipswich Town	eng.1	no football page
+20975	Julio Enciso	Ipswich Town	eng.1	no football page
+222300	Sasa Lukic	Ipswich Town	eng.1	no football page
+243648	Cedric Kipre	Ipswich Town	eng.1	no football page
+256607	Florentino	Ipswich Town	eng.1	no football page
+269343	Jack Clarke	Ipswich Town	eng.1	no football page
+308891	Anis Mehmeti	Ipswich Town	eng.1	no football page
+3132863	Matthew Charles Compton	Ipswich Town	eng.1	no football page
+318680	Fatawu Issahaku	Ipswich Town	eng.1	no football page
+154595	Mateo Kovacic	Manchester City	eng.1	no football page
+299910	Josko Gvardiol	Manchester City	eng.1	no football page
+3129530	Dexter Oliver	Manchester City	eng.1	no football page
+361355	Claudio Echeverri	Manchester City	eng.1	no football page
+382966	Allan Elias	Manchester City	eng.1	no football page
+390094	Kaden Braithwaite	Manchester City	eng.1	no football page
+395463	Ryan McAidoo	Manchester City	eng.1	no football page
+410320	Floyd Samba	Manchester City	eng.1	no football page
+413855	Max-Edgar Chabot	Manchester City	eng.1	no football page
+272585	Chris Richards	Crystal Palace	eng.1	no football page
+297370	Yéremy Pino	Crystal Palace	eng.1	no football page
+3114844	Lucca Benetton	Crystal Palace	eng.1	no football page
+358084	Caleb Kporha	Crystal Palace	eng.1	no football page
+374519	Zavier Gozo	Crystal Palace	eng.1	no football page
+380963	Sebastian Williams	Crystal Palace	eng.1	no football page
+388605	Honest Ahanor	Crystal Palace	eng.1	no football page
+400110	George King	Crystal Palace	eng.1	no football page
+403867	Dean Benamar	Crystal Palace	eng.1	no football page
+143007	Daniel Bentley	Coventry City	eng.1	no football page
+169619	Ben Wilson	Coventry City	eng.1	no football page
+206172	Jay Da Silva	Coventry City	eng.1	no football page
+236912	Gustavo Hamer	Coventry City	eng.1	no football page
+240495	Brandon Thomas-Asante	Coventry City	eng.1	no football page
+246954	Ephron Mason-Clark	Coventry City	eng.1	no football page
+277614	Josh Eccles	Coventry City	eng.1	no football page
+281139	Milan van Ewijk	Coventry City	eng.1	no football page
+294308	Kaine Kesler Hayden	Coventry City	eng.1	no football page
+307069	Carl Rushworth	Coventry City	eng.1	no football page
+319404	Aurèle Amenda	Coventry City	eng.1	no football page
+134190	Chris Wood	Nottingham Forest	eng.1	no football page
+213718	Ibrahim Sangaré	Nottingham Forest	eng.1	no football page
+233241	John Victor	Nottingham Forest	eng.1	no football page
+238990	Nikola Milenkovic	Nottingham Forest	eng.1	no football page
+254118	Nicolás Domínguez	Nottingham Forest	eng.1	no football page
+287869	Igor Jesus	Nottingham Forest	eng.1	no football page
+338876	Jair Paula	Nottingham Forest	eng.1	no football page
+348303	Zach Abbott	Nottingham Forest	eng.1	no football page
+196200	Lucas Hernández	Paris Saint-Germain	fra.1	no football page
+248699	Matvei Safonov	Paris Saint-Germain	fra.1	no football page
+290591	Nuno Mendes	Paris Saint-Germain	fra.1	no football page
+3143886	Adam Mouak	Paris Saint-Germain	fra.1	no football page
+403419	Quentin Ndjantou	Paris Saint-Germain	fra.1	no football page
+403578	Dro Fernández	Paris Saint-Germain	fra.1	no football page
+403981	David Boly	Paris Saint-Germain	fra.1	no football page
+231778	Gaetan Perrin	Lille	fra.1	no football page
+255780	Arnaud Bodart	Lille	fra.1	no football page
+301648	Orlando Gill	Lille	fra.1	no football page
+304011	Maurits Kjaergaard	Lille	fra.1	no football page
+337855	Basar Önal	Lille	fra.1	no football page
+340900	Alexsandro	Lille	fra.1	no football page
+345988	Ngal'ayel Mukau	Lille	fra.1	no football page
+355971	Ethan Mbappé	Lille	fra.1	no football page
+358999	Hamza Igmane	Lille	fra.1	no football page
+387346	Loun Srdanovic	Lille	fra.1	no football page
+393321	Isaac Cossier	Lille	fra.1	no football page
+400352	Soriba Diaoune	Lille	fra.1	no football page
+408358	Thomas Sajous	Lille	fra.1	no football page
+408359	Maxima Goffi	Lille	fra.1	no football page
+415421	Zadig Lanssade	Lille	fra.1	no football page
+417256	Matah Yondjio	Lille	fra.1	no football page
+285088	Abner	Lyon	fra.1	no football page
+305545	Pavel Sulc	Lyon	fra.1	no football page
+320945	Felix Bacher	Lyon	fra.1	no football page
+341375	Julien Duranville	Lyon	fra.1	no football page
+362971	Justin Bengui Joao	Lyon	fra.1	no football page
+364589	Mohamed Ouédraogo	Lyon	fra.1	no football page
+370758	Zachary Athekame	Lyon	fra.1	no football page
+379066	Kail Boudache	Lyon	fra.1	no football page
+384990	Yvann Konan	Lyon	fra.1	no football page
+402948	Mathys De Carvalho	Lyon	fra.1	no football page
+402949	Alejandro Rodríguez	Lyon	fra.1	no football page
+403110	Noham Kamara	Lyon	fra.1	no football page
+403421	Matthias Da Silva	Lyon	fra.1	no football page
+403842	Rémi Himbert	Lyon	fra.1	no football page
+408345	Khalis Merah	Lyon	fra.1	no football page
+408362	Tiago Manuel Gonçalves Silva	Lyon	fra.1	no football page
+415054	Adil Hamdani	Lyon	fra.1	no football page
+419943	Steeve Kango	Lyon	fra.1	no football page
+5325687	Angel Daniel Garcia	Lyon	fra.1	no football page
+5327620	Cluver Sambi Mbungu	Lyon	fra.1	no football page
+190806	Przemyslaw Frankowski	Stade Rennais	fra.1	no football page
+217668	Nicolas Lemaitre	Stade Rennais	fra.1	no football page
+243844	Sebastian Szymanski	Stade Rennais	fra.1	no football page
+250758	Bryan Reynolds	Stade Rennais	fra.1	no football page
+257489	Mousa Al-Tamari	Stade Rennais	fra.1	no football page
+323850	Esteban Lepaul	Stade Rennais	fra.1	no football page
+332862	Eliezer Mayenda	Stade Rennais	fra.1	no football page
+355982	Djaoui Cissé	Stade Rennais	fra.1	no football page
+372260	Mahamadou Nagida	Stade Rennais	fra.1	no football page
+398977	Henrick Do Marcolino	Stade Rennais	fra.1	no football page
+401410	Gonçalo Oliveira	Stade Rennais	fra.1	no football page
+414191	Kilian Belazzoug	Stade Rennais	fra.1	no football page
+415193	Elias Legendre	Stade Rennais	fra.1	no football page
+112988	Michel Diaz	Troyes	fra.1	no football page
+270173	Antoine Mille	Troyes	fra.1	no football page
+283692	Alexandre Philiponeau	Troyes	fra.1	no football page
+286972	Iron Gomis	Troyes	fra.1	no football page
+287514	Timothé Nkada	Troyes	fra.1	no football page
+287576	Paolo Gozzi Iweru	Troyes	fra.1	no football page
+304898	Ismael Boura	Troyes	fra.1	no football page
+305693	Jeremy Le Douaron	Troyes	fra.1	no football page
+3129214	Yacouba Koné	Troyes	fra.1	no football page
+3131916	Idrissa Soukouna	Troyes	fra.1	no football page
+3139430	Enisio Carneiro	Troyes	fra.1	no football page
+3140905	Lassana Simakha	Troyes	fra.1	no football page
+323058	Dermane Karim	Troyes	fra.1	no football page
+334281	Lucas Maronnier	Troyes	fra.1	no football page
+371562	Yvann Titi	Troyes	fra.1	no football page
+403998	Christ Batola	Troyes	fra.1	no football page
+408779	Roman Murcy	Troyes	fra.1	no football page
+408780	Anis Ouzenadji	Troyes	fra.1	no football page
+414398	Noah Donkor	Troyes	fra.1	no football page
+186306	Mohamed Coulibaly	AJ Auxerre	fra.1	no football page
+214305	Assane Dioussé	AJ Auxerre	fra.1	no football page
+243748	Danny Namaso	AJ Auxerre	fra.1	no football page
+252136	Sekou Fofana	AJ Auxerre	fra.1	no football page
+255625	Thelonius Bair	AJ Auxerre	fra.1	no football page
+268591	Romain Faivre	AJ Auxerre	fra.1	no football page
+302862	Sinaly Diomande	AJ Auxerre	fra.1	no football page
+304212	Josué Casimir	AJ Auxerre	fra.1	no football page
+310134	Fredrik Oppegard	AJ Auxerre	fra.1	no football page
+3131801	Salimou Danfakha	AJ Auxerre	fra.1	no football page
+3145596	Youssef Khoudda	AJ Auxerre	fra.1	no football page
+323175	Lasso Coulibaly	AJ Auxerre	fra.1	no football page
+335320	Lamine Sy	AJ Auxerre	fra.1	no football page
+345926	Mamadou Diop	AJ Auxerre	fra.1	no football page
+349185	Remy Labeau Lascary	AJ Auxerre	fra.1	no football page
+359360	Arthur Piedfort	AJ Auxerre	fra.1	no football page
+362476	Christ Makosso	AJ Auxerre	fra.1	no football page
+379070	Rayan Mandengue	AJ Auxerre	fra.1	no football page
+392126	Aristide Zossou	AJ Auxerre	fra.1	no football page
+400649	Wei Xiangxin	AJ Auxerre	fra.1	no football page
+403125	Telli Siwe	AJ Auxerre	fra.1	no football page
+404532	Elikya Legros	AJ Auxerre	fra.1	no football page
+409261	Louis Mezerette	AJ Auxerre	fra.1	no football page
+409262	Tidiane Devernois	AJ Auxerre	fra.1	no football page
+409263	Ryan Rodin	AJ Auxerre	fra.1	no football page
+410797	Alvin Petit Dol	AJ Auxerre	fra.1	no football page
+414184	Yvan Zaddy	AJ Auxerre	fra.1	no football page
+415461	Mamoudou Cissokho	AJ Auxerre	fra.1	no football page
+416458	Lamfia Dioubaté	AJ Auxerre	fra.1	no football page
+208518	Mamadou Coulibaly	AS Monaco	fra.1	no football page
+258875	Philipp Köhn	AS Monaco	fra.1	no football page
+299566	Oumar Konaté	AS Monaco	fra.1	no football page
+310640	Vanderson	AS Monaco	fra.1	no football page
+3124793	Aymen Assab	AS Monaco	fra.1	no football page
+3124794	Safouane Benzahra	AS Monaco	fra.1	no football page
+316559	Názinho	AS Monaco	fra.1	no football page
+356925	Stanis Idumbo	AS Monaco	fra.1	no football page
+362288	Sadibou Sané	AS Monaco	fra.1	no football page
+365789	Paris Brunner	AS Monaco	fra.1	no football page
+388328	Samuel Nibombé	AS Monaco	fra.1	no football page
+388329	Jules Stawiecki	AS Monaco	fra.1	no football page
+411027	Ilane Touré	AS Monaco	fra.1	no football page
+411449	Pape Cabral	AS Monaco	fra.1	no football page
+101451	Régis Gurtner	Lens	fra.1	no football page
+288481	Michal Skoras	Lens	fra.1	no football page
+297385	Jhoanner Chavez	Lens	fra.1	no football page
+308246	Abdallah Sima	Lens	fra.1	no football page
+333228	Junior Kadile	Lens	fra.1	no football page
+341720	Yassine Titraoui	Lens	fra.1	no football page
+350577	Pierre Ganiou	Lens	fra.1	no football page
+364180	Franjo Ivanovic	Lens	fra.1	no football page
+387044	Nidal Celik	Lens	fra.1	no football page
+387061	Andrija Bulatovic	Lens	fra.1	no football page
+401306	Souleymane Sagnan	Lens	fra.1	no football page
+403417	Ilan Jourdren	Lens	fra.1	no football page
+412217	Mezian Soares	Lens	fra.1	no football page
+159051	Emerson	Marseille	fra.1	no football page
+276160	Faris Moumbagna	Marseille	fra.1	no football page
+280650	Théo Vermot	Marseille	fra.1	no football page
+343114	Tochukwu Nnadi	Marseille	fra.1	no football page
+404675	Ibrahim Gomis	Marseille	fra.1	no football page
+411418	Tadjidine Mmadi	Marseille	fra.1	no football page
+414465	Mathis Clement	Marseille	fra.1	no football page
+414467	Rayan Bang Na	Marseille	fra.1	no football page
+418016	Anis Doubal	Marseille	fra.1	no football page
+421851	Nouhoum Kamissoko	Marseille	fra.1	no football page
+421852	Hilan Slimani	Marseille	fra.1	no football page
+421853	Ugo El Kadmiri	Marseille	fra.1	no football page
+422095	Kelyann Bezahaf	Marseille	fra.1	no football page
+5325768	Antoine Dominique Henri Valero	Marseille	fra.1	no football page
+252740	Aron Donnum	Toulouse	fra.1	no football page
+290030	Abu Francis	Toulouse	fra.1	no football page
+306664	Casper Tengstedt	Toulouse	fra.1	no football page
+3140851	Théo Collin	Toulouse	fra.1	no football page
+322205	Mario Sauer	Toulouse	fra.1	no football page
+362411	David Odogu	Toulouse	fra.1	no football page
+371559	Mathys Niflore	Toulouse	fra.1	no football page
+380400	Julián Vignolo	Toulouse	fra.1	no football page
+385000	Christ Tapé	Toulouse	fra.1	no football page
+386251	Mathis Saka	Toulouse	fra.1	no football page
+396620	Naime Said Mchindra	Toulouse	fra.1	no football page
+397384	Ismail Diallo	Toulouse	fra.1	no football page
+399428	Sion Oppong	Toulouse	fra.1	no football page
+403310	Ilyas Azizi	Toulouse	fra.1	no football page
+408251	Alexis Vossah	Toulouse	fra.1	no football page
+408252	Seny Koumbassa	Toulouse	fra.1	no football page
+422969	Aymen Ammaouch	Toulouse	fra.1	no football page
+77072	Mark McKenzie	Toulouse	fra.1	no football page
+224074	Karim Coulibaly	Strasbourg	fra.1	no football page
+290230	Giovanni Reyna	Strasbourg	fra.1	no football page
+304256	Filip Jørgensen	Strasbourg	fra.1	no football page
+305935	Ismael Doukoure	Strasbourg	fra.1	no football page
+3117410	Jacobo Ortega Conde	Strasbourg	fra.1	no football page
+3138939	Kingsley Olufade	Strasbourg	fra.1	no football page
+331082	Omari Kellyman	Strasbourg	fra.1	no football page
+335877	Mateo Del Blanco	Strasbourg	fra.1	no football page
+347919	Maximillian Oyedele	Strasbourg	fra.1	no football page
+350501	Samuel Amo-Ameyaw	Strasbourg	fra.1	no football page
+353378	Pape Diop	Strasbourg	fra.1	no football page
+359934	Lucas Høgsberg	Strasbourg	fra.1	no football page
+362794	Conrad Harder	Strasbourg	fra.1	no football page
+368325	Diogo Sousa	Strasbourg	fra.1	no football page
+371556	Yaya Diémé	Strasbourg	fra.1	no football page
+371973	Milosz Piekutowski	Strasbourg	fra.1	no football page
+374221	Genesis Antwi	Strasbourg	fra.1	no football page
+377782	Oso	Strasbourg	fra.1	no football page
+380238	Benjamin Brantlind	Strasbourg	fra.1	no football page
+388392	Fabio Baldé	Strasbourg	fra.1	no football page
+401738	Ghianny Kodia	Strasbourg	fra.1	no football page
+403982	Hermann Diandaga	Strasbourg	fra.1	no football page
+408136	Gabriel Kerckaert	Strasbourg	fra.1	no football page
+418506	Tyrese Noubissie	Strasbourg	fra.1	no football page
+418786	Yoann Becker	Strasbourg	fra.1	no football page
+176816	Morgan Sanson	Nice	fra.1	no football page
+232670	Issiaga Camara	Nice	fra.1	no football page
+236957	Mohamed Abdelmoneim	Nice	fra.1	no football page
+282597	Isak Jansson	Nice	fra.1	no football page
+282676	Nathan N'Goumou	Nice	fra.1	no football page
+298030	Niels Nkounkou	Nice	fra.1	no football page
+305669	Alidu Seidu	Nice	fra.1	no football page
+3117261	Xavier Junior Mandza Tsiendi	Nice	fra.1	no football page
+3121791	Martin Ponsot	Nice	fra.1	no football page
+3127048	Nassim Laarej	Nice	fra.1	no football page
+3131927	Aboulaye Camara	Nice	fra.1	no football page
+3135995	Djelan Morana	Nice	fra.1	no football page
+357425	Djibril Coulibaly	Nice	fra.1	no football page
+376344	Hamza Koutoune	Nice	fra.1	no football page
+399717	Zoumana Diallo	Nice	fra.1	no football page
+404832	Brad-Hamilton Mantsounga	Nice	fra.1	no football page
+416460	Everton Pereira	Nice	fra.1	no football page
+233702	Dame Guèye	Le Mans	fra.1	no football page
+262482	Lucas Buades	Le Mans	fra.1	no football page
+268720	Louis Mafouta	Le Mans	fra.1	no football page
+273021	Daouda Traoré	Le Mans	fra.1	no football page
+277526	Edwin Quarshie	Le Mans	fra.1	no football page
+279137	Brahimi Bilal	Le Mans	fra.1	no football page
+287606	Alexandre Lauray	Le Mans	fra.1	no football page
+299457	Ewan Hatfout	Le Mans	fra.1	no football page
+30302	Djibril Sidibé	Le Mans	fra.1	no football page
+310024	Raúl Torrente	Le Mans	fra.1	no football page
+315460	Jean Vercruysse	Le Mans	fra.1	no football page
+331636	Lucas Calodat	Le Mans	fra.1	no football page
+332827	Milan Robin	Le Mans	fra.1	no football page
+344518	Augustin Delbecque	Le Mans	fra.1	no football page
+357006	Erwan Colas	Le Mans	fra.1	no football page
+393721	Harold Voyer	Le Mans	fra.1	no football page
+397317	Théo Eyoum	Le Mans	fra.1	no football page
+397327	Martin Rossignol	Le Mans	fra.1	no football page
+397394	Noa Boissé	Le Mans	fra.1	no football page
+402816	João Almeida	Le Mans	fra.1	no football page
+407614	William Harhouz	Le Mans	fra.1	no football page
+417822	Enzo Vágner	Le Mans	fra.1	no football page
+418536	Adil Bourabaa	Le Mans	fra.1	no football page
+5326304	Lenny Videira	Le Mans	fra.1	no football page
+137397	Formose Mendy	Lorient	fra.1	no football page
+258100	Tosin Aiyegun	Lorient	fra.1	no football page
+297345	Souleymane Faye	Lorient	fra.1	no football page
+306535	Isaak Touré	Lorient	fra.1	no football page
+309651	Isak Jensen	Lorient	fra.1	no football page
+3145437	Samir Said Haribou	Lorient	fra.1	no football page
+315215	Noah Cadiou	Lorient	fra.1	no football page
+315454	Noah Mbamba	Lorient	fra.1	no football page
+324565	Ibrahima Baldé	Lorient	fra.1	no football page
+344634	Srdjan Kuzmic	Lorient	fra.1	no football page
+345529	Mohamed Bamba	Lorient	fra.1	no football page
+345563	Nathaniel Adjei	Lorient	fra.1	no football page
+355870	Arthur Avom	Lorient	fra.1	no football page
+368592	Nosa Obaretin	Lorient	fra.1	no football page
+381626	Arsène Kouassi	Lorient	fra.1	no football page
+397392	Gabin Bernardeau	Lorient	fra.1	no football page
+416429	Mamadou Koné	Lorient	fra.1	no football page
+417372	Daniel Semedo	Lorient	fra.1	no football page
+138563	Vincent Sasso	Le Havre AC	fra.1	no football page
+243514	Josh Maja	Le Havre AC	fra.1	no football page
+246847	Ahmed Touba	Le Havre AC	fra.1	no football page
+258270	Ayumu Seko	Le Havre AC	fra.1	no football page
+285975	Félix Mambimbi	Le Havre AC	fra.1	no football page
+291982	Rassoul Ndiaye	Le Havre AC	fra.1	no football page
+297167	Timothee Pembélé	Le Havre AC	fra.1	no football page
+3132216	Djibril Ouziad	Le Havre AC	fra.1	no football page
+3140852	Hakim Dongopandji	Le Havre AC	fra.1	no football page
+319286	Mathéo Bodmer	Le Havre AC	fra.1	no football page
+325043	Kaito Mizuta	Le Havre AC	fra.1	no football page
+346519	Simon Ebonog	Le Havre AC	fra.1	no football page
+371557	Ismail Bouneb	Le Havre AC	fra.1	no football page
+371558	Joan Tincres	Le Havre AC	fra.1	no football page
+386384	Yanis Zouaoui	Le Havre AC	fra.1	no football page
+388878	Daren Mosengo	Le Havre AC	fra.1	no football page
+388879	Guy Zohouri	Le Havre AC	fra.1	no football page
+399434	Sota Nakamura	Le Havre AC	fra.1	no football page
+401045	Rayan Fofana	Le Havre AC	fra.1	no football page
+401714	Stephan Zagadou	Le Havre AC	fra.1	no football page
+408085	Mouhamed N'Diaye	Le Havre AC	fra.1	no football page
+411169	Enzo Koffi	Le Havre AC	fra.1	no football page
+223122	Maxime López	Paris FC	fra.1	no football page
+257126	Jean-Phillipe Krasso	Paris FC	fra.1	no football page
+287474	Moustapha Mbow	Paris FC	fra.1	no football page
+287572	Samir Chergui	Paris FC	fra.1	no football page
+301770	Obed Nkambadio	Paris FC	fra.1	no football page
+304918	Ilan Kebbal	Paris FC	fra.1	no football page
+308195	Otavio	Paris FC	fra.1	no football page
+324325	Yoan Koré	Paris FC	fra.1	no football page
+364746	Adama Camara	Paris FC	fra.1	no football page
+368334	Omar Sissoko	Paris FC	fra.1	no football page
+398780	Zabi Gueu	Paris FC	fra.1	no football page
+402888	Rudy Matondo	Paris FC	fra.1	no football page
+403843	Emmanuel Mbemba	Paris FC	fra.1	no football page
+5326108	Ibrahim Meïté	Paris FC	fra.1	no football page
+180174	Gautier Lloris	Brest	fra.1	no football page
+251556	Romain Cagnon	Brest	fra.1	no football page
+3100741	Noé Poillion	Brest	fra.1	no football page
+3121265	Enzo Monchatre	Brest	fra.1	no football page
+3131925	Evan Mailly	Brest	fra.1	no football page
+324572	Bradley Locko	Brest	fra.1	no football page
+325330	Axel Camblan	Brest	fra.1	no football page
+359402	Giovani Versini	Brest	fra.1	no football page
+363150	Luc Zogbe	Brest	fra.1	no football page
+365783	Pathé Mboup	Brest	fra.1	no football page
+388421	Ibrahim Kanté	Brest	fra.1	no football page
+397594	Raphaël Le Guen	Brest	fra.1	no football page
+399248	Justin Bourgault	Brest	fra.1	no football page
+416403	Mathis Lainé	Brest	fra.1	no football page
+301262	Amine El Ouazzani	Angers	fra.1	no football page
+312399	Mamadou Simbakoli	Angers	fra.1	no football page
+3130907	Mamadou Diallo	Angers	fra.1	no football page
+3130908	Jules Bouffandeau	Angers	fra.1	no football page
+333218	Jacques Ekomie	Angers	fra.1	no football page
+356211	Emmanuel Biumla	Angers	fra.1	no football page
+377899	Joseph Kalulu Kyatengwa	Angers	fra.1	no football page
+378976	Oumar Pona	Angers	fra.1	no football page
+379227	Anthony Bermont	Angers	fra.1	no football page
+394476	Marius Louãr	Angers	fra.1	no football page
+403232	Prosper Peter	Angers	fra.1	no football page
+412232	Ousmane Camara	Angers	fra.1	no football page
+412871	Harouna Djibirin	Angers	fra.1	no football page
+416401	Maël Gernigon	Angers	fra.1	no football page
+421740	Bané Diatta	Angers	fra.1	no football page
+271904	Carlos Romero	Villarreal	esp.1	no football page
+289072	Sergi Cardona	Villarreal	esp.1	no football page
+307390	Alberto Moleiro	Villarreal	esp.1	no football page
+3101324	Nizar El Jmili Ben Hamou	Villarreal	esp.1	no football page
+3101325	Cheikh Ahmad Tidiane Thiam	Villarreal	esp.1	no football page
+3101339	César Bonafé Ceita	Villarreal	esp.1	no football page
+318098	Santiago Mouriño	Villarreal	esp.1	no football page
+343640	Rubén Gómez	Villarreal	esp.1	no football page
+368878	Pau Navarro	Villarreal	esp.1	no football page
+371619	Joselillo	Villarreal	esp.1	no football page
+396751	Alassane Diatta	Villarreal	esp.1	no football page
+415438	Carlos Macià	Villarreal	esp.1	no football page
+5326689	Mauro Roca Martínez	Villarreal	esp.1	no football page
+140791	Koke	Atlético Madrid	esp.1	no football page
+166396	Alejandro Grimaldo	Atlético Madrid	esp.1	no football page
+184757	Jorge Castillo	Atlético Madrid	esp.1	no football page
+274197	Lee Kang-In	Atlético Madrid	esp.1	no football page
+277206	Julián Álvarez	Atlético Madrid	esp.1	no football page
+318554	Obed Vargas	Atlético Madrid	esp.1	no football page
+324192	Carlos Martín	Atlético Madrid	esp.1	no football page
+328289	Arnau Ortiz	Atlético Madrid	esp.1	no football page
+336634	Pablo Barrios	Atlético Madrid	esp.1	no football page
+345110	Arnau Solà	Atlético Madrid	esp.1	no football page
+354378	Jorge Domínguez	Atlético Madrid	esp.1	no football page
+368593	Daniel Martinez	Atlético Madrid	esp.1	no football page
+395579	Javier Gil	Atlético Madrid	esp.1	no football page
+405502	Salvi Esquivel	Atlético Madrid	esp.1	no football page
+421996	Miguel Cubo	Atlético Madrid	esp.1	no football page
+74630	Rodrigo Mendoza	Atlético Madrid	esp.1	no football page
+203680	Víctor García	Levante	esp.1	no football page
+267591	Roger Brugué	Levante	esp.1	no football page
+269339	Orio Rey	Levante	esp.1	no football page
+276841	Adrián de la Fuente	Levante	esp.1	no football page
+300985	Manu Sánchez	Levante	esp.1	no football page
+3102194	Yanis Kasonga Musuayi	Levante	esp.1	no football page
+311054	Iván Romero	Levante	esp.1	no football page
+3129042	Manel Usedo Domingo	Levante	esp.1	no football page
+3129043	Marc Santos Gavilán	Levante	esp.1	no football page
+3129044	Ihor Galdin	Levante	esp.1	no football page
+3129045	Alberto Calatrava Ragull	Levante	esp.1	no football page
+316040	Pablo Cuñat	Levante	esp.1	no football page
+317784	Jon Ander Olasagasti	Levante	esp.1	no football page
+339195	Thiago Fernández	Levante	esp.1	no football page
+340744	Alejandro Primo	Levante	esp.1	no football page
+346676	Etta Eyong	Levante	esp.1	no football page
+362752	Dani Requena	Levante	esp.1	no football page
+3731	Carlos Álvarez	Levante	esp.1	no football page
+381071	Jorge Cabello	Levante	esp.1	no football page
+384985	Paco Cortés	Levante	esp.1	no football page
+396655	Axel Tape	Levante	esp.1	no football page
+407397	Ifeanyi Ndukwe	Levante	esp.1	no football page
+409383	Nacho Pérez	Levante	esp.1	no football page
+415819	Kareem Tunde	Levante	esp.1	no football page
+119332	Rafael Romero	Sevilla	esp.1	no football page
+159135	Odisseas Vlachodimos	Sevilla	esp.1	no football page
+203112	Marcão	Sevilla	esp.1	no football page
+215386	Fábio Cardoso	Sevilla	esp.1	no football page
+250508	José Ángel Carmona	Sevilla	esp.1	no football page
+258923	Giorgi Kochorashvili	Sevilla	esp.1	no football page
+277307	Youssouf Fofana	Sevilla	esp.1	no football page
+279738	Juan Iglesias	Sevilla	esp.1	no football page
+288900	Felix Correia	Sevilla	esp.1	no football page
+304213	Arouna Sangante	Sevilla	esp.1	no football page
+3131879	Manuel Ángel Castillo Rodríguez	Sevilla	esp.1	no football page
+322993	Robbie Ure	Sevilla	esp.1	no football page
+332246	Andrés Castrín	Sevilla	esp.1	no football page
+334163	Enrique Salas	Sevilla	esp.1	no football page
+347359	Peque	Sevilla	esp.1	no football page
+356228	Manu Bueno	Sevilla	esp.1	no football page
+362874	Fran González	Sevilla	esp.1	no football page
+365821	Isaac Romero	Sevilla	esp.1	no football page
+371543	Ibrahima Sow	Sevilla	esp.1	no football page
+375514	Miguel Sierra	Sevilla	esp.1	no football page
+387493	Julio Díaz	Sevilla	esp.1	no football page
+409486	Edu Altozano	Sevilla	esp.1	no football page
+415742	Iker Ortín	Sevilla	esp.1	no football page
+422137	Nico Guillén	Sevilla	esp.1	no football page
+5324162	Jesús Cruz Morales	Sevilla	esp.1	no football page
+213050	Fran García	Real Betis	esp.1	no football page
+242008	Marc Roca	Real Betis	esp.1	no football page
+268601	Aitor Ruibal	Real Betis	esp.1	no football page
+281558	Antony	Real Betis	esp.1	no football page
+301526	Natan	Real Betis	esp.1	no football page
+322908	Nelson Deossa	Real Betis	esp.1	no football page
+359912	Facundo Bernal	Real Betis	esp.1	no football page
+390091	Manu González	Real Betis	esp.1	no football page
+394885	Álvaro De Pablo	Real Betis	esp.1	no football page
+395941	Ángel Ortiz	Real Betis	esp.1	no football page
+411284	José Morante	Real Betis	esp.1	no football page
+70224	Rodrigo Riquelme	Real Betis	esp.1	no football page
+143643	Juanmi	Getafe	esp.1	no football page
+181355	Djené	Getafe	esp.1	no football page
+284854	Martín Satriano	Getafe	esp.1	no football page
+300111	Zaid Romero	Getafe	esp.1	no football page
+307186	Francho Serrano	Getafe	esp.1	no football page
+309838	Ramón Terrats	Getafe	esp.1	no football page
+3101327	Sebastián Salazar Trujillo	Getafe	esp.1	no football page
+310259	Ivan Azón	Getafe	esp.1	no football page
+3121766	Ibrahima Danfakha Keita	Getafe	esp.1	no football page
+3124560	Ibra Drammeh	Getafe	esp.1	no football page
+3139281	Moha Achraf	Getafe	esp.1	no football page
+344245	Jirí Letácek	Getafe	esp.1	no football page
+356080	Andrés García	Getafe	esp.1	no football page
+357147	Mario Martín	Getafe	esp.1	no football page
+359826	Sebastián Boselli	Getafe	esp.1	no football page
+375400	Mohamed Hamdoune	Getafe	esp.1	no football page
+376208	Joselu Pérez	Getafe	esp.1	no football page
+383912	Alberto Risco	Getafe	esp.1	no football page
+384168	Jesús Martínez	Getafe	esp.1	no football page
+386256	Christantus Uche	Getafe	esp.1	no football page
+388898	Diego Ferrer	Getafe	esp.1	no football page
+394958	Curro Burgos	Getafe	esp.1	no football page
+395479	Jean Ives Valou	Getafe	esp.1	no football page
+396387	Óscar López	Getafe	esp.1	no football page
+406832	Davinchi	Getafe	esp.1	no football page
+411023	Vladyslav Kysil	Getafe	esp.1	no football page
+5327018	Irahima Danfakha Keita	Getafe	esp.1	no football page
+167297	Pedro Bigas	Elche	esp.1	no football page
+259916	José Antonio Morente	Elche	esp.1	no football page
+265995	Víctor Chust	Elche	esp.1	no football page
+273424	Gonzalo Villar	Elche	esp.1	no football page
+297358	Germán Valera	Elche	esp.1	no football page
+301406	Marc Aguado	Elche	esp.1	no football page
+301684	Fer Niño	Elche	esp.1	no football page
+3129647	Álvaro Padilla Escribá	Elche	esp.1	no football page
+318284	Facundo Buonanotte	Elche	esp.1	no football page
+319781	Rubén Sánchez	Elche	esp.1	no football page
+323286	Roy Revivo	Elche	esp.1	no football page
+326234	Yago Alonso	Elche	esp.1	no football page
+330433	Alejandro Iturbe	Elche	esp.1	no football page
+336840	Abiel Osorio	Elche	esp.1	no football page
+371608	Buba Sangaré	Elche	esp.1	no football page
+376156	Ali Houary	Elche	esp.1	no football page
+389448	Matia Barzic	Elche	esp.1	no football page
+402185	Umaru	Elche	esp.1	no football page
+421310	Javier Morcillo	Elche	esp.1	no football page
+128714	Eric García	Barcelona	esp.1	no football page
+131634	Wojciech Szczesny	Barcelona	esp.1	no football page
+187946	Dominik Livakovic	Barcelona	esp.1	no football page
+297362	Joan García	Barcelona	esp.1	no football page
+300377	Álvaro Cortés	Barcelona	esp.1	no football page
+365318	Jesse Bisiwu	Barcelona	esp.1	no football page
+403575	Brian Fariñas	Barcelona	esp.1	no football page
+403576	Iker Rodríguez	Barcelona	esp.1	no football page
+403582	Xavi Espart	Barcelona	esp.1	no football page
+403583	Guillem Víctor	Barcelona	esp.1	no football page
+403587	Eder Aller	Barcelona	esp.1	no football page
+416496	Orian Goren	Barcelona	esp.1	no football page
+416502	Ebrima Tunkara	Barcelona	esp.1	no football page
+416511	Jordi Pesquer	Barcelona	esp.1	no football page
+94947	Álex Campos	Barcelona	esp.1	no football page
+144720	Andrei Radu	Celta Vigo	esp.1	no football page
+146127	Marcos Alonso	Celta Vigo	esp.1	no football page
+188391	Hugo Álvarez	Celta Vigo	esp.1	no football page
+231838	Javi Galán	Celta Vigo	esp.1	no football page
+240235	Aleix Febas	Celta Vigo	esp.1	no football page
+274272	Altay Bayindir	Celta Vigo	esp.1	no football page
+298343	Sergio Carreira	Celta Vigo	esp.1	no football page
+3100792	Frank Germain Jonathan Miller	Celta Vigo	esp.1	no football page
+3100794	Enrique Ribes	Celta Vigo	esp.1	no football page
+324811	Hugo Gonzalez	Celta Vigo	esp.1	no football page
+331586	Javi Rueda	Celta Vigo	esp.1	no football page
+334111	Jones El-Abdellaoui	Celta Vigo	esp.1	no football page
+353736	Miguel Román	Celta Vigo	esp.1	no football page
+367430	Álvaro Núñez	Celta Vigo	esp.1	no football page
+384643	Yoel Lago	Celta Vigo	esp.1	no football page
+414292	Andrés Antañón	Celta Vigo	esp.1	no football page
+414293	Hugo Burcio	Celta Vigo	esp.1	no football page
+415036	Ángel Arcos	Celta Vigo	esp.1	no football page
+3117407	Alexis Ciria	Real Madrid	esp.1	no football page
+330352	Mario Rivas	Real Madrid	esp.1	no football page
+350351	Sergio Mestre	Real Madrid	esp.1	no football page
+376422	Daniel Yañez	Real Madrid	esp.1	no football page
+380286	Carlos Espí	Real Madrid	esp.1	no football page
+388338	Raúl Asencio	Real Madrid	esp.1	no football page
+388339	Joan Martínez	Real Madrid	esp.1	no football page
+405490	Illia Voloshyn	Real Madrid	esp.1	no football page
+405544	Jesús Fortea	Real Madrid	esp.1	no football page
+409019	Thiago Pitarch	Real Madrid	esp.1	no football page
+409318	Sergio Martínez	Real Madrid	esp.1	no football page
+415478	Jorge Cestero	Real Madrid	esp.1	no football page
+84349	Javier Navarro	Real Madrid	esp.1	no football page
+107960	Matteo Prati	Racing Santander	esp.1	no football page
+178237	Jorge Salinas	Racing Santander	esp.1	no football page
+242007	Aarón Martín	Racing Santander	esp.1	no football page
+259839	Manu	Racing Santander	esp.1	no football page
+279699	Íñigo Sainz	Racing Santander	esp.1	no football page
+282672	Pablo Ramon	Racing Santander	esp.1	no football page
+286604	André Almeida	Racing Santander	esp.1	no football page
+289439	Giorgi Guliashvili	Racing Santander	esp.1	no football page
+300471	Alvaro Mantilla	Racing Santander	esp.1	no football page
+3100788	Hugo Pérez Sañudo	Racing Santander	esp.1	no football page
+3128976	Jorge Castellanos Del Olmo	Racing Santander	esp.1	no football page
+3141	Andrés Martín	Racing Santander	esp.1	no football page
+323970	Julen Agirrezabala	Racing Santander	esp.1	no football page
+330545	Iván Martín	Racing Santander	esp.1	no football page
+334268	Juan Carlos Arana	Racing Santander	esp.1	no football page
+342654	Maguette Gueye	Racing Santander	esp.1	no football page
+361455	Pedro Felipe	Racing Santander	esp.1	no football page
+394309	Laro Gómez	Racing Santander	esp.1	no football page
+396027	Diego Diaz	Racing Santander	esp.1	no football page
+399278	Pablo García	Racing Santander	esp.1	no football page
+400222	Simon Eriksson	Racing Santander	esp.1	no football page
+414075	Andrés Vallecillo	Racing Santander	esp.1	no football page
+417250	Hugo Martín	Racing Santander	esp.1	no football page
+417258	Iker Luque	Racing Santander	esp.1	no football page
+421199	Carlos Sánchez	Racing Santander	esp.1	no football page
+135422	Enrique García	Espanyol	esp.1	no football page
+179211	Marko Dmitrovic	Espanyol	esp.1	no football page
+196914	Pere Milla	Espanyol	esp.1	no football page
+255272	Edu Expósito	Espanyol	esp.1	no football page
+260242	Pol Lozano	Espanyol	esp.1	no football page
+260243	Javier Puado	Espanyol	esp.1	no football page
+260902	Unai Núñez	Espanyol	esp.1	no football page
+277314	Vanja Drkusic	Espanyol	esp.1	no football page
+307270	Jofre Carreras	Espanyol	esp.1	no football page
+307419	Ángel Fortuño	Espanyol	esp.1	no football page
+307915	Urko Gonzalez	Espanyol	esp.1	no football page
+3111247	Jan Peries Duran	Espanyol	esp.1	no football page
+3111255	Alejandro Santiago Vargas	Espanyol	esp.1	no football page
+311571	Bryan Zaragoza	Espanyol	esp.1	no football page
+3139134	Víctor Mullerat Tomas	Espanyol	esp.1	no football page
+318773	Roberto Fernández	Espanyol	esp.1	no football page
+354621	Marcos Fernández	Espanyol	esp.1	no football page
+355902	Cala	Espanyol	esp.1	no football page
+367946	Javi Hernandez	Espanyol	esp.1	no football page
+381681	Llorenç Serred	Espanyol	esp.1	no football page
+383900	Rafael Bauza	Espanyol	esp.1	no football page
+397289	José Ángel López	Espanyol	esp.1	no football page
+401377	Roger Hinojo	Espanyol	esp.1	no football page
+420443	Adama Timera	Espanyol	esp.1	no football page
+265993	Sergio Gómez	Real Sociedad	esp.1	no football page
+306263	Luka Sucic	Real Sociedad	esp.1	no football page
+326900	Pablo Marín	Real Sociedad	esp.1	no football page
+341367	Orri Óskarsson	Real Sociedad	esp.1	no football page
+363039	Héctor Fort	Real Sociedad	esp.1	no football page
+366886	Alex Lebarbier	Real Sociedad	esp.1	no football page
+368327	Aitor Fraga	Real Sociedad	esp.1	no football page
+379457	Iñaki Rupérez	Real Sociedad	esp.1	no football page
+388601	Jon Gorrotxategi	Real Sociedad	esp.1	no football page
+396607	Luken Beitia	Real Sociedad	esp.1	no football page
+396613	Alex Marchal	Real Sociedad	esp.1	no football page
+406379	Job Ochieng	Real Sociedad	esp.1	no football page
+406383	Gorka Carrera	Real Sociedad	esp.1	no football page
+410486	Ibai Aguirre	Real Sociedad	esp.1	no football page
+157568	Ximo Navarro	Deportivo	esp.1	no football page
+181288	Germán Parreño	Deportivo	esp.1	no football page
+220626	Adama Traoré	Deportivo	esp.1	no football page
+279609	Riki Rodríguez	Deportivo	esp.1	no football page
+297353	Mario Soriano Carreno	Deportivo	esp.1	no football page
+300333	Arnau Comas	Deportivo	esp.1	no football page
+300926	Leo Román	Deportivo	esp.1	no football page
+308006	Adrià Altimira	Deportivo	esp.1	no football page
+3102992	Bright Ede	Deportivo	esp.1	no football page
+321112	Lucas Noubi	Deportivo	esp.1	no football page
+324945	Yayo	Deportivo	esp.1	no football page
+356639	Lorenzo Amatucci	Deportivo	esp.1	no football page
+362123	Teun Gijselhart	Deportivo	esp.1	no football page
+375392	Martín Ochoa	Deportivo	esp.1	no football page
+375566	Rubén	Deportivo	esp.1	no football page
+384414	Jonathan Asp Jensen	Deportivo	esp.1	no football page
+414299	Bil Nsongo	Deportivo	esp.1	no football page
+96060	Álvaro Fernández	Deportivo	esp.1	no football page
+209579	Álex Berenguer	Athletic Club	esp.1	no football page
+217225	Yeray	Athletic Club	esp.1	no football page
+231905	Gorka Guruzeta	Athletic Club	esp.1	no football page
+274016	Dani Vivian	Athletic Club	esp.1	no football page
+287410	Mikel Santos	Athletic Club	esp.1	no football page
+300876	Jesús Areso	Athletic Club	esp.1	no football page
+3106512	Jesús Vizcay Hurtado	Athletic Club	esp.1	no football page
+3122617	Aritz Conde Albiol	Athletic Club	esp.1	no football page
+333214	Johaneko Louis Jean	Athletic Club	esp.1	no football page
+347411	Álex Padilla	Athletic Club	esp.1	no football page
+362572	Hugo Rincón	Athletic Club	esp.1	no football page
+379707	Adama Boiro	Athletic Club	esp.1	no football page
+388805	Peio Canales	Athletic Club	esp.1	no football page
+403371	Alejandro Rego	Athletic Club	esp.1	no football page
+414350	Selton Sánchez	Athletic Club	esp.1	no football page
+422929	Christian Imga	Athletic Club	esp.1	no football page
+16340	Javi Guerra	Valencia	esp.1	no football page
+189804	Jesús Vázquez	Valencia	esp.1	no football page
+231603	Pepelu	Valencia	esp.1	no football page
+248681	Filip Ugrinic	Valencia	esp.1	no football page
+253763	Dani Raba	Valencia	esp.1	no football page
+264177	Luis Rioja	Valencia	esp.1	no football page
+267477	Hugo Duro	Valencia	esp.1	no football page
+282086	Justin de Haas	Valencia	esp.1	no football page
+300927	Copete	Valencia	esp.1	no football page
+308728	Arnau Martínez	Valencia	esp.1	no football page
+3124770	Rodrigo Gamón Martín	Valencia	esp.1	no football page
+3124771	Jaume Durá I Soler	Valencia	esp.1	no football page
+324504	Diego López	Valencia	esp.1	no football page
+324582	Kayne Van Oevelen	Valencia	esp.1	no football page
+330552	César Tárrega	Valencia	esp.1	no football page
+360096	Ryunosuke Sato	Valencia	esp.1	no football page
+362393	Marcos Navarro	Valencia	esp.1	no football page
+377768	David Otorbi	Valencia	esp.1	no football page
+388076	Iker Córdoba	Valencia	esp.1	no football page
+409380	Aimar Blázquez	Valencia	esp.1	no football page
+413671	Alex Panach	Valencia	esp.1	no football page
+419048	Aaron Mayol	Valencia	esp.1	no football page
+149306	Ville Koski	Alavés	esp.1	no football page
+150374	Adrián Rodríguez	Alavés	esp.1	no football page
+176312	Jonny	Alavés	esp.1	no football page
+198832	Mariano Díaz	Alavés	esp.1	no football page
+200910	Antonio Sivera	Alavés	esp.1	no football page
+207236	Lucas Boyé	Alavés	esp.1	no football page
+213535	Moussa Diarra	Alavés	esp.1	no football page
+255931	Facundo Garcés	Alavés	esp.1	no football page
+262491	Nahuel Tenaglia	Alavés	esp.1	no football page
+265997	Antonio Blanco	Alavés	esp.1	no football page
+318084	Nicolás Valentini	Alavés	esp.1	no football page
+346534	Grégoire Swiderski	Alavés	esp.1	no football page
+367996	Selu Diallo	Alavés	esp.1	no football page
+373796	Rúben Montero	Alavés	esp.1	no football page
+374621	Ángel Pérez	Alavés	esp.1	no football page
+379231	Aitor Mañas	Alavés	esp.1	no football page
+382532	Youssef Lekhedim	Alavés	esp.1	no football page
+396612	Mikel Rodriguez	Alavés	esp.1	no football page
+415206	Izei Hernandez	Alavés	esp.1	no football page
+415276	Xanet Oláiz	Alavés	esp.1	no football page
+83494	Miguel Rodríguez	Alavés	esp.1	no football page
+144759	Aitor Fernández	Osasuna	esp.1	no football page
+170154	Lucas Torró	Osasuna	esp.1	no football page
+178328	Rubén García	Osasuna	esp.1	no football page
+191360	Sergio Herrera	Osasuna	esp.1	no football page
+209580	Enrique Barja	Osasuna	esp.1	no football page
+264175	Alejandro Catena	Osasuna	esp.1	no football page
+296163	Raúl García	Osasuna	esp.1	no football page
+300284	Abel Bretones	Osasuna	esp.1	no football page
+307019	Jorge Herrando	Osasuna	esp.1	no football page
+307905	Enzo Boyomo	Osasuna	esp.1	no football page
+311969	Jonathan Dubasin	Osasuna	esp.1	no football page
+3128992	Mikel Bermejo Sola	Osasuna	esp.1	no football page
+3129002	Asier Bonel Aicua	Osasuna	esp.1	no football page
+359154	Iker Muñoz	Osasuna	esp.1	no football page
+366598	Rockson Yeboah	Osasuna	esp.1	no football page
+403704	Rafa Fernández	Osasuna	esp.1	no football page
+145565	Juan Cruz	Málaga	esp.1	no football page
+180444	Joaquín Muñoz	Málaga	esp.1	no football page
+184488	José Salinas	Málaga	esp.1	no football page
+240624	Alfonso Herrero	Málaga	esp.1	no football page
+262061	Juan Berrocal	Málaga	esp.1	no football page
+270610	Eneko Jauregui	Málaga	esp.1	no football page
+271151	Pablo Martínez	Málaga	esp.1	no football page
+292225	Ramón Enríquez	Málaga	esp.1	no football page
+297828	David Larrubia	Málaga	esp.1	no football page
+301869	Julen Lobete	Málaga	esp.1	no football page
+310869	Álex Pastor	Málaga	esp.1	no football page
+3110513	Juani	Málaga	esp.1	no football page
+3110515	Otu Junior	Málaga	esp.1	no football page
+312338	Haitam Abaida	Málaga	esp.1	no football page
+319783	Ángel Recio	Málaga	esp.1	no football page
+324098	Carlos Dotor	Málaga	esp.1	no football page
+331533	Daniel Lorenzo	Málaga	esp.1	no football page
+331785	Carlos Puga	Málaga	esp.1	no football page
+350947	Diego Murillo	Málaga	esp.1	no football page
+355503	Carlos López	Málaga	esp.1	no football page
+357858	Rafa Rodríguez	Málaga	esp.1	no football page
+371564	Izan Merino	Málaga	esp.1	no football page
+373542	Adrián Niño	Málaga	esp.1	no football page
+376166	Rafa Garrido	Málaga	esp.1	no football page
+377777	Aarón Moloney	Málaga	esp.1	no football page
+379032	Adam Aznou	Málaga	esp.1	no football page
+388600	Andres Cespedes	Málaga	esp.1	no football page
+388602	Chupete	Málaga	esp.1	no football page
+303919	Filippo Terracciano	AC Milan	ita.1	no football page
+3110063	Lorenzo Ossola	AC Milan	ita.1	no football page
+335207	Silvano Vos	AC Milan	ita.1	no football page
+345637	Davide Bartesaghi	AC Milan	ita.1	no football page
+359754	Alphadjo Cissè	AC Milan	ita.1	no football page
+377563	Francesco Camarda	AC Milan	ita.1	no football page
+384305	Lorenzo Torriani	AC Milan	ita.1	no football page
+388239	Sankhoun Diawara	AC Milan	ita.1	no football page
+403807	Christian Comotto	AC Milan	ita.1	no football page
+403839	Léo-Paul Bouyer	AC Milan	ita.1	no football page
+409491	Valeri Vladimirov	AC Milan	ita.1	no football page
+5326343	El Hadji Malick Cissé	AC Milan	ita.1	no football page
+5326344	Nirash Raffaello Perera	AC Milan	ita.1	no football page
+5326345	Luca Menon	AC Milan	ita.1	no football page
+234300	Devis Vásquez	AS Roma	ita.1	no football page
+3098218	Alessandro Di Nunzio	AS Roma	ita.1	no football page
+332354	Wesley	AS Roma	ita.1	no football page
+360235	Niccolò Pisilli	AS Roma	ita.1	no football page
+364223	Jan Ziólkowski	AS Roma	ita.1	no football page
+377387	Mandjou Camara	AS Roma	ita.1	no football page
+387204	Rodrigo Mora	AS Roma	ita.1	no football page
+398120	Giorgio De Marzi	AS Roma	ita.1	no football page
+404546	Antonio Arena	AS Roma	ita.1	no football page
+409371	Emanuele Lulli	AS Roma	ita.1	no football page
+409634	Lorenzo Paratici	AS Roma	ita.1	no football page
+303296	Lazar Samardzic	Atalanta	ita.1	no football page
+303988	Lorenzo Bernasconi	Atalanta	ita.1	no football page
+309812	Giorgio Scalvini	Atalanta	ita.1	no football page
+3114443	Thomas Pompei	Atalanta	ita.1	no football page
+3128883	Isaac Collins Isoa	Atalanta	ita.1	no football page
+3130628	Mattia Sonzogni	Atalanta	ita.1	no football page
+334283	Tommaso De Nipoti	Atalanta	ita.1	no football page
+377831	Alberto Manzoni	Atalanta	ita.1	no football page
+378193	Matteo Plaia	Atalanta	ita.1	no football page
+378197	Andrea Bonanomi	Atalanta	ita.1	no football page
+378198	Paolo Vismara	Atalanta	ita.1	no football page
+384831	Jacopo Mirra	Atalanta	ita.1	no football page
+387841	Sergej Levak	Atalanta	ita.1	no football page
+388799	Federico Cassa	Atalanta	ita.1	no football page
+399540	Relja Obric	Atalanta	ita.1	no football page
+403445	Javison Idele	Atalanta	ita.1	no football page
+410098	Digne Pounga	Atalanta	ita.1	no football page
+89216	Francesco Rossi	Atalanta	ita.1	no football page
+99909	Thomas Kristensen	Atalanta	ita.1	no football page
+179358	Lukasz Skorupski	Bologna	ita.1	no football page
+250707	Nicoló Casale	Bologna	ita.1	no football page
+287790	Nicolò Cambiaghi	Bologna	ita.1	no football page
+309110	Martin Vitík	Bologna	ita.1	no football page
+331770	Rahim Alhassane	Bologna	ita.1	no football page
+337058	Jay Enem	Bologna	ita.1	no football page
+355997	Samuel Mbangula	Bologna	ita.1	no football page
+361818	Eivind Helland	Bologna	ita.1	no football page
+365160	Mikel Amondarain	Bologna	ita.1	no football page
+388880	Massimo Pessina	Bologna	ita.1	no football page
+410325	Marco Libra	Bologna	ita.1	no football page
+410822	Ukko Happonen	Bologna	ita.1	no football page
+415168	Matteo Franceschelli	Bologna	ita.1	no football page
+5326829	Luca Lo Monaco	Bologna	ita.1	no football page
+139008	João Mário	Fiorentina	ita.1	no football page
+168453	Dodô	Fiorentina	ita.1	no football page
+233515	Sulayman Jallow	Fiorentina	ita.1	no football page
+255650	Marin Pongracic	Fiorentina	ita.1	no football page
+289511	Beto	Fiorentina	ita.1	no football page
+308082	Fabiano Parisi	Fiorentina	ita.1	no football page
+3099527	Dennis Beldenti	Fiorentina	ita.1	no football page
+310216	Radu Dragusin	Fiorentina	ita.1	no football page
+3118047	Brando Mazzeo	Fiorentina	ita.1	no football page
+312757	Mateo Pellegrino	Fiorentina	ita.1	no football page
+364156	Viery	Fiorentina	ita.1	no football page
+367743	Alieu Njie	Fiorentina	ita.1	no football page
+367861	Álex Jiménez	Fiorentina	ita.1	no football page
+401558	Víctor Valdepeñas	Fiorentina	ita.1	no football page
+403581	Eman Kospo	Fiorentina	ita.1	no football page
+421785	Salvatore Cianciulli	Fiorentina	ita.1	no football page
+422138	Antonio Pirrò	Fiorentina	ita.1	no football page
+5324063	Arnis Ademi	Fiorentina	ita.1	no football page
+170785	Hakan Çalhanoglu	Internazionale	ita.1	no football page
+177782	Piotr Zielinski	Internazionale	ita.1	no football page
+181322	Raffaele Di Gennaro	Internazionale	ita.1	no football page
+181836	Ivan Provedel	Internazionale	ita.1	no football page
+190257	Curtis Jones	Internazionale	ita.1	no football page
+204441	Nicolò Barella	Internazionale	ita.1	no football page
+240109	Aleksandar Stankovic	Internazionale	ita.1	no football page
+266660	Yann Bisseck	Internazionale	ita.1	no football page
+286369	Luis Henrique	Internazionale	ita.1	no football page
+341494	Petar Sucic	Internazionale	ita.1	no football page
+384534	Leon Jakirovic	Internazionale	ita.1	no football page
+387837	Francesco Stante	Internazionale	ita.1	no football page
+400734	Alain Taho	Internazionale	ita.1	no football page
+402778	Matteo Lavelli	Internazionale	ita.1	no football page
+403808	Leonardo Bovio	Internazionale	ita.1	no football page
+409051	Mattia Mosconi	Internazionale	ita.1	no football page
+410613	Jamal Iddrissou	Internazionale	ita.1	no football page
+412245	Mattia Marello	Internazionale	ita.1	no football page
+138398	Neto	Juventus	ita.1	no football page
+24412	Juan Cabal	Juventus	ita.1	no football page
+258307	Bremer	Juventus	ita.1	no football page
+290129	Pierre Kalulu	Juventus	ita.1	no football page
+3102531	Arman Durmiši	Juventus	ita.1	no football page
+3121500	Grady Makiobo Makiobo	Juventus	ita.1	no football page
+3129035	Antonio Stefano Merola	Juventus	ita.1	no football page
+349101	Justin Oboavwoduo	Juventus	ita.1	no football page
+366509	Kenan Yildiz	Juventus	ita.1	no football page
+387434	Filippo Pagnucco	Juventus	ita.1	no football page
+388606	Jeff Ekhator	Juventus	ita.1	no football page
+391034	Kerim Alajbegovic	Juventus	ita.1	no football page
+397258	Augusto Owusu	Juventus	ita.1	no football page
+397463	Niccolò Rizzo	Juventus	ita.1	no football page
+404034	Destiny Elimoghale	Juventus	ita.1	no football page
+414157	Stefano Mangiapoco	Juventus	ita.1	no football page
+421739	Riccardo Radu	Juventus	ita.1	no football page
+76017	Nico González	Juventus	ita.1	no football page
+239086	Andrea Pinamonti	Lazio	ita.1	no football page
+288361	Alessio Furlanetto	Lazio	ita.1	no football page
+291550	Gustav Isaksen	Lazio	ita.1	no football page
+295515	Fisayo Dele-Bashiru	Lazio	ita.1	no football page
+308944	Matteo Cancellieri	Lazio	ita.1	no football page
+3102821	Bruno Galassi	Lazio	ita.1	no football page
+3127847	Ricardo Bordon	Lazio	ita.1	no football page
+330041	Romano Floriani	Lazio	ita.1	no football page
+333311	Oliver Provstgaard	Lazio	ita.1	no football page
+345323	Reda Belahyane	Lazio	ita.1	no football page
+359380	Filipe Bordon	Lazio	ita.1	no football page
+364224	Adrian Przyborek	Lazio	ita.1	no football page
+367320	Edoardo Motta	Lazio	ita.1	no football page
+411164	Valerio Farcomeni	Lazio	ita.1	no football page
+192570	Marco Bleve	Lecce	ita.1	no football page
+223292	Mohamed Kaba	Lecce	ita.1	no football page
+241405	Youssef Maleh	Lecce	ita.1	no football page
+286582	Konan N’Dri	Lecce	ita.1	no football page
+287673	Corrie Ndaba	Lecce	ita.1	no football page
+288429	Santiago Pierotti	Lecce	ita.1	no football page
+304512	Nikola Stulic	Lecce	ita.1	no football page
+307391	Jamil Siebert	Lecce	ita.1	no football page
+307893	Joel Monteiro	Lecce	ita.1	no football page
+308318	Alexandru Borbei	Lecce	ita.1	no football page
+3099569	Hjalte Morel Lærke	Lecce	ita.1	no football page
+3115809	Marlon Nnamdi Ubani	Lecce	ita.1	no football page
+3123405	Divine Onyemachi	Lecce	ita.1	no football page
+3123406	Francisco Esteban Sánchez	Lecce	ita.1	no football page
+318604	Kialonda Gaspar	Lecce	ita.1	no football page
+324661	Sadik Fofana	Lecce	ita.1	no football page
+334793	Oumar Ngom	Lecce	ita.1	no football page
+341756	Medon Berisha	Lecce	ita.1	no football page
+344844	Danilo Veiga	Lecce	ita.1	no football page
+374812	Olaf Gorter	Lecce	ita.1	no football page
+379865	Tiago Gabriel	Lecce	ita.1	no football page
+399632	Elijah Scott	Lecce	ita.1	no football page
+188306	Matteo Politano	Napoli	ita.1	no football page
+198082	Nikita Contini	Napoli	ita.1	no football page
+205576	Amir Rrahmani	Napoli	ita.1	no football page
+297360	Rafa Marín	Napoli	ita.1	no football page
+3138825	Claudio Pugliese	Napoli	ita.1	no football page
+3145436	Milton Agustín Pereyra	Napoli	ita.1	no football page
+319697	Alisson Santos	Napoli	ita.1	no football page
+332411	Antonio Vergara	Napoli	ita.1	no football page
+339953	Giovane	Napoli	ita.1	no football page
+346622	Costantino Favasuli	Napoli	ita.1	no football page
+367690	Luca Marianucci	Napoli	ita.1	no football page
+413630	David Spinelli	Napoli	ita.1	no football page
+416154	Francisco Baridó	Napoli	ita.1	no football page
+418210	Christian Garofalo	Napoli	ita.1	no football page
+5327647	Andrea Chiummariello	Napoli	ita.1	no football page
+194718	Ousmane Diallo	Parma	ita.1	no football page
+252927	Simone Ghidotti	Parma	ita.1	no football page
+261274	Emanuele Valeri	Parma	ita.1	no football page
+272694	Enrico Del Prato	Parma	ita.1	no football page
+281590	Lautaro Valenti	Parma	ita.1	no football page
+286764	Hans Nicolussi Caviglia	Parma	ita.1	no football page
+287430	El Bilal Toure	Parma	ita.1	no football page
+290792	Edoardo Corvi	Parma	ita.1	no football page
+301980	José Romero	Parma	ita.1	no football page
+308939	Franco Carboni	Parma	ita.1	no football page
+310860	Matija Frigan	Parma	ita.1	no football page
+316609	Mandela Keita	Parma	ita.1	no football page
+339198	Christian Ordoñez	Parma	ita.1	no football page
+361749	Nesta Elphege	Parma	ita.1	no football page
+365697	Rachid Kouda	Parma	ita.1	no football page
+366510	Giovanni Daffara	Parma	ita.1	no football page
+366526	Mariano Troilo	Parma	ita.1	no football page
+371539	Abdou-Salam Konate	Parma	ita.1	no football page
+396009	Sascha Britschgi	Parma	ita.1	no football page
+402608	Thomás De Martis	Parma	ita.1	no football page
+413818	Simone Lontani	Parma	ita.1	no football page
+417783	Dominik Drobnic	Parma	ita.1	no football page
+422950	Djibril Diallo	Parma	ita.1	no football page
+423017	Alessandro Mazzocchi	Parma	ita.1	no football page
+233654	Keinan Davis	Udinese	ita.1	no football page
+252323	Lazar Jovanovic	Udinese	ita.1	no football page
+258933	Giorgi Chakvetadze	Udinese	ita.1	no football page
+263508	Bayo Youssouf	Udinese	ita.1	no football page
+270010	Alessandro Zanoli	Udinese	ita.1	no football page
+318762	Edoardo Piana	Udinese	ita.1	no football page
+319437	Nicolò Bertola	Udinese	ita.1	no football page
+347009	Lennon Miller	Udinese	ita.1	no football page
+360207	Juan David Arizala	Udinese	ita.1	no football page
+367445	David Pejicic	Udinese	ita.1	no football page
+384519	Matteo Palma	Udinese	ita.1	no football page
+406061	Branimir Mlacic	Udinese	ita.1	no football page
+408146	Giulio Vinciati	Udinese	ita.1	no football page
+145138	Matteo Grandi	Venezia	ita.1	no football page
+184737	Lorenzo Montipò	Venezia	ita.1	no football page
+186457	Matías Moreno	Venezia	ita.1	no football page
+221057	Toma Basic	Venezia	ita.1	no football page
+228328	Marin Sverko	Venezia	ita.1	no football page
+260188	Pasquale Mazzocchi	Venezia	ita.1	no football page
+263816	Alessio Pozzi	Venezia	ita.1	no football page
+275227	Thorir Johann Helgason	Venezia	ita.1	no football page
+276636	Enrique Perez	Venezia	ita.1	no football page
+286128	Armel Bella-Kotchap	Venezia	ita.1	no football page
+289560	Filip Stankovic	Venezia	ita.1	no football page
+291405	Bartol Franjic	Venezia	ita.1	no football page
+3111599	Mohamed Malang Touré	Venezia	ita.1	no football page
+326032	Marko Farji	Venezia	ita.1	no football page
+340139	Okoro Obinna	Venezia	ita.1	no football page
+342763	Albion Rrahmani	Venezia	ita.1	no football page
+345152	Joel Schingtienne	Venezia	ita.1	no football page
+345713	Richie Sagrado	Venezia	ita.1	no football page
+346916	Antoine Hainaut	Venezia	ita.1	no football page
+361838	Lamine Dabo	Venezia	ita.1	no football page
+366972	Matteo Dagasso	Venezia	ita.1	no football page
+383897	Rufai Mohammed	Venezia	ita.1	no football page
+388285	Toni Fernández	Venezia	ita.1	no football page
+405754	Kornel Lisman	Venezia	ita.1	no football page
+408725	Lorenzo Berardi	Venezia	ita.1	no football page
+414161	Ale Gomes	Venezia	ita.1	no football page
+136865	Ricardo Rodríguez	Torino	ita.1	no football page
+206378	Nikola Vlasic	Torino	ita.1	no football page
+239120	Adrian Ismajli	Torino	ita.1	no football page
+245538	Sandro Kulenovic	Torino	ita.1	no football page
+251141	Pietro Pellegri	Torino	ita.1	no football page
+271445	Franco Israel	Torino	ita.1	no football page
+282642	Faustino Anjorin	Torino	ita.1	no football page
+3131322	Andrea Ballanti	Torino	ita.1	no football page
+3131323	Manuel Carrascosa Moreno	Torino	ita.1	no football page
+330707	Emirhan Ilkhan	Torino	ita.1	no football page
+364590	Rafik Belghali	Torino	ita.1	no football page
+367168	Pietro Comuzzo	Torino	ita.1	no football page
+367321	Lapo Siviero	Torino	ita.1	no football page
+368006	Diego Mascardi	Torino	ita.1	no football page
+403148	Alessio Cacciamani	Torino	ita.1	no football page
+403824	Andrea Luongo	Torino	ita.1	no football page
+413819	Francesco Cereser	Torino	ita.1	no football page
+416520	Mattia Pellini	Torino	ita.1	no football page
+417945	Zalán Kugyela	Torino	ita.1	no football page
+181060	Edoardo Goldaniga	Como	ita.1	no football page
+264211	Luis Milla	Como	ita.1	no football page
+291285	Lucas Da Cunha	Como	ita.1	no football page
+297084	Yan Couto	Como	ita.1	no football page
+3140451	Lorenzo Luigi Ginelli	Como	ita.1	no football page
+317233	Kaiki	Como	ita.1	no football page
+323273	Ivan Smolcic	Como	ita.1	no football page
+325553	Willy Kambwala	Como	ita.1	no football page
+337858	Jayden Addai	Como	ita.1	no football page
+380318	Jacobo Ramón	Como	ita.1	no football page
+380970	Adrian Lahdo	Como	ita.1	no football page
+387491	Jesús Rodriguez	Como	ita.1	no football page
+387723	Mattia Liberali	Como	ita.1	no football page
+411276	Matteo Papaccioli	Como	ita.1	no football page
+419210	Zebedee Kennedy	Como	ita.1	no football page
+422244	Riccardo Cassano	Como	ita.1	no football page
+224187	Boris Radunovic	Cagliari	ita.1	no football page
+272745	Michel Adopo	Cagliari	ita.1	no football page
+278987	Elia Caprile	Cagliari	ita.1	no football page
+290545	Daniel Maldini	Cagliari	ita.1	no football page
+303910	Giuseppe Aurelio	Cagliari	ita.1	no football page
+304151	Kevin Carlos	Cagliari	ita.1	no football page
+306210	Alen Sherri	Cagliari	ita.1	no football page
+325527	Nicolò Cavuoti	Cagliari	ita.1	no football page
+332684	Zé Pedro	Cagliari	ita.1	no football page
+333938	Jacopo Fazzini	Cagliari	ita.1	no football page
+345390	Yanis Massolin	Cagliari	ita.1	no football page
+346596	Raphael Kofler	Cagliari	ita.1	no football page
+361506	Juan Rodríguez	Cagliari	ita.1	no football page
+368312	Kingstone Mutandwa	Cagliari	ita.1	no football page
+387036	Riyad Idrissi	Cagliari	ita.1	no football page
+387844	Alessandro Sugamele	Cagliari	ita.1	no football page
+399563	Demi Akarakiri	Cagliari	ita.1	no football page
+407930	Joseph Liteta	Cagliari	ita.1	no football page
+407931	Yael Trepy	Cagliari	ita.1	no football page
+407932	Ivan Sulev	Cagliari	ita.1	no football page
+411232	Nicola Grandu	Cagliari	ita.1	no football page
+418819	Paul Mendy	Cagliari	ita.1	no football page
+6729	Alessandro Romano	Cagliari	ita.1	no football page
+177862	Stefano Sabelli	Genoa	ita.1	no football page
+257058	Hamed Traoré	Genoa	ita.1	no football page
+259975	Johan Vásquez	Genoa	ita.1	no football page
+275444	Milutin Osmajic	Genoa	ita.1	no football page
+279786	Cody Drameh	Genoa	ita.1	no football page
+281736	Leo Østigard	Genoa	ita.1	no football page
+297220	Lorenzo Colombo	Genoa	ita.1	no football page
+3098553	Marcelo Vaz	Genoa	ita.1	no football page
+324256	Mikael Ellertsson	Genoa	ita.1	no football page
+341773	Franz Stolz	Genoa	ita.1	no football page
+350205	Sebastian Otoa	Genoa	ita.1	no football page
+358445	Alexsandro Amorim	Genoa	ita.1	no football page
+364761	Alessandro Marcandalli	Genoa	ita.1	no football page
+383999	Gaël Lafont	Genoa	ita.1	no football page
+386505	David Puczka	Genoa	ita.1	no football page
+389431	Lorenzo Venturino	Genoa	ita.1	no football page
+401482	Joi Nuredini	Genoa	ita.1	no football page
+406191	Ethan Meichtry	Genoa	ita.1	no football page
+407480	Robinho Junior	Genoa	ita.1	no football page
+416531	Rendijs Mihelsons	Genoa	ita.1	no football page
+418840	Samuel Wiafe	Genoa	ita.1	no football page
+419268	Mamedi Doucouré	Genoa	ita.1	no football page
+421761	Lukas Klisys	Genoa	ita.1	no football page
+135743	Nemanja Matic	Sassuolo	ita.1	no football page
+194766	Duje Caleta-Car	Sassuolo	ita.1	no football page
+233088	Nicholas Pierini	Sassuolo	ita.1	no football page
+234305	Giacomo Satalino	Sassuolo	ita.1	no football page
+272719	Armand Laurienté	Sassuolo	ita.1	no football page
+283375	Kieron Bowie	Sassuolo	ita.1	no football page
+288788	Andrea Ghion	Sassuolo	ita.1	no football page
+290418	Josh Doig	Sassuolo	ita.1	no football page
+291729	Cas Odenthal	Sassuolo	ita.1	no football page
+292199	Ignace van der Brempt	Sassuolo	ita.1	no football page
+303980	Laurs Skjellerup	Sassuolo	ita.1	no football page
+304217	Rafael Obrador	Sassuolo	ita.1	no football page
+307969	Edoardo Iannoni	Sassuolo	ita.1	no football page
+3101737	Alessandro Di Bitonto	Sassuolo	ita.1	no football page
+3129533	Gabriel Kulla	Sassuolo	ita.1	no football page
+330043	Filippo Missori	Sassuolo	ita.1	no football page
+331231	Benjamín Domínguez	Sassuolo	ita.1	no football page
+333924	Yeferson Paz	Sassuolo	ita.1	no football page
+333925	Edoardo Pieragnolo	Sassuolo	ita.1	no football page
+344917	Vasilije Adzic	Sassuolo	ita.1	no football page
+346850	Patrick Nuamah	Sassuolo	ita.1	no football page
+347018	Sulemana	Sassuolo	ita.1	no football page
+347408	Luca Lipani	Sassuolo	ita.1	no football page
+384170	Darryl Bakola	Sassuolo	ita.1	no football page
+412248	Simone Cinquegrano	Sassuolo	ita.1	no football page
+413868	Lorenzo Nyarko	Sassuolo	ita.1	no football page
+415197	Tommaso Macchioni	Sassuolo	ita.1	no football page
+423015	Giorgio Vezzosi	Sassuolo	ita.1	no football page
+197764	Kevin Martins	Monza	ita.1	no football page
+234951	Idrissa Touré	Monza	ita.1	no football page
+235453	Dany Mota	Monza	ita.1	no football page
+250460	Demba Thiam	Monza	ita.1	no football page
+250672	Filippo Delli Carri	Monza	ita.1	no football page
+252385	Michael Folorunsho	Monza	ita.1	no football page
+259871	Ricardo Mangas	Monza	ita.1	no football page
+270186	Semuel Pizzignacco	Monza	ita.1	no football page
+283741	Cyril Ngonge	Monza	ita.1	no football page
+297051	Exequiel Zeballos	Monza	ita.1	no football page
+301278	Andrea Carboni	Monza	ita.1	no football page
+3131891	Aleksandr Ballabio	Monza	ita.1	no football page
+325554	Omari Forson	Monza	ita.1	no football page
+353013	Leonardo Colombo	Monza	ita.1	no football page
+355859	Adam Bakoune	Monza	ita.1	no football page
+362776	Ebenezer Akinsanmiro	Monza	ita.1	no football page
+376261	Manga Foe Ondoa	Monza	ita.1	no football page
+384482	Gustavo Varela	Monza	ita.1	no football page
+390673	Eddy Kouadio	Monza	ita.1	no football page
+397386	Solomon Loubao	Monza	ita.1	no football page
+409565	Aljaz Strajnar	Monza	ita.1	no football page
+412249	Yvan Maye	Monza	ita.1	no football page
+198150	Matteo Pisseri	Frosinone	ita.1	no football page
+236038	Giacomo Calo	Frosinone	ita.1	no football page
+260005	Aleksa Terzic	Frosinone	ita.1	no football page
+306390	Tomas Bobcek	Frosinone	ita.1	no football page
+307971	Ilias Koutsoupias	Frosinone	ita.1	no football page
+318394	Wisdom Amey	Frosinone	ita.1	no football page
+319265	Antonio Raimondo	Frosinone	ita.1	no football page
+325056	Lorenzo Palmisani	Frosinone	ita.1	no football page
+333598	Giorgio Cittadini	Frosinone	ita.1	no football page
+335061	Daniel Birligea	Frosinone	ita.1	no football page
+346840	Patrizio Masini	Frosinone	ita.1	no football page
+346974	Gabriele Bracaglia	Frosinone	ita.1	no football page
+347409	Seydou Fini	Frosinone	ita.1	no football page
+352751	Gabriele Calvani	Frosinone	ita.1	no football page
+356536	Farès Ghedjemis	Frosinone	ita.1	no football page
+360714	Giorgi Kvernadze	Frosinone	ita.1	no football page
+364685	Luis Hasa	Frosinone	ita.1	no football page
+368011	Omar Fayed	Frosinone	ita.1	no football page
+388779	Matteo Cichella	Frosinone	ita.1	no football page
+123772	Frank Lehmann	SV Elversberg	ger.1	no football page
+188031	Jan Gyamerah	SV Elversberg	ger.1	no football page
+190167	Maximilian Rohr	SV Elversberg	ger.1	no football page
+207335	Luca Schnellbacher	SV Elversberg	ger.1	no football page
+3113346	Elias Etringer	SV Elversberg	ger.1	no football page
+321061	Lasse Günther	SV Elversberg	ger.1	no football page
+324021	Nicolas Kristof	SV Elversberg	ger.1	no football page
+340739	Felix Keidel	SV Elversberg	ger.1	no football page
+341826	Lukas Finn Pinckert	SV Elversberg	ger.1	no football page
+358496	Maurice Krattenmacher	SV Elversberg	ger.1	no football page
+364790	Tom Zimmerschied	SV Elversberg	ger.1	no football page
+372032	Noah Darvich	SV Elversberg	ger.1	no football page
+377481	Luis Seifert	SV Elversberg	ger.1	no football page
+379024	Cole Campbell	SV Elversberg	ger.1	no football page
+379180	Francis-Ikechukwu Onyeka	SV Elversberg	ger.1	no football page
+398004	David Mokwa	SV Elversberg	ger.1	no football page
+417336	Raif Adam	SV Elversberg	ger.1	no football page
+200079	Leopold Zingerle	RB Leipzig	ger.1	no football page
+307364	Rocco Reitz	RB Leipzig	ger.1	no football page
+330233	Ezechiel Banzuzi	RB Leipzig	ger.1	no football page
+357683	Brajan Gruda	RB Leipzig	ger.1	no football page
+366911	Tidiam Gomis	RB Leipzig	ger.1	no football page
+368003	Max Finkgrafe	RB Leipzig	ger.1	no football page
+388683	Viggo Gebel	RB Leipzig	ger.1	no football page
+413837	Benno Kaltefleiter	RB Leipzig	ger.1	no football page
+413839	Samba Konate	RB Leipzig	ger.1	no football page
+231173	Linton Maina	FC Cologne	ger.1	no football page
+258973	Matthias Köbbing	FC Cologne	ger.1	no football page
+264484	Gideon Mensah	FC Cologne	ger.1	no football page
+275797	Marius Bulter	FC Cologne	ger.1	no football page
+286815	Ísak Jóhannesson	FC Cologne	ger.1	no football page
+306161	Rav van den Berg	FC Cologne	ger.1	no football page
+306378	Joel Schmied	FC Cologne	ger.1	no football page
+306653	Imad Rondic	FC Cologne	ger.1	no football page
+3114409	Jonathan Friemel	FC Cologne	ger.1	no football page
+357337	Jahmai Simpson-Pusey	FC Cologne	ger.1	no football page
+378369	Reigan Heskey	FC Cologne	ger.1	no football page
+380795	Said El Mala	FC Cologne	ger.1	no football page
+384155	Malek El Mala	FC Cologne	ger.1	no football page
+404143	Gil Neves	FC Cologne	ger.1	no football page
+415149	Martin James	FC Cologne	ger.1	no football page
+178380	Alexander Meyer	Borussia Dortmund	ger.1	no football page
+294317	Carney Chukwuemeka	Borussia Dortmund	ger.1	no football page
+357801	Konstantinos Karetsas	Borussia Dortmund	ger.1	no football page
+383070	Justin Lerma	Borussia Dortmund	ger.1	no football page
+387437	Filippo Mané	Borussia Dortmund	ger.1	no football page
+399455	Kauã Prates	Borussia Dortmund	ger.1	no football page
+401450	Enzo De Pina Duarte Dos Santos	Borussia Dortmund	ger.1	no football page
+403781	Mathis Albert	Borussia Dortmund	ger.1	no football page
+403833	Samuele Inácio	Borussia Dortmund	ger.1	no football page
+403933	Mussa Kaba	Borussia Dortmund	ger.1	no football page
+413817	Luca Reggiani	Borussia Dortmund	ger.1	no football page
+208285	Robin Koch	Eintracht Frankfurt	ger.1	no football page
+274887	Jonathan Burkardt	Eintracht Frankfurt	ger.1	no football page
+305556	Nnamdi Collins	Eintracht Frankfurt	ger.1	no football page
+3109554	Niko Iličević	Eintracht Frankfurt	ger.1	no football page
+338950	Kauã Santos	Eintracht Frankfurt	ger.1	no football page
+352179	Noël Aséko	Eintracht Frankfurt	ger.1	no football page
+355369	Can Uzun	Eintracht Frankfurt	ger.1	no football page
+359793	Younes Ebnoutalib	Eintracht Frankfurt	ger.1	no football page
+371596	Keita Kosugi	Eintracht Frankfurt	ger.1	no football page
+397160	Amil Siljevic	Eintracht Frankfurt	ger.1	no football page
+399423	Love Arrhov	Eintracht Frankfurt	ger.1	no football page
+406374	Jeremiaha Maluze	Eintracht Frankfurt	ger.1	no football page
+408339	Julian Etse	Eintracht Frankfurt	ger.1	no football page
+416636	Ayoube Amaimouni	Eintracht Frankfurt	ger.1	no football page
+418030	Malik Pimpong	Eintracht Frankfurt	ger.1	no football page
+171701	Lukas Kübler	SC Freiburg	ger.1	no football page
+179571	Vincenzo Grifo	SC Freiburg	ger.1	no football page
+231190	Niklas Beste	SC Freiburg	ger.1	no football page
+291203	Patrick Osterhage	SC Freiburg	ger.1	no football page
+3114681	Mateo Zelic	SC Freiburg	ger.1	no football page
+337079	Yannick Engelhardt	SC Freiburg	ger.1	no football page
+346208	Keisuke Goto	SC Freiburg	ger.1	no football page
+346619	Derry Scherhant	SC Freiburg	ger.1	no football page
+347980	Rihito Yamamoto	SC Freiburg	ger.1	no football page
+367557	Max Rosenfelder	SC Freiburg	ger.1	no football page
+387472	Berkay Yilmaz	SC Freiburg	ger.1	no football page
+387474	Ifechukwu Ogbus	SC Freiburg	ger.1	no football page
+390031	Cyriaque Irié	SC Freiburg	ger.1	no football page
+419274	Rouven Tarnutzer	SC Freiburg	ger.1	no football page
+297750	Albert Grønbaek	Hamburg SV	ger.1	no football page
+307725	Mario Vuskovic	Hamburg SV	ger.1	no football page
+3115345	Jason-Dean Bissi Mouelle	Hamburg SV	ger.1	no football page
+332878	Martin Adeline	Hamburg SV	ger.1	no football page
+377704	Kofi Amoako	Hamburg SV	ger.1	no football page
+388681	Fernando Dickes	Hamburg SV	ger.1	no football page
+410645	Louis Lemke	Hamburg SV	ger.1	no football page
+415376	Shafiq Nandja	Hamburg SV	ger.1	no football page
+290044	Miguel Gutiérrez	Bayer Leverkusen	ger.1	no football page
+346376	Tim Oermann	Bayer Leverkusen	ger.1	no football page
+361258	Afonso Moreira	Bayer Leverkusen	ger.1	no football page
+397120	Ben Hawighorst	Bayer Leverkusen	ger.1	no football page
+408246	Kennet Eichhorn	Bayer Leverkusen	ger.1	no football page
+408703	Montrell Culbreath	Bayer Leverkusen	ger.1	no football page
+422968	Kenan Doganay	Bayer Leverkusen	ger.1	no football page
+5325769	Gabriel Minutillo	Bayer Leverkusen	ger.1	no football page
+5327243	Dustin Buck	Bayer Leverkusen	ger.1	no football page
+3104151	Tim Binder	Bayern Munich	ger.1	no football page
+3110056	David Podar-Stiube	Bayern Munich	ger.1	no football page
+324660	Tom Bischof	Bayern Munich	ger.1	no football page
+402841	Lennart Karl	Bayern Munich	ger.1	no football page
+405585	David Daiber	Bayern Munich	ger.1	no football page
+405586	Cassiano Kiala	Bayern Munich	ger.1	no football page
+409827	Jannis Bärtl	Bayern Munich	ger.1	no football page
+417373	Maycon Cardozo	Bayern Munich	ger.1	no football page
+250866	Bryan Lasme	Schalke 04	ger.1	no football page
+253816	Ron Schallenberg	Schalke 04	ger.1	no football page
+297565	Satoshi Tanaka	Schalke 04	ger.1	no football page
+318343	Soufian El-Faouzi	Schalke 04	ger.1	no football page
+326766	Adrian Gantenbein	Schalke 04	ger.1	no football page
+332429	Emil Höjlund	Schalke 04	ger.1	no football page
+386465	Vitalie Becker	Schalke 04	ger.1	no football page
+403400	Mert Can Ayhan	Schalke 04	ger.1	no football page
+408247	Johannes Siebeking	Schalke 04	ger.1	no football page
+414334	Luca Vozar	Schalke 04	ger.1	no football page
+269136	Ermedin Demirovic	VfB Stuttgart	ger.1	no football page
+285866	Leonidas Stergiou	VfB Stuttgart	ger.1	no football page
+301319	Stefan Drljaca	VfB Stuttgart	ger.1	no football page
+323847	Ameen Al Dakhil	VfB Stuttgart	ger.1	no football page
+332574	Luca Jaquez	VfB Stuttgart	ger.1	no football page
+345905	Dzenan Pejcinovic	VfB Stuttgart	ger.1	no football page
+357684	Justin Diehl	VfB Stuttgart	ger.1	no football page
+372026	Finn Jeltsch	VfB Stuttgart	ger.1	no football page
+372027	Jarzinho Malanga	VfB Stuttgart	ger.1	no football page
+376559	Maximilian Herwerth	VfB Stuttgart	ger.1	no football page
+403741	Yanik Spalt	VfB Stuttgart	ger.1	no football page
+410646	Ertugrul Yigit	VfB Stuttgart	ger.1	no football page
+162111	Markus Kolke	Werder Bremen	ger.1	no football page
+234757	Jens Stage	Werder Bremen	ger.1	no football page
+275844	Amos Pieper	Werder Bremen	ger.1	no football page
+282388	Olivier Deman	Werder Bremen	ger.1	no football page
+305821	Oskar Wójcik	Werder Bremen	ger.1	no football page
+309487	Julian Malatini	Werder Bremen	ger.1	no football page
+3100710	Darwin Kaan Soylu	Werder Bremen	ger.1	no football page
+3106924	Paul Bright Max Erevbenagie	Werder Bremen	ger.1	no football page
+330964	Skelly Alvero	Werder Bremen	ger.1	no football page
+332325	Keke Topp	Werder Bremen	ger.1	no football page
+334374	Arthur	Werder Bremen	ger.1	no football page
+371689	Chuki	Werder Bremen	ger.1	no football page
+385354	Stefan Smarkalev	Werder Bremen	ger.1	no football page
+398005	Patrice Covic	Werder Bremen	ger.1	no football page
+399747	Dariusz Stalmach	Werder Bremen	ger.1	no football page
+399865	Mick Schmetgens	Werder Bremen	ger.1	no football page
+407196	Salim Musah	Werder Bremen	ger.1	no football page
+415744	Kenny Quetant	Werder Bremen	ger.1	no football page
+149297	Daniel Batz	Borussia Mönchengladbach	ger.1	no football page
+238033	Kou Itakura	Borussia Mönchengladbach	ger.1	no football page
+238536	Moritz Nicolas	Borussia Mönchengladbach	ger.1	no football page
+258876	Robin Hack	Borussia Mönchengladbach	ger.1	no football page
+271352	Shuto Machino	Borussia Mönchengladbach	ger.1	no football page
+275805	Philipp Sander	Borussia Mönchengladbach	ger.1	no football page
+276082	Yukhym Konoplia	Borussia Mönchengladbach	ger.1	no football page
+291817	Lion Schweers	Borussia Mönchengladbach	ger.1	no football page
+304631	Jan Olschowsky	Borussia Mönchengladbach	ger.1	no football page
+304793	Jens Castrop	Borussia Mönchengladbach	ger.1	no football page
+3116064	Josiah Kaled Uwakhonye	Borussia Mönchengladbach	ger.1	no football page
+3116071	Iaia Manco Danfa	Borussia Mönchengladbach	ger.1	no football page
+323061	Fabio Chiarodia	Borussia Mönchengladbach	ger.1	no football page
+341707	Zento Uno	Borussia Mönchengladbach	ger.1	no football page
+343990	Enzo Leopold	Borussia Mönchengladbach	ger.1	no football page
+346617	Lukas Ullrich	Borussia Mönchengladbach	ger.1	no football page
+384410	Jan Leszczynski	Borussia Mönchengladbach	ger.1	no football page
+403898	Mathieu Nguefack	Borussia Mönchengladbach	ger.1	no football page
+408539	Wael Mohya	Borussia Mönchengladbach	ger.1	no football page
+415726	Fritz Fleck	Borussia Mönchengladbach	ger.1	no football page
+134103	Lee Jae-Sung	Mainz	ger.1	no football page
+241297	Anthony Caci	Mainz	ger.1	no football page
+267798	Lennard Maloney	Mainz	ger.1	no football page
+279282	Silas Katompa-Mvumpa	Mainz	ger.1	no football page
+3121808	Rael-Tshimbela Nakuzola	Mainz	ger.1	no football page
+333646	Sota Kawasaki	Mainz	ger.1	no football page
+341950	Maximilian Kinzig	Mainz	ger.1	no football page
+342667	Otto Ruoppi	Mainz	ger.1	no football page
+357030	Kaishu Sano	Mainz	ger.1	no football page
+375371	Kacper Potulski	Mainz	ger.1	no football page
+399746	Fabio Gruber	Mainz	ger.1	no football page
+404381	Alynho Haïdara	Mainz	ger.1	no football page
+220823	Tom Baack	SC Paderborn 07	ger.1	no football page
+225579	Markus Schubert	SC Paderborn 07	ger.1	no football page
+245940	Felix Götze	SC Paderborn 07	ger.1	no football page
+267513	Sebastian Klaas	SC Paderborn 07	ger.1	no football page
+291207	Marcel Hoffmeier	SC Paderborn 07	ger.1	no football page
+3098337	Clemens Lippmann	SC Paderborn 07	ger.1	no football page
+312389	Marvin Pieringer	SC Paderborn 07	ger.1	no football page
+319415	Nahuel Nicolas Noll	SC Paderborn 07	ger.1	no football page
+323936	Gabriel Vidovic	SC Paderborn 07	ger.1	no football page
+332543	Stefano Marino	SC Paderborn 07	ger.1	no football page
+338837	Santiago Castaneda	SC Paderborn 07	ger.1	no football page
+345394	Laurin Ulrich	SC Paderborn 07	ger.1	no football page
+364593	Laurin Curda	SC Paderborn 07	ger.1	no football page
+364789	Timur Gayret	SC Paderborn 07	ger.1	no football page
+364892	Mattes Hansen	SC Paderborn 07	ger.1	no football page
+366362	Florian Pruhs	SC Paderborn 07	ger.1	no football page
+366370	Jano Horst	SC Paderborn 07	ger.1	no football page
+366828	Jonah Sticker	SC Paderborn 07	ger.1	no football page
+367058	Nyamekye Awortwie-Grant	SC Paderborn 07	ger.1	no football page
+371806	Tjark Scheller	SC Paderborn 07	ger.1	no football page
+386466	Deniz Zeitler	SC Paderborn 07	ger.1	no football page
+399219	Luka Djuric	SC Paderborn 07	ger.1	no football page
+401325	Tristan Zobel	SC Paderborn 07	ger.1	no football page
+406466	Ruben Müller	SC Paderborn 07	ger.1	no football page
+409108	Niklas Mohr	SC Paderborn 07	ger.1	no football page
+414361	Lasse Eickel	SC Paderborn 07	ger.1	no football page
+416412	Albert Millgramm	SC Paderborn 07	ger.1	no football page
+140624	Jeffrey Gouweleeuw	FC Augsburg	ger.1	no football page
+228507	Finn Dahmen	FC Augsburg	ger.1	no football page
+266657	Yannik Keitel	FC Augsburg	ger.1	no football page
+291750	Nathanaël Mbuku	FC Augsburg	ger.1	no football page
+302793	Seol Young-Woo	FC Augsburg	ger.1	no football page
+306928	Robin Fellhauer	FC Augsburg	ger.1	no football page
+308908	Fabian Rieder	FC Augsburg	ger.1	no football page
+309634	Tim Breithaupt	FC Augsburg	ger.1	no football page
+322693	Nediljko Labrovic	FC Augsburg	ger.1	no football page
+332689	Rodrigo Ribeiro	FC Augsburg	ger.1	no football page
+333400	Arijon Ibrahimovic	FC Augsburg	ger.1	no football page
+333837	Anton Kade	FC Augsburg	ger.1	no football page
+345106	Calvin Brackelmann	FC Augsburg	ger.1	no football page
+359207	Mert Kömür	FC Augsburg	ger.1	no football page
+373992	Klaus Suso	FC Augsburg	ger.1	no football page
+397212	Faik Sakar	FC Augsburg	ger.1	no football page
+399214	Hennes Behrens	FC Augsburg	ger.1	no football page
+406851	Uchenna Ogundu	FC Augsburg	ger.1	no football page
+413727	Loris Husic	FC Augsburg	ger.1	no football page
+416416	Tim Schnitzer	FC Augsburg	ger.1	no football page
+422096	Tom Wisbereit	FC Augsburg	ger.1	no football page
+165424	Frederik Ronnow	1. FC Union Berlin	ger.1	no football page
+221460	Carl Klaus	1. FC Union Berlin	ger.1	no football page
+222567	Josip Juranovic	1. FC Union Berlin	ger.1	no football page
+233499	Felix Uduokhai	1. FC Union Berlin	ger.1	no football page
+245623	Michel Aebischer	1. FC Union Berlin	ger.1	no football page
+268808	Stanley N'Soki	1. FC Union Berlin	ger.1	no football page
+276323	Jeong Woo-Yeong	1. FC Union Berlin	ger.1	no football page
+289527	Kastriot Imeri	1. FC Union Berlin	ger.1	no football page
+3101887	Julien Piet Friedrich	1. FC Union Berlin	ger.1	no football page
+3113344	Mekhi Anthony Gray	1. FC Union Berlin	ger.1	no football page
+3131188	Fritz Gagzow	1. FC Union Berlin	ger.1	no football page
+314184	Zeno Van Den Bosch	1. FC Union Berlin	ger.1	no football page
+322098	Marin Ljubicic	1. FC Union Berlin	ger.1	no football page
+341441	Andrej Ilić	1. FC Union Berlin	ger.1	no football page
+366823	Livan Burcu	1. FC Union Berlin	ger.1	no football page
+406371	Andrik Markgraf	1. FC Union Berlin	ger.1	no football page
+413775	Duje Sliskovic	1. FC Union Berlin	ger.1	no football page
+139520	Andrej Kramaric	TSG Hoffenheim	ger.1	no football page
+191209	Vladimír Coufal	TSG Hoffenheim	ger.1	no football page
+208608	Klaus Gjasula	TSG Hoffenheim	ger.1	no football page
+218980	Bernardo	TSG Hoffenheim	ger.1	no football page
+238025	Koki Machida	TSG Hoffenheim	ger.1	no football page
+274860	Wouter Burger	TSG Hoffenheim	ger.1	no football page
+277301	Valentin Gendrey	TSG Hoffenheim	ger.1	no football page
+292169	Adam Hlozek	TSG Hoffenheim	ger.1	no football page
+304795	Luca Philipp	TSG Hoffenheim	ger.1	no football page
+307567	Albian Hajdari	TSG Hoffenheim	ger.1	no football page
+3098291	Sean Dulic	TSG Hoffenheim	ger.1	no football page
+3099575	Jykese Fields	TSG Hoffenheim	ger.1	no football page
+3105981	Muhammed Yasin Batuhan Zor	TSG Hoffenheim	ger.1	no football page
+3111131	Tristan Spranger	TSG Hoffenheim	ger.1	no football page
+3111134	Oskar Hencke	TSG Hoffenheim	ger.1	no football page
+322510	Robin Hranác	TSG Hoffenheim	ger.1	no football page
+336355	Bambasé Conté	TSG Hoffenheim	ger.1	no football page
+362590	Leon Avdullahu	TSG Hoffenheim	ger.1	no football page
+364646	Lúkas Petersson	TSG Hoffenheim	ger.1	no football page
+372035	Max Moerstedt	TSG Hoffenheim	ger.1	no football page
+383188	Luis Engelns	TSG Hoffenheim	ger.1	no football page
+403802	Natnael Abraha	TSG Hoffenheim	ger.1	no football page
+407682	Cajetan Lenz	TSG Hoffenheim	ger.1	no football page
+418789	Valentin Lässig	TSG Hoffenheim	ger.1	no football page
