@@ -229,8 +229,7 @@ export async function backfillSeasonResults(): Promise<GoalAlert[]> {
              AND substr(kickoff_at, 1, 10) >= ? AND substr(kickoff_at, 1, 10) < ?`,
           [league, from, to],
         )?.n ?? 0;
-      if (stored >= wanted) continue;
-
+      // Always walk on a fresh/empty DB; do not skip based on stored count.
       log(`${league}: standings say ${Math.floor(expected / 2)} finished match(es), db has ${stored} — backfilling ${from}..${today}`);
       // Walk the season window newest-forward, capped: a league launched this
       // season cannot need a walk past 300 days, and the cap bounds a
@@ -238,6 +237,7 @@ export async function backfillSeasonResults(): Promise<GoalAlert[]> {
       const end = new Date(Math.min(new Date(to).getTime(), new Date(`${today}T00:00:00Z`).getTime() + 86_400_000));
       const start = new Date(new Date(end).getTime() - BACKFILL_MAX_DAYS * 86_400_000);
       let day = new Date(start.getTime() > new Date(`${from}T00:00:00Z`).getTime() ? start.getTime() : new Date(`${from}T00:00:00Z`).getTime());
+      let dayCount = 0;
       while (day.getTime() < end.getTime()) {
         const dateArg = day.toISOString().slice(0, 10).replace(/-/g, "");
         try {
@@ -248,6 +248,11 @@ export async function backfillSeasonResults(): Promise<GoalAlert[]> {
           console.error(`[sync] backfill ${league} (${dateArg}) FAILED:`, String(err));
         }
         day = new Date(day.getTime() + 86_400_000);
+        dayCount++;
+        const totalFinished = get<{ n: number }>(db, "SELECT COUNT(*) AS n FROM matches WHERE league = ? AND status = 'finished'", [league])?.n ?? 0;
+        if (dayCount % 5 === 0) {
+          console.log(`[sync] backfill: ${totalFinished} matches stored for ${league}`);
+        }
       }
       // A scoreboard stores only the scoreline. Timeline, player stats and the
       // per-team box score (possession, shots … — everything the season stat

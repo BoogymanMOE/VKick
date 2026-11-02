@@ -30,7 +30,7 @@ const ROOT_DIR = findProjectRoot(__dirname);
 import { getDb, get } from "./db/index.js";
 import { APP_BUILT_AT, APP_COMMIT } from "./appInfo.js";
 import { pruneFootballDetail, pruneSessions, logCapKb, RotatingLogger } from "./db/retention.js";
-import { backfillMissingDataOnBoot, backfillSeasonResults, startSyncLoop } from "./sync/service.js";
+import { backfillMissingDataOnBoot, backfillSeasonResults, startSyncLoop, syncSeasonFull } from "./sync/service.js";
 import { startBot } from "./bot/index.js";
 import { startResolverLoop } from "./predictions/resolver.js";
 import { startBackupLoop } from "./backupSchedule.js";
@@ -327,6 +327,8 @@ const server = app.listen(PORT, () => {
   if (process.env.SKIP_CRON === "1") {
     console.log("[api] SKIP_CRON=1 — sync/resolver cron loops disabled (dev fixtures stay put)");
   } else {
+    void syncSeasonFull().catch((err) => console.error("[sync] season-full error:", String(err)));
+    void backfillSeasonResults().catch((err) => console.error("[sync] backfill error:", String(err)));
     startSyncLoop();
     // Background data repair: only runs if something is actually missing, and
     // starts after the server is listening so it never delays boot.
