@@ -371,6 +371,7 @@ async function main() {
       const info = infoMap.get(fn);
       credits.push({
         player_id: p.id,
+        player_name: p.full_name,
         source_url: url,
         author: info?.author ?? null,
         license: info?.license ?? null,
@@ -387,8 +388,20 @@ async function main() {
     console.log(`Batch ${Math.floor(i / BATCH) + 1}: processed ${i + batch.length}/${total}, downloaded ${downloaded}, rejected ${rejected}, noImage ${noImage}`);
   }
 
-  // write credits.json
-  await writeFile(CREDITS_PATH, JSON.stringify(credits, null, 2) + "\n");
+  // merge with existing credits
+  let existing: Array<{ player_id: string; source_url: string | null; author: string | null; license: string | null }> = [];
+  try { existing = JSON.parse(fs.readFileSync(CREDITS_PATH, "utf8")); } catch {}
+  const byId = new Map(existing.map((c) => [c.player_id, c]));
+  for (const c of credits) byId.set(c.player_id, c);
+  const merged = [...byId.values()];
+  await writeFile(CREDITS_PATH, JSON.stringify(merged, null, 2) + "\n");
+  // verify every webp has a credit entry
+  const webpFiles = fs.readdirSync(FACES_DIR).filter((f) => f.endsWith(".webp"));
+  const creditIds = new Set(merged.map((c) => c.player_id));
+  const missingCredits = webpFiles.map((f) => f.replace(/\.webp$/, "")).filter((id) => !creditIds.has(id));
+  if (missingCredits.length > 0) {
+    throw new Error(`Missing credits for ${missingCredits.length} files: ${missingCredits.slice(0, 10).join(", ")}`);
+  }
 
   // summary
   const webpCount = fs.readdirSync(FACES_DIR).filter((f) => f.endsWith(".webp")).length;
