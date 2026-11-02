@@ -74,6 +74,29 @@ try {
   console.error("[api] seed load failed:", String(err));
 }
 
+// Deploy safety: log DB state on boot.
+try {
+  const existed = fs.existsSync(process.env.SQLITE_PATH ?? "./data/matchday.db");
+  const counts = {
+    teams: get<{ c: number }>(db, "SELECT COUNT(*) AS c FROM teams")?.c ?? 0,
+    players: get<{ c: number }>(db, "SELECT COUNT(*) AS c FROM players")?.c ?? 0,
+    matches: get<{ c: number }>(db, "SELECT COUNT(*) AS c FROM matches")?.c ?? 0,
+    users: get<{ c: number }>(db, "SELECT COUNT(*) AS c FROM users")?.c ?? 0,
+  };
+  console.log(`[api] db: path=${process.env.SQLITE_PATH ?? "./data/matchday.db"} existed=${existed} counts=${JSON.stringify(counts)}`);
+  if (counts.teams === 0) {
+    console.warn("[api] DB was empty on boot, seed loaded");
+    // alert via ALERT_CHAT_ID
+    const chatId = (process.env.ALERT_CHAT_ID ?? "").trim();
+    if (chatId) {
+      // best-effort: log only; bot may not be ready
+      console.log(`[api] ALERT: DB empty on boot, seed loaded (chat ${chatId})`);
+    }
+  }
+} catch (err) {
+  console.error("[api] db state log failed:", String(err));
+}
+
 // File-based SQLite + in-process cron loops (sync, resolver, retention): the
 // API must run as exactly one instance. Scale by making this box bigger, not
 // by running more of it.

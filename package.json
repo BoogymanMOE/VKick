@@ -35,7 +35,8 @@
     "map-faces-to-players": "tsx scripts/map-faces-to-players.ts",
     "list-missing-faces": "tsx scripts/list-missing-faces.ts",
     "set-override": "tsx scripts/set-override.ts",
-    "export-seed": "tsx scripts/export-seed.ts"
+    "export-seed": "tsx scripts/export-seed.ts",
+    "pull-backup": "tsx scripts/pull-backup.ts"
   },
   "dependencies": {
     "@fontsource/archivo": "^5.3.0",

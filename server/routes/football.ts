@@ -1145,7 +1145,14 @@ matchesRouter.get("/api/health/data", (_req, res) => {
       latestSeason,
     };
   });
-  const jobs = all<{ job_name: string; last_success_at: string | null; last_run_at: string | null; last_error: string | null }>(db, "SELECT job_name, last_success_at, last_run_at, last_error FROM sync_job_status");
+  const jobRows = all<{ job_name: string; last_success_at: string | null; last_run_at: string | null; last_error: string | null; interval_seconds: number | null }>(db, "SELECT job_name, last_success_at, last_run_at, last_error, interval_seconds FROM sync_job_status");
+  const nowMs = Date.now();
+  const jobs = jobRows.map((j) => {
+    const interval = j.interval_seconds ?? 3600;
+    const last = j.last_success_at ? new Date(j.last_success_at).getTime() : 0;
+    const stale = !last || nowMs - last > 2 * interval * 1000;
+    return { ...j, stale };
+  });
   res.json({ generatedAt: new Date().toISOString(), leagues: data, jobs });
 });
 

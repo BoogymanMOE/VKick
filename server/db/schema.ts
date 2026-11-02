@@ -46,7 +46,8 @@ export function migrate(db: DatabaseSync): void {
       job_name TEXT PRIMARY KEY,
       last_success_at TEXT,
       last_error TEXT,
-      last_run_at TEXT
+      last_run_at TEXT,
+      interval_seconds INTEGER NOT NULL DEFAULT 3600
     );
 
     CREATE TABLE IF NOT EXISTS manual_overrides (

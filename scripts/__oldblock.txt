@@ -1,0 +1,86 @@
+﻿    } catch (e) {
+      result = "orphan";
+    }
+
+    if (result === "ambiguous") {
+      ambiguous += 1;
+      if (ambiguousSample.length < 10) {
+        ambiguousSample.push({ espn_id: espnId, name: player.full_name, team: tName });
+      }
+    } else if (result === "orphan" || result === "no-candidate") {
+      orphan += 1;
+      if (orphanSample.length < 10) {
+        orphanSample.push({ espn_id: espnId, name: player.full_name, team: tName });
+      }
+    } else {
+      matched += 1;
+      const claims = result.claims;
+      const p18 = (claims.P18 ?? [])[0]?.mainsnak?.datavalue?.value;
+      const wikiName = result.name;
+
+      if (!p18) {
+        noImage += 1;
+      } else {
+        // download
+        try {
+          await pool.run(async () => {
+            const url = commonsDownloadUrl(wikiFilenameFromImageValue(p18));
+            for (let attempt = 0; attempt <= 2; attempt++) {
+              try {
+                const res = await fetch(url, {
+                  headers: { "User-Agent": UA },
+                  signal: AbortSignal.timeout(20_000),
+                });
+                if (res.status === 404) {
+                  missing += 1;
+                  if (missingSample.length < 10) missingSample.push({ espn_id: espnId, name: wikiName, team: tName });
+                  return;
+                }
+                if (!res.ok) {
+                  if (attempt === 2) {
+                    missing += 1;
+                    if (missingSample.length < 10) missingSample.push({ espn_id: espnId, name: wikiName, team: tName });
+                    return;
+                  }
+                  await sleep(1000 * (attempt + 1));
+                  continue;
+                }
+                const ct = res.headers.get("content-type") ?? "";
+                if (!ct.toLowerCase().startsWith("image/")) {
+                  missing += 1;
+                  if (missingSample.length < 10) missingSample.push({ espn_id: espnId, name: wikiName, team: tName });
+                  return;
+                }
+                const buf = Buffer.from(await res.arrayBuffer());
+                if (buf.length === 0) {
+                  if (attempt === 2) {
+                    missing += 1;
+                    if (missingSample.length < 10) missingSample.push({ espn_id: espnId, name: wikiName, team: tName });
+                    return;
+                  }
+                  await sleep(1000 * (attempt + 1));
+                  continue;
+                }
+                await writeFile(dest, buf);
+                const rtl = isRtl(wikiName);
+                const content = (rtl ? "\uFEFF" : "") + wikiName + (rtl ? "\n" : "");
+                await writeFile(txtDest, content, "utf8");
+                matchedIds.add(espnId);
+                downloaded += 1;
+                return;
+              } catch (e) {
+                if (attempt === 2) {
+                  missing += 1;
+                  if (missingSample.length < 10) missingSample.push({ espn_id: espnId, name: wikiName, team: tName });
+                  return;
+                }
+                await sleep(1000 * (attempt + 1));
+              }
+            }
+          });
+        } catch (e) {
+          missing += 1;
+          if (missingSample.length < 10) missingSample.push({ espn_id: espnId, name: wikiName, team: tName });
+        }
+      }
+    }

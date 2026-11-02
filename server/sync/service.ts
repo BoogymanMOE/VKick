@@ -20,12 +20,12 @@ import {
 
 const db = getDb();
 
-export function recordJobSuccess(job: string): void {
+export function recordJobSuccess(job: string, intervalSeconds: number = 3600): void {
   try {
     db.prepare(
-      `INSERT INTO sync_job_status (job_name, last_success_at, last_run_at) VALUES (?, ?, ?)
-       ON CONFLICT(job_name) DO UPDATE SET last_success_at=excluded.last_success_at, last_run_at=excluded.last_run_at, last_error=NULL`,
-    ).run(job, new Date().toISOString(), new Date().toISOString());
+      `INSERT INTO sync_job_status (job_name, last_success_at, last_run_at, interval_seconds) VALUES (?, ?, ?, ?)
+       ON CONFLICT(job_name) DO UPDATE SET last_success_at=excluded.last_success_at, last_run_at=excluded.last_run_at, last_error=NULL, interval_seconds=excluded.interval_seconds`,
+    ).run(job, new Date().toISOString(), new Date().toISOString(), intervalSeconds);
   } catch {}
 }
 export function recordJobError(job: string, err: unknown): void {
@@ -112,6 +112,34 @@ export async function syncScoreboardWindow(backDays: number, forwardDays: number
  * the routine 21-day lookahead stops well short of that.
  */
 export const FIXTURE_HORIZON_DAYS = 95;
+
+/**
+ * Sync every month of the current season for all followed leagues, using the
+ * ESPN scoreboard month param (dates=YYYYMM). Covers the full season instead
+ * of a fixed day window.
+ */
+export async function syncSeasonFull(): Promise<void> {
+  const months: string[] = [];
+  // Aug 2026 -> May 2027
+  for (let y = 2026; y <= 2027; y++) {
+    const startM = y === 2026 ? 8 : 1;
+    const endM = y === 2027 ? 5 : 12;
+    for (let m = startM; m <= endM; m++) {
+      months.push(`${y}${String(m).padStart(2, "0")}`);
+    }
+  }
+  for (const league of LEAGUES) {
+    for (const ym of months) {
+      try {
+        const json = await fetchScoreboard(league, ym);
+        applyScoreboard(db, json, league);
+      } catch (err) {
+        console.error(`[sync] season-full ${league} ${ym} FAILED:`, String(err));
+      }
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+}
 
 /**
  * The fixture horizon: every day from just past the routine lookahead out to
@@ -451,7 +479,7 @@ export async function syncRosters(): Promise<void> {
   log(
     `rosters: ${ok}/${teams.length - skipped} squads refreshed${skipped ? ` (${skipped} skipped, no league)` : ""}`,
   );
-  recordJobSuccess("rosters");
+  recordJobSuccess("rosters", 86400);
 }
 
 /**
@@ -524,7 +552,7 @@ export async function syncStandings(): Promise<void> {
       console.error(`[sync] standings ${league} FAILED:`, String(err));
     }
   }
-  recordJobSuccess("standings");
+  recordJobSuccess("standings", 86400);
 }
 
 /** "2026-27" -> 2026. ESPN's standings endpoint wants the season START year. */
@@ -639,7 +667,7 @@ export async function syncLeagueNews(): Promise<void> {
       console.error(`[sync] league news ${league} FAILED:`, String(err));
     }
   }
-  recordJobSuccess("league-news");
+  recordJobSuccess("league-news", 900);
 }
 
 export function startSyncLoop(): void {

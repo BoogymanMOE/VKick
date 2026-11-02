@@ -10,7 +10,7 @@ const FACES_DIR = path.join(ROOT, "public", "faces");
 const CREDITS_PATH = path.join(FACES_DIR, "credits.json");
 const REJECTS_PATH = path.join(ROOT, "scripts", "face-rejects-wikidata.txt");
 const UA = "VKickBot/1.0 (contact: github.com/BoogymanMOE/VKick)";
-const SEARCH_DELAY_MS = 1000;
+const SEARCH_DELAY_MS = 2000;
 const teamQidMap = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "team-qid-map.json"), "utf8"));
 const top5Qids = new Set(Object.values(teamQidMap));
 
@@ -18,9 +18,17 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 async function fetchJson(url: string): Promise<any> {
-  const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20_000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  for (let attempt = 0; attempt <= 6; attempt++) {
+    const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20_000) });
+    if (res.status === 429 || res.status === 503) {
+      const retry = parseInt(res.headers.get("retry-after") ?? "10", 10);
+      await sleep((retry || 10) * 1000 * (attempt + 1));
+      continue;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
+  throw new Error("max retries");
 }
 
 async function searchEntities(name: string): Promise<Array<{ id: string; label: string; description?: string; aliases?: string[] }>> {
