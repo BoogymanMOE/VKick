@@ -3,1536 +3,1536 @@
 312182	Daniel Jebbison	349	eng.1	no footballer claim
 289824	Djordje Petrovic	349	eng.1	no footballer claim
 102368	Evanilson	349	eng.1	no footballer claim
-279155	James Hill	349	eng.1	error: Error: HTTP 429
-303804	Juanlu Sanchez	349	eng.1	error: Error: HTTP 429
-361809	Junior Kroupi	349	eng.1	error: Error: HTTP 429
-223452	Lewis Cook	349	eng.1	error: Error: HTTP 429
-3130136	Mack Allan	349	eng.1	error: Error: HTTP 429
-357719	Rayan	349	eng.1	error: Error: HTTP 429
-377736	Veljko Milosavljevic	349	eng.1	error: Error: HTTP 429
-291269	William Dennis	349	eng.1	error: Error: HTTP 429
-353151	Álvaro Rodríguez	349	eng.1	error: Error: HTTP 429
-390975	Andre Annous	359	eng.1	error: Error: HTTP 429
-381341	Ceadach O’Neill	359	eng.1	error: Error: HTTP 429
-399894	Ife Ibrahim	359	eng.1	error: Error: HTTP 429
-399007	Maalik Hashi	359	eng.1	error: Error: HTTP 429
-399893	Marcell Washington	359	eng.1	error: Error: HTTP 429
-400284	Marli Salmon	359	eng.1	error: Error: HTTP 429
-393424	Theo Julienne	359	eng.1	error: Error: HTTP 429
-382839	Alysson	362	eng.1	error: Error: HTTP 429
-393425	Bradley Burrowes	362	eng.1	error: Error: HTTP 429
-366248	George Hemmings	362	eng.1	error: Error: HTTP 429
-235319	James Wright	362	eng.1	error: Error: HTTP 429
-386992	Johan Manzambi	362	eng.1	error: Error: HTTP 429
-301524	João Gomes	362	eng.1	error: Error: HTTP 429
-380307	Luka Lynch	362	eng.1	error: Error: HTTP 429
-392682	Modou Cissé	362	eng.1	error: Error: HTTP 429
-409310	Owen Asemota	362	eng.1	error: Error: HTTP 429
-349075	Triston Rowe	362	eng.1	error: Error: HTTP 429
-362266	Benjamin Fredrick	337	eng.1	error: Error: HTTP 429
-249527	Ellery Balcombe	337	eng.1	error: Error: HTTP 429
-231049	Fábio Carvalho	337	eng.1	error: Error: HTTP 429
-246309	Josh Dasilva	337	eng.1	error: Error: HTTP 429
-394418	Kaye Furo	337	eng.1	error: Error: HTTP 429
-362203	Kim Ji-Soo	337	eng.1	error: Error: HTTP 429
-228547	Mamadou Sangare	337	eng.1	error: Error: HTTP 429
-342029	Yehor Yarmoliuk	337	eng.1	error: Error: HTTP 429
-327170	Amario Cozier-Duberry	331	eng.1	error: Error: HTTP 429
-387655	Charalambos Kostoulas	331	eng.1	error: Error: HTTP 429
-387489	Chema Andrés	331	eng.1	error: Error: HTTP 429
-192278	Diego Gómez	331	eng.1	error: Error: HTTP 429
-238318	Ferdi Kadioglu	331	eng.1	error: Error: HTTP 429
-359400	Ibrahim Osman	331	eng.1	error: Error: HTTP 429
-364962	Luka Vuskovic	331	eng.1	error: Error: HTTP 429
-359097	Malick Yalcouyé	331	eng.1	error: Error: HTTP 429
-399697	Nehemiah Oriola	331	eng.1	error: Error: HTTP 429
-132659	Pascal Gross	331	eng.1	error: Error: HTTP 429
-411697	Shane Nti	331	eng.1	error: Error: HTTP 429
-357165	Stefanos Tzimas	331	eng.1	error: Error: HTTP 429
-182573	Steven Hall	331	eng.1	error: Error: HTTP 429
-248761	Tom McGill	331	eng.1	error: Error: HTTP 429
-413274	Younes Ibrahim	331	eng.1	error: Error: HTTP 429
-407059	Zadok Yohanna	331	eng.1	error: Error: HTTP 429
-363218	Aaron Anselmino	363	eng.1	error: Error: HTTP 429
-376481	Estêvão	363	eng.1	error: Error: HTTP 429
-286774	Gaga Slonina	363	eng.1	error: Error: HTTP 429
-376274	Geovany Quenda	363	eng.1	error: Error: HTTP 429
-339879	Jamie Gittens	363	eng.1	error: Error: HTTP 429
-368317	Josh Acheampong	363	eng.1	error: Error: HTTP 429
-284960	João Pedro	363	eng.1	error: Error: HTTP 429
-399562	Mahdi Nicoll-Jazuli	363	eng.1	error: Error: HTTP 429
-362486	Marco Palestra	363	eng.1	error: Error: HTTP 429
-408508	Olutayo Subuloye	363	eng.1	error: Error: HTTP 429
-300331	Pep Chavarría	363	eng.1	error: Error: HTTP 429
-399564	Reggie Watson	363	eng.1	error: Error: HTTP 429
-308217	Romeo Lavia	363	eng.1	error: Error: HTTP 429
-319404	Aurèle Amenda	388	eng.1	error: Error: HTTP 429
-169619	Ben Wilson	388	eng.1	error: Error: HTTP 429
-240495	Brandon Thomas-Asante	388	eng.1	error: Error: HTTP 429
-307069	Carl Rushworth	388	eng.1	error: Error: HTTP 429
-143007	Daniel Bentley	388	eng.1	error: Error: HTTP 429
-246954	Ephron Mason-Clark	388	eng.1	error: Error: HTTP 429
-236912	Gustavo Hamer	388	eng.1	error: Error: HTTP 429
-206172	Jay Da Silva	388	eng.1	error: Error: HTTP 429
-277614	Josh Eccles	388	eng.1	error: Error: HTTP 429
-294308	Kaine Kesler Hayden	388	eng.1	error: Error: HTTP 429
-281139	Milan van Ewijk	388	eng.1	error: Error: HTTP 429
-358084	Caleb Kporha	384	eng.1	error: Error: HTTP 429
-272585	Chris Richards	384	eng.1	error: Error: HTTP 429
-403867	Dean Benamar	384	eng.1	error: Error: HTTP 429
-400110	George King	384	eng.1	error: Error: HTTP 429
-388605	Honest Ahanor	384	eng.1	error: Error: HTTP 429
-3114844	Lucca Benetton	384	eng.1	error: Error: HTTP 429
-380963	Sebastian Williams	384	eng.1	error: Error: HTTP 429
-297370	Yéremy Pino	384	eng.1	error: Error: HTTP 429
-374519	Zavier Gozo	384	eng.1	error: Error: HTTP 429
-367559	Braiden Graham	368	eng.1	error: Error: HTTP 429
-378458	Harrison Armstrong	368	eng.1	error: Error: HTTP 429
-392052	Harvey Foster	368	eng.1	error: Error: HTTP 429
-276220	James Garner	368	eng.1	error: Error: HTTP 429
-410322	Malik Olayiwola	368	eng.1	error: Error: HTTP 429
-311963	Merlin Röhl	368	eng.1	error: Error: HTTP 429
-4946	Michael Keane	368	eng.1	error: Error: HTTP 429
-301166	Thierno Barry	368	eng.1	error: Error: HTTP 429
-148515	Tom King	368	eng.1	error: Error: HTTP 429
-340640	Tyler Dibling	368	eng.1	error: Error: HTTP 429
-362553	Alex Borto	370	eng.1	error: Error: HTTP 429
-376050	Bradley Slade	370	eng.1	error: Error: HTTP 429
-365351	Chibuzo Nwoko	370	eng.1	error: Error: HTTP 429
-12172	César Palacios	370	eng.1	error: Error: HTTP 429
-313230	David Affengruber	370	eng.1	error: Error: HTTP 429
-87297	Gonzalo García	370	eng.1	error: Error: HTTP 429
-409541	Josh King	370	eng.1	error: Error: HTTP 429
-330764	Kevin	370	eng.1	error: Error: HTTP 429
-392697	Macauley Zepa	370	eng.1	error: Error: HTTP 429
-301525	Rodrigo Muniz	370	eng.1	error: Error: HTTP 429
-414372	Archie Howard	306	eng.1	error: Error: HTTP 429
-311173	Brooke Norton-Cuffy	306	eng.1	error: Error: HTTP 429
-326187	Charlie Hughes	306	eng.1	error: Error: HTTP 429
-387657	Christos Mouzakitis	306	eng.1	error: Error: HTTP 429
-308216	Darko Gyabi	306	eng.1	error: Error: HTTP 429
-306055	Eliot Matazo	306	eng.1	error: Error: HTTP 429
-366363	Ilyas Ansah	306	eng.1	error: Error: HTTP 429
-354149	Jens Hjerto Dahl	306	eng.1	error: Error: HTTP 429
-168424	John Egan	306	eng.1	error: Error: HTTP 429
-153613	Matt Crooks	306	eng.1	error: Error: HTTP 429
-356212	Nobel Mendy	306	eng.1	error: Error: HTTP 429
-193010	Oliver McBurnie	306	eng.1	error: Error: HTTP 429
-249851	Regan Slater	306	eng.1	error: Error: HTTP 429
-243576	Ryan Giles	306	eng.1	error: Error: HTTP 429
-310599	Tim Iroegbunam	306	eng.1	error: Error: HTTP 429
-328740	Óscar Zambrano	306	eng.1	error: Error: HTTP 429
-308891	Anis Mehmeti	373	eng.1	error: Error: HTTP 429
-183326	Cameron Humphreys	373	eng.1	error: Error: HTTP 429
-243648	Cedric Kipre	373	eng.1	error: Error: HTTP 429
-318680	Fatawu Issahaku	373	eng.1	error: Error: HTTP 429
-256607	Florentino	373	eng.1	error: Error: HTTP 429
-269343	Jack Clarke	373	eng.1	error: Error: HTTP 429
-139744	Jack Taylor	373	eng.1	error: Error: HTTP 429
-20975	Julio Enciso	373	eng.1	error: Error: HTTP 429
-3132863	Matthew Charles Compton	373	eng.1	error: Error: HTTP 429
-222300	Sasa Lukic	373	eng.1	error: Error: HTTP 429
-408489	Alfie Cresswell	357	eng.1	error: Error: HTTP 429
-346913	Darryl Ombang	357	eng.1	error: Error: HTTP 429
-194801	Harry Wilson	357	eng.1	error: Error: HTTP 429
-30116	Ilia Gruev	357	eng.1	error: Error: HTTP 429
-408959	Jayden Lienou	357	eng.1	error: Error: HTTP 429
-346662	Jean-Mattéo Bahoya	357	eng.1	error: Error: HTTP 429
-407584	Rhys Chadwick	357	eng.1	error: Error: HTTP 429
-407583	Rory Mahady	357	eng.1	error: Error: HTTP 429
-318390	Tarik Muharemovic	357	eng.1	error: Error: HTTP 429
-380082	Giovanni Leoni	364	eng.1	error: Error: HTTP 429
-326230	James McConnell	364	eng.1	error: Error: HTTP 429
-354737	Jayden Danns	364	eng.1	error: Error: HTTP 429
-395890	Joshua Lambie	364	eng.1	error: Error: HTTP 429
-380624	Michael Laffey	364	eng.1	error: Error: HTTP 429
-270821	Ronald Araujo	364	eng.1	error: Error: HTTP 429
-289840	Vitezslav Jaros	364	eng.1	error: Error: HTTP 429
-397545	Víctor Muñoz	364	eng.1	error: Error: HTTP 429
-379855	Wellity Lucky	364	eng.1	error: Error: HTTP 429
-382966	Allan Elias	382	eng.1	error: Error: HTTP 429
-361355	Claudio Echeverri	382	eng.1	error: Error: HTTP 429
-3129530	Dexter Oliver	382	eng.1	error: Error: HTTP 429
-410320	Floyd Samba	382	eng.1	error: Error: HTTP 429
-299910	Josko Gvardiol	382	eng.1	error: Error: HTTP 429
-390094	Kaden Braithwaite	382	eng.1	error: Error: HTTP 429
-154595	Mateo Kovacic	382	eng.1	error: Error: HTTP 429
-413855	Max-Edgar Chabot	382	eng.1	error: Error: HTTP 429
-395463	Ryan McAidoo	382	eng.1	error: Error: HTTP 429
-289155	Benjamin Sesko	360	eng.1	error: Error: HTTP 429
-381055	Daniel Armer	360	eng.1	error: Error: HTTP 429
-325550	Dermot Mee	360	eng.1	error: Error: HTTP 429
-205081	Jack Fletcher	360	eng.1	error: Error: HTTP 429
-386199	Jaydan Kamason	360	eng.1	error: Error: HTTP 429
-358180	Shea Lacey	360	eng.1	error: Error: HTTP 429
-393138	Tyler Fletcher	360	eng.1	error: Error: HTTP 429
-397881	Tynan Thompson	360	eng.1	error: Error: HTTP 429
-353304	Aidan Harris	361	eng.1	error: Error: HTTP 429
-308979	Amar Dedic	361	eng.1	error: Error: HTTP 429
-347523	Ewen Jaouen	361	eng.1	error: Error: HTTP 429
-414116	Kyran Thompson	361	eng.1	error: Error: HTTP 429
-374219	Leo Shahar	361	eng.1	error: Error: HTTP 429
-319267	Lukás Hornícek	361	eng.1	error: Error: HTTP 429
-416448	Mason Miley	361	eng.1	error: Error: HTTP 429
+279155	James Hill	349	eng.1	no wikidata match
+303804	Juanlu Sanchez	349	eng.1	no wikidata match
+361809	Junior Kroupi	349	eng.1	no wikidata match
+223452	Lewis Cook	349	eng.1	no wikidata match
+3130136	Mack Allan	349	eng.1	no wikidata match
+357719	Rayan	349	eng.1	no footballer claim
+377736	Veljko Milosavljevic	349	eng.1	no wikidata match
+291269	William Dennis	349	eng.1	no footballer claim
+353151	Álvaro Rodríguez	349	eng.1	no footballer claim
+390975	Andre Annous	359	eng.1	no wikidata match
+381341	Ceadach O’Neill	359	eng.1	no wikidata match
+399894	Ife Ibrahim	359	eng.1	no footballer claim
+399007	Maalik Hashi	359	eng.1	no wikidata match
+399893	Marcell Washington	359	eng.1	no wikidata match
+400284	Marli Salmon	359	eng.1	no footballer claim
+393424	Theo Julienne	359	eng.1	no footballer claim
+382839	Alysson	362	eng.1	no footballer claim
+393425	Bradley Burrowes	362	eng.1	no wikidata match
+366248	George Hemmings	362	eng.1	no footballer claim
+235319	James Wright	362	eng.1	no footballer claim
+386992	Johan Manzambi	362	eng.1	no footballer claim
+301524	João Gomes	362	eng.1	no footballer claim
+380307	Luka Lynch	362	eng.1	no footballer claim
+392682	Modou Cissé	362	eng.1	no wikidata match
+409310	Owen Asemota	362	eng.1	no wikidata match
+349075	Triston Rowe	362	eng.1	no footballer claim
+362266	Benjamin Fredrick	337	eng.1	no footballer claim
+249527	Ellery Balcombe	337	eng.1	no footballer claim
+231049	Fábio Carvalho	337	eng.1	no footballer claim
+246309	Josh Dasilva	337	eng.1	no footballer claim
+394418	Kaye Furo	337	eng.1	no footballer claim
+362203	Kim Ji-Soo	337	eng.1	no footballer claim
+228547	Mamadou Sangare	337	eng.1	no wikidata match
+342029	Yehor Yarmoliuk	337	eng.1	no wikidata match
+327170	Amario Cozier-Duberry	331	eng.1	no footballer claim
+387655	Charalambos Kostoulas	331	eng.1	no wikidata match
+387489	Chema Andrés	331	eng.1	no footballer claim
+192278	Diego Gómez	331	eng.1	no footballer claim
+238318	Ferdi Kadioglu	331	eng.1	no wikidata match
+359400	Ibrahim Osman	331	eng.1	no footballer claim
+364962	Luka Vuskovic	331	eng.1	no wikidata match
+359097	Malick Yalcouyé	331	eng.1	no wikidata match
+399697	Nehemiah Oriola	331	eng.1	no footballer claim
+132659	Pascal Gross	331	eng.1	no footballer claim
+411697	Shane Nti	331	eng.1	no wikidata match
+357165	Stefanos Tzimas	331	eng.1	no footballer claim
+182573	Steven Hall	331	eng.1	no footballer claim
+248761	Tom McGill	331	eng.1	no footballer claim
+413274	Younes Ibrahim	331	eng.1	no footballer claim
+407059	Zadok Yohanna	331	eng.1	no footballer claim
+363218	Aaron Anselmino	363	eng.1	no footballer claim
+376481	Estêvão	363	eng.1	no wikidata match
+286774	Gaga Slonina	363	eng.1	no footballer claim
+376274	Geovany Quenda	363	eng.1	no footballer claim
+339879	Jamie Gittens	363	eng.1	no footballer claim
+368317	Josh Acheampong	363	eng.1	no footballer claim
+284960	João Pedro	363	eng.1	no wikidata match
+399562	Mahdi Nicoll-Jazuli	363	eng.1	no footballer claim
+362486	Marco Palestra	363	eng.1	no footballer claim
+408508	Olutayo Subuloye	363	eng.1	no footballer claim
+300331	Pep Chavarría	363	eng.1	no wikidata match
+399564	Reggie Watson	363	eng.1	no footballer claim
+308217	Romeo Lavia	363	eng.1	no wikidata match
+319404	Aurèle Amenda	388	eng.1	no footballer claim
+169619	Ben Wilson	388	eng.1	no footballer claim
+240495	Brandon Thomas-Asante	388	eng.1	no footballer claim
+307069	Carl Rushworth	388	eng.1	no wikidata match
+143007	Daniel Bentley	388	eng.1	no footballer claim
+246954	Ephron Mason-Clark	388	eng.1	no footballer claim
+236912	Gustavo Hamer	388	eng.1	no footballer claim
+206172	Jay Da Silva	388	eng.1	no wikidata match
+277614	Josh Eccles	388	eng.1	no footballer claim
+294308	Kaine Kesler Hayden	388	eng.1	no wikidata match
+281139	Milan van Ewijk	388	eng.1	no footballer claim
+358084	Caleb Kporha	384	eng.1	no footballer claim
+272585	Chris Richards	384	eng.1	no footballer claim
+403867	Dean Benamar	384	eng.1	no wikidata match
+400110	George King	384	eng.1	no footballer claim
+388605	Honest Ahanor	384	eng.1	no footballer claim
+3114844	Lucca Benetton	384	eng.1	no wikidata match
+380963	Sebastian Williams	384	eng.1	no wikidata match
+297370	Yéremy Pino	384	eng.1	no footballer claim
+374519	Zavier Gozo	384	eng.1	no footballer claim
+367559	Braiden Graham	368	eng.1	no footballer claim
+378458	Harrison Armstrong	368	eng.1	no footballer claim
+392052	Harvey Foster	368	eng.1	no wikidata match
+276220	James Garner	368	eng.1	no footballer claim
+410322	Malik Olayiwola	368	eng.1	no wikidata match
+311963	Merlin Röhl	368	eng.1	no footballer claim
+4946	Michael Keane	368	eng.1	no footballer claim
+301166	Thierno Barry	368	eng.1	no footballer claim
+148515	Tom King	368	eng.1	no footballer claim
+340640	Tyler Dibling	368	eng.1	no footballer claim
+362553	Alex Borto	370	eng.1	no footballer claim
+376050	Bradley Slade	370	eng.1	no footballer claim
+365351	Chibuzo Nwoko	370	eng.1	no footballer claim
+12172	César Palacios	370	eng.1	no footballer claim
+313230	David Affengruber	370	eng.1	no wikidata match
+87297	Gonzalo García	370	eng.1	no footballer claim
+409541	Josh King	370	eng.1	no footballer claim
+330764	Kevin	370	eng.1	no footballer claim
+392697	Macauley Zepa	370	eng.1	no wikidata match
+301525	Rodrigo Muniz	370	eng.1	no wikidata match
+414372	Archie Howard	306	eng.1	no footballer claim
+311173	Brooke Norton-Cuffy	306	eng.1	no footballer claim
+326187	Charlie Hughes	306	eng.1	no wikidata match
+387657	Christos Mouzakitis	306	eng.1	no footballer claim
+308216	Darko Gyabi	306	eng.1	no footballer claim
+306055	Eliot Matazo	306	eng.1	no footballer claim
+366363	Ilyas Ansah	306	eng.1	no footballer claim
+354149	Jens Hjerto Dahl	306	eng.1	no wikidata match
+168424	John Egan	306	eng.1	no footballer claim
+153613	Matt Crooks	306	eng.1	no footballer claim
+356212	Nobel Mendy	306	eng.1	no footballer claim
+193010	Oliver McBurnie	306	eng.1	no footballer claim
+249851	Regan Slater	306	eng.1	no footballer claim
+243576	Ryan Giles	306	eng.1	no footballer claim
+310599	Tim Iroegbunam	306	eng.1	no footballer claim
+328740	Óscar Zambrano	306	eng.1	no footballer claim
+308891	Anis Mehmeti	373	eng.1	no footballer claim
+183326	Cameron Humphreys	373	eng.1	no footballer claim
+243648	Cedric Kipre	373	eng.1	no wikidata match
+318680	Fatawu Issahaku	373	eng.1	no wikidata match
+256607	Florentino	373	eng.1	no footballer claim
+269343	Jack Clarke	373	eng.1	no footballer claim
+139744	Jack Taylor	373	eng.1	no footballer claim
+20975	Julio Enciso	373	eng.1	no footballer claim
+3132863	Matthew Charles Compton	373	eng.1	no wikidata match
+222300	Sasa Lukic	373	eng.1	no wikidata match
+408489	Alfie Cresswell	357	eng.1	no wikidata match
+346913	Darryl Ombang	357	eng.1	no wikidata match
+194801	Harry Wilson	357	eng.1	no footballer claim
+30116	Ilia Gruev	357	eng.1	no footballer claim
+408959	Jayden Lienou	357	eng.1	no wikidata match
+346662	Jean-Mattéo Bahoya	357	eng.1	no footballer claim
+407584	Rhys Chadwick	357	eng.1	no wikidata match
+407583	Rory Mahady	357	eng.1	no wikidata match
+318390	Tarik Muharemovic	357	eng.1	no footballer claim
+380082	Giovanni Leoni	364	eng.1	no footballer claim
+326230	James McConnell	364	eng.1	no footballer claim
+354737	Jayden Danns	364	eng.1	no wikidata match
+395890	Joshua Lambie	364	eng.1	no wikidata match
+380624	Michael Laffey	364	eng.1	no footballer claim
+270821	Ronald Araujo	364	eng.1	no wikidata match
+289840	Vitezslav Jaros	364	eng.1	no wikidata match
+397545	Víctor Muñoz	364	eng.1	no footballer claim
+379855	Wellity Lucky	364	eng.1	no wikidata match
+382966	Allan Elias	382	eng.1	no footballer claim
+361355	Claudio Echeverri	382	eng.1	no footballer claim
+3129530	Dexter Oliver	382	eng.1	no footballer claim
+410320	Floyd Samba	382	eng.1	no footballer claim
+299910	Josko Gvardiol	382	eng.1	no wikidata match
+390094	Kaden Braithwaite	382	eng.1	no wikidata match
+154595	Mateo Kovacic	382	eng.1	no wikidata match
+413855	Max-Edgar Chabot	382	eng.1	no wikidata match
+395463	Ryan McAidoo	382	eng.1	no footballer claim
+289155	Benjamin Sesko	360	eng.1	no wikidata match
+381055	Daniel Armer	360	eng.1	no wikidata match
+325550	Dermot Mee	360	eng.1	no footballer claim
+205081	Jack Fletcher	360	eng.1	no footballer claim
+386199	Jaydan Kamason	360	eng.1	no wikidata match
+358180	Shea Lacey	360	eng.1	no footballer claim
+393138	Tyler Fletcher	360	eng.1	no footballer claim
+397881	Tynan Thompson	360	eng.1	no wikidata match
+353304	Aidan Harris	361	eng.1	no footballer claim
+308979	Amar Dedic	361	eng.1	no wikidata match
+347523	Ewen Jaouen	361	eng.1	no footballer claim
+414116	Kyran Thompson	361	eng.1	no wikidata match
+374219	Leo Shahar	361	eng.1	no footballer claim
+319267	Lukás Hornícek	361	eng.1	no wikidata match
+416448	Mason Miley	361	eng.1	no wikidata match
 418769	Michael Mills	361	eng.1	no footballer claim
 346776	Miodrag Pivas	361	eng.1	no wikidata match
 323986	Nico González	361	eng.1	no footballer claim
 385593	Vakho Salia	361	eng.1	no wikidata match
 134190	Chris Wood	393	eng.1	no footballer claim
 213718	Ibrahim Sangaré	393	eng.1	no footballer claim
-287869	Igor Jesus	393	eng.1	error: Error: HTTP 429
-338876	Jair Paula	393	eng.1	error: Error: HTTP 429
-233241	John Victor	393	eng.1	error: Error: HTTP 429
-254118	Nicolás Domínguez	393	eng.1	error: Error: HTTP 429
-238990	Nikola Milenkovic	393	eng.1	error: Error: HTTP 429
-348303	Zach Abbott	393	eng.1	error: Error: HTTP 429
-282645	Danny Ballard	366	eng.1	error: Error: HTTP 429
-3111009	Felix Scott	366	eng.1	error: Error: HTTP 429
-236211	Jack Whittaker	366	eng.1	error: Error: HTTP 429
-243578	Jenson Arron Jones	366	eng.1	error: Error: HTTP 429
-417825	Jocelin Ta Bi	366	eng.1	error: Error: HTTP 429
-48106	Juan Angulo	366	eng.1	error: Error: HTTP 429
-3111010	Tom Proctor	366	eng.1	error: Error: HTTP 429
-392107	Trey Ogunsuyi	366	eng.1	error: Error: HTTP 429
-387460	Tymur Tutierov	366	eng.1	error: Error: HTTP 429
-324393	Antonín Kinsky	367	eng.1	error: Error: HTTP 429
-6327	Ben Davies	367	eng.1	error: Error: HTTP 429
-372016	Callum Olusesi	367	eng.1	error: Error: HTTP 429
-304470	Sávio	367	eng.1	error: Error: HTTP 429
-150374	Adrián Rodríguez	96	esp.1	error: Error: HTTP 429
-379231	Aitor Mañas	96	esp.1	error: Error: HTTP 429
-265997	Antonio Blanco	96	esp.1	error: Error: HTTP 429
-200910	Antonio Sivera	96	esp.1	error: Error: HTTP 429
-255931	Facundo Garcés	96	esp.1	error: Error: HTTP 429
-346534	Grégoire Swiderski	96	esp.1	error: Error: HTTP 429
-415206	Izei Hernandez	96	esp.1	error: Error: HTTP 429
-176312	Jonny	96	esp.1	error: Error: HTTP 429
-207236	Lucas Boyé	96	esp.1	error: Error: HTTP 429
-198832	Mariano Díaz	96	esp.1	error: Error: HTTP 429
-83494	Miguel Rodríguez	96	esp.1	error: Error: HTTP 429
-396612	Mikel Rodriguez	96	esp.1	error: Error: HTTP 429
-213535	Moussa Diarra	96	esp.1	error: Error: HTTP 429
-262491	Nahuel Tenaglia	96	esp.1	error: Error: HTTP 429
-318084	Nicolás Valentini	96	esp.1	error: Error: HTTP 429
-373796	Rúben Montero	96	esp.1	error: Error: HTTP 429
-367996	Selu Diallo	96	esp.1	error: Error: HTTP 429
-149306	Ville Koski	96	esp.1	error: Error: HTTP 429
-415276	Xanet Oláiz	96	esp.1	error: Error: HTTP 429
-382532	Youssef Lekhedim	96	esp.1	error: Error: HTTP 429
-374621	Ángel Pérez	96	esp.1	error: Error: HTTP 429
-379707	Adama Boiro	93	esp.1	error: Error: HTTP 429
-403371	Alejandro Rego	93	esp.1	error: Error: HTTP 429
-3122617	Aritz Conde Albiol	93	esp.1	error: Error: HTTP 429
-422929	Christian Imga	93	esp.1	error: Error: HTTP 429
-274016	Dani Vivian	93	esp.1	error: Error: HTTP 429
-231905	Gorka Guruzeta	93	esp.1	error: Error: HTTP 429
-362572	Hugo Rincón	93	esp.1	error: Error: HTTP 429
-300876	Jesús Areso	93	esp.1	error: Error: HTTP 429
-3106512	Jesús Vizcay Hurtado	93	esp.1	error: Error: HTTP 429
-333214	Johaneko Louis Jean	93	esp.1	error: Error: HTTP 429
-287410	Mikel Santos	93	esp.1	error: Error: HTTP 429
-388805	Peio Canales	93	esp.1	error: Error: HTTP 429
-414350	Selton Sánchez	93	esp.1	error: Error: HTTP 429
-217225	Yeray	93	esp.1	error: Error: HTTP 429
-209579	Álex Berenguer	93	esp.1	error: Error: HTTP 429
-347411	Álex Padilla	93	esp.1	error: Error: HTTP 429
-166396	Alejandro Grimaldo	1068	esp.1	error: Error: HTTP 429
-328289	Arnau Ortiz	1068	esp.1	error: Error: HTTP 429
-345110	Arnau Solà	1068	esp.1	error: Error: HTTP 429
-324192	Carlos Martín	1068	esp.1	error: Error: HTTP 429
-368593	Daniel Martinez	1068	esp.1	error: Error: HTTP 429
-395579	Javier Gil	1068	esp.1	error: Error: HTTP 429
-184757	Jorge Castillo	1068	esp.1	error: Error: HTTP 429
-354378	Jorge Domínguez	1068	esp.1	error: Error: HTTP 429
-277206	Julián Álvarez	1068	esp.1	error: Error: HTTP 429
-140791	Koke	1068	esp.1	error: Error: HTTP 429
-274197	Lee Kang-In	1068	esp.1	error: Error: HTTP 429
-421996	Miguel Cubo	1068	esp.1	error: Error: HTTP 429
-318554	Obed Vargas	1068	esp.1	error: Error: HTTP 429
-336634	Pablo Barrios	1068	esp.1	error: Error: HTTP 429
-74630	Rodrigo Mendoza	1068	esp.1	error: Error: HTTP 429
-405502	Salvi Esquivel	1068	esp.1	error: Error: HTTP 429
-403575	Brian Fariñas	83	esp.1	error: Error: HTTP 429
-187946	Dominik Livakovic	83	esp.1	error: Error: HTTP 429
-416502	Ebrima Tunkara	83	esp.1	error: Error: HTTP 429
-403587	Eder Aller	83	esp.1	error: Error: HTTP 429
-128714	Eric García	83	esp.1	error: Error: HTTP 429
-403583	Guillem Víctor	83	esp.1	error: Error: HTTP 429
-403576	Iker Rodríguez	83	esp.1	error: Error: HTTP 429
-365318	Jesse Bisiwu	83	esp.1	error: Error: HTTP 429
-297362	Joan García	83	esp.1	error: Error: HTTP 429
-416511	Jordi Pesquer	83	esp.1	error: Error: HTTP 429
-416496	Orian Goren	83	esp.1	error: Error: HTTP 429
-131634	Wojciech Szczesny	83	esp.1	error: Error: HTTP 429
-403582	Xavi Espart	83	esp.1	error: Error: HTTP 429
-94947	Álex Campos	83	esp.1	error: Error: HTTP 429
-300377	Álvaro Cortés	83	esp.1	error: Error: HTTP 429
-240235	Aleix Febas	85	esp.1	error: Error: HTTP 429
-274272	Altay Bayindir	85	esp.1	error: Error: HTTP 429
-144720	Andrei Radu	85	esp.1	error: Error: HTTP 429
-414292	Andrés Antañón	85	esp.1	error: Error: HTTP 429
-3100794	Enrique Ribes	85	esp.1	error: Error: HTTP 429
-3100792	Frank Germain Jonathan Miller	85	esp.1	error: Error: HTTP 429
-414293	Hugo Burcio	85	esp.1	error: Error: HTTP 429
-324811	Hugo Gonzalez	85	esp.1	error: Error: HTTP 429
-188391	Hugo Álvarez	85	esp.1	error: Error: HTTP 429
-231838	Javi Galán	85	esp.1	error: Error: HTTP 429
-331586	Javi Rueda	85	esp.1	error: Error: HTTP 429
-334111	Jones El-Abdellaoui	85	esp.1	error: Error: HTTP 429
-146127	Marcos Alonso	85	esp.1	error: Error: HTTP 429
-353736	Miguel Román	85	esp.1	error: Error: HTTP 429
-298343	Sergio Carreira	85	esp.1	error: Error: HTTP 429
-384643	Yoel Lago	85	esp.1	error: Error: HTTP 429
-367430	Álvaro Núñez	85	esp.1	error: Error: HTTP 429
-415036	Ángel Arcos	85	esp.1	error: Error: HTTP 429
-220626	Adama Traoré	90	esp.1	error: Error: HTTP 429
-308006	Adrià Altimira	90	esp.1	error: Error: HTTP 429
-300333	Arnau Comas	90	esp.1	error: Error: HTTP 429
-414299	Bil Nsongo	90	esp.1	error: Error: HTTP 429
-3102992	Bright Ede	90	esp.1	error: Error: HTTP 429
-181288	Germán Parreño	90	esp.1	error: Error: HTTP 429
-384414	Jonathan Asp Jensen	90	esp.1	error: Error: HTTP 429
-300926	Leo Román	90	esp.1	error: Error: HTTP 429
-356639	Lorenzo Amatucci	90	esp.1	error: Error: HTTP 429
-321112	Lucas Noubi	90	esp.1	error: Error: HTTP 429
-297353	Mario Soriano Carreno	90	esp.1	error: Error: HTTP 429
-375392	Martín Ochoa	90	esp.1	error: Error: HTTP 429
-279609	Riki Rodríguez	90	esp.1	error: Error: HTTP 429
-375566	Rubén	90	esp.1	error: Error: HTTP 429
-362123	Teun Gijselhart	90	esp.1	error: Error: HTTP 429
-157568	Ximo Navarro	90	esp.1	error: Error: HTTP 429
-324945	Yayo	90	esp.1	error: Error: HTTP 429
-96060	Álvaro Fernández	90	esp.1	error: Error: HTTP 429
-336840	Abiel Osorio	3751	esp.1	error: Error: HTTP 429
-330433	Alejandro Iturbe	3751	esp.1	error: Error: HTTP 429
-376156	Ali Houary	3751	esp.1	error: Error: HTTP 429
-371608	Buba Sangaré	3751	esp.1	error: Error: HTTP 429
-318284	Facundo Buonanotte	3751	esp.1	error: Error: HTTP 429
-301684	Fer Niño	3751	esp.1	error: Error: HTTP 429
-297358	Germán Valera	3751	esp.1	error: Error: HTTP 429
-273424	Gonzalo Villar	3751	esp.1	error: Error: HTTP 429
-421310	Javier Morcillo	3751	esp.1	error: Error: HTTP 429
-259916	José Antonio Morente	3751	esp.1	error: Error: HTTP 429
-301406	Marc Aguado	3751	esp.1	error: Error: HTTP 429
-389448	Matia Barzic	3751	esp.1	error: Error: HTTP 429
-167297	Pedro Bigas	3751	esp.1	error: Error: HTTP 429
-323286	Roy Revivo	3751	esp.1	error: Error: HTTP 429
-319781	Rubén Sánchez	3751	esp.1	error: Error: HTTP 429
-402185	Umaru	3751	esp.1	error: Error: HTTP 429
-265995	Víctor Chust	3751	esp.1	error: Error: HTTP 429
-326234	Yago Alonso	3751	esp.1	error: Error: HTTP 429
-3129647	Álvaro Padilla Escribá	3751	esp.1	error: Error: HTTP 429
-420443	Adama Timera	88	esp.1	error: Error: HTTP 429
-3111255	Alejandro Santiago Vargas	88	esp.1	error: Error: HTTP 429
-311571	Bryan Zaragoza	88	esp.1	error: Error: HTTP 429
-355902	Cala	88	esp.1	error: Error: HTTP 429
-255272	Edu Expósito	88	esp.1	error: Error: HTTP 429
-135422	Enrique García	88	esp.1	error: Error: HTTP 429
-3111247	Jan Peries Duran	88	esp.1	error: Error: HTTP 429
-367946	Javi Hernandez	88	esp.1	error: Error: HTTP 429
-260243	Javier Puado	88	esp.1	error: Error: HTTP 429
-307270	Jofre Carreras	88	esp.1	error: Error: HTTP 429
-397289	José Ángel López	88	esp.1	error: Error: HTTP 429
-381681	Llorenç Serred	88	esp.1	error: Error: HTTP 429
-354621	Marcos Fernández	88	esp.1	error: Error: HTTP 429
-179211	Marko Dmitrovic	88	esp.1	error: Error: HTTP 429
-196914	Pere Milla	88	esp.1	error: Error: HTTP 429
-260242	Pol Lozano	88	esp.1	error: Error: HTTP 429
-383900	Rafael Bauza	88	esp.1	error: Error: HTTP 429
-318773	Roberto Fernández	88	esp.1	error: Error: HTTP 429
-401377	Roger Hinojo	88	esp.1	error: Error: HTTP 429
-260902	Unai Núñez	88	esp.1	error: Error: HTTP 429
-307915	Urko Gonzalez	88	esp.1	error: Error: HTTP 429
-277314	Vanja Drkusic	88	esp.1	error: Error: HTTP 429
-3139134	Víctor Mullerat Tomas	88	esp.1	error: Error: HTTP 429
-307419	Ángel Fortuño	88	esp.1	error: Error: HTTP 429
-383912	Alberto Risco	2922	esp.1	error: Error: HTTP 429
-356080	Andrés García	2922	esp.1	error: Error: HTTP 429
-386256	Christantus Uche	2922	esp.1	error: Error: HTTP 429
-394958	Curro Burgos	2922	esp.1	error: Error: HTTP 429
-406832	Davinchi	2922	esp.1	error: Error: HTTP 429
-388898	Diego Ferrer	2922	esp.1	error: Error: HTTP 429
-181355	Djené	2922	esp.1	error: Error: HTTP 429
-307186	Francho Serrano	2922	esp.1	error: Error: HTTP 429
-3124560	Ibra Drammeh	2922	esp.1	error: Error: HTTP 429
-3121766	Ibrahima Danfakha Keita	2922	esp.1	error: Error: HTTP 429
-5327018	Irahima Danfakha Keita	2922	esp.1	error: Error: HTTP 429
-310259	Ivan Azón	2922	esp.1	error: Error: HTTP 429
-395479	Jean Ives Valou	2922	esp.1	error: Error: HTTP 429
-384168	Jesús Martínez	2922	esp.1	error: Error: HTTP 429
-344245	Jirí Letácek	2922	esp.1	error: Error: HTTP 429
-376208	Joselu Pérez	2922	esp.1	error: Error: HTTP 429
-143643	Juanmi	2922	esp.1	error: Error: HTTP 429
-357147	Mario Martín	2922	esp.1	error: Error: HTTP 429
-284854	Martín Satriano	2922	esp.1	error: Error: HTTP 429
-3139281	Moha Achraf	2922	esp.1	error: Error: HTTP 429
-375400	Mohamed Hamdoune	2922	esp.1	error: Error: HTTP 429
-309838	Ramón Terrats	2922	esp.1	error: Error: HTTP 429
-359826	Sebastián Boselli	2922	esp.1	error: Error: HTTP 429
-3101327	Sebastián Salazar Trujillo	2922	esp.1	error: Error: HTTP 429
-411023	Vladyslav Kysil	2922	esp.1	error: Error: HTTP 429
-300111	Zaid Romero	2922	esp.1	error: Error: HTTP 429
-396387	Óscar López	2922	esp.1	error: Error: HTTP 429
-276841	Adrián de la Fuente	1538	esp.1	error: Error: HTTP 429
-3129045	Alberto Calatrava Ragull	1538	esp.1	error: Error: HTTP 429
-340744	Alejandro Primo	1538	esp.1	error: Error: HTTP 429
-396655	Axel Tape	1538	esp.1	error: Error: HTTP 429
-3731	Carlos Álvarez	1538	esp.1	error: Error: HTTP 429
-362752	Dani Requena	1538	esp.1	error: Error: HTTP 429
-346676	Etta Eyong	1538	esp.1	error: Error: HTTP 429
-407397	Ifeanyi Ndukwe	1538	esp.1	error: Error: HTTP 429
-3129044	Ihor Galdin	1538	esp.1	error: Error: HTTP 429
-311054	Iván Romero	1538	esp.1	error: Error: HTTP 429
-317784	Jon Ander Olasagasti	1538	esp.1	error: Error: HTTP 429
-381071	Jorge Cabello	1538	esp.1	error: Error: HTTP 429
-415819	Kareem Tunde	1538	esp.1	error: Error: HTTP 429
-3129042	Manel Usedo Domingo	1538	esp.1	error: Error: HTTP 429
-300985	Manu Sánchez	1538	esp.1	error: Error: HTTP 429
-3129043	Marc Santos Gavilán	1538	esp.1	error: Error: HTTP 429
-409383	Nacho Pérez	1538	esp.1	error: Error: HTTP 429
-269339	Orio Rey	1538	esp.1	error: Error: HTTP 429
-316040	Pablo Cuñat	1538	esp.1	error: Error: HTTP 429
-384985	Paco Cortés	1538	esp.1	error: Error: HTTP 429
-267591	Roger Brugué	1538	esp.1	error: Error: HTTP 429
-339195	Thiago Fernández	1538	esp.1	error: Error: HTTP 429
-203680	Víctor García	1538	esp.1	error: Error: HTTP 429
-3102194	Yanis Kasonga Musuayi	1538	esp.1	error: Error: HTTP 429
-377777	Aarón Moloney	99	esp.1	error: Error: HTTP 429
-379032	Adam Aznou	99	esp.1	error: Error: HTTP 429
-373542	Adrián Niño	99	esp.1	error: Error: HTTP 429
-240624	Alfonso Herrero	99	esp.1	error: Error: HTTP 429
-388600	Andres Cespedes	99	esp.1	error: Error: HTTP 429
-324098	Carlos Dotor	99	esp.1	error: Error: HTTP 429
-355503	Carlos López	99	esp.1	error: Error: HTTP 429
-331785	Carlos Puga	99	esp.1	error: Error: HTTP 429
-388602	Chupete	99	esp.1	error: Error: HTTP 429
-331533	Daniel Lorenzo	99	esp.1	error: Error: HTTP 429
-297828	David Larrubia	99	esp.1	error: Error: HTTP 429
-350947	Diego Murillo	99	esp.1	error: Error: HTTP 429
-270610	Eneko Jauregui	99	esp.1	error: Error: HTTP 429
-312338	Haitam Abaida	99	esp.1	error: Error: HTTP 429
-371564	Izan Merino	99	esp.1	error: Error: HTTP 429
-180444	Joaquín Muñoz	99	esp.1	error: Error: HTTP 429
-184488	José Salinas	99	esp.1	error: Error: HTTP 429
-262061	Juan Berrocal	99	esp.1	error: Error: HTTP 429
-145565	Juan Cruz	99	esp.1	error: Error: HTTP 429
-3110513	Juani	99	esp.1	error: Error: HTTP 429
-301869	Julen Lobete	99	esp.1	error: Error: HTTP 429
-3110515	Otu Junior	99	esp.1	error: Error: HTTP 429
-271151	Pablo Martínez	99	esp.1	error: Error: HTTP 429
-376166	Rafa Garrido	99	esp.1	error: Error: HTTP 429
-357858	Rafa Rodríguez	99	esp.1	error: Error: HTTP 429
-292225	Ramón Enríquez	99	esp.1	error: Error: HTTP 429
-310869	Álex Pastor	99	esp.1	error: Error: HTTP 429
-319783	Ángel Recio	99	esp.1	error: Error: HTTP 429
-300284	Abel Bretones	97	esp.1	error: Error: HTTP 429
-144759	Aitor Fernández	97	esp.1	error: Error: HTTP 429
-264175	Alejandro Catena	97	esp.1	error: Error: HTTP 429
-3129002	Asier Bonel Aicua	97	esp.1	error: Error: HTTP 429
-209580	Enrique Barja	97	esp.1	error: Error: HTTP 429
-307905	Enzo Boyomo	97	esp.1	error: Error: HTTP 429
-359154	Iker Muñoz	97	esp.1	error: Error: HTTP 429
-311969	Jonathan Dubasin	97	esp.1	error: Error: HTTP 429
-307019	Jorge Herrando	97	esp.1	error: Error: HTTP 429
-170154	Lucas Torró	97	esp.1	error: Error: HTTP 429
-3128992	Mikel Bermejo Sola	97	esp.1	error: Error: HTTP 429
-403704	Rafa Fernández	97	esp.1	error: Error: HTTP 429
-296163	Raúl García	97	esp.1	error: Error: HTTP 429
-366598	Rockson Yeboah	97	esp.1	error: Error: HTTP 429
-178328	Rubén García	97	esp.1	error: Error: HTTP 429
-191360	Sergio Herrera	97	esp.1	error: Error: HTTP 429
-242007	Aarón Martín	87	esp.1	error: Error: HTTP 429
-300471	Alvaro Mantilla	87	esp.1	error: Error: HTTP 429
-286604	André Almeida	87	esp.1	error: Error: HTTP 429
-3141	Andrés Martín	87	esp.1	error: Error: HTTP 429
-414075	Andrés Vallecillo	87	esp.1	error: Error: HTTP 429
-421199	Carlos Sánchez	87	esp.1	error: Error: HTTP 429
-396027	Diego Diaz	87	esp.1	error: Error: HTTP 429
-289439	Giorgi Guliashvili	87	esp.1	error: Error: HTTP 429
-417250	Hugo Martín	87	esp.1	error: Error: HTTP 429
-3100788	Hugo Pérez Sañudo	87	esp.1	error: Error: HTTP 429
-417258	Iker Luque	87	esp.1	error: Error: HTTP 429
-330545	Iván Martín	87	esp.1	error: Error: HTTP 429
-3128976	Jorge Castellanos Del Olmo	87	esp.1	error: Error: HTTP 429
-178237	Jorge Salinas	87	esp.1	error: Error: HTTP 429
-334268	Juan Carlos Arana	87	esp.1	error: Error: HTTP 429
-323970	Julen Agirrezabala	87	esp.1	error: Error: HTTP 429
-394309	Laro Gómez	87	esp.1	error: Error: HTTP 429
-342654	Maguette Gueye	87	esp.1	error: Error: HTTP 429
-259839	Manu	87	esp.1	error: Error: HTTP 429
-107960	Matteo Prati	87	esp.1	error: Error: HTTP 429
-399278	Pablo García	87	esp.1	error: Error: HTTP 429
-282672	Pablo Ramon	87	esp.1	error: Error: HTTP 429
-361455	Pedro Felipe	87	esp.1	error: Error: HTTP 429
-400222	Simon Eriksson	87	esp.1	error: Error: HTTP 429
-279699	Íñigo Sainz	87	esp.1	error: Error: HTTP 429
-300878	Adrián Molina	101	esp.1	error: Error: HTTP 429
-287224	Andrei Ratiu	101	esp.1	error: Error: HTTP 429
-192893	Daniel Cárdenas	101	esp.1	error: Error: HTTP 429
-324505	Fran Pérez	101	esp.1	error: Error: HTTP 429
-3115984	Gnangoro Bouare Samake	101	esp.1	error: Error: HTTP 429
-3128651	Iván Alonso Martín	101	esp.1	error: Error: HTTP 429
-260740	Jorge de Frutos	101	esp.1	error: Error: HTTP 429
-415410	Marco Román	101	esp.1	error: Error: HTTP 429
-389447	Marco de las Sias	101	esp.1	error: Error: HTTP 429
-265996	Mujaid Sadick	101	esp.1	error: Error: HTTP 429
-264078	Pedro Díaz	101	esp.1	error: Error: HTTP 429
-386579	Pelayo Fernández	101	esp.1	error: Error: HTTP 429
-276847	Randy Nteka	101	esp.1	error: Error: HTTP 429
-377843	Rayane Belaid	101	esp.1	error: Error: HTTP 429
-409289	Samu Becerra	101	esp.1	error: Error: HTTP 429
-276652	Sergio Camello	101	esp.1	error: Error: HTTP 429
-268601	Aitor Ruibal	244	esp.1	error: Error: HTTP 429
-281558	Antony	244	esp.1	error: Error: HTTP 429
-359912	Facundo Bernal	244	esp.1	error: Error: HTTP 429
-213050	Fran García	244	esp.1	error: Error: HTTP 429
-411284	José Morante	244	esp.1	error: Error: HTTP 429
-390091	Manu González	244	esp.1	error: Error: HTTP 429
-242008	Marc Roca	244	esp.1	error: Error: HTTP 429
-301526	Natan	244	esp.1	error: Error: HTTP 429
-322908	Nelson Deossa	244	esp.1	error: Error: HTTP 429
-70224	Rodrigo Riquelme	244	esp.1	error: Error: HTTP 429
-394885	Álvaro De Pablo	244	esp.1	error: Error: HTTP 429
-395941	Ángel Ortiz	244	esp.1	error: Error: HTTP 429
-3117407	Alexis Ciria	86	esp.1	error: Error: HTTP 429
-380286	Carlos Espí	86	esp.1	error: Error: HTTP 429
-376422	Daniel Yañez	86	esp.1	error: Error: HTTP 429
-405490	Illia Voloshyn	86	esp.1	error: Error: HTTP 429
-84349	Javier Navarro	86	esp.1	error: Error: HTTP 429
-405544	Jesús Fortea	86	esp.1	error: Error: HTTP 429
-388339	Joan Martínez	86	esp.1	error: Error: HTTP 429
-415478	Jorge Cestero	86	esp.1	error: Error: HTTP 429
-330352	Mario Rivas	86	esp.1	error: Error: HTTP 429
-388338	Raúl Asencio	86	esp.1	error: Error: HTTP 429
-409318	Sergio Martínez	86	esp.1	error: Error: HTTP 429
-350351	Sergio Mestre	86	esp.1	error: Error: HTTP 429
-409019	Thiago Pitarch	86	esp.1	error: Error: HTTP 429
-368327	Aitor Fraga	89	esp.1	error: Error: HTTP 429
-366886	Alex Lebarbier	89	esp.1	error: Error: HTTP 429
-396613	Alex Marchal	89	esp.1	error: Error: HTTP 429
-406383	Gorka Carrera	89	esp.1	error: Error: HTTP 429
-363039	Héctor Fort	89	esp.1	error: Error: HTTP 429
-410486	Ibai Aguirre	89	esp.1	error: Error: HTTP 429
-379457	Iñaki Rupérez	89	esp.1	error: Error: HTTP 429
-406379	Job Ochieng	89	esp.1	error: Error: HTTP 429
-388601	Jon Gorrotxategi	89	esp.1	error: Error: HTTP 429
-306263	Luka Sucic	89	esp.1	error: Error: HTTP 429
-396607	Luken Beitia	89	esp.1	error: Error: HTTP 429
-341367	Orri Óskarsson	89	esp.1	error: Error: HTTP 429
-326900	Pablo Marín	89	esp.1	error: Error: HTTP 429
-265993	Sergio Gómez	89	esp.1	error: Error: HTTP 429
-332246	Andrés Castrín	243	esp.1	error: Error: HTTP 429
-304213	Arouna Sangante	243	esp.1	error: Error: HTTP 429
-409486	Edu Altozano	243	esp.1	error: Error: HTTP 429
+287869	Igor Jesus	393	eng.1	no wikidata match
+338876	Jair Paula	393	eng.1	no wikidata match
+233241	John Victor	393	eng.1	no footballer claim
+254118	Nicolás Domínguez	393	eng.1	no wikidata match
+238990	Nikola Milenkovic	393	eng.1	no wikidata match
+348303	Zach Abbott	393	eng.1	no footballer claim
+282645	Danny Ballard	366	eng.1	no wikidata match
+3111009	Felix Scott	366	eng.1	no footballer claim
+236211	Jack Whittaker	366	eng.1	no wikidata match
+243578	Jenson Arron Jones	366	eng.1	no wikidata match
+417825	Jocelin Ta Bi	366	eng.1	no footballer claim
+48106	Juan Angulo	366	eng.1	no wikidata match
+3111010	Tom Proctor	366	eng.1	no wikidata match
+392107	Trey Ogunsuyi	366	eng.1	no wikidata match
+387460	Tymur Tutierov	366	eng.1	no wikidata match
+324393	Antonín Kinsky	367	eng.1	no wikidata match
+6327	Ben Davies	367	eng.1	no footballer claim
+372016	Callum Olusesi	367	eng.1	no footballer claim
+304470	Sávio	367	eng.1	no footballer claim
+150374	Adrián Rodríguez	96	esp.1	no footballer claim
+379231	Aitor Mañas	96	esp.1	no wikidata match
+265997	Antonio Blanco	96	esp.1	no footballer claim
+200910	Antonio Sivera	96	esp.1	no footballer claim
+255931	Facundo Garcés	96	esp.1	no footballer claim
+346534	Grégoire Swiderski	96	esp.1	no footballer claim
+415206	Izei Hernandez	96	esp.1	no footballer claim
+176312	Jonny	96	esp.1	no footballer claim
+207236	Lucas Boyé	96	esp.1	no wikidata match
+198832	Mariano Díaz	96	esp.1	no footballer claim
+83494	Miguel Rodríguez	96	esp.1	no footballer claim
+396612	Mikel Rodriguez	96	esp.1	no footballer claim
+213535	Moussa Diarra	96	esp.1	no footballer claim
+262491	Nahuel Tenaglia	96	esp.1	no footballer claim
+318084	Nicolás Valentini	96	esp.1	no wikidata match
+373796	Rúben Montero	96	esp.1	no wikidata match
+367996	Selu Diallo	96	esp.1	no footballer claim
+149306	Ville Koski	96	esp.1	no footballer claim
+415276	Xanet Oláiz	96	esp.1	no wikidata match
+382532	Youssef Lekhedim	96	esp.1	no footballer claim
+374621	Ángel Pérez	96	esp.1	no footballer claim
+379707	Adama Boiro	93	esp.1	no footballer claim
+403371	Alejandro Rego	93	esp.1	no wikidata match
+3122617	Aritz Conde Albiol	93	esp.1	no wikidata match
+422929	Christian Imga	93	esp.1	no footballer claim
+274016	Dani Vivian	93	esp.1	no wikidata match
+231905	Gorka Guruzeta	93	esp.1	no footballer claim
+362572	Hugo Rincón	93	esp.1	no footballer claim
+300876	Jesús Areso	93	esp.1	no footballer claim
+3106512	Jesús Vizcay Hurtado	93	esp.1	no wikidata match
+333214	Johaneko Louis Jean	93	esp.1	no wikidata match
+287410	Mikel Santos	93	esp.1	no wikidata match
+388805	Peio Canales	93	esp.1	no footballer claim
+414350	Selton Sánchez	93	esp.1	no footballer claim
+217225	Yeray	93	esp.1	no footballer claim
+209579	Álex Berenguer	93	esp.1	no footballer claim
+347411	Álex Padilla	93	esp.1	no footballer claim
+166396	Alejandro Grimaldo	1068	esp.1	no wikidata match
+328289	Arnau Ortiz	1068	esp.1	no wikidata match
+345110	Arnau Solà	1068	esp.1	no footballer claim
+324192	Carlos Martín	1068	esp.1	no footballer claim
+368593	Daniel Martinez	1068	esp.1	no footballer claim
+395579	Javier Gil	1068	esp.1	no footballer claim
+184757	Jorge Castillo	1068	esp.1	no footballer claim
+354378	Jorge Domínguez	1068	esp.1	no footballer claim
+277206	Julián Álvarez	1068	esp.1	no footballer claim
+140791	Koke	1068	esp.1	no footballer claim
+274197	Lee Kang-In	1068	esp.1	no footballer claim
+421996	Miguel Cubo	1068	esp.1	no footballer claim
+318554	Obed Vargas	1068	esp.1	no footballer claim
+336634	Pablo Barrios	1068	esp.1	no footballer claim
+74630	Rodrigo Mendoza	1068	esp.1	no wikidata match
+405502	Salvi Esquivel	1068	esp.1	no footballer claim
+403575	Brian Fariñas	83	esp.1	no footballer claim
+187946	Dominik Livakovic	83	esp.1	no wikidata match
+416502	Ebrima Tunkara	83	esp.1	no footballer claim
+403587	Eder Aller	83	esp.1	no footballer claim
+128714	Eric García	83	esp.1	no footballer claim
+403583	Guillem Víctor	83	esp.1	no wikidata match
+403576	Iker Rodríguez	83	esp.1	no wikidata match
+365318	Jesse Bisiwu	83	esp.1	no footballer claim
+297362	Joan García	83	esp.1	no wikidata match
+416511	Jordi Pesquer	83	esp.1	no footballer claim
+416496	Orian Goren	83	esp.1	no wikidata match
+131634	Wojciech Szczesny	83	esp.1	no wikidata match
+403582	Xavi Espart	83	esp.1	no footballer claim
+94947	Álex Campos	83	esp.1	no wikidata match
+300377	Álvaro Cortés	83	esp.1	no footballer claim
+240235	Aleix Febas	85	esp.1	no footballer claim
+274272	Altay Bayindir	85	esp.1	no wikidata match
+144720	Andrei Radu	85	esp.1	no footballer claim
+414292	Andrés Antañón	85	esp.1	no footballer claim
+3100794	Enrique Ribes	85	esp.1	no wikidata match
+3100792	Frank Germain Jonathan Miller	85	esp.1	no footballer claim
+414293	Hugo Burcio	85	esp.1	no footballer claim
+324811	Hugo Gonzalez	85	esp.1	no wikidata match
+188391	Hugo Álvarez	85	esp.1	no footballer claim
+231838	Javi Galán	85	esp.1	no footballer claim
+331586	Javi Rueda	85	esp.1	no footballer claim
+334111	Jones El-Abdellaoui	85	esp.1	no wikidata match
+146127	Marcos Alonso	85	esp.1	no footballer claim
+353736	Miguel Román	85	esp.1	no footballer claim
+298343	Sergio Carreira	85	esp.1	no wikidata match
+384643	Yoel Lago	85	esp.1	no footballer claim
+367430	Álvaro Núñez	85	esp.1	no footballer claim
+415036	Ángel Arcos	85	esp.1	no footballer claim
+220626	Adama Traoré	90	esp.1	no footballer claim
+308006	Adrià Altimira	90	esp.1	no footballer claim
+300333	Arnau Comas	90	esp.1	no footballer claim
+414299	Bil Nsongo	90	esp.1	no footballer claim
+3102992	Bright Ede	90	esp.1	no footballer claim
+181288	Germán Parreño	90	esp.1	no footballer claim
+384414	Jonathan Asp Jensen	90	esp.1	no wikidata match
+300926	Leo Román	90	esp.1	no footballer claim
+356639	Lorenzo Amatucci	90	esp.1	no wikidata match
+321112	Lucas Noubi	90	esp.1	no footballer claim
+297353	Mario Soriano Carreno	90	esp.1	no wikidata match
+375392	Martín Ochoa	90	esp.1	no footballer claim
+279609	Riki Rodríguez	90	esp.1	no footballer claim
+375566	Rubén	90	esp.1	no wikidata match
+362123	Teun Gijselhart	90	esp.1	no footballer claim
+157568	Ximo Navarro	90	esp.1	no footballer claim
+324945	Yayo	90	esp.1	no footballer claim
+96060	Álvaro Fernández	90	esp.1	no footballer claim
+336840	Abiel Osorio	3751	esp.1	no footballer claim
+330433	Alejandro Iturbe	3751	esp.1	no footballer claim
+376156	Ali Houary	3751	esp.1	no footballer claim
+371608	Buba Sangaré	3751	esp.1	no footballer claim
+318284	Facundo Buonanotte	3751	esp.1	no wikidata match
+301684	Fer Niño	3751	esp.1	no footballer claim
+297358	Germán Valera	3751	esp.1	no footballer claim
+273424	Gonzalo Villar	3751	esp.1	no wikidata match
+421310	Javier Morcillo	3751	esp.1	no footballer claim
+259916	José Antonio Morente	3751	esp.1	no wikidata match
+301406	Marc Aguado	3751	esp.1	no footballer claim
+389448	Matia Barzic	3751	esp.1	no wikidata match
+167297	Pedro Bigas	3751	esp.1	no footballer claim
+323286	Roy Revivo	3751	esp.1	no footballer claim
+319781	Rubén Sánchez	3751	esp.1	no footballer claim
+402185	Umaru	3751	esp.1	no footballer claim
+265995	Víctor Chust	3751	esp.1	no footballer claim
+326234	Yago Alonso	3751	esp.1	no footballer claim
+3129647	Álvaro Padilla Escribá	3751	esp.1	no wikidata match
+420443	Adama Timera	88	esp.1	no wikidata match
+3111255	Alejandro Santiago Vargas	88	esp.1	no wikidata match
+311571	Bryan Zaragoza	88	esp.1	no footballer claim
+355902	Cala	88	esp.1	no footballer claim
+255272	Edu Expósito	88	esp.1	no footballer claim
+135422	Enrique García	88	esp.1	no footballer claim
+3111247	Jan Peries Duran	88	esp.1	no wikidata match
+367946	Javi Hernandez	88	esp.1	no wikidata match
+260243	Javier Puado	88	esp.1	no wikidata match
+307270	Jofre Carreras	88	esp.1	no footballer claim
+397289	José Ángel López	88	esp.1	no wikidata match
+381681	Llorenç Serred	88	esp.1	no wikidata match
+354621	Marcos Fernández	88	esp.1	no footballer claim
+179211	Marko Dmitrovic	88	esp.1	no wikidata match
+196914	Pere Milla	88	esp.1	no wikidata match
+260242	Pol Lozano	88	esp.1	no footballer claim
+383900	Rafael Bauza	88	esp.1	no wikidata match
+318773	Roberto Fernández	88	esp.1	no footballer claim
+401377	Roger Hinojo	88	esp.1	no footballer claim
+260902	Unai Núñez	88	esp.1	no footballer claim
+307915	Urko Gonzalez	88	esp.1	no wikidata match
+277314	Vanja Drkusic	88	esp.1	no wikidata match
+3139134	Víctor Mullerat Tomas	88	esp.1	no wikidata match
+307419	Ángel Fortuño	88	esp.1	no footballer claim
+383912	Alberto Risco	2922	esp.1	no footballer claim
+356080	Andrés García	2922	esp.1	no footballer claim
+386256	Christantus Uche	2922	esp.1	no footballer claim
+394958	Curro Burgos	2922	esp.1	no wikidata match
+406832	Davinchi	2922	esp.1	no footballer claim
+388898	Diego Ferrer	2922	esp.1	no wikidata match
+181355	Djené	2922	esp.1	no footballer claim
+307186	Francho Serrano	2922	esp.1	no footballer claim
+3124560	Ibra Drammeh	2922	esp.1	no wikidata match
+3121766	Ibrahima Danfakha Keita	2922	esp.1	no wikidata match
+5327018	Irahima Danfakha Keita	2922	esp.1	no wikidata match
+310259	Ivan Azón	2922	esp.1	no wikidata match
+395479	Jean Ives Valou	2922	esp.1	no footballer claim
+384168	Jesús Martínez	2922	esp.1	no footballer claim
+344245	Jirí Letácek	2922	esp.1	no wikidata match
+376208	Joselu Pérez	2922	esp.1	no wikidata match
+143643	Juanmi	2922	esp.1	no footballer claim
+357147	Mario Martín	2922	esp.1	no footballer claim
+284854	Martín Satriano	2922	esp.1	no footballer claim
+3139281	Moha Achraf	2922	esp.1	no wikidata match
+375400	Mohamed Hamdoune	2922	esp.1	no wikidata match
+309838	Ramón Terrats	2922	esp.1	no footballer claim
+359826	Sebastián Boselli	2922	esp.1	no footballer claim
+3101327	Sebastián Salazar Trujillo	2922	esp.1	no wikidata match
+411023	Vladyslav Kysil	2922	esp.1	no footballer claim
+300111	Zaid Romero	2922	esp.1	no footballer claim
+396387	Óscar López	2922	esp.1	no footballer claim
+276841	Adrián de la Fuente	1538	esp.1	no footballer claim
+3129045	Alberto Calatrava Ragull	1538	esp.1	no wikidata match
+340744	Alejandro Primo	1538	esp.1	no footballer claim
+396655	Axel Tape	1538	esp.1	no footballer claim
+3731	Carlos Álvarez	1538	esp.1	no footballer claim
+362752	Dani Requena	1538	esp.1	no footballer claim
+346676	Etta Eyong	1538	esp.1	no footballer claim
+407397	Ifeanyi Ndukwe	1538	esp.1	no footballer claim
+3129044	Ihor Galdin	1538	esp.1	no wikidata match
+311054	Iván Romero	1538	esp.1	no wikidata match
+317784	Jon Ander Olasagasti	1538	esp.1	no wikidata match
+381071	Jorge Cabello	1538	esp.1	no wikidata match
+415819	Kareem Tunde	1538	esp.1	no footballer claim
+3129042	Manel Usedo Domingo	1538	esp.1	no wikidata match
+300985	Manu Sánchez	1538	esp.1	no footballer claim
+3129043	Marc Santos Gavilán	1538	esp.1	no wikidata match
+409383	Nacho Pérez	1538	esp.1	no footballer claim
+269339	Orio Rey	1538	esp.1	no wikidata match
+316040	Pablo Cuñat	1538	esp.1	no footballer claim
+384985	Paco Cortés	1538	esp.1	no footballer claim
+267591	Roger Brugué	1538	esp.1	no footballer claim
+339195	Thiago Fernández	1538	esp.1	no footballer claim
+203680	Víctor García	1538	esp.1	no footballer claim
+3102194	Yanis Kasonga Musuayi	1538	esp.1	no wikidata match
+377777	Aarón Moloney	99	esp.1	no wikidata match
+379032	Adam Aznou	99	esp.1	no footballer claim
+373542	Adrián Niño	99	esp.1	no wikidata match
+240624	Alfonso Herrero	99	esp.1	no wikidata match
+388600	Andres Cespedes	99	esp.1	no wikidata match
+324098	Carlos Dotor	99	esp.1	no wikidata match
+355503	Carlos López	99	esp.1	no footballer claim
+331785	Carlos Puga	99	esp.1	no wikidata match
+388602	Chupete	99	esp.1	no wikidata match
+331533	Daniel Lorenzo	99	esp.1	no footballer claim
+297828	David Larrubia	99	esp.1	no footballer claim
+350947	Diego Murillo	99	esp.1	no footballer claim
+270610	Eneko Jauregui	99	esp.1	no wikidata match
+312338	Haitam Abaida	99	esp.1	no footballer claim
+371564	Izan Merino	99	esp.1	no wikidata match
+180444	Joaquín Muñoz	99	esp.1	no footballer claim
+184488	José Salinas	99	esp.1	no footballer claim
+262061	Juan Berrocal	99	esp.1	no footballer claim
+145565	Juan Cruz	99	esp.1	no footballer claim
+3110513	Juani	99	esp.1	no wikidata match
+301869	Julen Lobete	99	esp.1	no footballer claim
+3110515	Otu Junior	99	esp.1	no wikidata match
+271151	Pablo Martínez	99	esp.1	no footballer claim
+376166	Rafa Garrido	99	esp.1	no wikidata match
+357858	Rafa Rodríguez	99	esp.1	no wikidata match
+292225	Ramón Enríquez	99	esp.1	no wikidata match
+310869	Álex Pastor	99	esp.1	no footballer claim
+319783	Ángel Recio	99	esp.1	no footballer claim
+300284	Abel Bretones	97	esp.1	no footballer claim
+144759	Aitor Fernández	97	esp.1	no footballer claim
+264175	Alejandro Catena	97	esp.1	no wikidata match
+3129002	Asier Bonel Aicua	97	esp.1	no wikidata match
+209580	Enrique Barja	97	esp.1	no footballer claim
+307905	Enzo Boyomo	97	esp.1	no wikidata match
+359154	Iker Muñoz	97	esp.1	no wikidata match
+311969	Jonathan Dubasin	97	esp.1	no footballer claim
+307019	Jorge Herrando	97	esp.1	no footballer claim
+170154	Lucas Torró	97	esp.1	no footballer claim
+3128992	Mikel Bermejo Sola	97	esp.1	no wikidata match
+403704	Rafa Fernández	97	esp.1	no footballer claim
+296163	Raúl García	97	esp.1	no footballer claim
+366598	Rockson Yeboah	97	esp.1	no footballer claim
+178328	Rubén García	97	esp.1	no footballer claim
+191360	Sergio Herrera	97	esp.1	no footballer claim
+242007	Aarón Martín	87	esp.1	no footballer claim
+300471	Alvaro Mantilla	87	esp.1	no wikidata match
+286604	André Almeida	87	esp.1	no wikidata match
+3141	Andrés Martín	87	esp.1	no wikidata match
+414075	Andrés Vallecillo	87	esp.1	no wikidata match
+421199	Carlos Sánchez	87	esp.1	no footballer claim
+396027	Diego Diaz	87	esp.1	no footballer claim
+289439	Giorgi Guliashvili	87	esp.1	no footballer claim
+417250	Hugo Martín	87	esp.1	no wikidata match
+3100788	Hugo Pérez Sañudo	87	esp.1	no wikidata match
+417258	Iker Luque	87	esp.1	no footballer claim
+330545	Iván Martín	87	esp.1	no footballer claim
+3128976	Jorge Castellanos Del Olmo	87	esp.1	no wikidata match
+178237	Jorge Salinas	87	esp.1	no wikidata match
+334268	Juan Carlos Arana	87	esp.1	no footballer claim
+323970	Julen Agirrezabala	87	esp.1	no footballer claim
+394309	Laro Gómez	87	esp.1	no footballer claim
+342654	Maguette Gueye	87	esp.1	no footballer claim
+259839	Manu	87	esp.1	no footballer claim
+107960	Matteo Prati	87	esp.1	no footballer claim
+399278	Pablo García	87	esp.1	no footballer claim
+282672	Pablo Ramon	87	esp.1	no wikidata match
+361455	Pedro Felipe	87	esp.1	no footballer claim
+400222	Simon Eriksson	87	esp.1	no footballer claim
+279699	Íñigo Sainz	87	esp.1	no wikidata match
+300878	Adrián Molina	101	esp.1	no footballer claim
+287224	Andrei Ratiu	101	esp.1	no wikidata match
+192893	Daniel Cárdenas	101	esp.1	no footballer claim
+324505	Fran Pérez	101	esp.1	no footballer claim
+3115984	Gnangoro Bouare Samake	101	esp.1	no footballer claim
+3128651	Iván Alonso Martín	101	esp.1	no wikidata match
+260740	Jorge de Frutos	101	esp.1	no wikidata match
+415410	Marco Román	101	esp.1	no wikidata match
+389447	Marco de las Sias	101	esp.1	no wikidata match
+265996	Mujaid Sadick	101	esp.1	no wikidata match
+264078	Pedro Díaz	101	esp.1	no footballer claim
+386579	Pelayo Fernández	101	esp.1	no footballer claim
+276847	Randy Nteka	101	esp.1	no footballer claim
+377843	Rayane Belaid	101	esp.1	no footballer claim
+409289	Samu Becerra	101	esp.1	no footballer claim
+276652	Sergio Camello	101	esp.1	no footballer claim
+268601	Aitor Ruibal	244	esp.1	no wikidata match
+281558	Antony	244	esp.1	no footballer claim
+359912	Facundo Bernal	244	esp.1	no footballer claim
+213050	Fran García	244	esp.1	no footballer claim
+411284	José Morante	244	esp.1	no wikidata match
+390091	Manu González	244	esp.1	no footballer claim
+242008	Marc Roca	244	esp.1	no footballer claim
+301526	Natan	244	esp.1	no footballer claim
+322908	Nelson Deossa	244	esp.1	no footballer claim
+70224	Rodrigo Riquelme	244	esp.1	no footballer claim
+394885	Álvaro De Pablo	244	esp.1	no wikidata match
+395941	Ángel Ortiz	244	esp.1	no footballer claim
+3117407	Alexis Ciria	86	esp.1	no footballer claim
+380286	Carlos Espí	86	esp.1	no footballer claim
+376422	Daniel Yañez	86	esp.1	no wikidata match
+405490	Illia Voloshyn	86	esp.1	no footballer claim
+84349	Javier Navarro	86	esp.1	no footballer claim
+405544	Jesús Fortea	86	esp.1	no footballer claim
+388339	Joan Martínez	86	esp.1	no footballer claim
+415478	Jorge Cestero	86	esp.1	no footballer claim
+330352	Mario Rivas	86	esp.1	no footballer claim
+388338	Raúl Asencio	86	esp.1	no footballer claim
+409318	Sergio Martínez	86	esp.1	no footballer claim
+350351	Sergio Mestre	86	esp.1	no wikidata match
+409019	Thiago Pitarch	86	esp.1	no footballer claim
+368327	Aitor Fraga	89	esp.1	no wikidata match
+366886	Alex Lebarbier	89	esp.1	no footballer claim
+396613	Alex Marchal	89	esp.1	no footballer claim
+406383	Gorka Carrera	89	esp.1	no footballer claim
+363039	Héctor Fort	89	esp.1	no footballer claim
+410486	Ibai Aguirre	89	esp.1	no footballer claim
+379457	Iñaki Rupérez	89	esp.1	no footballer claim
+406379	Job Ochieng	89	esp.1	no footballer claim
+388601	Jon Gorrotxategi	89	esp.1	no footballer claim
+306263	Luka Sucic	89	esp.1	no wikidata match
+396607	Luken Beitia	89	esp.1	no wikidata match
+341367	Orri Óskarsson	89	esp.1	no footballer claim
+326900	Pablo Marín	89	esp.1	no footballer claim
+265993	Sergio Gómez	89	esp.1	no footballer claim
+332246	Andrés Castrín	243	esp.1	no footballer claim
+304213	Arouna Sangante	243	esp.1	no footballer claim
+409486	Edu Altozano	243	esp.1	no wikidata match
 334163	Enrique Salas	243	esp.1	no footballer claim
 288900	Felix Correia	243	esp.1	no wikidata match
 362874	Fran González	243	esp.1	no wikidata match
 215386	Fábio Cardoso	243	esp.1	no footballer claim
 258923	Giorgi Kochorashvili	243	esp.1	no footballer claim
 371543	Ibrahima Sow	243	esp.1	no footballer claim
-415742	Iker Ortín	243	esp.1	error: Error: HTTP 429
-365821	Isaac Romero	243	esp.1	error: Error: HTTP 429
-5324162	Jesús Cruz Morales	243	esp.1	error: Error: HTTP 429
-250508	José Ángel Carmona	243	esp.1	error: Error: HTTP 429
-279738	Juan Iglesias	243	esp.1	error: Error: HTTP 429
-387493	Julio Díaz	243	esp.1	error: Error: HTTP 429
-356228	Manu Bueno	243	esp.1	error: Error: HTTP 429
-3131879	Manuel Ángel Castillo Rodríguez	243	esp.1	error: Error: HTTP 429
-203112	Marcão	243	esp.1	error: Error: HTTP 429
-375514	Miguel Sierra	243	esp.1	error: Error: HTTP 429
-422137	Nico Guillén	243	esp.1	error: Error: HTTP 429
-159135	Odisseas Vlachodimos	243	esp.1	error: Error: HTTP 429
-347359	Peque	243	esp.1	error: Error: HTTP 429
-119332	Rafael Romero	243	esp.1	error: Error: HTTP 429
-322993	Robbie Ure	243	esp.1	error: Error: HTTP 429
-277307	Youssouf Fofana	243	esp.1	error: Error: HTTP 429
-419048	Aaron Mayol	94	esp.1	error: Error: HTTP 429
-409380	Aimar Blázquez	94	esp.1	error: Error: HTTP 429
-413671	Alex Panach	94	esp.1	error: Error: HTTP 429
-308728	Arnau Martínez	94	esp.1	error: Error: HTTP 429
-300927	Copete	94	esp.1	error: Error: HTTP 429
-330552	César Tárrega	94	esp.1	error: Error: HTTP 429
-253763	Dani Raba	94	esp.1	error: Error: HTTP 429
-377768	David Otorbi	94	esp.1	error: Error: HTTP 429
-324504	Diego López	94	esp.1	error: Error: HTTP 429
-248681	Filip Ugrinic	94	esp.1	error: Error: HTTP 429
-267477	Hugo Duro	94	esp.1	error: Error: HTTP 429
-388076	Iker Córdoba	94	esp.1	error: Error: HTTP 429
-3124771	Jaume Durá I Soler	94	esp.1	error: Error: HTTP 429
-16340	Javi Guerra	94	esp.1	error: Error: HTTP 429
-189804	Jesús Vázquez	94	esp.1	error: Error: HTTP 429
-282086	Justin de Haas	94	esp.1	error: Error: HTTP 429
-324582	Kayne Van Oevelen	94	esp.1	error: Error: HTTP 429
-264177	Luis Rioja	94	esp.1	error: Error: HTTP 429
-362393	Marcos Navarro	94	esp.1	error: Error: HTTP 429
-231603	Pepelu	94	esp.1	error: Error: HTTP 429
-3124770	Rodrigo Gamón Martín	94	esp.1	error: Error: HTTP 429
-360096	Ryunosuke Sato	94	esp.1	error: Error: HTTP 429
-396751	Alassane Diatta	102	esp.1	error: Error: HTTP 429
-307390	Alberto Moleiro	102	esp.1	error: Error: HTTP 429
-415438	Carlos Macià	102	esp.1	error: Error: HTTP 429
-271904	Carlos Romero	102	esp.1	error: Error: HTTP 429
-3101325	Cheikh Ahmad Tidiane Thiam	102	esp.1	error: Error: HTTP 429
-3101339	César Bonafé Ceita	102	esp.1	error: Error: HTTP 429
-371619	Joselillo	102	esp.1	error: Error: HTTP 429
-5326689	Mauro Roca Martínez	102	esp.1	error: Error: HTTP 429
-3101324	Nizar El Jmili Ben Hamou	102	esp.1	error: Error: HTTP 429
-368878	Pau Navarro	102	esp.1	error: Error: HTTP 429
-343640	Rubén Gómez	102	esp.1	error: Error: HTTP 429
-318098	Santiago Mouriño	102	esp.1	error: Error: HTTP 429
-289072	Sergi Cardona	102	esp.1	error: Error: HTTP 429
-410797	Alvin Petit Dol	172	fra.1	error: Error: HTTP 429
-392126	Aristide Zossou	172	fra.1	error: Error: HTTP 429
-359360	Arthur Piedfort	172	fra.1	error: Error: HTTP 429
-214305	Assane Dioussé	172	fra.1	error: Error: HTTP 429
-362476	Christ Makosso	172	fra.1	error: Error: HTTP 429
-243748	Danny Namaso	172	fra.1	error: Error: HTTP 429
-404532	Elikya Legros	172	fra.1	error: Error: HTTP 429
-310134	Fredrik Oppegard	172	fra.1	error: Error: HTTP 429
-304212	Josué Casimir	172	fra.1	error: Error: HTTP 429
-416458	Lamfia Dioubaté	172	fra.1	error: Error: HTTP 429
-335320	Lamine Sy	172	fra.1	error: Error: HTTP 429
-323175	Lasso Coulibaly	172	fra.1	error: Error: HTTP 429
-409261	Louis Mezerette	172	fra.1	error: Error: HTTP 429
-345926	Mamadou Diop	172	fra.1	error: Error: HTTP 429
-415461	Mamoudou Cissokho	172	fra.1	error: Error: HTTP 429
-186306	Mohamed Coulibaly	172	fra.1	error: Error: HTTP 429
-379070	Rayan Mandengue	172	fra.1	error: Error: HTTP 429
-349185	Remy Labeau Lascary	172	fra.1	error: Error: HTTP 429
-268591	Romain Faivre	172	fra.1	error: Error: HTTP 429
-409263	Ryan Rodin	172	fra.1	error: Error: HTTP 429
-3131801	Salimou Danfakha	172	fra.1	error: Error: HTTP 429
-252136	Sekou Fofana	172	fra.1	error: Error: HTTP 429
-302862	Sinaly Diomande	172	fra.1	error: Error: HTTP 429
-403125	Telli Siwe	172	fra.1	error: Error: HTTP 429
-255625	Thelonius Bair	172	fra.1	error: Error: HTTP 429
-409262	Tidiane Devernois	172	fra.1	error: Error: HTTP 429
-400649	Wei Xiangxin	172	fra.1	error: Error: HTTP 429
-3145596	Youssef Khoudda	172	fra.1	error: Error: HTTP 429
-414184	Yvan Zaddy	172	fra.1	error: Error: HTTP 429
-3124793	Aymen Assab	174	fra.1	error: Error: HTTP 429
-411027	Ilane Touré	174	fra.1	error: Error: HTTP 429
-388329	Jules Stawiecki	174	fra.1	error: Error: HTTP 429
-208518	Mamadou Coulibaly	174	fra.1	error: Error: HTTP 429
-316559	Názinho	174	fra.1	error: Error: HTTP 429
-299566	Oumar Konaté	174	fra.1	error: Error: HTTP 429
-411449	Pape Cabral	174	fra.1	error: Error: HTTP 429
-365789	Paris Brunner	174	fra.1	error: Error: HTTP 429
-258875	Philipp Köhn	174	fra.1	error: Error: HTTP 429
-362288	Sadibou Sané	174	fra.1	error: Error: HTTP 429
-3124794	Safouane Benzahra	174	fra.1	error: Error: HTTP 429
-388328	Samuel Nibombé	174	fra.1	error: Error: HTTP 429
-356925	Stanis Idumbo	174	fra.1	error: Error: HTTP 429
-310640	Vanderson	174	fra.1	error: Error: HTTP 429
-301262	Amine El Ouazzani	7868	fra.1	error: Error: HTTP 429
-379227	Anthony Bermont	7868	fra.1	error: Error: HTTP 429
-421740	Bané Diatta	7868	fra.1	error: Error: HTTP 429
-356211	Emmanuel Biumla	7868	fra.1	error: Error: HTTP 429
-412871	Harouna Djibirin	7868	fra.1	error: Error: HTTP 429
-333218	Jacques Ekomie	7868	fra.1	error: Error: HTTP 429
-377899	Joseph Kalulu Kyatengwa	7868	fra.1	error: Error: HTTP 429
-3130908	Jules Bouffandeau	7868	fra.1	error: Error: HTTP 429
-3130907	Mamadou Diallo	7868	fra.1	error: Error: HTTP 429
-312399	Mamadou Simbakoli	7868	fra.1	error: Error: HTTP 429
-394476	Marius Louãr	7868	fra.1	error: Error: HTTP 429
-416401	Maël Gernigon	7868	fra.1	error: Error: HTTP 429
-378976	Oumar Pona	7868	fra.1	error: Error: HTTP 429
-412232	Ousmane Camara	7868	fra.1	error: Error: HTTP 429
-403232	Prosper Peter	7868	fra.1	error: Error: HTTP 429
-325330	Axel Camblan	6997	fra.1	error: Error: HTTP 429
-324572	Bradley Locko	6997	fra.1	error: Error: HTTP 429
-3121265	Enzo Monchatre	6997	fra.1	error: Error: HTTP 429
-3131925	Evan Mailly	6997	fra.1	error: Error: HTTP 429
-180174	Gautier Lloris	6997	fra.1	error: Error: HTTP 429
-359402	Giovani Versini	6997	fra.1	error: Error: HTTP 429
-388421	Ibrahim Kanté	6997	fra.1	error: Error: HTTP 429
-399248	Justin Bourgault	6997	fra.1	error: Error: HTTP 429
-363150	Luc Zogbe	6997	fra.1	error: Error: HTTP 429
-416403	Mathis Lainé	6997	fra.1	error: Error: HTTP 429
-3100741	Noé Poillion	6997	fra.1	error: Error: HTTP 429
-365783	Pathé Mboup	6997	fra.1	error: Error: HTTP 429
-397594	Raphaël Le Guen	6997	fra.1	error: Error: HTTP 429
-251556	Romain Cagnon	6997	fra.1	error: Error: HTTP 429
-246847	Ahmed Touba	3236	fra.1	error: Error: HTTP 429
-258270	Ayumu Seko	3236	fra.1	error: Error: HTTP 429
-388878	Daren Mosengo	3236	fra.1	error: Error: HTTP 429
-3132216	Djibril Ouziad	3236	fra.1	error: Error: HTTP 429
-411169	Enzo Koffi	3236	fra.1	error: Error: HTTP 429
-285975	Félix Mambimbi	3236	fra.1	error: Error: HTTP 429
-388879	Guy Zohouri	3236	fra.1	error: Error: HTTP 429
-3140852	Hakim Dongopandji	3236	fra.1	error: Error: HTTP 429
-371557	Ismail Bouneb	3236	fra.1	error: Error: HTTP 429
-371558	Joan Tincres	3236	fra.1	error: Error: HTTP 429
-243514	Josh Maja	3236	fra.1	error: Error: HTTP 429
-325043	Kaito Mizuta	3236	fra.1	error: Error: HTTP 429
-319286	Mathéo Bodmer	3236	fra.1	error: Error: HTTP 429
-408085	Mouhamed N'Diaye	3236	fra.1	error: Error: HTTP 429
-291982	Rassoul Ndiaye	3236	fra.1	error: Error: HTTP 429
-401045	Rayan Fofana	3236	fra.1	error: Error: HTTP 429
-346519	Simon Ebonog	3236	fra.1	error: Error: HTTP 429
-399434	Sota Nakamura	3236	fra.1	error: Error: HTTP 429
-401714	Stephan Zagadou	3236	fra.1	error: Error: HTTP 429
-297167	Timothee Pembélé	3236	fra.1	error: Error: HTTP 429
-138563	Vincent Sasso	3236	fra.1	error: Error: HTTP 429
-386384	Yanis Zouaoui	3236	fra.1	error: Error: HTTP 429
-418536	Adil Bourabaa	2697	fra.1	error: Error: HTTP 429
-287606	Alexandre Lauray	2697	fra.1	error: Error: HTTP 429
-344518	Augustin Delbecque	2697	fra.1	error: Error: HTTP 429
-279137	Brahimi Bilal	2697	fra.1	error: Error: HTTP 429
-233702	Dame Guèye	2697	fra.1	error: Error: HTTP 429
-273021	Daouda Traoré	2697	fra.1	error: Error: HTTP 429
-30302	Djibril Sidibé	2697	fra.1	error: Error: HTTP 429
-277526	Edwin Quarshie	2697	fra.1	error: Error: HTTP 429
-417822	Enzo Vágner	2697	fra.1	error: Error: HTTP 429
-357006	Erwan Colas	2697	fra.1	error: Error: HTTP 429
-299457	Ewan Hatfout	2697	fra.1	error: Error: HTTP 429
-393721	Harold Voyer	2697	fra.1	error: Error: HTTP 429
-315460	Jean Vercruysse	2697	fra.1	error: Error: HTTP 429
-402816	João Almeida	2697	fra.1	error: Error: HTTP 429
-5326304	Lenny Videira	2697	fra.1	error: Error: HTTP 429
-268720	Louis Mafouta	2697	fra.1	error: Error: HTTP 429
-262482	Lucas Buades	2697	fra.1	error: Error: HTTP 429
-331636	Lucas Calodat	2697	fra.1	error: Error: HTTP 429
-397327	Martin Rossignol	2697	fra.1	error: Error: HTTP 429
-332827	Milan Robin	2697	fra.1	error: Error: HTTP 429
-397394	Noa Boissé	2697	fra.1	error: Error: HTTP 429
-310024	Raúl Torrente	2697	fra.1	error: Error: HTTP 429
-397317	Théo Eyoum	2697	fra.1	error: Error: HTTP 429
-407614	William Harhouz	2697	fra.1	error: Error: HTTP 429
-308246	Abdallah Sima	175	fra.1	error: Error: HTTP 429
-387061	Andrija Bulatovic	175	fra.1	error: Error: HTTP 429
-364180	Franjo Ivanovic	175	fra.1	error: Error: HTTP 429
-403417	Ilan Jourdren	175	fra.1	error: Error: HTTP 429
-297385	Jhoanner Chavez	175	fra.1	error: Error: HTTP 429
-333228	Junior Kadile	175	fra.1	error: Error: HTTP 429
-412217	Mezian Soares	175	fra.1	error: Error: HTTP 429
-288481	Michal Skoras	175	fra.1	error: Error: HTTP 429
-387044	Nidal Celik	175	fra.1	error: Error: HTTP 429
-350577	Pierre Ganiou	175	fra.1	error: Error: HTTP 429
-101451	Régis Gurtner	175	fra.1	error: Error: HTTP 429
-401306	Souleymane Sagnan	175	fra.1	error: Error: HTTP 429
-341720	Yassine Titraoui	175	fra.1	error: Error: HTTP 429
-340900	Alexsandro	166	fra.1	error: Error: HTTP 429
-255780	Arnaud Bodart	166	fra.1	error: Error: HTTP 429
-337855	Basar Önal	166	fra.1	error: Error: HTTP 429
-355971	Ethan Mbappé	166	fra.1	error: Error: HTTP 429
-231778	Gaetan Perrin	166	fra.1	error: Error: HTTP 429
-358999	Hamza Igmane	166	fra.1	error: Error: HTTP 429
-393321	Isaac Cossier	166	fra.1	error: Error: HTTP 429
-387346	Loun Srdanovic	166	fra.1	error: Error: HTTP 429
-417256	Matah Yondjio	166	fra.1	error: Error: HTTP 429
-304011	Maurits Kjaergaard	166	fra.1	error: Error: HTTP 429
-408359	Maxima Goffi	166	fra.1	error: Error: HTTP 429
-345988	Ngal'ayel Mukau	166	fra.1	error: Error: HTTP 429
-301648	Orlando Gill	166	fra.1	error: Error: HTTP 429
-400352	Soriba Diaoune	166	fra.1	error: Error: HTTP 429
-408358	Thomas Sajous	166	fra.1	error: Error: HTTP 429
-415421	Zadig Lanssade	166	fra.1	error: Error: HTTP 429
-381626	Arsène Kouassi	273	fra.1	error: Error: HTTP 429
-355870	Arthur Avom	273	fra.1	error: Error: HTTP 429
-417372	Daniel Semedo	273	fra.1	error: Error: HTTP 429
-137397	Formose Mendy	273	fra.1	error: Error: HTTP 429
-397392	Gabin Bernardeau	273	fra.1	error: Error: HTTP 429
-324565	Ibrahima Baldé	273	fra.1	error: Error: HTTP 429
-306535	Isaak Touré	273	fra.1	error: Error: HTTP 429
-309651	Isak Jensen	273	fra.1	error: Error: HTTP 429
-416429	Mamadou Koné	273	fra.1	error: Error: HTTP 429
-345529	Mohamed Bamba	273	fra.1	error: Error: HTTP 429
-345563	Nathaniel Adjei	273	fra.1	error: Error: HTTP 429
-315215	Noah Cadiou	273	fra.1	error: Error: HTTP 429
-315454	Noah Mbamba	273	fra.1	error: Error: HTTP 429
-368592	Nosa Obaretin	273	fra.1	error: Error: HTTP 429
-3145437	Samir Said Haribou	273	fra.1	error: Error: HTTP 429
-297345	Souleymane Faye	273	fra.1	error: Error: HTTP 429
-344634	Srdjan Kuzmic	273	fra.1	error: Error: HTTP 429
-258100	Tosin Aiyegun	273	fra.1	error: Error: HTTP 429
-285088	Abner	167	fra.1	error: Error: HTTP 429
-415054	Adil Hamdani	167	fra.1	error: Error: HTTP 429
-402949	Alejandro Rodríguez	167	fra.1	error: Error: HTTP 429
-5325687	Angel Daniel Garcia	167	fra.1	error: Error: HTTP 429
-5327620	Cluver Sambi Mbungu	167	fra.1	error: Error: HTTP 429
-320945	Felix Bacher	167	fra.1	error: Error: HTTP 429
-341375	Julien Duranville	167	fra.1	error: Error: HTTP 429
-362971	Justin Bengui Joao	167	fra.1	error: Error: HTTP 429
-379066	Kail Boudache	167	fra.1	error: Error: HTTP 429
-408345	Khalis Merah	167	fra.1	error: Error: HTTP 429
-402948	Mathys De Carvalho	167	fra.1	error: Error: HTTP 429
-403421	Matthias Da Silva	167	fra.1	error: Error: HTTP 429
-364589	Mohamed Ouédraogo	167	fra.1	error: Error: HTTP 429
-403110	Noham Kamara	167	fra.1	error: Error: HTTP 429
-305545	Pavel Sulc	167	fra.1	error: Error: HTTP 429
-403842	Rémi Himbert	167	fra.1	error: Error: HTTP 429
-419943	Steeve Kango	167	fra.1	error: Error: HTTP 429
-408362	Tiago Manuel Gonçalves Silva	167	fra.1	error: Error: HTTP 429
-384990	Yvann Konan	167	fra.1	error: Error: HTTP 429
-370758	Zachary Athekame	167	fra.1	error: Error: HTTP 429
-418016	Anis Doubal	176	fra.1	error: Error: HTTP 429
-5325768	Antoine Dominique Henri Valero	176	fra.1	error: Error: HTTP 429
-159051	Emerson	176	fra.1	error: Error: HTTP 429
-276160	Faris Moumbagna	176	fra.1	error: Error: HTTP 429
-421852	Hilan Slimani	176	fra.1	error: Error: HTTP 429
-404675	Ibrahim Gomis	176	fra.1	error: Error: HTTP 429
-422095	Kelyann Bezahaf	176	fra.1	error: Error: HTTP 429
-414465	Mathis Clement	176	fra.1	error: Error: HTTP 429
-421851	Nouhoum Kamissoko	176	fra.1	error: Error: HTTP 429
-414467	Rayan Bang Na	176	fra.1	error: Error: HTTP 429
-411418	Tadjidine Mmadi	176	fra.1	error: Error: HTTP 429
-280650	Théo Vermot	176	fra.1	error: Error: HTTP 429
-343114	Tochukwu Nnadi	176	fra.1	error: Error: HTTP 429
-421853	Ugo El Kadmiri	176	fra.1	error: Error: HTTP 429
-3131927	Aboulaye Camara	2502	fra.1	error: Error: HTTP 429
-305669	Alidu Seidu	2502	fra.1	error: Error: HTTP 429
-404832	Brad-Hamilton Mantsounga	2502	fra.1	error: Error: HTTP 429
-3135995	Djelan Morana	2502	fra.1	error: Error: HTTP 429
-357425	Djibril Coulibaly	2502	fra.1	error: Error: HTTP 429
-416460	Everton Pereira	2502	fra.1	error: Error: HTTP 429
-376344	Hamza Koutoune	2502	fra.1	error: Error: HTTP 429
-282597	Isak Jansson	2502	fra.1	error: Error: HTTP 429
-232670	Issiaga Camara	2502	fra.1	error: Error: HTTP 429
-3121791	Martin Ponsot	2502	fra.1	error: Error: HTTP 429
-236957	Mohamed Abdelmoneim	2502	fra.1	error: Error: HTTP 429
-176816	Morgan Sanson	2502	fra.1	error: Error: HTTP 429
-3127048	Nassim Laarej	2502	fra.1	error: Error: HTTP 429
-282676	Nathan N'Goumou	2502	fra.1	error: Error: HTTP 429
-298030	Niels Nkounkou	2502	fra.1	error: Error: HTTP 429
-3117261	Xavier Junior Mandza Tsiendi	2502	fra.1	error: Error: HTTP 429
-399717	Zoumana Diallo	2502	fra.1	error: Error: HTTP 429
-364746	Adama Camara	6851	fra.1	error: Error: HTTP 429
-403843	Emmanuel Mbemba	6851	fra.1	error: Error: HTTP 429
-5326108	Ibrahim Meïté	6851	fra.1	error: Error: HTTP 429
-304918	Ilan Kebbal	6851	fra.1	error: Error: HTTP 429
-257126	Jean-Phillipe Krasso	6851	fra.1	error: Error: HTTP 429
-223122	Maxime López	6851	fra.1	error: Error: HTTP 429
-287474	Moustapha Mbow	6851	fra.1	error: Error: HTTP 429
-301770	Obed Nkambadio	6851	fra.1	error: Error: HTTP 429
-368334	Omar Sissoko	6851	fra.1	error: Error: HTTP 429
-308195	Otavio	6851	fra.1	error: Error: HTTP 429
-402888	Rudy Matondo	6851	fra.1	error: Error: HTTP 429
-287572	Samir Chergui	6851	fra.1	error: Error: HTTP 429
-324325	Yoan Koré	6851	fra.1	error: Error: HTTP 429
-398780	Zabi Gueu	6851	fra.1	error: Error: HTTP 429
-3143886	Adam Mouak	160	fra.1	error: Error: HTTP 429
-403981	David Boly	160	fra.1	error: Error: HTTP 429
-403578	Dro Fernández	160	fra.1	error: Error: HTTP 429
-196200	Lucas Hernández	160	fra.1	error: Error: HTTP 429
-248699	Matvei Safonov	160	fra.1	error: Error: HTTP 429
-290591	Nuno Mendes	160	fra.1	error: Error: HTTP 429
-403419	Quentin Ndjantou	160	fra.1	error: Error: HTTP 429
-250758	Bryan Reynolds	169	fra.1	error: Error: HTTP 429
-355982	Djaoui Cissé	169	fra.1	error: Error: HTTP 429
-415193	Elias Legendre	169	fra.1	error: Error: HTTP 429
-332862	Eliezer Mayenda	169	fra.1	error: Error: HTTP 429
-323850	Esteban Lepaul	169	fra.1	error: Error: HTTP 429
-401410	Gonçalo Oliveira	169	fra.1	error: Error: HTTP 429
-398977	Henrick Do Marcolino	169	fra.1	error: Error: HTTP 429
-414191	Kilian Belazzoug	169	fra.1	error: Error: HTTP 429
-372260	Mahamadou Nagida	169	fra.1	error: Error: HTTP 429
-257489	Mousa Al-Tamari	169	fra.1	error: Error: HTTP 429
-217668	Nicolas Lemaitre	169	fra.1	error: Error: HTTP 429
-190806	Przemyslaw Frankowski	169	fra.1	error: Error: HTTP 429
-243844	Sebastian Szymanski	169	fra.1	error: Error: HTTP 429
-380238	Benjamin Brantlind	180	fra.1	error: Error: HTTP 429
-362794	Conrad Harder	180	fra.1	error: Error: HTTP 429
-368325	Diogo Sousa	180	fra.1	error: Error: HTTP 429
-388392	Fabio Baldé	180	fra.1	error: Error: HTTP 429
-304256	Filip Jørgensen	180	fra.1	error: Error: HTTP 429
-408136	Gabriel Kerckaert	180	fra.1	error: Error: HTTP 429
-374221	Genesis Antwi	180	fra.1	error: Error: HTTP 429
-401738	Ghianny Kodia	180	fra.1	error: Error: HTTP 429
-290230	Giovanni Reyna	180	fra.1	error: Error: HTTP 429
-403982	Hermann Diandaga	180	fra.1	error: Error: HTTP 429
-305935	Ismael Doukoure	180	fra.1	error: Error: HTTP 429
-3117410	Jacobo Ortega Conde	180	fra.1	error: Error: HTTP 429
-224074	Karim Coulibaly	180	fra.1	error: Error: HTTP 429
-3138939	Kingsley Olufade	180	fra.1	error: Error: HTTP 429
-359934	Lucas Høgsberg	180	fra.1	error: Error: HTTP 429
-335877	Mateo Del Blanco	180	fra.1	error: Error: HTTP 429
-347919	Maximillian Oyedele	180	fra.1	error: Error: HTTP 429
-371973	Milosz Piekutowski	180	fra.1	error: Error: HTTP 429
-331082	Omari Kellyman	180	fra.1	error: Error: HTTP 429
-377782	Oso	180	fra.1	error: Error: HTTP 429
-353378	Pape Diop	180	fra.1	error: Error: HTTP 429
-350501	Samuel Amo-Ameyaw	180	fra.1	error: Error: HTTP 429
-418506	Tyrese Noubissie	180	fra.1	error: Error: HTTP 429
-371556	Yaya Diémé	180	fra.1	error: Error: HTTP 429
-418786	Yoann Becker	180	fra.1	error: Error: HTTP 429
-290030	Abu Francis	179	fra.1	error: Error: HTTP 429
-408251	Alexis Vossah	179	fra.1	error: Error: HTTP 429
-252740	Aron Donnum	179	fra.1	error: Error: HTTP 429
-422969	Aymen Ammaouch	179	fra.1	error: Error: HTTP 429
-306664	Casper Tengstedt	179	fra.1	error: Error: HTTP 429
-385000	Christ Tapé	179	fra.1	error: Error: HTTP 429
-362411	David Odogu	179	fra.1	error: Error: HTTP 429
-403310	Ilyas Azizi	179	fra.1	error: Error: HTTP 429
-397384	Ismail Diallo	179	fra.1	error: Error: HTTP 429
-380400	Julián Vignolo	179	fra.1	error: Error: HTTP 429
-322205	Mario Sauer	179	fra.1	error: Error: HTTP 429
-77072	Mark McKenzie	179	fra.1	error: Error: HTTP 429
-386251	Mathis Saka	179	fra.1	error: Error: HTTP 429
-371559	Mathys Niflore	179	fra.1	error: Error: HTTP 429
-396620	Naime Said Mchindra	179	fra.1	error: Error: HTTP 429
-408252	Seny Koumbassa	179	fra.1	error: Error: HTTP 429
-399428	Sion Oppong	179	fra.1	error: Error: HTTP 429
-3140851	Théo Collin	179	fra.1	error: Error: HTTP 429
-283692	Alexandre Philiponeau	170	fra.1	error: Error: HTTP 429
-408780	Anis Ouzenadji	170	fra.1	error: Error: HTTP 429
-270173	Antoine Mille	170	fra.1	error: Error: HTTP 429
-403998	Christ Batola	170	fra.1	error: Error: HTTP 429
-323058	Dermane Karim	170	fra.1	error: Error: HTTP 429
-3139430	Enisio Carneiro	170	fra.1	error: Error: HTTP 429
-3131916	Idrissa Soukouna	170	fra.1	error: Error: HTTP 429
-286972	Iron Gomis	170	fra.1	error: Error: HTTP 429
-304898	Ismael Boura	170	fra.1	error: Error: HTTP 429
-305693	Jeremy Le Douaron	170	fra.1	error: Error: HTTP 429
-3140905	Lassana Simakha	170	fra.1	error: Error: HTTP 429
-334281	Lucas Maronnier	170	fra.1	error: Error: HTTP 429
-112988	Michel Diaz	170	fra.1	error: Error: HTTP 429
-414398	Noah Donkor	170	fra.1	error: Error: HTTP 429
-287576	Paolo Gozzi Iweru	170	fra.1	error: Error: HTTP 429
-408779	Roman Murcy	170	fra.1	error: Error: HTTP 429
-287514	Timothé Nkada	170	fra.1	error: Error: HTTP 429
-3129214	Yacouba Koné	170	fra.1	error: Error: HTTP 429
-371562	Yvann Titi	170	fra.1	error: Error: HTTP 429
-341441	Andrej Ilić	598	ger.1	error: Error: HTTP 429
-406371	Andrik Markgraf	598	ger.1	error: Error: HTTP 429
-221460	Carl Klaus	598	ger.1	error: Error: HTTP 429
-413775	Duje Sliskovic	598	ger.1	error: Error: HTTP 429
-233499	Felix Uduokhai	598	ger.1	error: Error: HTTP 429
-165424	Frederik Ronnow	598	ger.1	error: Error: HTTP 429
-3131188	Fritz Gagzow	598	ger.1	error: Error: HTTP 429
-276323	Jeong Woo-Yeong	598	ger.1	error: Error: HTTP 429
-222567	Josip Juranovic	598	ger.1	error: Error: HTTP 429
-3101887	Julien Piet Friedrich	598	ger.1	error: Error: HTTP 429
-289527	Kastriot Imeri	598	ger.1	error: Error: HTTP 429
-366823	Livan Burcu	598	ger.1	error: Error: HTTP 429
-322098	Marin Ljubicic	598	ger.1	error: Error: HTTP 429
-3113344	Mekhi Anthony Gray	598	ger.1	error: Error: HTTP 429
-245623	Michel Aebischer	598	ger.1	error: Error: HTTP 429
-268808	Stanley N'Soki	598	ger.1	error: Error: HTTP 429
-314184	Zeno Van Den Bosch	598	ger.1	error: Error: HTTP 429
-361258	Afonso Moreira	131	ger.1	error: Error: HTTP 429
-397120	Ben Hawighorst	131	ger.1	error: Error: HTTP 429
-5327243	Dustin Buck	131	ger.1	error: Error: HTTP 429
-5325769	Gabriel Minutillo	131	ger.1	error: Error: HTTP 429
-422968	Kenan Doganay	131	ger.1	error: Error: HTTP 429
-408246	Kennet Eichhorn	131	ger.1	error: Error: HTTP 429
-290044	Miguel Gutiérrez	131	ger.1	error: Error: HTTP 429
-408703	Montrell Culbreath	131	ger.1	error: Error: HTTP 429
-346376	Tim Oermann	131	ger.1	error: Error: HTTP 429
-405586	Cassiano Kiala	132	ger.1	error: Error: HTTP 429
-405585	David Daiber	132	ger.1	error: Error: HTTP 429
-3110056	David Podar-Stiube	132	ger.1	error: Error: HTTP 429
-409827	Jannis Bärtl	132	ger.1	error: Error: HTTP 429
-402841	Lennart Karl	132	ger.1	error: Error: HTTP 429
-417373	Maycon Cardozo	132	ger.1	error: Error: HTTP 429
-3104151	Tim Binder	132	ger.1	error: Error: HTTP 429
-324660	Tom Bischof	132	ger.1	error: Error: HTTP 429
-178380	Alexander Meyer	124	ger.1	error: Error: HTTP 429
-294317	Carney Chukwuemeka	124	ger.1	error: Error: HTTP 429
-401450	Enzo De Pina Duarte Dos Santos	124	ger.1	error: Error: HTTP 429
-387437	Filippo Mané	124	ger.1	error: Error: HTTP 429
-383070	Justin Lerma	124	ger.1	error: Error: HTTP 429
-399455	Kauã Prates	124	ger.1	error: Error: HTTP 429
-357801	Konstantinos Karetsas	124	ger.1	error: Error: HTTP 429
-413817	Luca Reggiani	124	ger.1	error: Error: HTTP 429
-403781	Mathis Albert	124	ger.1	error: Error: HTTP 429
-403933	Mussa Kaba	124	ger.1	error: Error: HTTP 429
-403833	Samuele Inácio	124	ger.1	error: Error: HTTP 429
-149297	Daniel Batz	268	ger.1	error: Error: HTTP 429
-343990	Enzo Leopold	268	ger.1	error: Error: HTTP 429
-323061	Fabio Chiarodia	268	ger.1	error: Error: HTTP 429
-415726	Fritz Fleck	268	ger.1	error: Error: HTTP 429
-3116071	Iaia Manco Danfa	268	ger.1	error: Error: HTTP 429
-384410	Jan Leszczynski	268	ger.1	error: Error: HTTP 429
-304631	Jan Olschowsky	268	ger.1	error: Error: HTTP 429
-304793	Jens Castrop	268	ger.1	error: Error: HTTP 429
-3116064	Josiah Kaled Uwakhonye	268	ger.1	error: Error: HTTP 429
-238033	Kou Itakura	268	ger.1	error: Error: HTTP 429
-291817	Lion Schweers	268	ger.1	error: Error: HTTP 429
+415742	Iker Ortín	243	esp.1	no wikidata match
+365821	Isaac Romero	243	esp.1	no footballer claim
+5324162	Jesús Cruz Morales	243	esp.1	no wikidata match
+250508	José Ángel Carmona	243	esp.1	no footballer claim
+279738	Juan Iglesias	243	esp.1	no footballer claim
+387493	Julio Díaz	243	esp.1	no footballer claim
+356228	Manu Bueno	243	esp.1	no footballer claim
+3131879	Manuel Ángel Castillo Rodríguez	243	esp.1	no wikidata match
+203112	Marcão	243	esp.1	no footballer claim
+375514	Miguel Sierra	243	esp.1	no footballer claim
+422137	Nico Guillén	243	esp.1	no footballer claim
+159135	Odisseas Vlachodimos	243	esp.1	no footballer claim
+347359	Peque	243	esp.1	no footballer claim
+119332	Rafael Romero	243	esp.1	no footballer claim
+322993	Robbie Ure	243	esp.1	no footballer claim
+277307	Youssouf Fofana	243	esp.1	no footballer claim
+419048	Aaron Mayol	94	esp.1	no footballer claim
+409380	Aimar Blázquez	94	esp.1	no footballer claim
+413671	Alex Panach	94	esp.1	no wikidata match
+308728	Arnau Martínez	94	esp.1	no footballer claim
+300927	Copete	94	esp.1	no footballer claim
+330552	César Tárrega	94	esp.1	no footballer claim
+253763	Dani Raba	94	esp.1	no footballer claim
+377768	David Otorbi	94	esp.1	no footballer claim
+324504	Diego López	94	esp.1	no footballer claim
+248681	Filip Ugrinic	94	esp.1	no wikidata match
+267477	Hugo Duro	94	esp.1	no wikidata match
+388076	Iker Córdoba	94	esp.1	no footballer claim
+3124771	Jaume Durá I Soler	94	esp.1	no wikidata match
+16340	Javi Guerra	94	esp.1	no footballer claim
+189804	Jesús Vázquez	94	esp.1	no footballer claim
+282086	Justin de Haas	94	esp.1	no footballer claim
+324582	Kayne Van Oevelen	94	esp.1	no footballer claim
+264177	Luis Rioja	94	esp.1	no wikidata match
+362393	Marcos Navarro	94	esp.1	no footballer claim
+231603	Pepelu	94	esp.1	no footballer claim
+3124770	Rodrigo Gamón Martín	94	esp.1	no wikidata match
+360096	Ryunosuke Sato	94	esp.1	no footballer claim
+396751	Alassane Diatta	102	esp.1	no wikidata match
+307390	Alberto Moleiro	102	esp.1	no footballer claim
+415438	Carlos Macià	102	esp.1	no wikidata match
+271904	Carlos Romero	102	esp.1	no footballer claim
+3101325	Cheikh Ahmad Tidiane Thiam	102	esp.1	no wikidata match
+3101339	César Bonafé Ceita	102	esp.1	no footballer claim
+371619	Joselillo	102	esp.1	no footballer claim
+5326689	Mauro Roca Martínez	102	esp.1	no wikidata match
+3101324	Nizar El Jmili Ben Hamou	102	esp.1	no wikidata match
+368878	Pau Navarro	102	esp.1	no footballer claim
+343640	Rubén Gómez	102	esp.1	no footballer claim
+318098	Santiago Mouriño	102	esp.1	no footballer claim
+289072	Sergi Cardona	102	esp.1	no footballer claim
+410797	Alvin Petit Dol	172	fra.1	no footballer claim
+392126	Aristide Zossou	172	fra.1	no wikidata match
+359360	Arthur Piedfort	172	fra.1	no footballer claim
+214305	Assane Dioussé	172	fra.1	no footballer claim
+362476	Christ Makosso	172	fra.1	no footballer claim
+243748	Danny Namaso	172	fra.1	no wikidata match
+404532	Elikya Legros	172	fra.1	no footballer claim
+310134	Fredrik Oppegard	172	fra.1	no wikidata match
+304212	Josué Casimir	172	fra.1	no footballer claim
+416458	Lamfia Dioubaté	172	fra.1	no footballer claim
+335320	Lamine Sy	172	fra.1	no footballer claim
+323175	Lasso Coulibaly	172	fra.1	no wikidata match
+409261	Louis Mezerette	172	fra.1	no footballer claim
+345926	Mamadou Diop	172	fra.1	no footballer claim
+415461	Mamoudou Cissokho	172	fra.1	no footballer claim
+186306	Mohamed Coulibaly	172	fra.1	no footballer claim
+379070	Rayan Mandengue	172	fra.1	no footballer claim
+349185	Remy Labeau Lascary	172	fra.1	no wikidata match
+268591	Romain Faivre	172	fra.1	no footballer claim
+409263	Ryan Rodin	172	fra.1	no wikidata match
+3131801	Salimou Danfakha	172	fra.1	no wikidata match
+252136	Sekou Fofana	172	fra.1	no wikidata match
+302862	Sinaly Diomande	172	fra.1	no wikidata match
+403125	Telli Siwe	172	fra.1	no footballer claim
+255625	Thelonius Bair	172	fra.1	no footballer claim
+409262	Tidiane Devernois	172	fra.1	no footballer claim
+400649	Wei Xiangxin	172	fra.1	no footballer claim
+3145596	Youssef Khoudda	172	fra.1	no footballer claim
+414184	Yvan Zaddy	172	fra.1	no footballer claim
+3124793	Aymen Assab	174	fra.1	no wikidata match
+411027	Ilane Touré	174	fra.1	no footballer claim
+388329	Jules Stawiecki	174	fra.1	no footballer claim
+208518	Mamadou Coulibaly	174	fra.1	no footballer claim
+316559	Názinho	174	fra.1	no wikidata match
+299566	Oumar Konaté	174	fra.1	no wikidata match
+411449	Pape Cabral	174	fra.1	no footballer claim
+365789	Paris Brunner	174	fra.1	no wikidata match
+258875	Philipp Köhn	174	fra.1	no footballer claim
+362288	Sadibou Sané	174	fra.1	no footballer claim
+3124794	Safouane Benzahra	174	fra.1	no footballer claim
+388328	Samuel Nibombé	174	fra.1	no footballer claim
+356925	Stanis Idumbo	174	fra.1	no wikidata match
+310640	Vanderson	174	fra.1	no footballer claim
+301262	Amine El Ouazzani	7868	fra.1	no wikidata match
+379227	Anthony Bermont	7868	fra.1	no footballer claim
+421740	Bané Diatta	7868	fra.1	no wikidata match
+356211	Emmanuel Biumla	7868	fra.1	no footballer claim
+412871	Harouna Djibirin	7868	fra.1	no footballer claim
+333218	Jacques Ekomie	7868	fra.1	no wikidata match
+377899	Joseph Kalulu Kyatengwa	7868	fra.1	no wikidata match
+3130908	Jules Bouffandeau	7868	fra.1	no wikidata match
+3130907	Mamadou Diallo	7868	fra.1	no footballer claim
+312399	Mamadou Simbakoli	7868	fra.1	no footballer claim
+394476	Marius Louãr	7868	fra.1	no wikidata match
+416401	Maël Gernigon	7868	fra.1	no footballer claim
+378976	Oumar Pona	7868	fra.1	no wikidata match
+412232	Ousmane Camara	7868	fra.1	no footballer claim
+403232	Prosper Peter	7868	fra.1	no footballer claim
+325330	Axel Camblan	6997	fra.1	no footballer claim
+324572	Bradley Locko	6997	fra.1	no footballer claim
+3121265	Enzo Monchatre	6997	fra.1	no wikidata match
+3131925	Evan Mailly	6997	fra.1	no wikidata match
+180174	Gautier Lloris	6997	fra.1	no footballer claim
+359402	Giovani Versini	6997	fra.1	no footballer claim
+388421	Ibrahim Kanté	6997	fra.1	no footballer claim
+399248	Justin Bourgault	6997	fra.1	no footballer claim
+363150	Luc Zogbe	6997	fra.1	no wikidata match
+416403	Mathis Lainé	6997	fra.1	no footballer claim
+3100741	Noé Poillion	6997	fra.1	no wikidata match
+365783	Pathé Mboup	6997	fra.1	no footballer claim
+397594	Raphaël Le Guen	6997	fra.1	no footballer claim
+251556	Romain Cagnon	6997	fra.1	no footballer claim
+246847	Ahmed Touba	3236	fra.1	no footballer claim
+258270	Ayumu Seko	3236	fra.1	no wikidata match
+388878	Daren Mosengo	3236	fra.1	no footballer claim
+3132216	Djibril Ouziad	3236	fra.1	no footballer claim
+411169	Enzo Koffi	3236	fra.1	no footballer claim
+285975	Félix Mambimbi	3236	fra.1	no wikidata match
+388879	Guy Zohouri	3236	fra.1	no wikidata match
+3140852	Hakim Dongopandji	3236	fra.1	no footballer claim
+371557	Ismail Bouneb	3236	fra.1	no footballer claim
+371558	Joan Tincres	3236	fra.1	no footballer claim
+243514	Josh Maja	3236	fra.1	no footballer claim
+325043	Kaito Mizuta	3236	fra.1	no footballer claim
+319286	Mathéo Bodmer	3236	fra.1	no footballer claim
+408085	Mouhamed N'Diaye	3236	fra.1	no footballer claim
+291982	Rassoul Ndiaye	3236	fra.1	no wikidata match
+401045	Rayan Fofana	3236	fra.1	no footballer claim
+346519	Simon Ebonog	3236	fra.1	no footballer claim
+399434	Sota Nakamura	3236	fra.1	no wikidata match
+401714	Stephan Zagadou	3236	fra.1	no footballer claim
+297167	Timothee Pembélé	3236	fra.1	no wikidata match
+138563	Vincent Sasso	3236	fra.1	no footballer claim
+386384	Yanis Zouaoui	3236	fra.1	no footballer claim
+418536	Adil Bourabaa	2697	fra.1	no footballer claim
+287606	Alexandre Lauray	2697	fra.1	no footballer claim
+344518	Augustin Delbecque	2697	fra.1	no wikidata match
+279137	Brahimi Bilal	2697	fra.1	no wikidata match
+233702	Dame Guèye	2697	fra.1	no wikidata match
+273021	Daouda Traoré	2697	fra.1	no wikidata match
+30302	Djibril Sidibé	2697	fra.1	no footballer claim
+277526	Edwin Quarshie	2697	fra.1	no footballer claim
+417822	Enzo Vágner	2697	fra.1	no wikidata match
+357006	Erwan Colas	2697	fra.1	no footballer claim
+299457	Ewan Hatfout	2697	fra.1	no footballer claim
+393721	Harold Voyer	2697	fra.1	no footballer claim
+315460	Jean Vercruysse	2697	fra.1	no footballer claim
+402816	João Almeida	2697	fra.1	no footballer claim
+5326304	Lenny Videira	2697	fra.1	no wikidata match
+268720	Louis Mafouta	2697	fra.1	no footballer claim
+262482	Lucas Buades	2697	fra.1	no wikidata match
+331636	Lucas Calodat	2697	fra.1	no wikidata match
+397327	Martin Rossignol	2697	fra.1	no footballer claim
+332827	Milan Robin	2697	fra.1	no footballer claim
+397394	Noa Boissé	2697	fra.1	no footballer claim
+310024	Raúl Torrente	2697	fra.1	no footballer claim
+397317	Théo Eyoum	2697	fra.1	no footballer claim
+407614	William Harhouz	2697	fra.1	no footballer claim
+308246	Abdallah Sima	175	fra.1	no footballer claim
+387061	Andrija Bulatovic	175	fra.1	no wikidata match
+364180	Franjo Ivanovic	175	fra.1	no wikidata match
+403417	Ilan Jourdren	175	fra.1	no footballer claim
+297385	Jhoanner Chavez	175	fra.1	no wikidata match
+333228	Junior Kadile	175	fra.1	no footballer claim
+412217	Mezian Soares	175	fra.1	no footballer claim
+288481	Michal Skoras	175	fra.1	no wikidata match
+387044	Nidal Celik	175	fra.1	no wikidata match
+350577	Pierre Ganiou	175	fra.1	no wikidata match
+101451	Régis Gurtner	175	fra.1	no footballer claim
+401306	Souleymane Sagnan	175	fra.1	no footballer claim
+341720	Yassine Titraoui	175	fra.1	no footballer claim
+340900	Alexsandro	166	fra.1	no footballer claim
+255780	Arnaud Bodart	166	fra.1	no footballer claim
+337855	Basar Önal	166	fra.1	no wikidata match
+355971	Ethan Mbappé	166	fra.1	no footballer claim
+231778	Gaetan Perrin	166	fra.1	no wikidata match
+358999	Hamza Igmane	166	fra.1	no wikidata match
+393321	Isaac Cossier	166	fra.1	no footballer claim
+387346	Loun Srdanovic	166	fra.1	no footballer claim
+417256	Matah Yondjio	166	fra.1	no wikidata match
+304011	Maurits Kjaergaard	166	fra.1	no wikidata match
+408359	Maxima Goffi	166	fra.1	no footballer claim
+345988	Ngal'ayel Mukau	166	fra.1	no footballer claim
+301648	Orlando Gill	166	fra.1	no footballer claim
+400352	Soriba Diaoune	166	fra.1	no footballer claim
+408358	Thomas Sajous	166	fra.1	no footballer claim
+415421	Zadig Lanssade	166	fra.1	no wikidata match
+381626	Arsène Kouassi	273	fra.1	no footballer claim
+355870	Arthur Avom	273	fra.1	no footballer claim
+417372	Daniel Semedo	273	fra.1	no footballer claim
+137397	Formose Mendy	273	fra.1	no footballer claim
+397392	Gabin Bernardeau	273	fra.1	no wikidata match
+324565	Ibrahima Baldé	273	fra.1	no footballer claim
+306535	Isaak Touré	273	fra.1	no footballer claim
+309651	Isak Jensen	273	fra.1	no footballer claim
+416429	Mamadou Koné	273	fra.1	no footballer claim
+345529	Mohamed Bamba	273	fra.1	no footballer claim
+345563	Nathaniel Adjei	273	fra.1	no footballer claim
+315215	Noah Cadiou	273	fra.1	no footballer claim
+315454	Noah Mbamba	273	fra.1	no footballer claim
+368592	Nosa Obaretin	273	fra.1	no wikidata match
+3145437	Samir Said Haribou	273	fra.1	no wikidata match
+297345	Souleymane Faye	273	fra.1	no footballer claim
+344634	Srdjan Kuzmic	273	fra.1	no wikidata match
+258100	Tosin Aiyegun	273	fra.1	no footballer claim
+285088	Abner	167	fra.1	no footballer claim
+415054	Adil Hamdani	167	fra.1	no footballer claim
+402949	Alejandro Rodríguez	167	fra.1	no footballer claim
+5325687	Angel Daniel Garcia	167	fra.1	no footballer claim
+5327620	Cluver Sambi Mbungu	167	fra.1	no wikidata match
+320945	Felix Bacher	167	fra.1	no footballer claim
+341375	Julien Duranville	167	fra.1	no footballer claim
+362971	Justin Bengui Joao	167	fra.1	no footballer claim
+379066	Kail Boudache	167	fra.1	no wikidata match
+408345	Khalis Merah	167	fra.1	no footballer claim
+402948	Mathys De Carvalho	167	fra.1	no footballer claim
+403421	Matthias Da Silva	167	fra.1	no footballer claim
+364589	Mohamed Ouédraogo	167	fra.1	no footballer claim
+403110	Noham Kamara	167	fra.1	no footballer claim
+305545	Pavel Sulc	167	fra.1	no footballer claim
+403842	Rémi Himbert	167	fra.1	no footballer claim
+419943	Steeve Kango	167	fra.1	no footballer claim
+408362	Tiago Manuel Gonçalves Silva	167	fra.1	no wikidata match
+384990	Yvann Konan	167	fra.1	no footballer claim
+370758	Zachary Athekame	167	fra.1	no footballer claim
+418016	Anis Doubal	176	fra.1	no footballer claim
+5325768	Antoine Dominique Henri Valero	176	fra.1	no wikidata match
+159051	Emerson	176	fra.1	no footballer claim
+276160	Faris Moumbagna	176	fra.1	no footballer claim
+421852	Hilan Slimani	176	fra.1	no wikidata match
+404675	Ibrahim Gomis	176	fra.1	no footballer claim
+422095	Kelyann Bezahaf	176	fra.1	no footballer claim
+414465	Mathis Clement	176	fra.1	no wikidata match
+421851	Nouhoum Kamissoko	176	fra.1	no footballer claim
+414467	Rayan Bang Na	176	fra.1	no wikidata match
+411418	Tadjidine Mmadi	176	fra.1	no footballer claim
+280650	Théo Vermot	176	fra.1	no wikidata match
+343114	Tochukwu Nnadi	176	fra.1	no footballer claim
+421853	Ugo El Kadmiri	176	fra.1	no wikidata match
+3131927	Aboulaye Camara	2502	fra.1	no wikidata match
+305669	Alidu Seidu	2502	fra.1	no footballer claim
+404832	Brad-Hamilton Mantsounga	2502	fra.1	no footballer claim
+3135995	Djelan Morana	2502	fra.1	no wikidata match
+357425	Djibril Coulibaly	2502	fra.1	no footballer claim
+416460	Everton Pereira	2502	fra.1	no footballer claim
+376344	Hamza Koutoune	2502	fra.1	no footballer claim
+282597	Isak Jansson	2502	fra.1	no footballer claim
+232670	Issiaga Camara	2502	fra.1	no footballer claim
+3121791	Martin Ponsot	2502	fra.1	no footballer claim
+236957	Mohamed Abdelmoneim	2502	fra.1	no footballer claim
+176816	Morgan Sanson	2502	fra.1	no footballer claim
+3127048	Nassim Laarej	2502	fra.1	no footballer claim
+282676	Nathan N'Goumou	2502	fra.1	no footballer claim
+298030	Niels Nkounkou	2502	fra.1	no footballer claim
+3117261	Xavier Junior Mandza Tsiendi	2502	fra.1	no footballer claim
+399717	Zoumana Diallo	2502	fra.1	no footballer claim
+364746	Adama Camara	6851	fra.1	no footballer claim
+403843	Emmanuel Mbemba	6851	fra.1	no footballer claim
+5326108	Ibrahim Meïté	6851	fra.1	no wikidata match
+304918	Ilan Kebbal	6851	fra.1	no footballer claim
+257126	Jean-Phillipe Krasso	6851	fra.1	no wikidata match
+223122	Maxime López	6851	fra.1	no wikidata match
+287474	Moustapha Mbow	6851	fra.1	no footballer claim
+301770	Obed Nkambadio	6851	fra.1	no footballer claim
+368334	Omar Sissoko	6851	fra.1	no footballer claim
+308195	Otavio	6851	fra.1	no footballer claim
+402888	Rudy Matondo	6851	fra.1	no footballer claim
+287572	Samir Chergui	6851	fra.1	no footballer claim
+324325	Yoan Koré	6851	fra.1	no footballer claim
+398780	Zabi Gueu	6851	fra.1	no wikidata match
+3143886	Adam Mouak	160	fra.1	no wikidata match
+403981	David Boly	160	fra.1	no footballer claim
+403578	Dro Fernández	160	fra.1	no footballer claim
+196200	Lucas Hernández	160	fra.1	no footballer claim
+248699	Matvei Safonov	160	fra.1	no footballer claim
+290591	Nuno Mendes	160	fra.1	no footballer claim
+403419	Quentin Ndjantou	160	fra.1	no footballer claim
+250758	Bryan Reynolds	169	fra.1	no footballer claim
+355982	Djaoui Cissé	169	fra.1	no footballer claim
+415193	Elias Legendre	169	fra.1	no footballer claim
+332862	Eliezer Mayenda	169	fra.1	no footballer claim
+323850	Esteban Lepaul	169	fra.1	no footballer claim
+401410	Gonçalo Oliveira	169	fra.1	no footballer claim
+398977	Henrick Do Marcolino	169	fra.1	no footballer claim
+414191	Kilian Belazzoug	169	fra.1	no footballer claim
+372260	Mahamadou Nagida	169	fra.1	no footballer claim
+257489	Mousa Al-Tamari	169	fra.1	no footballer claim
+217668	Nicolas Lemaitre	169	fra.1	no wikidata match
+190806	Przemyslaw Frankowski	169	fra.1	no wikidata match
+243844	Sebastian Szymanski	169	fra.1	no footballer claim
+380238	Benjamin Brantlind	180	fra.1	no footballer claim
+362794	Conrad Harder	180	fra.1	no footballer claim
+368325	Diogo Sousa	180	fra.1	no footballer claim
+388392	Fabio Baldé	180	fra.1	no footballer claim
+304256	Filip Jørgensen	180	fra.1	no footballer claim
+408136	Gabriel Kerckaert	180	fra.1	no footballer claim
+374221	Genesis Antwi	180	fra.1	no footballer claim
+401738	Ghianny Kodia	180	fra.1	no wikidata match
+290230	Giovanni Reyna	180	fra.1	no footballer claim
+403982	Hermann Diandaga	180	fra.1	no wikidata match
+305935	Ismael Doukoure	180	fra.1	no wikidata match
+3117410	Jacobo Ortega Conde	180	fra.1	no footballer claim
+224074	Karim Coulibaly	180	fra.1	no footballer claim
+3138939	Kingsley Olufade	180	fra.1	no wikidata match
+359934	Lucas Høgsberg	180	fra.1	no footballer claim
+335877	Mateo Del Blanco	180	fra.1	no footballer claim
+347919	Maximillian Oyedele	180	fra.1	no wikidata match
+371973	Milosz Piekutowski	180	fra.1	no wikidata match
+331082	Omari Kellyman	180	fra.1	no footballer claim
+377782	Oso	180	fra.1	no footballer claim
+353378	Pape Diop	180	fra.1	no footballer claim
+350501	Samuel Amo-Ameyaw	180	fra.1	no footballer claim
+418506	Tyrese Noubissie	180	fra.1	no footballer claim
+371556	Yaya Diémé	180	fra.1	no footballer claim
+418786	Yoann Becker	180	fra.1	no footballer claim
+290030	Abu Francis	179	fra.1	no wikidata match
+408251	Alexis Vossah	179	fra.1	no footballer claim
+252740	Aron Donnum	179	fra.1	no wikidata match
+422969	Aymen Ammaouch	179	fra.1	no wikidata match
+306664	Casper Tengstedt	179	fra.1	no footballer claim
+385000	Christ Tapé	179	fra.1	no wikidata match
+362411	David Odogu	179	fra.1	no footballer claim
+403310	Ilyas Azizi	179	fra.1	no footballer claim
+397384	Ismail Diallo	179	fra.1	no footballer claim
+380400	Julián Vignolo	179	fra.1	no footballer claim
+322205	Mario Sauer	179	fra.1	no footballer claim
+77072	Mark McKenzie	179	fra.1	no footballer claim
+386251	Mathis Saka	179	fra.1	no footballer claim
+371559	Mathys Niflore	179	fra.1	no footballer claim
+396620	Naime Said Mchindra	179	fra.1	no footballer claim
+408252	Seny Koumbassa	179	fra.1	no footballer claim
+399428	Sion Oppong	179	fra.1	no footballer claim
+3140851	Théo Collin	179	fra.1	no wikidata match
+283692	Alexandre Philiponeau	170	fra.1	no wikidata match
+408780	Anis Ouzenadji	170	fra.1	no footballer claim
+270173	Antoine Mille	170	fra.1	no footballer claim
+403998	Christ Batola	170	fra.1	no footballer claim
+323058	Dermane Karim	170	fra.1	no footballer claim
+3139430	Enisio Carneiro	170	fra.1	no wikidata match
+3131916	Idrissa Soukouna	170	fra.1	no wikidata match
+286972	Iron Gomis	170	fra.1	no footballer claim
+304898	Ismael Boura	170	fra.1	no wikidata match
+305693	Jeremy Le Douaron	170	fra.1	no wikidata match
+3140905	Lassana Simakha	170	fra.1	no wikidata match
+334281	Lucas Maronnier	170	fra.1	no footballer claim
+112988	Michel Diaz	170	fra.1	no footballer claim
+414398	Noah Donkor	170	fra.1	no footballer claim
+287576	Paolo Gozzi Iweru	170	fra.1	no footballer claim
+408779	Roman Murcy	170	fra.1	no footballer claim
+287514	Timothé Nkada	170	fra.1	no footballer claim
+3129214	Yacouba Koné	170	fra.1	no footballer claim
+371562	Yvann Titi	170	fra.1	no footballer claim
+341441	Andrej Ilić	598	ger.1	no footballer claim
+406371	Andrik Markgraf	598	ger.1	no wikidata match
+221460	Carl Klaus	598	ger.1	no footballer claim
+413775	Duje Sliskovic	598	ger.1	no wikidata match
+233499	Felix Uduokhai	598	ger.1	no wikidata match
+165424	Frederik Ronnow	598	ger.1	no wikidata match
+3131188	Fritz Gagzow	598	ger.1	no wikidata match
+276323	Jeong Woo-Yeong	598	ger.1	no footballer claim
+222567	Josip Juranovic	598	ger.1	no wikidata match
+3101887	Julien Piet Friedrich	598	ger.1	no wikidata match
+289527	Kastriot Imeri	598	ger.1	no footballer claim
+366823	Livan Burcu	598	ger.1	no footballer claim
+322098	Marin Ljubicic	598	ger.1	no wikidata match
+3113344	Mekhi Anthony Gray	598	ger.1	no footballer claim
+245623	Michel Aebischer	598	ger.1	no footballer claim
+268808	Stanley N'Soki	598	ger.1	no footballer claim
+314184	Zeno Van Den Bosch	598	ger.1	no footballer claim
+361258	Afonso Moreira	131	ger.1	no footballer claim
+397120	Ben Hawighorst	131	ger.1	no footballer claim
+5327243	Dustin Buck	131	ger.1	no wikidata match
+5325769	Gabriel Minutillo	131	ger.1	no wikidata match
+422968	Kenan Doganay	131	ger.1	no wikidata match
+408246	Kennet Eichhorn	131	ger.1	no footballer claim
+290044	Miguel Gutiérrez	131	ger.1	no footballer claim
+408703	Montrell Culbreath	131	ger.1	no footballer claim
+346376	Tim Oermann	131	ger.1	no footballer claim
+405586	Cassiano Kiala	132	ger.1	no footballer claim
+405585	David Daiber	132	ger.1	no footballer claim
+3110056	David Podar-Stiube	132	ger.1	no wikidata match
+409827	Jannis Bärtl	132	ger.1	no footballer claim
+402841	Lennart Karl	132	ger.1	no wikidata match
+417373	Maycon Cardozo	132	ger.1	no wikidata match
+3104151	Tim Binder	132	ger.1	no footballer claim
+324660	Tom Bischof	132	ger.1	no footballer claim
+178380	Alexander Meyer	124	ger.1	no footballer claim
+294317	Carney Chukwuemeka	124	ger.1	no wikidata match
+401450	Enzo De Pina Duarte Dos Santos	124	ger.1	no footballer claim
+387437	Filippo Mané	124	ger.1	no wikidata match
+383070	Justin Lerma	124	ger.1	no footballer claim
+399455	Kauã Prates	124	ger.1	no footballer claim
+357801	Konstantinos Karetsas	124	ger.1	no footballer claim
+413817	Luca Reggiani	124	ger.1	no footballer claim
+403781	Mathis Albert	124	ger.1	no footballer claim
+403933	Mussa Kaba	124	ger.1	no footballer claim
+403833	Samuele Inácio	124	ger.1	no wikidata match
+149297	Daniel Batz	268	ger.1	no footballer claim
+343990	Enzo Leopold	268	ger.1	no footballer claim
+323061	Fabio Chiarodia	268	ger.1	no footballer claim
+415726	Fritz Fleck	268	ger.1	no footballer claim
+3116071	Iaia Manco Danfa	268	ger.1	no footballer claim
+384410	Jan Leszczynski	268	ger.1	no wikidata match
+304631	Jan Olschowsky	268	ger.1	no footballer claim
+304793	Jens Castrop	268	ger.1	no footballer claim
+3116064	Josiah Kaled Uwakhonye	268	ger.1	no wikidata match
+238033	Kou Itakura	268	ger.1	no footballer claim
+291817	Lion Schweers	268	ger.1	no footballer claim
 346617	Lukas Ullrich	268	ger.1	no footballer claim
 403898	Mathieu Nguefack	268	ger.1	no footballer claim
-238536	Moritz Nicolas	268	ger.1	no wikidata match
+238536	Moritz Nicolas	268	ger.1	no footballer claim
 275805	Philipp Sander	268	ger.1	no footballer claim
 258876	Robin Hack	268	ger.1	no footballer claim
-271352	Shuto Machino	268	ger.1	error: Error: HTTP 429
-408539	Wael Mohya	268	ger.1	error: Error: HTTP 429
-276082	Yukhym Konoplia	268	ger.1	error: Error: HTTP 429
-341707	Zento Uno	268	ger.1	error: Error: HTTP 429
-397160	Amil Siljevic	125	ger.1	error: Error: HTTP 429
-416636	Ayoube Amaimouni	125	ger.1	error: Error: HTTP 429
-355369	Can Uzun	125	ger.1	error: Error: HTTP 429
-406374	Jeremiaha Maluze	125	ger.1	error: Error: HTTP 429
-274887	Jonathan Burkardt	125	ger.1	error: Error: HTTP 429
-408339	Julian Etse	125	ger.1	error: Error: HTTP 429
-338950	Kauã Santos	125	ger.1	error: Error: HTTP 429
-371596	Keita Kosugi	125	ger.1	error: Error: HTTP 429
-399423	Love Arrhov	125	ger.1	error: Error: HTTP 429
-418030	Malik Pimpong	125	ger.1	error: Error: HTTP 429
-3109554	Niko Iličević	125	ger.1	error: Error: HTTP 429
-305556	Nnamdi Collins	125	ger.1	error: Error: HTTP 429
-352179	Noël Aséko	125	ger.1	error: Error: HTTP 429
-208285	Robin Koch	125	ger.1	error: Error: HTTP 429
-359793	Younes Ebnoutalib	125	ger.1	error: Error: HTTP 429
-333837	Anton Kade	3841	ger.1	error: Error: HTTP 429
-333400	Arijon Ibrahimovic	3841	ger.1	error: Error: HTTP 429
-345106	Calvin Brackelmann	3841	ger.1	error: Error: HTTP 429
-308908	Fabian Rieder	3841	ger.1	error: Error: HTTP 429
-397212	Faik Sakar	3841	ger.1	error: Error: HTTP 429
-228507	Finn Dahmen	3841	ger.1	error: Error: HTTP 429
-399214	Hennes Behrens	3841	ger.1	error: Error: HTTP 429
-140624	Jeffrey Gouweleeuw	3841	ger.1	error: Error: HTTP 429
-373992	Klaus Suso	3841	ger.1	error: Error: HTTP 429
-413727	Loris Husic	3841	ger.1	error: Error: HTTP 429
-359207	Mert Kömür	3841	ger.1	error: Error: HTTP 429
-291750	Nathanaël Mbuku	3841	ger.1	error: Error: HTTP 429
-322693	Nediljko Labrovic	3841	ger.1	error: Error: HTTP 429
-306928	Robin Fellhauer	3841	ger.1	error: Error: HTTP 429
-332689	Rodrigo Ribeiro	3841	ger.1	error: Error: HTTP 429
-302793	Seol Young-Woo	3841	ger.1	error: Error: HTTP 429
-309634	Tim Breithaupt	3841	ger.1	error: Error: HTTP 429
-416416	Tim Schnitzer	3841	ger.1	error: Error: HTTP 429
-422096	Tom Wisbereit	3841	ger.1	error: Error: HTTP 429
-406851	Uchenna Ogundu	3841	ger.1	error: Error: HTTP 429
-266657	Yannik Keitel	3841	ger.1	error: Error: HTTP 429
-264484	Gideon Mensah	122	ger.1	error: Error: HTTP 429
-404143	Gil Neves	122	ger.1	error: Error: HTTP 429
-306653	Imad Rondic	122	ger.1	error: Error: HTTP 429
-357337	Jahmai Simpson-Pusey	122	ger.1	error: Error: HTTP 429
-306378	Joel Schmied	122	ger.1	error: Error: HTTP 429
-3114409	Jonathan Friemel	122	ger.1	error: Error: HTTP 429
-231173	Linton Maina	122	ger.1	error: Error: HTTP 429
-384155	Malek El Mala	122	ger.1	error: Error: HTTP 429
-275797	Marius Bulter	122	ger.1	error: Error: HTTP 429
-415149	Martin James	122	ger.1	error: Error: HTTP 429
-258973	Matthias Köbbing	122	ger.1	error: Error: HTTP 429
-306161	Rav van den Berg	122	ger.1	error: Error: HTTP 429
-378369	Reigan Heskey	122	ger.1	error: Error: HTTP 429
-380795	Said El Mala	122	ger.1	error: Error: HTTP 429
-286815	Ísak Jóhannesson	122	ger.1	error: Error: HTTP 429
-297750	Albert Grønbaek	127	ger.1	error: Error: HTTP 429
-388681	Fernando Dickes	127	ger.1	error: Error: HTTP 429
-3115345	Jason-Dean Bissi Mouelle	127	ger.1	error: Error: HTTP 429
-377704	Kofi Amoako	127	ger.1	error: Error: HTTP 429
-410645	Louis Lemke	127	ger.1	error: Error: HTTP 429
-307725	Mario Vuskovic	127	ger.1	error: Error: HTTP 429
-332878	Martin Adeline	127	ger.1	error: Error: HTTP 429
-415376	Shafiq Nandja	127	ger.1	error: Error: HTTP 429
-404381	Alynho Haïdara	2950	ger.1	error: Error: HTTP 429
-241297	Anthony Caci	2950	ger.1	error: Error: HTTP 429
-399746	Fabio Gruber	2950	ger.1	error: Error: HTTP 429
-375371	Kacper Potulski	2950	ger.1	error: Error: HTTP 429
-357030	Kaishu Sano	2950	ger.1	error: Error: HTTP 429
-134103	Lee Jae-Sung	2950	ger.1	error: Error: HTTP 429
-267798	Lennard Maloney	2950	ger.1	error: Error: HTTP 429
-341950	Maximilian Kinzig	2950	ger.1	error: Error: HTTP 429
-342667	Otto Ruoppi	2950	ger.1	error: Error: HTTP 429
-3121808	Rael-Tshimbela Nakuzola	2950	ger.1	error: Error: HTTP 429
-279282	Silas Katompa-Mvumpa	2950	ger.1	error: Error: HTTP 429
-333646	Sota Kawasaki	2950	ger.1	error: Error: HTTP 429
-413837	Benno Kaltefleiter	11420	ger.1	error: Error: HTTP 429
-357683	Brajan Gruda	11420	ger.1	error: Error: HTTP 429
-330233	Ezechiel Banzuzi	11420	ger.1	error: Error: HTTP 429
-200079	Leopold Zingerle	11420	ger.1	error: Error: HTTP 429
-368003	Max Finkgrafe	11420	ger.1	error: Error: HTTP 429
-307364	Rocco Reitz	11420	ger.1	error: Error: HTTP 429
-413839	Samba Konate	11420	ger.1	error: Error: HTTP 429
-366911	Tidiam Gomis	11420	ger.1	error: Error: HTTP 429
-388683	Viggo Gebel	11420	ger.1	error: Error: HTTP 429
-387472	Berkay Yilmaz	126	ger.1	error: Error: HTTP 429
-390031	Cyriaque Irié	126	ger.1	error: Error: HTTP 429
-346619	Derry Scherhant	126	ger.1	error: Error: HTTP 429
-387474	Ifechukwu Ogbus	126	ger.1	error: Error: HTTP 429
-346208	Keisuke Goto	126	ger.1	error: Error: HTTP 429
-171701	Lukas Kübler	126	ger.1	error: Error: HTTP 429
-3114681	Mateo Zelic	126	ger.1	error: Error: HTTP 429
-367557	Max Rosenfelder	126	ger.1	error: Error: HTTP 429
-231190	Niklas Beste	126	ger.1	error: Error: HTTP 429
-291203	Patrick Osterhage	126	ger.1	error: Error: HTTP 429
-347980	Rihito Yamamoto	126	ger.1	error: Error: HTTP 429
-419274	Rouven Tarnutzer	126	ger.1	error: Error: HTTP 429
-179571	Vincenzo Grifo	126	ger.1	error: Error: HTTP 429
-337079	Yannick Engelhardt	126	ger.1	error: Error: HTTP 429
-416412	Albert Millgramm	3307	ger.1	error: Error: HTTP 429
-3098337	Clemens Lippmann	3307	ger.1	error: Error: HTTP 429
-386466	Deniz Zeitler	3307	ger.1	error: Error: HTTP 429
-245940	Felix Götze	3307	ger.1	error: Error: HTTP 429
-366362	Florian Pruhs	3307	ger.1	error: Error: HTTP 429
-323936	Gabriel Vidovic	3307	ger.1	error: Error: HTTP 429
-366370	Jano Horst	3307	ger.1	error: Error: HTTP 429
-366828	Jonah Sticker	3307	ger.1	error: Error: HTTP 429
-414361	Lasse Eickel	3307	ger.1	error: Error: HTTP 429
-364593	Laurin Curda	3307	ger.1	error: Error: HTTP 429
-345394	Laurin Ulrich	3307	ger.1	error: Error: HTTP 429
-399219	Luka Djuric	3307	ger.1	error: Error: HTTP 429
-291207	Marcel Hoffmeier	3307	ger.1	error: Error: HTTP 429
-225579	Markus Schubert	3307	ger.1	error: Error: HTTP 429
-312389	Marvin Pieringer	3307	ger.1	error: Error: HTTP 429
-364892	Mattes Hansen	3307	ger.1	error: Error: HTTP 429
-319415	Nahuel Nicolas Noll	3307	ger.1	error: Error: HTTP 429
-409108	Niklas Mohr	3307	ger.1	error: Error: HTTP 429
-367058	Nyamekye Awortwie-Grant	3307	ger.1	error: Error: HTTP 429
-406466	Ruben Müller	3307	ger.1	error: Error: HTTP 429
-338837	Santiago Castaneda	3307	ger.1	error: Error: HTTP 429
-267513	Sebastian Klaas	3307	ger.1	error: Error: HTTP 429
-332543	Stefano Marino	3307	ger.1	error: Error: HTTP 429
-364789	Timur Gayret	3307	ger.1	error: Error: HTTP 429
-371806	Tjark Scheller	3307	ger.1	error: Error: HTTP 429
-220823	Tom Baack	3307	ger.1	error: Error: HTTP 429
-401325	Tristan Zobel	3307	ger.1	error: Error: HTTP 429
-379024	Cole Campbell	10388	ger.1	error: Error: HTTP 429
-398004	David Mokwa	10388	ger.1	error: Error: HTTP 429
-3113346	Elias Etringer	10388	ger.1	error: Error: HTTP 429
-340739	Felix Keidel	10388	ger.1	error: Error: HTTP 429
-379180	Francis-Ikechukwu Onyeka	10388	ger.1	error: Error: HTTP 429
-123772	Frank Lehmann	10388	ger.1	error: Error: HTTP 429
-188031	Jan Gyamerah	10388	ger.1	error: Error: HTTP 429
-321061	Lasse Günther	10388	ger.1	error: Error: HTTP 429
-207335	Luca Schnellbacher	10388	ger.1	error: Error: HTTP 429
-377481	Luis Seifert	10388	ger.1	error: Error: HTTP 429
-341826	Lukas Finn Pinckert	10388	ger.1	error: Error: HTTP 429
-358496	Maurice Krattenmacher	10388	ger.1	error: Error: HTTP 429
-190167	Maximilian Rohr	10388	ger.1	error: Error: HTTP 429
-324021	Nicolas Kristof	10388	ger.1	error: Error: HTTP 429
-372032	Noah Darvich	10388	ger.1	error: Error: HTTP 429
-417336	Raif Adam	10388	ger.1	error: Error: HTTP 429
-364790	Tom Zimmerschied	10388	ger.1	error: Error: HTTP 429
-326766	Adrian Gantenbein	133	ger.1	error: Error: HTTP 429
-250866	Bryan Lasme	133	ger.1	error: Error: HTTP 429
-332429	Emil Höjlund	133	ger.1	error: Error: HTTP 429
-408247	Johannes Siebeking	133	ger.1	error: Error: HTTP 429
-414334	Luca Vozar	133	ger.1	error: Error: HTTP 429
-403400	Mert Can Ayhan	133	ger.1	error: Error: HTTP 429
-253816	Ron Schallenberg	133	ger.1	error: Error: HTTP 429
-297565	Satoshi Tanaka	133	ger.1	error: Error: HTTP 429
-318343	Soufian El-Faouzi	133	ger.1	error: Error: HTTP 429
-386465	Vitalie Becker	133	ger.1	error: Error: HTTP 429
-292169	Adam Hlozek	7911	ger.1	error: Error: HTTP 429
-307567	Albian Hajdari	7911	ger.1	error: Error: HTTP 429
-139520	Andrej Kramaric	7911	ger.1	error: Error: HTTP 429
-336355	Bambasé Conté	7911	ger.1	error: Error: HTTP 429
-218980	Bernardo	7911	ger.1	error: Error: HTTP 429
-407682	Cajetan Lenz	7911	ger.1	error: Error: HTTP 429
-3099575	Jykese Fields	7911	ger.1	error: Error: HTTP 429
-208608	Klaus Gjasula	7911	ger.1	error: Error: HTTP 429
-238025	Koki Machida	7911	ger.1	error: Error: HTTP 429
-362590	Leon Avdullahu	7911	ger.1	error: Error: HTTP 429
-304795	Luca Philipp	7911	ger.1	error: Error: HTTP 429
-383188	Luis Engelns	7911	ger.1	error: Error: HTTP 429
-364646	Lúkas Petersson	7911	ger.1	error: Error: HTTP 429
-372035	Max Moerstedt	7911	ger.1	error: Error: HTTP 429
-3105981	Muhammed Yasin Batuhan Zor	7911	ger.1	error: Error: HTTP 429
-403802	Natnael Abraha	7911	ger.1	error: Error: HTTP 429
-3111134	Oskar Hencke	7911	ger.1	error: Error: HTTP 429
-322510	Robin Hranác	7911	ger.1	error: Error: HTTP 429
-3098291	Sean Dulic	7911	ger.1	error: Error: HTTP 429
-3111131	Tristan Spranger	7911	ger.1	error: Error: HTTP 429
-277301	Valentin Gendrey	7911	ger.1	error: Error: HTTP 429
-418789	Valentin Lässig	7911	ger.1	error: Error: HTTP 429
-191209	Vladimír Coufal	7911	ger.1	error: Error: HTTP 429
-274860	Wouter Burger	7911	ger.1	error: Error: HTTP 429
-323847	Ameen Al Dakhil	134	ger.1	error: Error: HTTP 429
-345905	Dzenan Pejcinovic	134	ger.1	error: Error: HTTP 429
-269136	Ermedin Demirovic	134	ger.1	error: Error: HTTP 429
-410646	Ertugrul Yigit	134	ger.1	error: Error: HTTP 429
-372026	Finn Jeltsch	134	ger.1	error: Error: HTTP 429
-372027	Jarzinho Malanga	134	ger.1	error: Error: HTTP 429
-357684	Justin Diehl	134	ger.1	error: Error: HTTP 429
-285866	Leonidas Stergiou	134	ger.1	error: Error: HTTP 429
-332574	Luca Jaquez	134	ger.1	error: Error: HTTP 429
-376559	Maximilian Herwerth	134	ger.1	error: Error: HTTP 429
-301319	Stefan Drljaca	134	ger.1	error: Error: HTTP 429
-403741	Yanik Spalt	134	ger.1	error: Error: HTTP 429
-275844	Amos Pieper	137	ger.1	error: Error: HTTP 429
-334374	Arthur	137	ger.1	error: Error: HTTP 429
-371689	Chuki	137	ger.1	error: Error: HTTP 429
-399747	Dariusz Stalmach	137	ger.1	error: Error: HTTP 429
-3100710	Darwin Kaan Soylu	137	ger.1	error: Error: HTTP 429
-234757	Jens Stage	137	ger.1	error: Error: HTTP 429
-309487	Julian Malatini	137	ger.1	error: Error: HTTP 429
-332325	Keke Topp	137	ger.1	error: Error: HTTP 429
-415744	Kenny Quetant	137	ger.1	error: Error: HTTP 429
-162111	Markus Kolke	137	ger.1	error: Error: HTTP 429
-399865	Mick Schmetgens	137	ger.1	error: Error: HTTP 429
-282388	Olivier Deman	137	ger.1	error: Error: HTTP 429
-305821	Oskar Wójcik	137	ger.1	error: Error: HTTP 429
-398005	Patrice Covic	137	ger.1	error: Error: HTTP 429
-3106924	Paul Bright Max Erevbenagie	137	ger.1	error: Error: HTTP 429
-407196	Salim Musah	137	ger.1	error: Error: HTTP 429
-330964	Skelly Alvero	137	ger.1	error: Error: HTTP 429
-385354	Stefan Smarkalev	137	ger.1	error: Error: HTTP 429
-359754	Alphadjo Cissè	103	ita.1	error: Error: HTTP 429
-403807	Christian Comotto	103	ita.1	error: Error: HTTP 429
-345637	Davide Bartesaghi	103	ita.1	error: Error: HTTP 429
-5326343	El Hadji Malick Cissé	103	ita.1	error: Error: HTTP 429
-303919	Filippo Terracciano	103	ita.1	error: Error: HTTP 429
-377563	Francesco Camarda	103	ita.1	error: Error: HTTP 429
-3110063	Lorenzo Ossola	103	ita.1	error: Error: HTTP 429
-384305	Lorenzo Torriani	103	ita.1	error: Error: HTTP 429
-5326345	Luca Menon	103	ita.1	error: Error: HTTP 429
-403839	Léo-Paul Bouyer	103	ita.1	error: Error: HTTP 429
-5326344	Nirash Raffaello Perera	103	ita.1	error: Error: HTTP 429
-388239	Sankhoun Diawara	103	ita.1	error: Error: HTTP 429
-335207	Silvano Vos	103	ita.1	error: Error: HTTP 429
-409491	Valeri Vladimirov	103	ita.1	error: Error: HTTP 429
-3098218	Alessandro Di Nunzio	104	ita.1	error: Error: HTTP 429
-404546	Antonio Arena	104	ita.1	error: Error: HTTP 429
-234300	Devis Vásquez	104	ita.1	error: Error: HTTP 429
-409371	Emanuele Lulli	104	ita.1	error: Error: HTTP 429
-398120	Giorgio De Marzi	104	ita.1	error: Error: HTTP 429
-364223	Jan Ziólkowski	104	ita.1	error: Error: HTTP 429
-409634	Lorenzo Paratici	104	ita.1	error: Error: HTTP 429
-377387	Mandjou Camara	104	ita.1	error: Error: HTTP 429
-360235	Niccolò Pisilli	104	ita.1	error: Error: HTTP 429
-387204	Rodrigo Mora	104	ita.1	error: Error: HTTP 429
-332354	Wesley	104	ita.1	error: Error: HTTP 429
-377831	Alberto Manzoni	105	ita.1	error: Error: HTTP 429
-378197	Andrea Bonanomi	105	ita.1	error: Error: HTTP 429
-410098	Digne Pounga	105	ita.1	error: Error: HTTP 429
-388799	Federico Cassa	105	ita.1	error: Error: HTTP 429
-89216	Francesco Rossi	105	ita.1	error: Error: HTTP 429
-309812	Giorgio Scalvini	105	ita.1	error: Error: HTTP 429
-3128883	Isaac Collins Isoa	105	ita.1	error: Error: HTTP 429
-384831	Jacopo Mirra	105	ita.1	error: Error: HTTP 429
-403445	Javison Idele	105	ita.1	error: Error: HTTP 429
-303296	Lazar Samardzic	105	ita.1	error: Error: HTTP 429
-303988	Lorenzo Bernasconi	105	ita.1	error: Error: HTTP 429
-378193	Matteo Plaia	105	ita.1	error: Error: HTTP 429
-3130628	Mattia Sonzogni	105	ita.1	error: Error: HTTP 429
-378198	Paolo Vismara	105	ita.1	error: Error: HTTP 429
-399540	Relja Obric	105	ita.1	error: Error: HTTP 429
-387841	Sergej Levak	105	ita.1	error: Error: HTTP 429
-99909	Thomas Kristensen	105	ita.1	error: Error: HTTP 429
-3114443	Thomas Pompei	105	ita.1	error: Error: HTTP 429
-334283	Tommaso De Nipoti	105	ita.1	error: Error: HTTP 429
-361818	Eivind Helland	107	ita.1	error: Error: HTTP 429
-337058	Jay Enem	107	ita.1	error: Error: HTTP 429
-5326829	Luca Lo Monaco	107	ita.1	error: Error: HTTP 429
-179358	Lukasz Skorupski	107	ita.1	error: Error: HTTP 429
-410325	Marco Libra	107	ita.1	error: Error: HTTP 429
-309110	Martin Vitík	107	ita.1	error: Error: HTTP 429
-388880	Massimo Pessina	107	ita.1	error: Error: HTTP 429
-415168	Matteo Franceschelli	107	ita.1	error: Error: HTTP 429
-365160	Mikel Amondarain	107	ita.1	error: Error: HTTP 429
-287790	Nicolò Cambiaghi	107	ita.1	error: Error: HTTP 429
-250707	Nicoló Casale	107	ita.1	error: Error: HTTP 429
-331770	Rahim Alhassane	107	ita.1	error: Error: HTTP 429
-355997	Samuel Mbangula	107	ita.1	error: Error: HTTP 429
-410822	Ukko Happonen	107	ita.1	error: Error: HTTP 429
-306210	Alen Sherri	2925	ita.1	error: Error: HTTP 429
-6729	Alessandro Romano	2925	ita.1	error: Error: HTTP 429
-387844	Alessandro Sugamele	2925	ita.1	error: Error: HTTP 429
-224187	Boris Radunovic	2925	ita.1	error: Error: HTTP 429
-290545	Daniel Maldini	2925	ita.1	error: Error: HTTP 429
-399563	Demi Akarakiri	2925	ita.1	error: Error: HTTP 429
-278987	Elia Caprile	2925	ita.1	error: Error: HTTP 429
-303910	Giuseppe Aurelio	2925	ita.1	error: Error: HTTP 429
-407932	Ivan Sulev	2925	ita.1	error: Error: HTTP 429
-333938	Jacopo Fazzini	2925	ita.1	error: Error: HTTP 429
-407930	Joseph Liteta	2925	ita.1	error: Error: HTTP 429
-361506	Juan Rodríguez	2925	ita.1	error: Error: HTTP 429
-304151	Kevin Carlos	2925	ita.1	error: Error: HTTP 429
-368312	Kingstone Mutandwa	2925	ita.1	error: Error: HTTP 429
-272745	Michel Adopo	2925	ita.1	error: Error: HTTP 429
-411232	Nicola Grandu	2925	ita.1	error: Error: HTTP 429
-325527	Nicolò Cavuoti	2925	ita.1	error: Error: HTTP 429
-418819	Paul Mendy	2925	ita.1	error: Error: HTTP 429
-346596	Raphael Kofler	2925	ita.1	error: Error: HTTP 429
-387036	Riyad Idrissi	2925	ita.1	error: Error: HTTP 429
-407931	Yael Trepy	2925	ita.1	error: Error: HTTP 429
-345390	Yanis Massolin	2925	ita.1	error: Error: HTTP 429
-332684	Zé Pedro	2925	ita.1	error: Error: HTTP 429
-380970	Adrian Lahdo	2572	ita.1	error: Error: HTTP 429
-181060	Edoardo Goldaniga	2572	ita.1	error: Error: HTTP 429
-323273	Ivan Smolcic	2572	ita.1	error: Error: HTTP 429
-380318	Jacobo Ramón	2572	ita.1	error: Error: HTTP 429
-337858	Jayden Addai	2572	ita.1	error: Error: HTTP 429
-387491	Jesús Rodriguez	2572	ita.1	error: Error: HTTP 429
-317233	Kaiki	2572	ita.1	error: Error: HTTP 429
-3140451	Lorenzo Luigi Ginelli	2572	ita.1	error: Error: HTTP 429
-291285	Lucas Da Cunha	2572	ita.1	error: Error: HTTP 429
-264211	Luis Milla	2572	ita.1	error: Error: HTTP 429
-411276	Matteo Papaccioli	2572	ita.1	error: Error: HTTP 429
-387723	Mattia Liberali	2572	ita.1	error: Error: HTTP 429
-422244	Riccardo Cassano	2572	ita.1	error: Error: HTTP 429
-325553	Willy Kambwala	2572	ita.1	error: Error: HTTP 429
-297084	Yan Couto	2572	ita.1	error: Error: HTTP 429
-419210	Zebedee Kennedy	2572	ita.1	error: Error: HTTP 429
-367743	Alieu Njie	109	ita.1	error: Error: HTTP 429
-422138	Antonio Pirrò	109	ita.1	error: Error: HTTP 429
-5324063	Arnis Ademi	109	ita.1	error: Error: HTTP 429
-289511	Beto	109	ita.1	error: Error: HTTP 429
-3118047	Brando Mazzeo	109	ita.1	error: Error: HTTP 429
-3099527	Dennis Beldenti	109	ita.1	error: Error: HTTP 429
-168453	Dodô	109	ita.1	error: Error: HTTP 429
-403581	Eman Kospo	109	ita.1	error: Error: HTTP 429
-308082	Fabiano Parisi	109	ita.1	error: Error: HTTP 429
-139008	João Mário	109	ita.1	error: Error: HTTP 429
-255650	Marin Pongracic	109	ita.1	error: Error: HTTP 429
-312757	Mateo Pellegrino	109	ita.1	error: Error: HTTP 429
-310216	Radu Dragusin	109	ita.1	error: Error: HTTP 429
-421785	Salvatore Cianciulli	109	ita.1	error: Error: HTTP 429
-233515	Sulayman Jallow	109	ita.1	error: Error: HTTP 429
-364156	Viery	109	ita.1	error: Error: HTTP 429
-401558	Víctor Valdepeñas	109	ita.1	error: Error: HTTP 429
-367861	Álex Jiménez	109	ita.1	error: Error: HTTP 429
-260005	Aleksa Terzic	4057	ita.1	error: Error: HTTP 429
-319265	Antonio Raimondo	4057	ita.1	error: Error: HTTP 429
-335061	Daniel Birligea	4057	ita.1	error: Error: HTTP 429
-356536	Farès Ghedjemis	4057	ita.1	error: Error: HTTP 429
-346974	Gabriele Bracaglia	4057	ita.1	error: Error: HTTP 429
-352751	Gabriele Calvani	4057	ita.1	error: Error: HTTP 429
-236038	Giacomo Calo	4057	ita.1	error: Error: HTTP 429
-360714	Giorgi Kvernadze	4057	ita.1	error: Error: HTTP 429
-333598	Giorgio Cittadini	4057	ita.1	error: Error: HTTP 429
-307971	Ilias Koutsoupias	4057	ita.1	error: Error: HTTP 429
-325056	Lorenzo Palmisani	4057	ita.1	error: Error: HTTP 429
-364685	Luis Hasa	4057	ita.1	error: Error: HTTP 429
-388779	Matteo Cichella	4057	ita.1	error: Error: HTTP 429
-198150	Matteo Pisseri	4057	ita.1	error: Error: HTTP 429
-368011	Omar Fayed	4057	ita.1	error: Error: HTTP 429
-346840	Patrizio Masini	4057	ita.1	error: Error: HTTP 429
-347409	Seydou Fini	4057	ita.1	error: Error: HTTP 429
-306390	Tomas Bobcek	4057	ita.1	error: Error: HTTP 429
-318394	Wisdom Amey	4057	ita.1	error: Error: HTTP 429
-364761	Alessandro Marcandalli	3263	ita.1	error: Error: HTTP 429
-358445	Alexsandro Amorim	3263	ita.1	error: Error: HTTP 429
-279786	Cody Drameh	3263	ita.1	error: Error: HTTP 429
-386505	David Puczka	3263	ita.1	error: Error: HTTP 429
-406191	Ethan Meichtry	3263	ita.1	error: Error: HTTP 429
-341773	Franz Stolz	3263	ita.1	error: Error: HTTP 429
-383999	Gaël Lafont	3263	ita.1	error: Error: HTTP 429
-257058	Hamed Traoré	3263	ita.1	error: Error: HTTP 429
-259975	Johan Vásquez	3263	ita.1	error: Error: HTTP 429
-401482	Joi Nuredini	3263	ita.1	error: Error: HTTP 429
-281736	Leo Østigard	3263	ita.1	error: Error: HTTP 429
-297220	Lorenzo Colombo	3263	ita.1	error: Error: HTTP 429
-389431	Lorenzo Venturino	3263	ita.1	error: Error: HTTP 429
-421761	Lukas Klisys	3263	ita.1	error: Error: HTTP 429
-419268	Mamedi Doucouré	3263	ita.1	error: Error: HTTP 429
-3098553	Marcelo Vaz	3263	ita.1	error: Error: HTTP 429
-324256	Mikael Ellertsson	3263	ita.1	error: Error: HTTP 429
-275444	Milutin Osmajic	3263	ita.1	error: Error: HTTP 429
-416531	Rendijs Mihelsons	3263	ita.1	error: Error: HTTP 429
-407480	Robinho Junior	3263	ita.1	error: Error: HTTP 429
-418840	Samuel Wiafe	3263	ita.1	error: Error: HTTP 429
-350205	Sebastian Otoa	3263	ita.1	error: Error: HTTP 429
-177862	Stefano Sabelli	3263	ita.1	error: Error: HTTP 429
-400734	Alain Taho	110	ita.1	error: Error: HTTP 429
-240109	Aleksandar Stankovic	110	ita.1	error: Error: HTTP 429
-190257	Curtis Jones	110	ita.1	error: Error: HTTP 429
-387837	Francesco Stante	110	ita.1	error: Error: HTTP 429
-170785	Hakan Çalhanoglu	110	ita.1	error: Error: HTTP 429
-181836	Ivan Provedel	110	ita.1	error: Error: HTTP 429
-410613	Jamal Iddrissou	110	ita.1	error: Error: HTTP 429
-384534	Leon Jakirovic	110	ita.1	error: Error: HTTP 429
-403808	Leonardo Bovio	110	ita.1	error: Error: HTTP 429
-286369	Luis Henrique	110	ita.1	error: Error: HTTP 429
-402778	Matteo Lavelli	110	ita.1	error: Error: HTTP 429
-412245	Mattia Marello	110	ita.1	error: Error: HTTP 429
-409051	Mattia Mosconi	110	ita.1	error: Error: HTTP 429
-204441	Nicolò Barella	110	ita.1	error: Error: HTTP 429
-341494	Petar Sucic	110	ita.1	error: Error: HTTP 429
-177782	Piotr Zielinski	110	ita.1	error: Error: HTTP 429
-181322	Raffaele Di Gennaro	110	ita.1	error: Error: HTTP 429
-266660	Yann Bisseck	110	ita.1	error: Error: HTTP 429
-3129035	Antonio Stefano Merola	111	ita.1	error: Error: HTTP 429
-3102531	Arman Durmiši	111	ita.1	error: Error: HTTP 429
-397258	Augusto Owusu	111	ita.1	error: Error: HTTP 429
-258307	Bremer	111	ita.1	error: Error: HTTP 429
-404034	Destiny Elimoghale	111	ita.1	error: Error: HTTP 429
-387434	Filippo Pagnucco	111	ita.1	error: Error: HTTP 429
-3121500	Grady Makiobo Makiobo	111	ita.1	error: Error: HTTP 429
-388606	Jeff Ekhator	111	ita.1	error: Error: HTTP 429
-24412	Juan Cabal	111	ita.1	error: Error: HTTP 429
-349101	Justin Oboavwoduo	111	ita.1	error: Error: HTTP 429
-366509	Kenan Yildiz	111	ita.1	error: Error: HTTP 429
-391034	Kerim Alajbegovic	111	ita.1	error: Error: HTTP 429
-138398	Neto	111	ita.1	error: Error: HTTP 429
-397463	Niccolò Rizzo	111	ita.1	error: Error: HTTP 429
-76017	Nico González	111	ita.1	error: Error: HTTP 429
-290129	Pierre Kalulu	111	ita.1	error: Error: HTTP 429
-421739	Riccardo Radu	111	ita.1	error: Error: HTTP 429
-414157	Stefano Mangiapoco	111	ita.1	error: Error: HTTP 429
-364224	Adrian Przyborek	112	ita.1	error: Error: HTTP 429
-288361	Alessio Furlanetto	112	ita.1	error: Error: HTTP 429
-239086	Andrea Pinamonti	112	ita.1	error: Error: HTTP 429
-3102821	Bruno Galassi	112	ita.1	error: Error: HTTP 429
-367320	Edoardo Motta	112	ita.1	error: Error: HTTP 429
-359380	Filipe Bordon	112	ita.1	error: Error: HTTP 429
-295515	Fisayo Dele-Bashiru	112	ita.1	error: Error: HTTP 429
-291550	Gustav Isaksen	112	ita.1	error: Error: HTTP 429
-308944	Matteo Cancellieri	112	ita.1	error: Error: HTTP 429
-333311	Oliver Provstgaard	112	ita.1	error: Error: HTTP 429
-345323	Reda Belahyane	112	ita.1	error: Error: HTTP 429
-3127847	Ricardo Bordon	112	ita.1	error: Error: HTTP 429
-330041	Romano Floriani	112	ita.1	error: Error: HTTP 429
-411164	Valerio Farcomeni	112	ita.1	error: Error: HTTP 429
-308318	Alexandru Borbei	113	ita.1	error: Error: HTTP 429
-287673	Corrie Ndaba	113	ita.1	error: Error: HTTP 429
-344844	Danilo Veiga	113	ita.1	error: Error: HTTP 429
-3123405	Divine Onyemachi	113	ita.1	error: Error: HTTP 429
-399632	Elijah Scott	113	ita.1	error: Error: HTTP 429
-3123406	Francisco Esteban Sánchez	113	ita.1	error: Error: HTTP 429
-3099569	Hjalte Morel Lærke	113	ita.1	error: Error: HTTP 429
-307391	Jamil Siebert	113	ita.1	error: Error: HTTP 429
-307893	Joel Monteiro	113	ita.1	error: Error: HTTP 429
-318604	Kialonda Gaspar	113	ita.1	error: Error: HTTP 429
-286582	Konan N’Dri	113	ita.1	error: Error: HTTP 429
-192570	Marco Bleve	113	ita.1	error: Error: HTTP 429
+271352	Shuto Machino	268	ger.1	no footballer claim
+408539	Wael Mohya	268	ger.1	no footballer claim
+276082	Yukhym Konoplia	268	ger.1	no footballer claim
+341707	Zento Uno	268	ger.1	no footballer claim
+397160	Amil Siljevic	125	ger.1	no wikidata match
+416636	Ayoube Amaimouni	125	ger.1	no footballer claim
+355369	Can Uzun	125	ger.1	no footballer claim
+406374	Jeremiaha Maluze	125	ger.1	no wikidata match
+274887	Jonathan Burkardt	125	ger.1	no footballer claim
+408339	Julian Etse	125	ger.1	no wikidata match
+338950	Kauã Santos	125	ger.1	no footballer claim
+371596	Keita Kosugi	125	ger.1	no wikidata match
+399423	Love Arrhov	125	ger.1	no wikidata match
+418030	Malik Pimpong	125	ger.1	no footballer claim
+3109554	Niko Iličević	125	ger.1	no footballer claim
+305556	Nnamdi Collins	125	ger.1	no footballer claim
+352179	Noël Aséko	125	ger.1	no footballer claim
+208285	Robin Koch	125	ger.1	no footballer claim
+359793	Younes Ebnoutalib	125	ger.1	no footballer claim
+333837	Anton Kade	3841	ger.1	no footballer claim
+333400	Arijon Ibrahimovic	3841	ger.1	no wikidata match
+345106	Calvin Brackelmann	3841	ger.1	no footballer claim
+308908	Fabian Rieder	3841	ger.1	no footballer claim
+397212	Faik Sakar	3841	ger.1	no wikidata match
+228507	Finn Dahmen	3841	ger.1	no footballer claim
+399214	Hennes Behrens	3841	ger.1	no footballer claim
+140624	Jeffrey Gouweleeuw	3841	ger.1	no footballer claim
+373992	Klaus Suso	3841	ger.1	no wikidata match
+413727	Loris Husic	3841	ger.1	no footballer claim
+359207	Mert Kömür	3841	ger.1	no footballer claim
+291750	Nathanaël Mbuku	3841	ger.1	no footballer claim
+322693	Nediljko Labrovic	3841	ger.1	no wikidata match
+306928	Robin Fellhauer	3841	ger.1	no footballer claim
+332689	Rodrigo Ribeiro	3841	ger.1	no footballer claim
+302793	Seol Young-Woo	3841	ger.1	no footballer claim
+309634	Tim Breithaupt	3841	ger.1	no footballer claim
+416416	Tim Schnitzer	3841	ger.1	no footballer claim
+422096	Tom Wisbereit	3841	ger.1	no wikidata match
+406851	Uchenna Ogundu	3841	ger.1	no footballer claim
+266657	Yannik Keitel	3841	ger.1	no footballer claim
+264484	Gideon Mensah	122	ger.1	no footballer claim
+404143	Gil Neves	122	ger.1	no footballer claim
+306653	Imad Rondic	122	ger.1	no wikidata match
+357337	Jahmai Simpson-Pusey	122	ger.1	no footballer claim
+306378	Joel Schmied	122	ger.1	no wikidata match
+3114409	Jonathan Friemel	122	ger.1	no wikidata match
+231173	Linton Maina	122	ger.1	no footballer claim
+384155	Malek El Mala	122	ger.1	no wikidata match
+275797	Marius Bulter	122	ger.1	no wikidata match
+415149	Martin James	122	ger.1	no footballer claim
+258973	Matthias Köbbing	122	ger.1	no wikidata match
+306161	Rav van den Berg	122	ger.1	no footballer claim
+378369	Reigan Heskey	122	ger.1	no footballer claim
+380795	Said El Mala	122	ger.1	no wikidata match
+286815	Ísak Jóhannesson	122	ger.1	no footballer claim
+297750	Albert Grønbaek	127	ger.1	no wikidata match
+388681	Fernando Dickes	127	ger.1	no footballer claim
+3115345	Jason-Dean Bissi Mouelle	127	ger.1	no wikidata match
+377704	Kofi Amoako	127	ger.1	no footballer claim
+410645	Louis Lemke	127	ger.1	no footballer claim
+307725	Mario Vuskovic	127	ger.1	no wikidata match
+332878	Martin Adeline	127	ger.1	no footballer claim
+415376	Shafiq Nandja	127	ger.1	no footballer claim
+404381	Alynho Haïdara	2950	ger.1	no footballer claim
+241297	Anthony Caci	2950	ger.1	no footballer claim
+399746	Fabio Gruber	2950	ger.1	no footballer claim
+375371	Kacper Potulski	2950	ger.1	no footballer claim
+357030	Kaishu Sano	2950	ger.1	no footballer claim
+134103	Lee Jae-Sung	2950	ger.1	no footballer claim
+267798	Lennard Maloney	2950	ger.1	no footballer claim
+341950	Maximilian Kinzig	2950	ger.1	no footballer claim
+342667	Otto Ruoppi	2950	ger.1	no footballer claim
+3121808	Rael-Tshimbela Nakuzola	2950	ger.1	no footballer claim
+279282	Silas Katompa-Mvumpa	2950	ger.1	no wikidata match
+333646	Sota Kawasaki	2950	ger.1	no footballer claim
+413837	Benno Kaltefleiter	11420	ger.1	no footballer claim
+357683	Brajan Gruda	11420	ger.1	no footballer claim
+330233	Ezechiel Banzuzi	11420	ger.1	no footballer claim
+200079	Leopold Zingerle	11420	ger.1	no wikidata match
+368003	Max Finkgrafe	11420	ger.1	no wikidata match
+307364	Rocco Reitz	11420	ger.1	no wikidata match
+413839	Samba Konate	11420	ger.1	no wikidata match
+366911	Tidiam Gomis	11420	ger.1	no footballer claim
+388683	Viggo Gebel	11420	ger.1	no footballer claim
+387472	Berkay Yilmaz	126	ger.1	no wikidata match
+390031	Cyriaque Irié	126	ger.1	no footballer claim
+346619	Derry Scherhant	126	ger.1	no footballer claim
+387474	Ifechukwu Ogbus	126	ger.1	no wikidata match
+346208	Keisuke Goto	126	ger.1	no footballer claim
+171701	Lukas Kübler	126	ger.1	no footballer claim
+3114681	Mateo Zelic	126	ger.1	no wikidata match
+367557	Max Rosenfelder	126	ger.1	no footballer claim
+231190	Niklas Beste	126	ger.1	no footballer claim
+291203	Patrick Osterhage	126	ger.1	no footballer claim
+347980	Rihito Yamamoto	126	ger.1	no footballer claim
+419274	Rouven Tarnutzer	126	ger.1	no footballer claim
+179571	Vincenzo Grifo	126	ger.1	no footballer claim
+337079	Yannick Engelhardt	126	ger.1	no wikidata match
+416412	Albert Millgramm	3307	ger.1	no footballer claim
+3098337	Clemens Lippmann	3307	ger.1	no footballer claim
+386466	Deniz Zeitler	3307	ger.1	no footballer claim
+245940	Felix Götze	3307	ger.1	no wikidata match
+366362	Florian Pruhs	3307	ger.1	no footballer claim
+323936	Gabriel Vidovic	3307	ger.1	no wikidata match
+366370	Jano Horst	3307	ger.1	no wikidata match
+366828	Jonah Sticker	3307	ger.1	no footballer claim
+414361	Lasse Eickel	3307	ger.1	no wikidata match
+364593	Laurin Curda	3307	ger.1	no footballer claim
+345394	Laurin Ulrich	3307	ger.1	no footballer claim
+399219	Luka Djuric	3307	ger.1	no footballer claim
+291207	Marcel Hoffmeier	3307	ger.1	no footballer claim
+225579	Markus Schubert	3307	ger.1	no footballer claim
+312389	Marvin Pieringer	3307	ger.1	no footballer claim
+364892	Mattes Hansen	3307	ger.1	no footballer claim
+319415	Nahuel Nicolas Noll	3307	ger.1	no footballer claim
+409108	Niklas Mohr	3307	ger.1	no footballer claim
+367058	Nyamekye Awortwie-Grant	3307	ger.1	no footballer claim
+406466	Ruben Müller	3307	ger.1	no footballer claim
+338837	Santiago Castaneda	3307	ger.1	no wikidata match
+267513	Sebastian Klaas	3307	ger.1	no footballer claim
+332543	Stefano Marino	3307	ger.1	no footballer claim
+364789	Timur Gayret	3307	ger.1	no footballer claim
+371806	Tjark Scheller	3307	ger.1	no footballer claim
+220823	Tom Baack	3307	ger.1	no footballer claim
+401325	Tristan Zobel	3307	ger.1	no footballer claim
+379024	Cole Campbell	10388	ger.1	no footballer claim
+398004	David Mokwa	10388	ger.1	no footballer claim
+3113346	Elias Etringer	10388	ger.1	no footballer claim
+340739	Felix Keidel	10388	ger.1	no footballer claim
+379180	Francis-Ikechukwu Onyeka	10388	ger.1	no wikidata match
+123772	Frank Lehmann	10388	ger.1	no footballer claim
+188031	Jan Gyamerah	10388	ger.1	no footballer claim
+321061	Lasse Günther	10388	ger.1	no footballer claim
+207335	Luca Schnellbacher	10388	ger.1	no footballer claim
+377481	Luis Seifert	10388	ger.1	no footballer claim
+341826	Lukas Finn Pinckert	10388	ger.1	no wikidata match
+358496	Maurice Krattenmacher	10388	ger.1	no footballer claim
+190167	Maximilian Rohr	10388	ger.1	no footballer claim
+324021	Nicolas Kristof	10388	ger.1	no wikidata match
+372032	Noah Darvich	10388	ger.1	no footballer claim
+417336	Raif Adam	10388	ger.1	no footballer claim
+364790	Tom Zimmerschied	10388	ger.1	no footballer claim
+326766	Adrian Gantenbein	133	ger.1	no footballer claim
+250866	Bryan Lasme	133	ger.1	no footballer claim
+332429	Emil Höjlund	133	ger.1	no wikidata match
+408247	Johannes Siebeking	133	ger.1	no footballer claim
+414334	Luca Vozar	133	ger.1	no footballer claim
+403400	Mert Can Ayhan	133	ger.1	no wikidata match
+253816	Ron Schallenberg	133	ger.1	no footballer claim
+297565	Satoshi Tanaka	133	ger.1	no wikidata match
+318343	Soufian El-Faouzi	133	ger.1	no wikidata match
+386465	Vitalie Becker	133	ger.1	no footballer claim
+292169	Adam Hlozek	7911	ger.1	no wikidata match
+307567	Albian Hajdari	7911	ger.1	no footballer claim
+139520	Andrej Kramaric	7911	ger.1	no wikidata match
+336355	Bambasé Conté	7911	ger.1	no footballer claim
+218980	Bernardo	7911	ger.1	no footballer claim
+407682	Cajetan Lenz	7911	ger.1	no footballer claim
+3099575	Jykese Fields	7911	ger.1	no footballer claim
+208608	Klaus Gjasula	7911	ger.1	no footballer claim
+238025	Koki Machida	7911	ger.1	no wikidata match
+362590	Leon Avdullahu	7911	ger.1	no footballer claim
+304795	Luca Philipp	7911	ger.1	no footballer claim
+383188	Luis Engelns	7911	ger.1	no footballer claim
+364646	Lúkas Petersson	7911	ger.1	no footballer claim
+372035	Max Moerstedt	7911	ger.1	no footballer claim
+3105981	Muhammed Yasin Batuhan Zor	7911	ger.1	no footballer claim
+403802	Natnael Abraha	7911	ger.1	no footballer claim
+3111134	Oskar Hencke	7911	ger.1	no wikidata match
+322510	Robin Hranác	7911	ger.1	no wikidata match
+3098291	Sean Dulic	7911	ger.1	no footballer claim
+3111131	Tristan Spranger	7911	ger.1	no wikidata match
+277301	Valentin Gendrey	7911	ger.1	no wikidata match
+418789	Valentin Lässig	7911	ger.1	no wikidata match
+191209	Vladimír Coufal	7911	ger.1	no footballer claim
+274860	Wouter Burger	7911	ger.1	no footballer claim
+323847	Ameen Al Dakhil	134	ger.1	no wikidata match
+345905	Dzenan Pejcinovic	134	ger.1	no wikidata match
+269136	Ermedin Demirovic	134	ger.1	no wikidata match
+410646	Ertugrul Yigit	134	ger.1	no wikidata match
+372026	Finn Jeltsch	134	ger.1	no footballer claim
+372027	Jarzinho Malanga	134	ger.1	no footballer claim
+357684	Justin Diehl	134	ger.1	no footballer claim
+285866	Leonidas Stergiou	134	ger.1	no wikidata match
+332574	Luca Jaquez	134	ger.1	no footballer claim
+376559	Maximilian Herwerth	134	ger.1	no footballer claim
+301319	Stefan Drljaca	134	ger.1	no wikidata match
+403741	Yanik Spalt	134	ger.1	no footballer claim
+275844	Amos Pieper	137	ger.1	no footballer claim
+334374	Arthur	137	ger.1	no footballer claim
+371689	Chuki	137	ger.1	no footballer claim
+399747	Dariusz Stalmach	137	ger.1	no footballer claim
+3100710	Darwin Kaan Soylu	137	ger.1	no wikidata match
+234757	Jens Stage	137	ger.1	no wikidata match
+309487	Julian Malatini	137	ger.1	no wikidata match
+332325	Keke Topp	137	ger.1	no footballer claim
+415744	Kenny Quetant	137	ger.1	no footballer claim
+162111	Markus Kolke	137	ger.1	no footballer claim
+399865	Mick Schmetgens	137	ger.1	no footballer claim
+282388	Olivier Deman	137	ger.1	no footballer claim
+305821	Oskar Wójcik	137	ger.1	no footballer claim
+398005	Patrice Covic	137	ger.1	no wikidata match
+3106924	Paul Bright Max Erevbenagie	137	ger.1	no footballer claim
+407196	Salim Musah	137	ger.1	no footballer claim
+330964	Skelly Alvero	137	ger.1	no footballer claim
+385354	Stefan Smarkalev	137	ger.1	no footballer claim
+359754	Alphadjo Cissè	103	ita.1	no wikidata match
+403807	Christian Comotto	103	ita.1	no footballer claim
+345637	Davide Bartesaghi	103	ita.1	no footballer claim
+5326343	El Hadji Malick Cissé	103	ita.1	no footballer claim
+303919	Filippo Terracciano	103	ita.1	no footballer claim
+377563	Francesco Camarda	103	ita.1	no footballer claim
+3110063	Lorenzo Ossola	103	ita.1	no footballer claim
+384305	Lorenzo Torriani	103	ita.1	no footballer claim
+5326345	Luca Menon	103	ita.1	no wikidata match
+403839	Léo-Paul Bouyer	103	ita.1	no footballer claim
+5326344	Nirash Raffaello Perera	103	ita.1	no wikidata match
+388239	Sankhoun Diawara	103	ita.1	no footballer claim
+335207	Silvano Vos	103	ita.1	no footballer claim
+409491	Valeri Vladimirov	103	ita.1	no wikidata match
+3098218	Alessandro Di Nunzio	104	ita.1	no footballer claim
+404546	Antonio Arena	104	ita.1	no footballer claim
+234300	Devis Vásquez	104	ita.1	no wikidata match
+409371	Emanuele Lulli	104	ita.1	no footballer claim
+398120	Giorgio De Marzi	104	ita.1	no footballer claim
+364223	Jan Ziólkowski	104	ita.1	no wikidata match
+409634	Lorenzo Paratici	104	ita.1	no wikidata match
+377387	Mandjou Camara	104	ita.1	no wikidata match
+360235	Niccolò Pisilli	104	ita.1	no footballer claim
+387204	Rodrigo Mora	104	ita.1	no wikidata match
+332354	Wesley	104	ita.1	no footballer claim
+377831	Alberto Manzoni	105	ita.1	no footballer claim
+378197	Andrea Bonanomi	105	ita.1	no footballer claim
+410098	Digne Pounga	105	ita.1	no wikidata match
+388799	Federico Cassa	105	ita.1	no footballer claim
+89216	Francesco Rossi	105	ita.1	no footballer claim
+309812	Giorgio Scalvini	105	ita.1	no footballer claim
+3128883	Isaac Collins Isoa	105	ita.1	no wikidata match
+384831	Jacopo Mirra	105	ita.1	no footballer claim
+403445	Javison Idele	105	ita.1	no footballer claim
+303296	Lazar Samardzic	105	ita.1	no wikidata match
+303988	Lorenzo Bernasconi	105	ita.1	no footballer claim
+378193	Matteo Plaia	105	ita.1	no footballer claim
+3130628	Mattia Sonzogni	105	ita.1	no wikidata match
+378198	Paolo Vismara	105	ita.1	no footballer claim
+399540	Relja Obric	105	ita.1	no wikidata match
+387841	Sergej Levak	105	ita.1	no footballer claim
+99909	Thomas Kristensen	105	ita.1	no footballer claim
+3114443	Thomas Pompei	105	ita.1	no footballer claim
+334283	Tommaso De Nipoti	105	ita.1	no footballer claim
+361818	Eivind Helland	107	ita.1	no footballer claim
+337058	Jay Enem	107	ita.1	no footballer claim
+5326829	Luca Lo Monaco	107	ita.1	no wikidata match
+179358	Lukasz Skorupski	107	ita.1	no wikidata match
+410325	Marco Libra	107	ita.1	no footballer claim
+309110	Martin Vitík	107	ita.1	no footballer claim
+388880	Massimo Pessina	107	ita.1	no footballer claim
+415168	Matteo Franceschelli	107	ita.1	no wikidata match
+365160	Mikel Amondarain	107	ita.1	no wikidata match
+287790	Nicolò Cambiaghi	107	ita.1	no footballer claim
+250707	Nicoló Casale	107	ita.1	no wikidata match
+331770	Rahim Alhassane	107	ita.1	no footballer claim
+355997	Samuel Mbangula	107	ita.1	no footballer claim
+410822	Ukko Happonen	107	ita.1	no wikidata match
+306210	Alen Sherri	2925	ita.1	no footballer claim
+6729	Alessandro Romano	2925	ita.1	no footballer claim
+387844	Alessandro Sugamele	2925	ita.1	no footballer claim
+224187	Boris Radunovic	2925	ita.1	no wikidata match
+290545	Daniel Maldini	2925	ita.1	no footballer claim
+399563	Demi Akarakiri	2925	ita.1	no footballer claim
+278987	Elia Caprile	2925	ita.1	no footballer claim
+303910	Giuseppe Aurelio	2925	ita.1	no footballer claim
+407932	Ivan Sulev	2925	ita.1	no wikidata match
+333938	Jacopo Fazzini	2925	ita.1	no footballer claim
+407930	Joseph Liteta	2925	ita.1	no footballer claim
+361506	Juan Rodríguez	2925	ita.1	no wikidata match
+304151	Kevin Carlos	2925	ita.1	no footballer claim
+368312	Kingstone Mutandwa	2925	ita.1	no footballer claim
+272745	Michel Adopo	2925	ita.1	no footballer claim
+411232	Nicola Grandu	2925	ita.1	no footballer claim
+325527	Nicolò Cavuoti	2925	ita.1	no footballer claim
+418819	Paul Mendy	2925	ita.1	no footballer claim
+346596	Raphael Kofler	2925	ita.1	no footballer claim
+387036	Riyad Idrissi	2925	ita.1	no footballer claim
+407931	Yael Trepy	2925	ita.1	no footballer claim
+345390	Yanis Massolin	2925	ita.1	no footballer claim
+332684	Zé Pedro	2925	ita.1	no footballer claim
+380970	Adrian Lahdo	2572	ita.1	no footballer claim
+181060	Edoardo Goldaniga	2572	ita.1	no footballer claim
+323273	Ivan Smolcic	2572	ita.1	no footballer claim
+380318	Jacobo Ramón	2572	ita.1	no footballer claim
+337858	Jayden Addai	2572	ita.1	no footballer claim
+387491	Jesús Rodriguez	2572	ita.1	no wikidata match
+317233	Kaiki	2572	ita.1	no footballer claim
+3140451	Lorenzo Luigi Ginelli	2572	ita.1	no wikidata match
+291285	Lucas Da Cunha	2572	ita.1	no footballer claim
+264211	Luis Milla	2572	ita.1	no footballer claim
+411276	Matteo Papaccioli	2572	ita.1	no wikidata match
+387723	Mattia Liberali	2572	ita.1	no footballer claim
+422244	Riccardo Cassano	2572	ita.1	no wikidata match
+325553	Willy Kambwala	2572	ita.1	no footballer claim
+297084	Yan Couto	2572	ita.1	no footballer claim
+419210	Zebedee Kennedy	2572	ita.1	no wikidata match
+367743	Alieu Njie	109	ita.1	no footballer claim
+422138	Antonio Pirrò	109	ita.1	no wikidata match
+5324063	Arnis Ademi	109	ita.1	no wikidata match
+289511	Beto	109	ita.1	no wikidata match
+3118047	Brando Mazzeo	109	ita.1	no wikidata match
+3099527	Dennis Beldenti	109	ita.1	no wikidata match
+168453	Dodô	109	ita.1	no footballer claim
+403581	Eman Kospo	109	ita.1	no wikidata match
+308082	Fabiano Parisi	109	ita.1	no footballer claim
+139008	João Mário	109	ita.1	no footballer claim
+255650	Marin Pongracic	109	ita.1	no wikidata match
+312757	Mateo Pellegrino	109	ita.1	no footballer claim
+310216	Radu Dragusin	109	ita.1	no wikidata match
+421785	Salvatore Cianciulli	109	ita.1	no wikidata match
+233515	Sulayman Jallow	109	ita.1	no footballer claim
+364156	Viery	109	ita.1	no footballer claim
+401558	Víctor Valdepeñas	109	ita.1	no footballer claim
+367861	Álex Jiménez	109	ita.1	no footballer claim
+260005	Aleksa Terzic	4057	ita.1	no wikidata match
+319265	Antonio Raimondo	4057	ita.1	no wikidata match
+335061	Daniel Birligea	4057	ita.1	no wikidata match
+356536	Farès Ghedjemis	4057	ita.1	no footballer claim
+346974	Gabriele Bracaglia	4057	ita.1	no footballer claim
+352751	Gabriele Calvani	4057	ita.1	no footballer claim
+236038	Giacomo Calo	4057	ita.1	no wikidata match
+360714	Giorgi Kvernadze	4057	ita.1	no footballer claim
+333598	Giorgio Cittadini	4057	ita.1	no footballer claim
+307971	Ilias Koutsoupias	4057	ita.1	no footballer claim
+325056	Lorenzo Palmisani	4057	ita.1	no footballer claim
+364685	Luis Hasa	4057	ita.1	no wikidata match
+388779	Matteo Cichella	4057	ita.1	no footballer claim
+198150	Matteo Pisseri	4057	ita.1	no footballer claim
+368011	Omar Fayed	4057	ita.1	no footballer claim
+346840	Patrizio Masini	4057	ita.1	no footballer claim
+347409	Seydou Fini	4057	ita.1	no wikidata match
+306390	Tomas Bobcek	4057	ita.1	no wikidata match
+318394	Wisdom Amey	4057	ita.1	no footballer claim
+364761	Alessandro Marcandalli	3263	ita.1	no footballer claim
+358445	Alexsandro Amorim	3263	ita.1	no wikidata match
+279786	Cody Drameh	3263	ita.1	no footballer claim
+386505	David Puczka	3263	ita.1	no footballer claim
+406191	Ethan Meichtry	3263	ita.1	no footballer claim
+341773	Franz Stolz	3263	ita.1	no wikidata match
+383999	Gaël Lafont	3263	ita.1	no footballer claim
+257058	Hamed Traoré	3263	ita.1	no wikidata match
+259975	Johan Vásquez	3263	ita.1	no footballer claim
+401482	Joi Nuredini	3263	ita.1	no footballer claim
+281736	Leo Østigard	3263	ita.1	no wikidata match
+297220	Lorenzo Colombo	3263	ita.1	no footballer claim
+389431	Lorenzo Venturino	3263	ita.1	no footballer claim
+421761	Lukas Klisys	3263	ita.1	no footballer claim
+419268	Mamedi Doucouré	3263	ita.1	no footballer claim
+3098553	Marcelo Vaz	3263	ita.1	no footballer claim
+324256	Mikael Ellertsson	3263	ita.1	no wikidata match
+275444	Milutin Osmajic	3263	ita.1	no wikidata match
+416531	Rendijs Mihelsons	3263	ita.1	no footballer claim
+407480	Robinho Junior	3263	ita.1	no wikidata match
+418840	Samuel Wiafe	3263	ita.1	no footballer claim
+350205	Sebastian Otoa	3263	ita.1	no footballer claim
+177862	Stefano Sabelli	3263	ita.1	no footballer claim
+400734	Alain Taho	110	ita.1	no footballer claim
+240109	Aleksandar Stankovic	110	ita.1	no footballer claim
+190257	Curtis Jones	110	ita.1	no footballer claim
+387837	Francesco Stante	110	ita.1	no footballer claim
+170785	Hakan Çalhanoglu	110	ita.1	no wikidata match
+181836	Ivan Provedel	110	ita.1	no footballer claim
+410613	Jamal Iddrissou	110	ita.1	no footballer claim
+384534	Leon Jakirovic	110	ita.1	no wikidata match
+403808	Leonardo Bovio	110	ita.1	no wikidata match
+286369	Luis Henrique	110	ita.1	no footballer claim
+402778	Matteo Lavelli	110	ita.1	no footballer claim
+412245	Mattia Marello	110	ita.1	no wikidata match
+409051	Mattia Mosconi	110	ita.1	no wikidata match
+204441	Nicolò Barella	110	ita.1	no footballer claim
+341494	Petar Sucic	110	ita.1	no wikidata match
+177782	Piotr Zielinski	110	ita.1	no footballer claim
+181322	Raffaele Di Gennaro	110	ita.1	no footballer claim
+266660	Yann Bisseck	110	ita.1	no footballer claim
+3129035	Antonio Stefano Merola	111	ita.1	no wikidata match
+3102531	Arman Durmiši	111	ita.1	no footballer claim
+397258	Augusto Owusu	111	ita.1	no footballer claim
+258307	Bremer	111	ita.1	no footballer claim
+404034	Destiny Elimoghale	111	ita.1	no footballer claim
+387434	Filippo Pagnucco	111	ita.1	no footballer claim
+3121500	Grady Makiobo Makiobo	111	ita.1	no wikidata match
+388606	Jeff Ekhator	111	ita.1	no footballer claim
+24412	Juan Cabal	111	ita.1	no wikidata match
+349101	Justin Oboavwoduo	111	ita.1	no footballer claim
+366509	Kenan Yildiz	111	ita.1	no wikidata match
+391034	Kerim Alajbegovic	111	ita.1	no wikidata match
+138398	Neto	111	ita.1	no footballer claim
+397463	Niccolò Rizzo	111	ita.1	no wikidata match
+76017	Nico González	111	ita.1	no footballer claim
+290129	Pierre Kalulu	111	ita.1	no footballer claim
+421739	Riccardo Radu	111	ita.1	no wikidata match
+414157	Stefano Mangiapoco	111	ita.1	no wikidata match
+364224	Adrian Przyborek	112	ita.1	no footballer claim
+288361	Alessio Furlanetto	112	ita.1	no footballer claim
+239086	Andrea Pinamonti	112	ita.1	no footballer claim
+3102821	Bruno Galassi	112	ita.1	no footballer claim
+367320	Edoardo Motta	112	ita.1	no footballer claim
+359380	Filipe Bordon	112	ita.1	no footballer claim
+295515	Fisayo Dele-Bashiru	112	ita.1	no footballer claim
+291550	Gustav Isaksen	112	ita.1	no footballer claim
+308944	Matteo Cancellieri	112	ita.1	no footballer claim
+333311	Oliver Provstgaard	112	ita.1	no footballer claim
+345323	Reda Belahyane	112	ita.1	no footballer claim
+3127847	Ricardo Bordon	112	ita.1	no footballer claim
+330041	Romano Floriani	112	ita.1	no wikidata match
+411164	Valerio Farcomeni	112	ita.1	no footballer claim
+308318	Alexandru Borbei	113	ita.1	no footballer claim
+287673	Corrie Ndaba	113	ita.1	no footballer claim
+344844	Danilo Veiga	113	ita.1	no footballer claim
+3123405	Divine Onyemachi	113	ita.1	no wikidata match
+399632	Elijah Scott	113	ita.1	no footballer claim
+3123406	Francisco Esteban Sánchez	113	ita.1	no wikidata match
+3099569	Hjalte Morel Lærke	113	ita.1	no wikidata match
+307391	Jamil Siebert	113	ita.1	no footballer claim
+307893	Joel Monteiro	113	ita.1	no wikidata match
+318604	Kialonda Gaspar	113	ita.1	no footballer claim
+286582	Konan N’Dri	113	ita.1	no wikidata match
+192570	Marco Bleve	113	ita.1	no footballer claim
 3115809	Marlon Nnamdi Ubani	113	ita.1	no footballer claim
 341756	Medon Berisha	113	ita.1	no footballer claim
 223292	Mohamed Kaba	113	ita.1	no footballer claim
 304512	Nikola Stulic	113	ita.1	no wikidata match
 374812	Olaf Gorter	113	ita.1	no footballer claim
-334793	Oumar Ngom	113	ita.1	error: Error: HTTP 429
-324661	Sadik Fofana	113	ita.1	error: Error: HTTP 429
-288429	Santiago Pierotti	113	ita.1	error: Error: HTTP 429
-379865	Tiago Gabriel	113	ita.1	error: Error: HTTP 429
-241405	Youssef Maleh	113	ita.1	error: Error: HTTP 429
-355859	Adam Bakoune	4007	ita.1	error: Error: HTTP 429
-3131891	Aleksandr Ballabio	4007	ita.1	error: Error: HTTP 429
-409565	Aljaz Strajnar	4007	ita.1	error: Error: HTTP 429
-301278	Andrea Carboni	4007	ita.1	error: Error: HTTP 429
-283741	Cyril Ngonge	4007	ita.1	error: Error: HTTP 429
-235453	Dany Mota	4007	ita.1	error: Error: HTTP 429
-250460	Demba Thiam	4007	ita.1	error: Error: HTTP 429
-362776	Ebenezer Akinsanmiro	4007	ita.1	error: Error: HTTP 429
-390673	Eddy Kouadio	4007	ita.1	error: Error: HTTP 429
-297051	Exequiel Zeballos	4007	ita.1	error: Error: HTTP 429
-250672	Filippo Delli Carri	4007	ita.1	error: Error: HTTP 429
-384482	Gustavo Varela	4007	ita.1	error: Error: HTTP 429
-234951	Idrissa Touré	4007	ita.1	error: Error: HTTP 429
-197764	Kevin Martins	4007	ita.1	error: Error: HTTP 429
-353013	Leonardo Colombo	4007	ita.1	error: Error: HTTP 429
-376261	Manga Foe Ondoa	4007	ita.1	error: Error: HTTP 429
-252385	Michael Folorunsho	4007	ita.1	error: Error: HTTP 429
-325554	Omari Forson	4007	ita.1	error: Error: HTTP 429
-259871	Ricardo Mangas	4007	ita.1	error: Error: HTTP 429
-270186	Semuel Pizzignacco	4007	ita.1	error: Error: HTTP 429
-397386	Solomon Loubao	4007	ita.1	error: Error: HTTP 429
-412249	Yvan Maye	4007	ita.1	error: Error: HTTP 429
-319697	Alisson Santos	114	ita.1	error: Error: HTTP 429
-205576	Amir Rrahmani	114	ita.1	error: Error: HTTP 429
-5327647	Andrea Chiummariello	114	ita.1	error: Error: HTTP 429
-332411	Antonio Vergara	114	ita.1	error: Error: HTTP 429
-418210	Christian Garofalo	114	ita.1	error: Error: HTTP 429
-3138825	Claudio Pugliese	114	ita.1	error: Error: HTTP 429
-346622	Costantino Favasuli	114	ita.1	error: Error: HTTP 429
-413630	David Spinelli	114	ita.1	error: Error: HTTP 429
-416154	Francisco Baridó	114	ita.1	error: Error: HTTP 429
-339953	Giovane	114	ita.1	error: Error: HTTP 429
-367690	Luca Marianucci	114	ita.1	error: Error: HTTP 429
-188306	Matteo Politano	114	ita.1	error: Error: HTTP 429
-3145436	Milton Agustín Pereyra	114	ita.1	error: Error: HTTP 429
-198082	Nikita Contini	114	ita.1	error: Error: HTTP 429
-297360	Rafa Marín	114	ita.1	error: Error: HTTP 429
-371539	Abdou-Salam Konate	115	ita.1	error: Error: HTTP 429
-423017	Alessandro Mazzocchi	115	ita.1	error: Error: HTTP 429
-339198	Christian Ordoñez	115	ita.1	error: Error: HTTP 429
-422950	Djibril Diallo	115	ita.1	error: Error: HTTP 429
-417783	Dominik Drobnic	115	ita.1	error: Error: HTTP 429
-290792	Edoardo Corvi	115	ita.1	error: Error: HTTP 429
-287430	El Bilal Toure	115	ita.1	error: Error: HTTP 429
-261274	Emanuele Valeri	115	ita.1	error: Error: HTTP 429
-272694	Enrico Del Prato	115	ita.1	error: Error: HTTP 429
-308939	Franco Carboni	115	ita.1	error: Error: HTTP 429
-366510	Giovanni Daffara	115	ita.1	error: Error: HTTP 429
-286764	Hans Nicolussi Caviglia	115	ita.1	error: Error: HTTP 429
-301980	José Romero	115	ita.1	error: Error: HTTP 429
-281590	Lautaro Valenti	115	ita.1	error: Error: HTTP 429
-316609	Mandela Keita	115	ita.1	error: Error: HTTP 429
-366526	Mariano Troilo	115	ita.1	error: Error: HTTP 429
-310860	Matija Frigan	115	ita.1	error: Error: HTTP 429
-361749	Nesta Elphege	115	ita.1	error: Error: HTTP 429
-194718	Ousmane Diallo	115	ita.1	error: Error: HTTP 429
-365697	Rachid Kouda	115	ita.1	error: Error: HTTP 429
-396009	Sascha Britschgi	115	ita.1	error: Error: HTTP 429
-252927	Simone Ghidotti	115	ita.1	error: Error: HTTP 429
-413818	Simone Lontani	115	ita.1	error: Error: HTTP 429
-402608	Thomás De Martis	115	ita.1	error: Error: HTTP 429
-3101737	Alessandro Di Bitonto	3997	ita.1	error: Error: HTTP 429
-288788	Andrea Ghion	3997	ita.1	error: Error: HTTP 429
-272719	Armand Laurienté	3997	ita.1	error: Error: HTTP 429
-331231	Benjamín Domínguez	3997	ita.1	error: Error: HTTP 429
-291729	Cas Odenthal	3997	ita.1	error: Error: HTTP 429
-384170	Darryl Bakola	3997	ita.1	error: Error: HTTP 429
-194766	Duje Caleta-Car	3997	ita.1	error: Error: HTTP 429
-307969	Edoardo Iannoni	3997	ita.1	error: Error: HTTP 429
-333925	Edoardo Pieragnolo	3997	ita.1	error: Error: HTTP 429
-330043	Filippo Missori	3997	ita.1	error: Error: HTTP 429
-3129533	Gabriel Kulla	3997	ita.1	error: Error: HTTP 429
-234305	Giacomo Satalino	3997	ita.1	error: Error: HTTP 429
-423015	Giorgio Vezzosi	3997	ita.1	error: Error: HTTP 429
-292199	Ignace van der Brempt	3997	ita.1	error: Error: HTTP 429
-290418	Josh Doig	3997	ita.1	error: Error: HTTP 429
-283375	Kieron Bowie	3997	ita.1	error: Error: HTTP 429
-303980	Laurs Skjellerup	3997	ita.1	error: Error: HTTP 429
-413868	Lorenzo Nyarko	3997	ita.1	error: Error: HTTP 429
-347408	Luca Lipani	3997	ita.1	error: Error: HTTP 429
-135743	Nemanja Matic	3997	ita.1	error: Error: HTTP 429
-233088	Nicholas Pierini	3997	ita.1	error: Error: HTTP 429
-346850	Patrick Nuamah	3997	ita.1	error: Error: HTTP 429
-304217	Rafael Obrador	3997	ita.1	error: Error: HTTP 429
-412248	Simone Cinquegrano	3997	ita.1	error: Error: HTTP 429
-347018	Sulemana	3997	ita.1	error: Error: HTTP 429
-415197	Tommaso Macchioni	3997	ita.1	error: Error: HTTP 429
-344917	Vasilije Adzic	3997	ita.1	error: Error: HTTP 429
-333924	Yeferson Paz	3997	ita.1	error: Error: HTTP 429
-239120	Adrian Ismajli	239	ita.1	error: Error: HTTP 429
-403148	Alessio Cacciamani	239	ita.1	error: Error: HTTP 429
-3131322	Andrea Ballanti	239	ita.1	error: Error: HTTP 429
-403824	Andrea Luongo	239	ita.1	error: Error: HTTP 429
-368006	Diego Mascardi	239	ita.1	error: Error: HTTP 429
-330707	Emirhan Ilkhan	239	ita.1	error: Error: HTTP 429
-282642	Faustino Anjorin	239	ita.1	error: Error: HTTP 429
-413819	Francesco Cereser	239	ita.1	error: Error: HTTP 429
-271445	Franco Israel	239	ita.1	error: Error: HTTP 429
-367321	Lapo Siviero	239	ita.1	error: Error: HTTP 429
-3131323	Manuel Carrascosa Moreno	239	ita.1	error: Error: HTTP 429
-416520	Mattia Pellini	239	ita.1	error: Error: HTTP 429
-206378	Nikola Vlasic	239	ita.1	error: Error: HTTP 429
-367168	Pietro Comuzzo	239	ita.1	error: Error: HTTP 429
-251141	Pietro Pellegri	239	ita.1	error: Error: HTTP 429
-364590	Rafik Belghali	239	ita.1	error: Error: HTTP 429
-136865	Ricardo Rodríguez	239	ita.1	error: Error: HTTP 429
-245538	Sandro Kulenovic	239	ita.1	error: Error: HTTP 429
-417945	Zalán Kugyela	239	ita.1	error: Error: HTTP 429
-270010	Alessandro Zanoli	118	ita.1	error: Error: HTTP 429
-263508	Bayo Youssouf	118	ita.1	error: Error: HTTP 429
-406061	Branimir Mlacic	118	ita.1	error: Error: HTTP 429
-367445	David Pejicic	118	ita.1	error: Error: HTTP 429
-318762	Edoardo Piana	118	ita.1	error: Error: HTTP 429
-258933	Giorgi Chakvetadze	118	ita.1	error: Error: HTTP 429
-408146	Giulio Vinciati	118	ita.1	error: Error: HTTP 429
-360207	Juan David Arizala	118	ita.1	error: Error: HTTP 429
-233654	Keinan Davis	118	ita.1	error: Error: HTTP 429
-252323	Lazar Jovanovic	118	ita.1	error: Error: HTTP 429
-347009	Lennon Miller	118	ita.1	error: Error: HTTP 429
-384519	Matteo Palma	118	ita.1	error: Error: HTTP 429
-319437	Nicolò Bertola	118	ita.1	error: Error: HTTP 429
-342763	Albion Rrahmani	17530	ita.1	error: Error: HTTP 429
-414161	Ale Gomes	17530	ita.1	error: Error: HTTP 429
-263816	Alessio Pozzi	17530	ita.1	error: Error: HTTP 429
-346916	Antoine Hainaut	17530	ita.1	error: Error: HTTP 429
-286128	Armel Bella-Kotchap	17530	ita.1	error: Error: HTTP 429
-291405	Bartol Franjic	17530	ita.1	error: Error: HTTP 429
-276636	Enrique Perez	17530	ita.1	error: Error: HTTP 429
-289560	Filip Stankovic	17530	ita.1	error: Error: HTTP 429
-345152	Joel Schingtienne	17530	ita.1	error: Error: HTTP 429
-405754	Kornel Lisman	17530	ita.1	error: Error: HTTP 429
-361838	Lamine Dabo	17530	ita.1	error: Error: HTTP 429
-408725	Lorenzo Berardi	17530	ita.1	error: Error: HTTP 429
-184737	Lorenzo Montipò	17530	ita.1	error: Error: HTTP 429
-228328	Marin Sverko	17530	ita.1	error: Error: HTTP 429
-326032	Marko Farji	17530	ita.1	error: Error: HTTP 429
-366972	Matteo Dagasso	17530	ita.1	error: Error: HTTP 429
-145138	Matteo Grandi	17530	ita.1	error: Error: HTTP 429
-186457	Matías Moreno	17530	ita.1	error: Error: HTTP 429
-3111599	Mohamed Malang Touré	17530	ita.1	error: Error: HTTP 429
-340139	Okoro Obinna	17530	ita.1	error: Error: HTTP 429
-260188	Pasquale Mazzocchi	17530	ita.1	error: Error: HTTP 429
-345713	Richie Sagrado	17530	ita.1	error: Error: HTTP 429
-383897	Rufai Mohammed	17530	ita.1	error: Error: HTTP 429
-275227	Thorir Johann Helgason	17530	ita.1	error: Error: HTTP 429
-221057	Toma Basic	17530	ita.1	error: Error: HTTP 429
-388285	Toni Fernández	17530	ita.1	error: Error: HTTP 429
+334793	Oumar Ngom	113	ita.1	no footballer claim
+324661	Sadik Fofana	113	ita.1	no footballer claim
+288429	Santiago Pierotti	113	ita.1	no footballer claim
+379865	Tiago Gabriel	113	ita.1	no wikidata match
+241405	Youssef Maleh	113	ita.1	no footballer claim
+355859	Adam Bakoune	4007	ita.1	no footballer claim
+3131891	Aleksandr Ballabio	4007	ita.1	no wikidata match
+409565	Aljaz Strajnar	4007	ita.1	no wikidata match
+301278	Andrea Carboni	4007	ita.1	no footballer claim
+283741	Cyril Ngonge	4007	ita.1	no footballer claim
+235453	Dany Mota	4007	ita.1	no footballer claim
+250460	Demba Thiam	4007	ita.1	no footballer claim
+362776	Ebenezer Akinsanmiro	4007	ita.1	no footballer claim
+390673	Eddy Kouadio	4007	ita.1	no footballer claim
+297051	Exequiel Zeballos	4007	ita.1	no footballer claim
+250672	Filippo Delli Carri	4007	ita.1	no footballer claim
+384482	Gustavo Varela	4007	ita.1	no footballer claim
+234951	Idrissa Touré	4007	ita.1	no footballer claim
+197764	Kevin Martins	4007	ita.1	no footballer claim
+353013	Leonardo Colombo	4007	ita.1	no footballer claim
+376261	Manga Foe Ondoa	4007	ita.1	no wikidata match
+252385	Michael Folorunsho	4007	ita.1	no footballer claim
+325554	Omari Forson	4007	ita.1	no footballer claim
+259871	Ricardo Mangas	4007	ita.1	no footballer claim
+270186	Semuel Pizzignacco	4007	ita.1	no footballer claim
+397386	Solomon Loubao	4007	ita.1	no footballer claim
+412249	Yvan Maye	4007	ita.1	no footballer claim
+319697	Alisson Santos	114	ita.1	no footballer claim
+205576	Amir Rrahmani	114	ita.1	no footballer claim
+5327647	Andrea Chiummariello	114	ita.1	no wikidata match
+332411	Antonio Vergara	114	ita.1	no footballer claim
+418210	Christian Garofalo	114	ita.1	no footballer claim
+3138825	Claudio Pugliese	114	ita.1	no footballer claim
+346622	Costantino Favasuli	114	ita.1	no footballer claim
+413630	David Spinelli	114	ita.1	no wikidata match
+416154	Francisco Baridó	114	ita.1	no footballer claim
+339953	Giovane	114	ita.1	no footballer claim
+367690	Luca Marianucci	114	ita.1	no footballer claim
+188306	Matteo Politano	114	ita.1	no wikidata match
+3145436	Milton Agustín Pereyra	114	ita.1	no wikidata match
+198082	Nikita Contini	114	ita.1	no wikidata match
+297360	Rafa Marín	114	ita.1	no footballer claim
+371539	Abdou-Salam Konate	115	ita.1	no footballer claim
+423017	Alessandro Mazzocchi	115	ita.1	no footballer claim
+339198	Christian Ordoñez	115	ita.1	no wikidata match
+422950	Djibril Diallo	115	ita.1	no footballer claim
+417783	Dominik Drobnic	115	ita.1	no wikidata match
+290792	Edoardo Corvi	115	ita.1	no footballer claim
+287430	El Bilal Toure	115	ita.1	no wikidata match
+261274	Emanuele Valeri	115	ita.1	no footballer claim
+272694	Enrico Del Prato	115	ita.1	no footballer claim
+308939	Franco Carboni	115	ita.1	no footballer claim
+366510	Giovanni Daffara	115	ita.1	no footballer claim
+286764	Hans Nicolussi Caviglia	115	ita.1	no footballer claim
+301980	José Romero	115	ita.1	no footballer claim
+281590	Lautaro Valenti	115	ita.1	no footballer claim
+316609	Mandela Keita	115	ita.1	no footballer claim
+366526	Mariano Troilo	115	ita.1	no footballer claim
+310860	Matija Frigan	115	ita.1	no footballer claim
+361749	Nesta Elphege	115	ita.1	no footballer claim
+194718	Ousmane Diallo	115	ita.1	no footballer claim
+365697	Rachid Kouda	115	ita.1	no footballer claim
+396009	Sascha Britschgi	115	ita.1	no footballer claim
+252927	Simone Ghidotti	115	ita.1	no footballer claim
+413818	Simone Lontani	115	ita.1	no footballer claim
+402608	Thomás De Martis	115	ita.1	no footballer claim
+3101737	Alessandro Di Bitonto	3997	ita.1	no footballer claim
+288788	Andrea Ghion	3997	ita.1	no footballer claim
+272719	Armand Laurienté	3997	ita.1	no footballer claim
+331231	Benjamín Domínguez	3997	ita.1	no footballer claim
+291729	Cas Odenthal	3997	ita.1	no footballer claim
+384170	Darryl Bakola	3997	ita.1	no footballer claim
+194766	Duje Caleta-Car	3997	ita.1	no wikidata match
+307969	Edoardo Iannoni	3997	ita.1	no footballer claim
+333925	Edoardo Pieragnolo	3997	ita.1	no footballer claim
+330043	Filippo Missori	3997	ita.1	no footballer claim
+3129533	Gabriel Kulla	3997	ita.1	no footballer claim
+234305	Giacomo Satalino	3997	ita.1	no footballer claim
+423015	Giorgio Vezzosi	3997	ita.1	no footballer claim
+292199	Ignace van der Brempt	3997	ita.1	no footballer claim
+290418	Josh Doig	3997	ita.1	no footballer claim
+283375	Kieron Bowie	3997	ita.1	no footballer claim
+303980	Laurs Skjellerup	3997	ita.1	no footballer claim
+413868	Lorenzo Nyarko	3997	ita.1	no wikidata match
+347408	Luca Lipani	3997	ita.1	no footballer claim
+135743	Nemanja Matic	3997	ita.1	no wikidata match
+233088	Nicholas Pierini	3997	ita.1	no footballer claim
+346850	Patrick Nuamah	3997	ita.1	no footballer claim
+304217	Rafael Obrador	3997	ita.1	no footballer claim
+412248	Simone Cinquegrano	3997	ita.1	no footballer claim
+347018	Sulemana	3997	ita.1	no wikidata match
+415197	Tommaso Macchioni	3997	ita.1	no wikidata match
+344917	Vasilije Adzic	3997	ita.1	no wikidata match
+333924	Yeferson Paz	3997	ita.1	no footballer claim
+239120	Adrian Ismajli	239	ita.1	no wikidata match
+403148	Alessio Cacciamani	239	ita.1	no footballer claim
+3131322	Andrea Ballanti	239	ita.1	no wikidata match
+403824	Andrea Luongo	239	ita.1	no footballer claim
+368006	Diego Mascardi	239	ita.1	no footballer claim
+330707	Emirhan Ilkhan	239	ita.1	no wikidata match
+282642	Faustino Anjorin	239	ita.1	no footballer claim
+413819	Francesco Cereser	239	ita.1	no wikidata match
+271445	Franco Israel	239	ita.1	no footballer claim
+367321	Lapo Siviero	239	ita.1	no footballer claim
+3131323	Manuel Carrascosa Moreno	239	ita.1	no wikidata match
+416520	Mattia Pellini	239	ita.1	no wikidata match
+206378	Nikola Vlasic	239	ita.1	no wikidata match
+367168	Pietro Comuzzo	239	ita.1	no footballer claim
+251141	Pietro Pellegri	239	ita.1	no footballer claim
+364590	Rafik Belghali	239	ita.1	no footballer claim
+136865	Ricardo Rodríguez	239	ita.1	no footballer claim
+245538	Sandro Kulenovic	239	ita.1	no wikidata match
+417945	Zalán Kugyela	239	ita.1	no wikidata match
+270010	Alessandro Zanoli	118	ita.1	no footballer claim
+263508	Bayo Youssouf	118	ita.1	no wikidata match
+406061	Branimir Mlacic	118	ita.1	no wikidata match
+367445	David Pejicic	118	ita.1	no wikidata match
+318762	Edoardo Piana	118	ita.1	no footballer claim
+258933	Giorgi Chakvetadze	118	ita.1	no footballer claim
+408146	Giulio Vinciati	118	ita.1	no footballer claim
+360207	Juan David Arizala	118	ita.1	no footballer claim
+233654	Keinan Davis	118	ita.1	no footballer claim
+252323	Lazar Jovanovic	118	ita.1	no wikidata match
+347009	Lennon Miller	118	ita.1	no footballer claim
+384519	Matteo Palma	118	ita.1	no footballer claim
+319437	Nicolò Bertola	118	ita.1	no footballer claim
+342763	Albion Rrahmani	17530	ita.1	no footballer claim
+414161	Ale Gomes	17530	ita.1	no footballer claim
+263816	Alessio Pozzi	17530	ita.1	no footballer claim
+346916	Antoine Hainaut	17530	ita.1	no footballer claim
+286128	Armel Bella-Kotchap	17530	ita.1	no footballer claim
+291405	Bartol Franjic	17530	ita.1	no wikidata match
+276636	Enrique Perez	17530	ita.1	no wikidata match
+289560	Filip Stankovic	17530	ita.1	no footballer claim
+345152	Joel Schingtienne	17530	ita.1	no wikidata match
+405754	Kornel Lisman	17530	ita.1	no footballer claim
+361838	Lamine Dabo	17530	ita.1	no footballer claim
+408725	Lorenzo Berardi	17530	ita.1	no footballer claim
+184737	Lorenzo Montipò	17530	ita.1	no footballer claim
+228328	Marin Sverko	17530	ita.1	no wikidata match
+326032	Marko Farji	17530	ita.1	no footballer claim
+366972	Matteo Dagasso	17530	ita.1	no footballer claim
+145138	Matteo Grandi	17530	ita.1	no footballer claim
+186457	Matías Moreno	17530	ita.1	no footballer claim
+3111599	Mohamed Malang Touré	17530	ita.1	no wikidata match
+340139	Okoro Obinna	17530	ita.1	no wikidata match
+260188	Pasquale Mazzocchi	17530	ita.1	no footballer claim
+345713	Richie Sagrado	17530	ita.1	no footballer claim
+383897	Rufai Mohammed	17530	ita.1	no footballer claim
+275227	Thorir Johann Helgason	17530	ita.1	no wikidata match
+221057	Toma Basic	17530	ita.1	no wikidata match
+388285	Toni Fernández	17530	ita.1	no footballer claim
