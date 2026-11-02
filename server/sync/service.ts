@@ -20,6 +20,23 @@ import {
 
 const db = getDb();
 
+export function recordJobSuccess(job: string): void {
+  try {
+    db.prepare(
+      `INSERT INTO sync_job_status (job_name, last_success_at, last_run_at) VALUES (?, ?, ?)
+       ON CONFLICT(job_name) DO UPDATE SET last_success_at=excluded.last_success_at, last_run_at=excluded.last_run_at, last_error=NULL`,
+    ).run(job, new Date().toISOString(), new Date().toISOString());
+  } catch {}
+}
+export function recordJobError(job: string, err: unknown): void {
+  try {
+    db.prepare(
+      `INSERT INTO sync_job_status (job_name, last_run_at, last_error) VALUES (?, ?, ?)
+       ON CONFLICT(job_name) DO UPDATE SET last_run_at=excluded.last_run_at, last_error=excluded.last_error`,
+    ).run(job, new Date().toISOString(), String(err).slice(0, 500));
+  } catch {}
+}
+
 /** A live/halftime match whose kickoff is older than this is treated as stuck. */
 const STUCK_LIVE_MS = 4 * 3_600_000;
 
@@ -434,6 +451,7 @@ export async function syncRosters(): Promise<void> {
   log(
     `rosters: ${ok}/${teams.length - skipped} squads refreshed${skipped ? ` (${skipped} skipped, no league)` : ""}`,
   );
+  recordJobSuccess("rosters");
 }
 
 /**
@@ -506,6 +524,7 @@ export async function syncStandings(): Promise<void> {
       console.error(`[sync] standings ${league} FAILED:`, String(err));
     }
   }
+  recordJobSuccess("standings");
 }
 
 /** "2026-27" -> 2026. ESPN's standings endpoint wants the season START year. */
@@ -620,6 +639,7 @@ export async function syncLeagueNews(): Promise<void> {
       console.error(`[sync] league news ${league} FAILED:`, String(err));
     }
   }
+  recordJobSuccess("league-news");
 }
 
 export function startSyncLoop(): void {

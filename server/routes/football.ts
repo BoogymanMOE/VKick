@@ -1145,7 +1145,8 @@ matchesRouter.get("/api/health/data", (_req, res) => {
       latestSeason,
     };
   });
-  res.json({ generatedAt: new Date().toISOString(), leagues: data });
+  const jobs = all<{ job_name: string; last_success_at: string | null; last_run_at: string | null; last_error: string | null }>(db, "SELECT job_name, last_success_at, last_run_at, last_error FROM sync_job_status");
+  res.json({ generatedAt: new Date().toISOString(), leagues: data, jobs });
 });
 
 export { safeArr };

@@ -42,6 +42,13 @@ export function migrate(db: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_league_news_league ON league_news(league);
 
+    CREATE TABLE IF NOT EXISTS sync_job_status (
+      job_name TEXT PRIMARY KEY,
+      last_success_at TEXT,
+      last_error TEXT,
+      last_run_at TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS manual_overrides (
       entity_type TEXT NOT NULL,
       entity_id TEXT NOT NULL,

@@ -5,12 +5,26 @@
 import express from "express";
 import { getDb, get, run, all } from "../db/index.js";
 import { syncScoreboards, syncScoreboardWindow, syncStandings } from "../sync/service.js";
+import fs from "node:fs";
+import path from "node:path";
 import { bad, isAdmin, requireUser } from "./shared.js";
 import { getBot } from "../bot/index.js";
 
 const db = getDb();
 
 export const adminRouter = express.Router();
+
+adminRouter.get("/api/admin/backup/latest", requireUser, (req, res) => {
+  if (!isAdmin(req)) return bad(res, "admin only", 403);
+  const dir = process.env.BACKUP_DIR ?? "./backups";
+  if (!fs.existsSync(dir)) return bad(res, "no backups", 404);
+  const files = fs.readdirSync(dir).filter((f) => f.startsWith("matchday-") && f.endsWith(".db")).sort().reverse();
+  if (files.length === 0) return bad(res, "no backups", 404);
+  const file = path.join(dir, files[0]!);
+  res.setHeader("Content-Type", "application/octet-stream");
+  res.setHeader("Content-Disposition", `attachment; filename="${files[0]}"`);
+  fs.createReadStream(file).pipe(res);
+});
 
 adminRouter.get("/api/admin/stats", requireUser, (_req, res) => {
   if (!isAdmin(_req)) return bad(res, "admin only", 403);
