@@ -54,6 +54,26 @@ import { apiNotFound, apiErrorHandler } from "./http/middleware.js";
 const app = express();
 const db = getDb();
 
+// Load committed seed if the database is empty (fresh disk).
+try {
+  const seedPath = path.join(ROOT_DIR, "data", "seed.json");
+  const count = get<{ c: number }>(db, "SELECT COUNT(*) AS c FROM teams", []);
+  if (count?.c === 0 && fs.existsSync(seedPath)) {
+    const seed = JSON.parse(fs.readFileSync(seedPath, "utf8"));
+    for (const t of seed.teams ?? []) {
+      db.prepare(`INSERT OR IGNORE INTO teams (id, name, short_name, abbreviation, logo_url, color, league) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+        .run(t.id, t.name, t.short_name, t.abbreviation, t.logo_url, t.color, t.league);
+    }
+    for (const p of seed.players ?? []) {
+      db.prepare(`INSERT OR IGNORE INTO players (id, team_id, full_name, short_name, position, espn_position, jersey_number, headshot_url, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(p.id, p.team_id, p.full_name, p.short_name, p.position, p.espn_position, p.jersey_number, p.headshot_url, p.active);
+    }
+    console.log(`[api] loaded seed: ${seed.teams?.length ?? 0} teams, ${seed.players?.length ?? 0} players`);
+  }
+} catch (err) {
+  console.error("[api] seed load failed:", String(err));
+}
+
 // File-based SQLite + in-process cron loops (sync, resolver, retention): the
 // API must run as exactly one instance. Scale by making this box bigger, not
 // by running more of it.
@@ -91,6 +111,21 @@ app.use(gzip);
 // 64KB body cap: far above any legit prediction/comment payload, well below
 // abuse size. (default was 100KB; explicit + smaller now that payloads are validated)
 app.use(express.json({ limit: "64kb" }));
+
+// Cache-Control for API reads: short for live-ish data, longer for reference data.
+app.use("/api", (req, res, next) => {
+  const p = req.path;
+  if (p.startsWith("/matches") || p.startsWith("/health")) {
+    res.setHeader("Cache-Control", "public, max-age=30");
+  } else if (p.startsWith("/standings")) {
+    res.setHeader("Cache-Control", "public, max-age=30");
+  } else if (p.startsWith("/teams") || p.startsWith("/leagues") || p.startsWith("/competitions")) {
+    res.setHeader("Cache-Control", "public, max-age=300");
+  } else {
+    res.setHeader("Cache-Control", "no-store");
+  }
+  next();
+});
 
 /* --------------------------------------------------------------- ops */
 
@@ -145,6 +180,17 @@ app.use(
     setHeaders: (res) => res.setHeader("Cache-Control", "public, max-age=86400"),
   }),
 );
+
+// Downloaded faces and logos are content-addressed by player/team id and never
+// change under the same URL, so cache them immutably.
+for (const seg of ["faces", "logos"]) {
+  app.use(
+    `/${seg}`,
+    express.static(path.join(ROOT_DIR, "public", seg), {
+      setHeaders: (res) => res.setHeader("Cache-Control", "public, max-age=31536000, immutable"),
+    }),
+  );
+}
 
 // Serve the built Vite frontend (dist/) so the React app loads in production.
 app.use(

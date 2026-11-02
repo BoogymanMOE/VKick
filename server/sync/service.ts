@@ -1,5 +1,5 @@
 import cron from "node-cron";
-import { fetchScoreboard, fetchStandings, fetchSummary, fetchTeamRoster } from "../espn/client.js";
+import { fetchLeagueNews, fetchScoreboard, fetchStandings, fetchSummary, fetchTeamRoster } from "../espn/client.js";
 import { LEAGUES, pollWindow, type LeagueSlug } from "../espn/types.js";
 import { getDb, all, get } from "../db/index.js";
 import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
@@ -587,6 +587,41 @@ let lookbackRunning = false;
 let understatRunning = false;
 
 /** Start the cron loops. Called once from server/index.ts. */
+export async function syncLeagueNews(): Promise<void> {
+  for (const league of LEAGUES) {
+    try {
+      const raw = (await fetchLeagueNews(league)) as { articles?: unknown };
+      const articles = Array.isArray(raw?.articles) ? raw.articles : [];
+      const now = new Date().toISOString();
+      for (const a of articles) {
+        const art = a as any;
+        if (art?.id == null) continue;
+        db.prepare(
+          `INSERT INTO league_news (league, article_id, headline, description, published, byline, image_url, web_url, team_ids_json, fetched_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(league, article_id) DO UPDATE SET
+             headline=excluded.headline, description=excluded.description, published=excluded.published,
+             byline=excluded.byline, image_url=excluded.image_url, web_url=excluded.web_url,
+             team_ids_json=excluded.team_ids_json, fetched_at=excluded.fetched_at`,
+        ).run(
+          league,
+          String(art.id),
+          String(art.headline ?? ""),
+          typeof art.description === "string" ? art.description : null,
+          typeof art.published === "string" ? art.published : null,
+          typeof art.byline === "string" ? art.byline : null,
+          typeof art.images?.[0]?.url === "string" ? art.images[0].url : null,
+          typeof art.links?.web?.href === "string" ? art.links.web.href : null,
+          JSON.stringify(Array.isArray(art.categories) ? art.categories.flatMap((c: any) => (c?.type === "team" && c?.team?.id != null ? [String(c.team.id)] : [])) : []),
+          now,
+        );
+      }
+    } catch (err) {
+      console.error(`[sync] league news ${league} FAILED:`, String(err));
+    }
+  }
+}
+
 export function startSyncLoop(): void {
   if (started) return;
   started = true;
@@ -758,8 +793,15 @@ export function startSyncLoop(): void {
 
   // Weekly: full squads (one ESPN call per club — keep it slow on purpose).
   // Moved to 4:30am to avoid overlap with Understat at 5am.
-  cron.schedule("30 4 * * 2", () => {
+  cron.schedule("30 4 * * *", () => {
     void syncRosters().catch((err) => console.error("[sync] roster loop error:", err));
+  });
+  // Transfer-window boost: every 2 hours in Jan, Jul, Aug.
+  cron.schedule("0 */2 * * *", () => {
+    const m = new Date().getUTCMonth(); // 0=Jan, 6=Jul, 7=Aug
+    if (m === 0 || m === 6 || m === 7) {
+      void syncRosters().catch((err) => console.error("[sync] roster boost error:", err));
+    }
   });
 
   // Daily: RESULTS lookback. The routine sweeps fetch at most yesterday, so a

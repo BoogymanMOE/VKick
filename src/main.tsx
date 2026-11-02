@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, dehydrate, hydrate } from "@tanstack/react-query";
 import { HashRouter } from "react-router-dom";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -50,6 +50,35 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: true,
     },
   },
+});
+
+// Persist the React Query cache so the last data shows instantly on reopen.
+const RQ_CACHE_KEY = "vkick:rq:v1";
+const RQ_MAX_AGE = 24 * 60 * 60 * 1000;
+function saveRqCache() {
+  try {
+    const state = dehydrate(queryClient, { shouldDehydrateQuery: (q) => q.state.status === "success" });
+    localStorage.setItem(RQ_CACHE_KEY, JSON.stringify({ ts: Date.now(), state }));
+  } catch {
+    /* ignore quota errors */
+  }
+}
+try {
+  const raw = localStorage.getItem(RQ_CACHE_KEY);
+  if (raw) {
+    const parsed = JSON.parse(raw);
+    if (parsed?.ts && Date.now() - parsed.ts < RQ_MAX_AGE && parsed.state) {
+      hydrate(queryClient, parsed.state);
+    } else {
+      localStorage.removeItem(RQ_CACHE_KEY);
+    }
+  }
+} catch {
+  /* ignore */
+}
+window.addEventListener("beforeunload", saveRqCache);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") saveRqCache();
 });
 
 /**

@@ -27,6 +27,30 @@ export function migrate(db: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_teams_league ON teams(league);
 
+    CREATE TABLE IF NOT EXISTS league_news (
+      league TEXT NOT NULL,
+      article_id TEXT NOT NULL,
+      headline TEXT NOT NULL,
+      description TEXT,
+      published TEXT,
+      byline TEXT,
+      image_url TEXT,
+      web_url TEXT,
+      team_ids_json TEXT,
+      fetched_at TEXT NOT NULL,
+      PRIMARY KEY (league, article_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_league_news_league ON league_news(league);
+
+    CREATE TABLE IF NOT EXISTS manual_overrides (
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      field TEXT NOT NULL,
+      value TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (entity_type, entity_id, field)
+    );
+
     CREATE TABLE IF NOT EXISTS players (
       id            TEXT PRIMARY KEY,          -- ESPN athlete id
       team_id       TEXT REFERENCES teams(id),

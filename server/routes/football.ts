@@ -5,6 +5,7 @@
  * Understat read keeps its requireUser gate. Behavior unchanged.
  */
 import express, { type Response } from "express";
+import fs from "node:fs";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { getDb, all, get } from "../db/index.js";
@@ -30,12 +31,20 @@ import { syncMatchSummary } from "../sync/service.js";
 import type { LeagueSlug } from "../espn/types.js";
 
 const db = getDb();
+const FACES_DIR = path.join(PROJECT_ROOT, "public", "faces");
 
 /** Resolve a face URL for a player.
  * Priority: 1) bundled webp under public/headshots/<id>.webp
  * 2) the remote ESPN headshot_url the sync stored
  * 3) null so the UI falls back to initials.
  */
+export function localLogoUrl(logoUrl: string | null, teamId: string | number): string | null {
+  const id = String(teamId);
+  const p = path.join(PROJECT_ROOT, "public", "logos", `${id}.webp`);
+  if (existsSync(p)) return `/logos/${id}.webp`;
+  return logoUrl;
+}
+
 export function localHeadshotUrl(headshotUrl: string | null, playerId: string | number): string | null {
   const id = String(playerId);
   // Downloaded faces (public/faces) take priority: they are the curated set
@@ -373,14 +382,7 @@ matchesRouter.get("/api/matches/:id/lineups", async (req, res) => {
   if (!match) return bad(res, "not found", 404);
   let rows = lineupRows(matchId);
 
-  // Backfill: a finished match with no player stats means we missed the
-  // post-final sync. Fetch the summary now, then re-read (the status may have
-  // moved, and the summary is what writes the rows).
-  if (rows.length === 0 && match.status === "finished") {
-    await backfillSummary(match.league, matchId);
-    match = matchReadState(matchId) ?? match;
-    rows = lineupRows(matchId);
-  }
+  // DB-only: never fetch ESPN on the request path. Empty state is acceptable.
 
   const players = rows.map((r) => ({
     ...r,
@@ -402,13 +404,7 @@ matchesRouter.get("/api/matches/:id/timeline", async (req, res) => {
   let events = timelineRows(matchId);
 
   // Same missed-summary repair as the lineups read above.
-  if (events.length === 0) {
-    const match = matchReadState(matchId);
-    if (match?.status === "finished") {
-      await backfillSummary(match.league, matchId);
-      events = timelineRows(matchId);
-    }
-  }
+  // DB-only: no on-demand fetch.
 
   res.json({ events: events.map((e) => ({ ...e, participants: safeArr(e.participants) })) });
 });
@@ -444,8 +440,6 @@ matchesRouter.get("/api/matches/:id/h2h", async (req, res) => {
     [matchId],
   );
   if (!row) {
-    const match = matchReadState(matchId);
-    if (match) await backfillSummary(match.league, matchId);
     row = get(db, select, [matchId]);
   }
   if (!row) return res.json({ summary: null, seriesLabel: null, events: [] });
@@ -475,8 +469,6 @@ matchesRouter.get("/api/matches/:id/form", async (req, res) => {
     away_games_json: string | null;
   }>(db, select, [matchId]);
   if (!row) {
-    const match = matchReadState(matchId);
-    if (match) await backfillSummary(match.league, matchId);
     row = get(db, select, [matchId]);
   }
   if (!row) return res.json({ home: null, away: null });
@@ -511,8 +503,6 @@ matchesRouter.get("/api/matches/:id/news", async (req, res) => {
      FROM match_news WHERE match_id = ? ORDER BY published DESC`;
   let rows = all<MatchNewsRow>(db, select, [matchId]);
   if (rows.length === 0) {
-    const match = matchReadState(matchId);
-    if (match) await backfillSummary(match.league, matchId);
     rows = all<MatchNewsRow>(db, select, [matchId]);
   }
   const articles = rows.map((r) => ({
@@ -553,7 +543,8 @@ matchesRouter.get("/api/teams", (req, res) => {
       "SELECT *, CASE WHEN league != '' THEN league ELSE 'other' END AS group_key FROM teams WHERE league = ? ORDER BY name ASC",
       [league],
     );
-    res.json({ teams: filterOutBlockedTeams(teams) });
+    const mapped = filterOutBlockedTeams(teams).map((t: any) => ({ ...t, logo_url: localLogoUrl(t.logo_url, t.id) }));
+    res.json({ teams: mapped });
     return;
   }
   const rows = all<{ id: string; league: string }>(
@@ -563,8 +554,9 @@ matchesRouter.get("/api/teams", (req, res) => {
      ORDER BY t.league ASC, t.name ASC`,
     [...TEAM_GROUP_PARAMS],
   );
+  const filtered = filterOutBlockedTeams(rows).filter((team) => isAllowedLeague(team.league));
   res.json({
-    teams: filterOutBlockedTeams(rows).filter((team) => isAllowedLeague(team.league)),
+    teams: filtered.map((t: any) => ({ ...t, logo_url: localLogoUrl(t.logo_url, t.id) })),
   });
 });
 
@@ -619,6 +611,7 @@ matchesRouter.get("/api/teams/:id", (req, res) => {
   // Same flat shape the client already consumes; newest results first,
   // then upcoming in chronological order.
   const fixtures = [...played, ...upcoming];
+  if (team) (team as any).logo_url = localLogoUrl((team as any).logo_url, teamId);
   res.json({ team, seasonStats: seasonStats ?? null, standing: standing ?? null, fixtures });
 });
 
@@ -652,36 +645,13 @@ matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
   let rows: MatchPlayerRow[] = [];
   for (const c of candidates) {
     let r = lineupRows(c.id);
-    if (r.length === 0) {
-      await backfillSummary(c.league, c.id);
-      const refreshed = get<{
-        id: string;
-        league: string;
-        home_team_id: string;
-        away_team_id: string;
-        home_formation: string | null;
-        away_formation: string | null;
-        kickoff_at: string;
-      }>(db, "SELECT id, league, home_team_id, away_team_id, home_formation, away_formation, kickoff_at FROM matches WHERE id = ?", [c.id]);
-      const m = refreshed ?? c;
-      r = lineupRows(m.id);
-      const teamRows = r.filter((row) => row.team_id === teamId);
-      const isHome = m.home_team_id === teamId;
-      const formation = isHome ? m.home_formation : m.away_formation;
-      if (teamRows.length > 0 || formation) {
-        match = m;
-        rows = r;
-        break;
-      }
-    } else {
-      const teamRows = r.filter((row) => row.team_id === teamId);
-      const isHome = c.home_team_id === teamId;
-      const formation = isHome ? c.home_formation : c.away_formation;
-      if (teamRows.length > 0 || formation) {
-        match = c;
-        rows = r;
-        break;
-      }
+    const teamRows = r.filter((row) => row.team_id === teamId);
+    const isHome = c.home_team_id === teamId;
+    const formation = isHome ? c.home_formation : c.away_formation;
+    if (teamRows.length > 0 || formation) {
+      match = c;
+      rows = r;
+      break;
     }
   }
 
@@ -1013,20 +983,29 @@ matchesRouter.get("/api/leagues/:league/news", (req, res) => {
   if (!isAllowedLeague(league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
   const team = req.query.team ? String(req.query.team) : null;
   const lang = req.query.lang ? String(req.query.lang) : null;
-  getLeagueNews(league as LeagueSlug)
-    .then((articles) => {
-      const scoped = team ? articles.filter((a) => a.teamIds.includes(team)) : articles;
-      // Answer in the reader's language where a translation is cached, and fill
-      // the rest in the background rather than making the tab wait on a model.
-      fillTranslations(scoped);
-      res.json({ articles: withTranslation(scoped, lang) });
-    })
-    .catch((err) => {
-      // News is decoration on a page that is otherwise complete: an ESPN
-      // outage should empty the tab, not 500 the club page.
-      console.error(`[news] ${league} FAILED:`, String(err));
-      res.json({ articles: [] });
-    });
+  const rows = all<{
+    article_id: string;
+    headline: string;
+    description: string | null;
+    published: string | null;
+    byline: string | null;
+    image_url: string | null;
+    web_url: string | null;
+    team_ids_json: string | null;
+  }>(db, "SELECT article_id, headline, description, published, byline, image_url, web_url, team_ids_json FROM league_news WHERE league = ? ORDER BY published DESC", [league]);
+  const articles: NewsArticle[] = rows.map((r) => ({
+    id: r.article_id,
+    headline: r.headline,
+    description: r.description ?? "",
+    published: r.published ?? "",
+    byline: r.byline,
+    imageUrl: r.image_url,
+    webUrl: r.web_url,
+    teamIds: (() => { try { return JSON.parse(r.team_ids_json ?? "[]"); } catch { return []; } })(),
+  }));
+  const scoped = team ? articles.filter((a) => a.teamIds.includes(team)) : articles;
+  fillTranslations(scoped);
+  res.json({ articles: withTranslation(scoped, lang) });
 });
 
 function getSeasonKeyDb(league: string): string {
@@ -1132,5 +1111,41 @@ function latestSeason(league: string): string {
   );
   return row?.season ?? currentSeasonLabel();
 }
+
+matchesRouter.get("/api/health/data", (_req, res) => {
+  const faceFiles = new Set(fs.readdirSync(FACES_DIR).filter((f) => f.endsWith(".webp") || f.endsWith(".png")));
+  const leagues = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
+  const data = leagues.map((lg) => {
+    const teams = (db.prepare("SELECT COUNT(*) AS c FROM teams WHERE league = ?").get(lg) as { c: number }).c;
+    const players = (db.prepare("SELECT COUNT(*) AS c FROM players p JOIN teams t ON t.id = p.team_id WHERE t.league = ?").get(lg) as { c: number }).c;
+    const teamsWithSquad = (db.prepare("SELECT COUNT(DISTINCT p.team_id) AS c FROM players p JOIN teams t ON t.id = p.team_id WHERE t.league = ?").get(lg) as { c: number }).c;
+    const playersWithFace = (db.prepare("SELECT p.id FROM players p JOIN teams t ON t.id = p.team_id WHERE t.league = ?").all(lg) as Array<{ id: string }>)
+      .filter((r) => faceFiles.has(r.id + ".webp") || faceFiles.has(r.id + ".png")).length;
+    const matches = (db.prepare("SELECT COUNT(*) AS c FROM matches WHERE league = ?").get(lg) as { c: number }).c;
+    const finished = (db.prepare("SELECT COUNT(*) AS c FROM matches WHERE league = ? AND status = 'finished'").get(lg) as { c: number }).c;
+    const withScore = (db.prepare("SELECT COUNT(*) AS c FROM matches WHERE league = ? AND status = 'finished' AND home_score IS NOT NULL").get(lg) as { c: number }).c;
+    const withLineup = (db.prepare("SELECT COUNT(*) AS c FROM matches m WHERE m.league = ? AND m.status = 'finished' AND EXISTS (SELECT 1 FROM match_player_stats s WHERE s.match_id = m.id)").get(lg) as { c: number }).c;
+    const withSummary = (db.prepare("SELECT COUNT(*) AS c FROM matches m WHERE m.league = ? AND m.status = 'finished' AND EXISTS (SELECT 1 FROM match_team_stats s WHERE s.match_id = m.id)").get(lg) as { c: number }).c;
+    const standings = (db.prepare("SELECT COUNT(*) AS c FROM standings WHERE league = ?").get(lg) as { c: number }).c;
+    const latestSeason = (db.prepare("SELECT MAX(season) AS s FROM standings WHERE league = ?").get(lg) as { s: string | null }).s;
+    return {
+      league: lg,
+      teams,
+      teamsWithSquad,
+      players,
+      playersWithFace,
+      faceCoveragePct: players > 0 ? Math.round((playersWithFace / players) * 100) : 0,
+      matchesStored: matches,
+      expectedMatches: teams * (teams - 1),
+      finished,
+      finishedWithScore: withScore,
+      finishedWithLineup: withLineup,
+      finishedWithSummary: withSummary,
+      standings,
+      latestSeason,
+    };
+  });
+  res.json({ generatedAt: new Date().toISOString(), leagues: data });
+});
 
 export { safeArr };
