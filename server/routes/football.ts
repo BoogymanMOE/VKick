@@ -38,6 +38,19 @@ const db = getDb();
  */
 export function localHeadshotUrl(headshotUrl: string | null, playerId: string | number): string | null {
   const id = String(playerId);
+  // Downloaded faces (public/faces) take priority: they are the curated set
+  // produced by scripts/download-faces-wiki.ts and are matched by ESPN athlete
+  // id. Check the image extensions we actually ship.
+  for (const ext of ["webp", "png", "jpg", "jpeg"]) {
+    try {
+      const facePath = path.join(PROJECT_ROOT, "public", "faces", `${id}.${ext}`);
+      if (existsSync(facePath)) {
+        return `/faces/${id}.${ext}`;
+      }
+    } catch {
+      // access denied or not found
+    }
+  }
   try {
     const headshotPath = path.join(PROJECT_ROOT, "public", "headshots", `${id}.webp`);
     if (existsSync(headshotPath)) {
@@ -617,11 +630,15 @@ matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
   if (!team) return bad(res, "not found", 404);
   if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
 
+  // Use the most recent finished match that actually carries lineup data for
+  // this club. A finished match can exist with no stored summary (older rows
+  // from before the sync window), so walking back through the last few avoids
+  // a false "no lineup" empty state when an earlier match does have XI data.
   const matchQuery = `SELECT id, league, home_team_id, away_team_id, home_formation, away_formation, kickoff_at
     FROM matches
     WHERE (home_team_id = ? OR away_team_id = ?) AND status = 'finished'
-    ORDER BY kickoff_at DESC LIMIT 1`;
-  let match = get<{
+    ORDER BY kickoff_at DESC LIMIT 8`;
+  const candidates = all<{
     id: string;
     league: string;
     home_team_id: string;
@@ -630,14 +647,45 @@ matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
     away_formation: string | null;
     kickoff_at: string;
   }>(db, matchQuery, [teamId, teamId]);
-  if (!match) return res.json({ match: null, starters: [], subs: [] });
 
-  let rows = lineupRows(match.id);
-  if (rows.length === 0) {
-    await backfillSummary(match.league, match.id);
-    match = get(db, matchQuery, [teamId, teamId]) ?? match;
-    rows = lineupRows(match.id);
+  let match: (typeof candidates)[number] | null = null;
+  let rows: MatchPlayerRow[] = [];
+  for (const c of candidates) {
+    let r = lineupRows(c.id);
+    if (r.length === 0) {
+      await backfillSummary(c.league, c.id);
+      const refreshed = get<{
+        id: string;
+        league: string;
+        home_team_id: string;
+        away_team_id: string;
+        home_formation: string | null;
+        away_formation: string | null;
+        kickoff_at: string;
+      }>(db, "SELECT id, league, home_team_id, away_team_id, home_formation, away_formation, kickoff_at FROM matches WHERE id = ?", [c.id]);
+      const m = refreshed ?? c;
+      r = lineupRows(m.id);
+      const teamRows = r.filter((row) => row.team_id === teamId);
+      const isHome = m.home_team_id === teamId;
+      const formation = isHome ? m.home_formation : m.away_formation;
+      if (teamRows.length > 0 || formation) {
+        match = m;
+        rows = r;
+        break;
+      }
+    } else {
+      const teamRows = r.filter((row) => row.team_id === teamId);
+      const isHome = c.home_team_id === teamId;
+      const formation = isHome ? c.home_formation : c.away_formation;
+      if (teamRows.length > 0 || formation) {
+        match = c;
+        rows = r;
+        break;
+      }
+    }
   }
+
+  if (!match) return res.json({ match: null, starters: [], subs: [] });
 
   const isHome = match.home_team_id === teamId;
   const formation = isHome ? match.home_formation : match.away_formation;
