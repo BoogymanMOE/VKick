@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Football-data reads: competitions, matches, match detail, commentary,
  * teams (+season line), squads, Understat, season stat
  * leaderboards, standings. Public routes stay public (web preview); the
@@ -13,7 +13,7 @@ import { PROJECT_ROOT } from "../env.js";
 import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
 
 import { isAllowedLeague } from "../espn/catalog.js";
-import { fetchLeagueNews } from "../espn/client.js";
+
 import { competitionCatalogWithMatches } from "../espn/competitions.js";
 import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
 import { foldForm, type FormMatchRow } from "../standings/form.js";
@@ -27,8 +27,7 @@ import { bad, requireUser } from "./shared.js";
 // Sync freshness for the ops surface: the client shows "data as of <time>"
 // rather than silently serving yesterday's football.
 import { syncHealthSnapshot } from "../sync/sentinel.js";
-import { syncMatchSummary } from "../sync/service.js";
-import type { LeagueSlug } from "../espn/types.js";
+
 
 const db = getDb();
 const FACES_DIR = path.join(PROJECT_ROOT, "public", "faces");
@@ -198,7 +197,7 @@ matchesRouter.get("/api/matches/:id/players", (req, res) => {
   if (!assertMatchAllowed(res, matchId)) return;
   const rows = all(
     db,
-    // This match's own position wins over the club roster's coarse label — the
+    // This match's own position wins over the club roster's coarse label � the
     // same rule the lineup read follows, so the stats table and the pitch can
     // never disagree about where a player played.
     `SELECT s.*, p.full_name, p.short_name,
@@ -218,7 +217,7 @@ matchesRouter.get("/api/matches/:id/players", (req, res) => {
 /**
  * Team-vs-team box score for the match detail comparison view, straight from
  * the per-match team stats synced off ESPN's summary boxscore
- * (match_team_stats). Goals ride on the matches row itself — the boxscore
+ * (match_team_stats). Goals ride on the matches row itself � the boxscore
  * table carries no goals column. A match whose stats have not synced yet
  * answers nulls, never 404: the match exists, the numbers just are not in.
  */
@@ -342,45 +341,14 @@ function timelineRows(matchId: string): Record<string, unknown>[] {
   );
 }
 
-/**
- * A finished match can sit in the database with no player stats at all: the
- * sync's "recent finishers" rule only re-summarizes while 1h < hoursSinceSync
- * < 26h, so a match that ended while the box was down — or more than 26h ago —
- * never gets its summary applied, and the lineups/timeline tabs read "not out
- * yet" for football that has already been played.
- *
- * Both reads below repair that on demand: zero rows for a finished match buys
- * one summary fetch, and because the summary writes match_player_stats and
- * timeline_events itself, the next reader of that match gets the cached result.
- *
- * The cooldown keeps a public route from becoming a fetch amplifier: a fixture
- * ESPN has no summary for keeps coming back empty, and without it every single
- * request for that match would hit ESPN again. One attempt per match per 10
- * minutes, in-memory on purpose — this server is one process, the same rule the
- * sync's own reconcile backoff follows.
- */
-const BACKFILL_RETRY_MS = 10 * 60_000;
-const backfillAttempts = new Map<string, number>();
-
-async function backfillSummary(league: string, matchId: string): Promise<void> {
-  const retriedAt = backfillAttempts.get(matchId) ?? 0;
-  if (retriedAt > Date.now()) return;
-  backfillAttempts.set(matchId, Date.now() + BACKFILL_RETRY_MS);
-  try {
-    await syncMatchSummary(league as LeagueSlug, matchId);
-  } catch (err) {
-    // A dead ESPN fetch must never 500 a read: the caller falls through to the
-    // empty state it would have shown before, exactly as if we had not tried.
-    console.error(`[lineups] backfill ${matchId} FAILED:`, String(err));
-  }
-}
+// DB-only: no on-demand ESPN fetch. Empty state is acceptable.
 
 matchesRouter.get("/api/matches/:id/lineups", async (req, res) => {
   const matchId = String(req.params.id);
   if (!assertMatchAllowed(res, matchId)) return;
-  let match = matchReadState(matchId);
+  const match = matchReadState(matchId);
   if (!match) return bad(res, "not found", 404);
-  let rows = lineupRows(matchId);
+  const rows = lineupRows(matchId);
 
   // DB-only: never fetch ESPN on the request path. Empty state is acceptable.
 
@@ -401,7 +369,7 @@ matchesRouter.get("/api/matches/:id/lineups", async (req, res) => {
 matchesRouter.get("/api/matches/:id/timeline", async (req, res) => {
   const matchId = String(req.params.id);
   if (!assertMatchAllowed(res, matchId)) return;
-  let events = timelineRows(matchId);
+  const events = timelineRows(matchId);
 
   // Same missed-summary repair as the lineups read above.
   // DB-only: no on-demand fetch.
@@ -454,7 +422,7 @@ matchesRouter.get("/api/matches/:id/h2h", async (req, res) => {
 
 /**
  * Both teams' last 5 results (`lastFiveGames[0..1]`). ESPN's home side is
- * block 0; the form string reads oldest→newest and the games carry the club's
+ * block 0; the form string reads oldest?newest and the games carry the club's
  * own scoreline. Same on-demand backfill as the reads above.
  */
 matchesRouter.get("/api/matches/:id/form", async (req, res) => {
@@ -492,7 +460,7 @@ interface MatchNewsRow {
 }
 
 /**
- * Articles from the summary `news` block — the same NewsArticle shape the
+ * Articles from the summary `news` block � the same NewsArticle shape the
  * league-news route serves, so the TeamPage card renders these unchanged.
  * A match with no stored articles gets the same one-shot backfill.
  */
@@ -523,7 +491,7 @@ matchesRouter.get("/api/matches/:id/news", async (req, res) => {
 /* ------------------------------------------------------------ teams */
 
 /*
- * All teams, optionally filtered by league — feeds the My Teams picker from
+ * All teams, optionally filtered by league � feeds the My Teams picker from
  * real data.
  *
  * `group_key` is the picker tab each side belongs under, and it is NOT the same
@@ -531,7 +499,7 @@ matchesRouter.get("/api/matches/:id/news", async (req, res) => {
  * the client would otherwise have no bucket to show them in. Domestic clubs
  * group under their own league slug; sides that turn up in an international
  * tournament are national teams ("international"); the rest are clubs we know
- * only through cup football ("other" — Ajax, Benfica, the European long tail).
+ * only through cup football ("other" � Ajax, Benfica, the European long tail).
  */
 matchesRouter.get("/api/teams", (req, res) => {
   const league = req.query.league ? String(req.query.league) : null;
@@ -563,13 +531,13 @@ matchesRouter.get("/api/teams", (req, res) => {
 // A single team with its season stat line.
 matchesRouter.get("/api/teams/:id", (req, res) => {
   const teamId = String(req.params.id);
-  // A blocked club has no team page either — same 404 as any unknown id.
+  // A blocked club has no team page either � same 404 as any unknown id.
   if (isBlockedTeamId(teamId)) return bad(res, "not found", 404);
   const team = get<{ league: string }>(db, "SELECT * FROM teams WHERE id = ?", [teamId]);
   if (!team) return bad(res, "not found", 404);
   if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
   // One season line for THIS club's own competition. 36 clubs also hold a row
-  // for their cup or European campaign, and those rows share the season label —
+  // for their cup or European campaign, and those rows share the season label �
   // so `ORDER BY season DESC` alone returned whichever row SQLite reached first,
   // a one-game cup line where the league season (the nine games the rest of
   // this page counts) should be. The club's own league wins; a cup-only club
@@ -644,7 +612,7 @@ matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
   let match: (typeof candidates)[number] | null = null;
   let rows: MatchPlayerRow[] = [];
   for (const c of candidates) {
-    let r = lineupRows(c.id);
+    const r = lineupRows(c.id);
     const teamRows = r.filter((row) => row.team_id === teamId);
     const isHome = c.home_team_id === teamId;
     const formation = isHome ? c.home_formation : c.away_formation;
@@ -831,8 +799,8 @@ matchesRouter.get("/api/teams/:id/understat", requireUser, (req, res) => {
 
 /* ------------------------------------------------------------ season stat boards */
 
-// Season player stats per league — sortable leaderboard (the "most assists and
-// goals and… everything" tables).
+// Season player stats per league � sortable leaderboard (the "most assists and
+// goals and� everything" tables).
 matchesRouter.get("/api/leagues/:league/players", (req, res) => {
   const league = String(req.params.league);
   if (!isAllowedLeague(league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
@@ -906,7 +874,7 @@ interface NewsArticle {
   byline: string | null;
   imageUrl: string | null;
   webUrl: string | null;
-  /** ESPN club ids the article is tagged with — the ids the app already uses. */
+  /** ESPN club ids the article is tagged with � the ids the app already uses. */
   teamIds: string[];
 }
 
@@ -914,69 +882,6 @@ interface NewsArticle {
  * One league's news for one minute. A club page asks for its club's slice of
  * the league feed, so without this cache twenty clubs in one league would mean
  * twenty identical ESPN calls for the same six articles.
- */
-const newsCache = new Map<string, { at: number; payload: NewsArticle[] }>();
-const NEWS_TTL_MS = 60_000;
-
-/**
- * ESPN article → our shape. Every field is optional at the edge, and the feed
- * mixes in non-story cards, so anything without an id is dropped rather than
- * rendered as an empty row.
- */
-function toNewsArticle(raw: unknown): NewsArticle | null {
-  if (!raw || typeof raw !== "object") return null;
-  const a = raw as {
-    id?: unknown;
-    headline?: unknown;
-    description?: unknown;
-    published?: unknown;
-    byline?: unknown;
-    images?: unknown;
-    links?: { web?: { href?: unknown } };
-    categories?: unknown;
-  };
-  if (a.id == null || String(a.id) === "") return null;
-
-  const images = Array.isArray(a.images) ? a.images : [];
-  // The "header" crop is the wide one; a logo or a square thumb letterboxes.
-  const image =
-    images.find((i) => (i as { type?: unknown } | null)?.type === "header") ?? images[0];
-  const imageUrl = (image as { url?: unknown } | undefined)?.url;
-
-  const categories = Array.isArray(a.categories) ? a.categories : [];
-  const teamIds = categories.flatMap((c) => {
-    const cat = c as { type?: unknown; team?: { id?: unknown } } | null;
-    return cat?.type === "team" && cat.team?.id != null ? [String(cat.team.id)] : [];
-  });
-
-  return {
-    id: String(a.id),
-    headline: typeof a.headline === "string" ? a.headline : "",
-    description: typeof a.description === "string" ? a.description : "",
-    published: typeof a.published === "string" ? a.published : "",
-    byline: typeof a.byline === "string" && a.byline ? a.byline : null,
-    imageUrl: typeof imageUrl === "string" && imageUrl ? imageUrl : null,
-    webUrl: typeof a.links?.web?.href === "string" ? a.links.web.href : null,
-    teamIds,
-  };
-}
-
-async function getLeagueNews(league: LeagueSlug): Promise<NewsArticle[]> {
-  const cached = newsCache.get(league);
-  if (cached && Date.now() - cached.at < NEWS_TTL_MS) return cached.payload;
-  const raw = (await fetchLeagueNews(league)) as { articles?: unknown };
-  const payload = (Array.isArray(raw.articles) ? raw.articles : [])
-    .map(toNewsArticle)
-    .filter((a): a is NewsArticle => a != null);
-  newsCache.set(league, { at: Date.now(), payload });
-  return payload;
-}
-
-/**
- * League news, optionally narrowed to one club. The team-scoped ESPN path
- * (/teams/{id}/news) returns nothing for soccer — ESPN only populates it for
- * US sports — so a league feed plus a team.id filter is the only route to
- * per-club news. Public: it is the same content ESPN serves to anyone.
  */
 matchesRouter.get("/api/leagues/:league/news", (req, res) => {
   const league = String(req.params.league);
