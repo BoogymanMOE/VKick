@@ -437,6 +437,54 @@ export async function syncRosters(): Promise<void> {
 }
 
 /**
+ * Boot-time repair pass: make sure every top-five club has a squad and every
+ * finished match has a summary (formation + XI), so a team page is never
+ * empty on a fresh or partially-synced database. Runs once per process in the
+ * background so it never blocks boot.
+ */
+export async function backfillMissingDataOnBoot(): Promise<void> {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  try {
+    const missingPlayers = get<{ c: number }>(
+      db,
+      `SELECT COUNT(*) AS c FROM teams t
+       WHERE t.league IN (${LEAGUES.map(() => "?").join(",")})
+         AND NOT EXISTS (SELECT 1 FROM players p WHERE p.team_id = t.id)`,
+      [...LEAGUES],
+    )?.c ?? 0;
+    if (missingPlayers > 0) {
+      log(`boot backfill: ${missingPlayers} club(s) have no squad - running roster sync`);
+      await syncRosters();
+    }
+
+    const missingMatches = all<{ id: string; league: string }>(
+      db,
+      `SELECT m.id, m.league FROM matches m
+       WHERE m.status = 'finished'
+         AND m.league IN (${LEAGUES.map(() => "?").join(",")})
+         AND NOT EXISTS (SELECT 1 FROM match_player_stats s WHERE s.match_id = m.id)`,
+      [...LEAGUES],
+    );
+    if (missingMatches.length > 0) {
+      log(`boot backfill: ${missingMatches.length} finished match(es) missing summaries`);
+      let ok = 0;
+      for (const m of missingMatches) {
+        try {
+          await syncMatchSummary(m.league as LeagueSlug, m.id);
+          ok += 1;
+        } catch (err) {
+          console.error(`[sync] boot backfill ${m.league}/${m.id} FAILED:`, String(err));
+        }
+        await sleep(200);
+      }
+      log(`boot backfill: summaries ${ok}/${missingMatches.length}`);
+    }
+  } catch (err) {
+    console.error("[sync] boot backfill error:", String(err));
+  }
+}
+
+/**
  * Season standings for every domestic league in the catalog (big five + the
  * wider domestic set) — cups and internationals correctly have no table.
  *
@@ -569,6 +617,12 @@ export function startSyncLoop(): void {
     .finally(() => {
       understatRunning = false;
     });
+
+  // Boot repair: make sure no club is left without a squad or a latest
+  // formation on a partially-synced database. Runs in the background.
+  void backfillMissingDataOnBoot().catch((err) =>
+    console.error("[sync] boot backfill error:", String(err)),
+  );
 
   // The live loop: summary of live matches every LIVE_SUMMARY_SECONDS.
   // A plain interval (not cron) because the cadence is env-configurable and
