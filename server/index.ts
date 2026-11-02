@@ -52,7 +52,6 @@ import { liveRouter } from "./routes/live.js";
 import { apiNotFound, apiErrorHandler } from "./http/middleware.js";
 
 const app = express();
-import zlib from "node:zlib";
 const db = getDb();
 
 // Restore-on-boot: if DB is empty, fetch latest snapshot from GitHub releases.
@@ -64,24 +63,23 @@ async function restoreFromGitHubIfEmpty(): Promise<void> {
   try {
     const count = get<{ c: number }>(db, "SELECT COUNT(*) AS c FROM teams", []);
     if ((count?.c ?? 0) > 0) return;
-    console.log("[restore] DB empty, fetching latest backup from GitHub...");
-    const releasesRes = await fetch(`https://api.github.com/repos/${repo}/releases`, {
+    console.log("[restore] DB empty, fetching latest backup from GitHub repo...");
+    const dirRes = await fetch(`https://api.github.com/repos/${repo}/contents/backups`, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "VKickBot/1.0" },
     });
-    if (!releasesRes.ok) throw new Error(`releases list ${releasesRes.status}`);
-    const releases = await releasesRes.json();
-    if (!Array.isArray(releases) || releases.length === 0) throw new Error("no releases");
-    const latest = releases[0];
-    const asset = (latest.assets ?? []).find((a: any) => String(a.name).endsWith(".db.gz"));
-    if (!asset) throw new Error("no .db.gz asset");
-    const assetRes = await fetch(asset.url, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/octet-stream", "User-Agent": "VKickBot/1.0" },
+    if (!dirRes.ok) throw new Error(`contents list ${dirRes.status}`);
+    const files = await dirRes.json();
+    if (!Array.isArray(files)) throw new Error("no files");
+    const backups = files.filter((f: any) => /^matchday-.*\.db$/.test(f.name)).sort((a: any, b: any) => b.name.localeCompare(a.name));
+    if (backups.length === 0) throw new Error("no backup files");
+    const latest = backups[0];
+    const rawRes = await fetch(latest.download_url, {
+      headers: { Authorization: `Bearer ${token}`, "User-Agent": "VKickBot/1.0" },
     });
-    if (!assetRes.ok) throw new Error(`asset download ${assetRes.status}`);
-    const gz = Buffer.from(await assetRes.arrayBuffer());
-    const dbBuf = zlib.gunzipSync(gz);
+    if (!rawRes.ok) throw new Error(`download ${rawRes.status}`);
+    const dbBuf = Buffer.from(await rawRes.arrayBuffer());
     fs.writeFileSync(dbPath, dbBuf);
-    console.log(`[restore] restored ${dbBuf.length} bytes from ${asset.name}`);
+    console.log(`[restore] restored ${dbBuf.length} bytes from ${latest.name}`);
   } catch (err) {
     console.error("[restore] failed:", String(err));
   }
