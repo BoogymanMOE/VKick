@@ -191,8 +191,6 @@ const ADVANCED_ROLES = new Set([
   "AM-M",
   "LW",
   "RW",
-  "LM",
-  "RM",
   "W-L",
   "W-R",
   "ST",

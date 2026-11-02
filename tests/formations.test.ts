@@ -469,6 +469,41 @@ function testUnknownPositionsStayVisible(): void {
   assert.equal(placed.slots.flat().filter((player) => player?.id === "unknown").length, 1, "unknown player appears once");
 }
 
+function testPositionAwarePlacement(): void {
+  const c = (id: string, espn: string | null, jersey: number, unit: Unit): SlotCandidate => ({
+    id, espnPosition: espn, jersey, unit,
+  });
+  const bayern: SlotCandidate[] = [
+    c("u", "CD-R", 2, "DEF"), c("k", "CD-L", 3, "DEF"),
+    c("kimmich", "RM", 6, "MID"), c("kane", "F", 9, "FWD"),
+    c("davies", "LB", 19, "DEF"), c("laimer", "RB", 27, "DEF"),
+    c("urbig", "G", 40, "GK"), c("pavlovic", "LM", 45, "MID"),
+    c("olise", "AM-R", 17, "MID"), c("gnabry", "AM-L", 7, "MID"),
+    c("saibari", "AM", 34, "MID"),
+  ];
+  const { slots } = placePublishedXI("4-2-3-1", bayern);
+  const defRow = slots[3];
+  assert.equal(defRow[1]?.id, "davies", "Davies (LB) lands in LB slot, not CB");
+  const holdRow = slots[2];
+  assert.ok(holdRow.some((p) => p?.id === "pavlovic"), "Pavlovic in holding pair");
+  assert.ok(!holdRow.some((p) => p?.id === "gnabry"), "Gnabry not in holding pair");
+  const attackRow = slots[1];
+  assert.ok(attackRow.some((p) => p?.id === "gnabry"), "Gnabry in attacking three");
+}
+
+function testFallbackPlacement(): void {
+  const c = (id: string, jersey: number, unit: Unit): SlotCandidate => ({ id, espnPosition: null, jersey, unit });
+  const xs: SlotCandidate[] = [
+    c("a", 10, "DEF"), c("b", 4, "DEF"), c("c", 5, "DEF"), c("d", 2, "DEF"),
+    c("g", 1, "GK"),
+    c("m1", 8, "MID"), c("m2", 6, "MID"), c("m3", 10, "MID"),
+    c("f1", 9, "FWD"), c("f2", 11, "FWD"), c("f3", 7, "FWD"),
+  ];
+  const { slots } = placePublishedXI("4-3-3", xs);
+  const defRow = slots[2];
+  assert.equal(defRow.filter(Boolean).length, 4, "all 4 defenders placed");
+}
+
 function testCompareSquad(): void {
   const sorted = [
     c("gk", "G", 1, "GK"),
@@ -503,5 +538,7 @@ export function runFormationTests(): void {
   testFormationPlaceTiebreak();
   testCompareSquad();
   testUnknownPositionsStayVisible();
+  testPositionAwarePlacement();
+  testFallbackPlacement();
   console.log(`  formations: ${FORMATIONS.length} shapes, unit mapping, XI rules, slot placement OK`);
 }

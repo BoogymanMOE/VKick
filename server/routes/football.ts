@@ -640,6 +640,7 @@ matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
         row.player_id as string | number,
       ),
       espnPosition: typeof row.espn_position === "string" ? row.espn_position : null,
+      formationPlace: typeof row.formation_place === "string" ? row.formation_place : null,
       started: Number(row.started) === 1,
       availability: row.availability_status
         ? {
