@@ -96,3 +96,11 @@ A team's `color` (from the DB) tints its own fallback badge, tactical discs, and
 
 - Pitch motif: faint pitch-line watermark (center circle / grid lines at 4% opacity) behind prediction cards — brand texture, present but quiet.
 - Shot Plotter reads as a pitch: turf plate under white markings, cells as the tappable grid, selected zone lifts 6% with a volt wash.
+
+## Persistence
+
+VKick runs on Render free tier, which has no persistent disk and resets the filesystem on every deploy. To survive deploys:
+- Nightly (or on first request after midnight UTC if the service slept): VACUUM the SQLite DB to a gzip file, push to a private GitHub release.
+- On boot: if the DB is empty, restore from the latest GitHub release before starting the sync loop.
+- The sync pipeline then refetches any matches missed during the downtime.
+Data loss window: up to 24 hours of matches. The sync catches up within ~1 hour after restore. No persistent disk required, no Turso migration needed.

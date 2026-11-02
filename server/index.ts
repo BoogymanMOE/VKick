@@ -52,7 +52,43 @@ import { liveRouter } from "./routes/live.js";
 import { apiNotFound, apiErrorHandler } from "./http/middleware.js";
 
 const app = express();
+import zlib from "node:zlib";
 const db = getDb();
+
+// Restore-on-boot: if DB is empty, fetch latest snapshot from GitHub releases.
+async function restoreFromGitHubIfEmpty(): Promise<void> {
+  const token = (process.env.GITHUB_TOKEN ?? "").trim();
+  const repo = (process.env.BACKUP_GITHUB_REPO ?? "").trim();
+  const dbPath = process.env.SQLITE_PATH ?? "./data/matchday.db";
+  if (!token || !repo) return;
+  try {
+    const count = get<{ c: number }>(db, "SELECT COUNT(*) AS c FROM teams", []);
+    if ((count?.c ?? 0) > 0) return;
+    console.log("[restore] DB empty, fetching latest backup from GitHub...");
+    const releasesRes = await fetch(`https://api.github.com/repos/${repo}/releases`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "VKickBot/1.0" },
+    });
+    if (!releasesRes.ok) throw new Error(`releases list ${releasesRes.status}`);
+    const releases = await releasesRes.json();
+    if (!Array.isArray(releases) || releases.length === 0) throw new Error("no releases");
+    const latest = releases[0];
+    const asset = (latest.assets ?? []).find((a: any) => String(a.name).endsWith(".db.gz"));
+    if (!asset) throw new Error("no .db.gz asset");
+    const assetRes = await fetch(asset.url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/octet-stream", "User-Agent": "VKickBot/1.0" },
+    });
+    if (!assetRes.ok) throw new Error(`asset download ${assetRes.status}`);
+    const gz = Buffer.from(await assetRes.arrayBuffer());
+    const dbBuf = zlib.gunzipSync(gz);
+    fs.writeFileSync(dbPath, dbBuf);
+    console.log(`[restore] restored ${dbBuf.length} bytes from ${asset.name}`);
+  } catch (err) {
+    console.error("[restore] failed:", String(err));
+  }
+}
+
+// Run restore before seed load (fire-and-forget, but await is fine at boot)
+await restoreFromGitHubIfEmpty();
 
 // Load committed seed if the database is empty (fresh disk).
 try {
