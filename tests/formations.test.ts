@@ -486,9 +486,11 @@ function testPositionAwarePlacement(): void {
   assert.equal(defRow[0]?.id, "davies", "Davies (LB) lands in LB slot, not CB");
   const holdRow = slots[2];
   assert.ok(holdRow.some((p) => p?.id === "kimmich"), "Kimmich in holding pair");
-  assert.ok(holdRow.some((p) => p?.id === "gnabry"), "Gnabry in holding pair");
+  assert.ok(holdRow.some((p) => p?.id === "pavlovic"), "Pavlovic in holding pair");
   const attackRow = slots[1];
-  assert.ok(attackRow.some((p) => p?.id === "pavlovic"), "Pavlovic in attacking three");
+  assert.ok(attackRow.some((p) => p?.id === "gnabry"), "Gnabry in attacking three");
+  assert.ok(attackRow.some((p) => p?.id === "olise"), "Olise in attacking three");
+  assert.ok(attackRow.some((p) => p?.id === "saibari"), "Saibari in attacking three");
 }
 
 function testFallbackPlacement(): void {

@@ -348,7 +348,8 @@ function bucketOf(pos: string): string {
   if (p.includes("CB") || (p.includes("CD") && !p.includes("DM"))) return "centerback";
   if (p.includes("LB") || p.includes("RB") || p.includes("WB") || p.includes("FB")) return "fullback";
   if (p.includes("AM") || p.includes("CAM")) return "am";
-  if (p.includes("LW") || p.includes("RW") || p.includes("LM") || p.includes("RM") || p.includes("W")) return "winger";
+  if (p.includes("LW") || p.includes("RW") || p.includes("W")) return "winger";
+  if (p.includes("LM") || p.includes("RM")) return "cm";
   if (p.includes("CM") || p === "M" || p === "MID" || p.includes("M-")) return "cm";
   if (p.includes("ST") || p.includes("CF") || p.includes("FW") || p.includes("F") || p.includes("LF") || p.includes("RF") || p.includes("SS")) return "striker";
   return "other";
