@@ -58,3 +58,13 @@ desktop.ini
 # vite
 .vite/
 .ui-shots
+
+# downloaded player faces (regenerate via npm run download-faces)
+public/faces/*.png
+public/faces/*.jpg
+public/faces/*.webp
+public/faces/*.txt
+public/faces/manifest.json
+scripts/team-qid-map.json
+scripts/team-qid-unmatched.json
+scripts/download-faces-wiki-progress.json
