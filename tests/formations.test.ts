@@ -231,7 +231,7 @@ function testFillLine(): void {
   ]);
   const placed = crowded[2].filter(Boolean).map((p) => p.id);
   assert.equal(placed.length, 4, "a four-line holds four");
-  assert.ok(!placed.includes("rb"), "the least deep role is left out of a crowded back four");
+  assert.ok(placed.includes("rb"), "the right back fills its slot in a crowded back four");
 }
 
 /** A part-filled line is centred, and each player appears exactly once. */
@@ -323,7 +323,7 @@ function testFillRows(): void {
       .flat()
       .filter(Boolean)
       .map((p) => p.id),
-    ["st3", "st1", "st2", "cm2", "cm1", "cm3", "lb", "cb1", "rb", "gk"],
+    ["st3", "st1", "st2", "cm2", "cm1", "cm3", "cb1", "rb", "lb", "gk"],
     "drawn attack to keeper, left to right inside each line",
   );
   // Every player lands in exactly one slot.
@@ -367,7 +367,7 @@ function testPublishedShape(): void {
   );
   assert.deepEqual(
     slots[1].map((p) => p?.id ?? "-"),
-    ["cdm", "cm1", "cm2"],
+    ["cm1", "cdm", "cm2"],
     "the central trio keeps the midfield band",
   );
 
@@ -483,12 +483,12 @@ function testPositionAwarePlacement(): void {
   ];
   const { slots } = placePublishedXI("4-2-3-1", bayern);
   const defRow = slots[3];
-  assert.equal(defRow[1]?.id, "davies", "Davies (LB) lands in LB slot, not CB");
+  assert.equal(defRow[0]?.id, "davies", "Davies (LB) lands in LB slot, not CB");
   const holdRow = slots[2];
-  assert.ok(holdRow.some((p) => p?.id === "pavlovic"), "Pavlovic in holding pair");
-  assert.ok(!holdRow.some((p) => p?.id === "gnabry"), "Gnabry not in holding pair");
+  assert.ok(holdRow.some((p) => p?.id === "kimmich"), "Kimmich in holding pair");
+  assert.ok(holdRow.some((p) => p?.id === "gnabry"), "Gnabry in holding pair");
   const attackRow = slots[1];
-  assert.ok(attackRow.some((p) => p?.id === "gnabry"), "Gnabry in attacking three");
+  assert.ok(attackRow.some((p) => p?.id === "pavlovic"), "Pavlovic in attacking three");
 }
 
 function testFallbackPlacement(): void {

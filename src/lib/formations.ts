@@ -191,6 +191,8 @@ const ADVANCED_ROLES = new Set([
   "AM-M",
   "LW",
   "RW",
+  "LM",
+  "RM",
   "W-L",
   "W-R",
   "ST",
@@ -247,35 +249,146 @@ export function fillRows<T extends SlotCandidate>(rows: PitchRow[], candidates: 
     const rowIndexes = rows.map((row, index) => (row.unit === unit ? index : -1)).filter((i) => i >= 0);
     if (rowIndexes.length === 0) continue;
 
-    // Deepest role first, then across the pitch, then formation slot / number.
     const pool = candidates
       .filter((c) => c.unit === unit)
       .sort((a, b) => {
-        const depth = advanceFor(a.espnPosition) - advanceFor(b.espnPosition);
-        if (depth !== 0) return depth;
-        const side =
-          SIDE_ORDER[slotRoleFor(a.espnPosition, a.unit).side] -
-          SIDE_ORDER[slotRoleFor(b.espnPosition, b.unit).side];
-        if (side !== 0) return side;
-        return tieBreak(a) - tieBreak(b);
+        const ca = centrality(a.espnPosition);
+        const cb = centrality(b.espnPosition);
+        if (ca !== cb) return ca - cb;
+        return (a.jersey ?? 99) - (b.jersey ?? 99);
       });
+    const deepestIndex = rowIndexes[rowIndexes.length - 1];
 
-    let next = 0;
-    // Rows run attack -> keeper, so a unit's *last* row is its deepest band and
-    // has to be dealt the deepest roles first.
+    const used = new Set<number>();
+
+    // Process deepest row first so holding/defensive roles get priority.
     for (const rowIndex of [...rowIndexes].reverse()) {
       const size = rows[rowIndex].size;
-      const taken = pool.slice(next, next + size);
-      next += size;
-      // Left to right for display, centred when the line isn't full.
-      const ordered = orderForLine(taken);
-      const start = Math.floor((size - ordered.length) / 2);
-      ordered.forEach((player, i) => {
+      const isLast = rowIndex === deepestIndex;
+      const roles = slotRolesFor(unit, size, isLast);
+
+      const chosen: Array<T | null> = new Array(size).fill(null);
+
+      for (let col = 0; col < size; col++) {
+        const role = roles[col];
+        let bestIdx = -1;
+        let bestCost = Infinity;
+        let bestJersey = Infinity;
+        for (let k = 0; k < pool.length; k++) {
+          if (used.has(k)) continue;
+          const cost = slotCost(pool[k].espnPosition, role, unit);
+          const jersey = pool[k].jersey ?? 99;
+          if (cost < bestCost || (cost === bestCost && jersey < bestJersey)) {
+            bestCost = cost;
+            bestIdx = k;
+            bestJersey = jersey;
+          }
+        }
+        if (bestIdx >= 0) {
+          chosen[col] = pool[bestIdx];
+          used.add(bestIdx);
+        }
+      }
+
+      const filled = chosen.filter(Boolean) as T[];
+      const start = Math.floor((size - filled.length) / 2);
+      filled.forEach((player, i) => {
         slots[rowIndex][start + i] = player;
       });
     }
   }
   return slots;
+}
+
+/** Implicit slot role for a band of the pitch, left-to-right. */
+function slotRolesFor(unit: Unit, size: number, isLastMid: boolean): string[] {
+  if (unit === "GK") return Array(size).fill("GK");
+  if (unit === "DEF") {
+    if (size === 3) return ["LCB", "CB", "RCB"];
+    if (size === 4) return ["LB", "LCB", "RCB", "RB"];
+    if (size === 5) return ["LWB", "LCB", "CB", "RCB", "RWB"];
+    return Array(size).fill("CB");
+  }
+  if (unit === "MID") {
+    if (isLastMid) {
+      if (size === 1) return ["CDM"];
+      if (size === 2) return ["L-CDM", "R-CDM"];
+      if (size === 3) return ["LCM", "CDM", "RCM"];
+      if (size === 4) return ["LM", "LCM", "RCM", "RM"];
+      if (size === 5) return ["LM", "LCM", "CDM", "RCM", "RM"];
+    } else {
+      if (size === 1) return ["CAM"];
+      if (size === 2) return ["LM", "RM"];
+      if (size === 3) return ["LW", "CAM", "RW"];
+      if (size === 4) return ["LW", "LCM", "RCM", "RW"];
+      if (size === 5) return ["LW", "LCM", "CAM", "RCM", "RW"];
+    }
+    return Array(size).fill("CM");
+  }
+  if (unit === "FWD") {
+    if (size === 1) return ["ST"];
+    if (size === 2) return ["LF", "RF"];
+    if (size === 3) return ["LW", "ST", "RW"];
+    return Array(size).fill("ST");
+  }
+  return Array(size).fill("OTHER");
+}
+
+function sideOfRole(role: string): SlotSide {
+  const r = role.toUpperCase();
+  if (r.startsWith("L")) return "left";
+  if (r.startsWith("R")) return "right";
+  return "center";
+}
+
+function bucketOf(pos: string): string {
+  const p = pos.toUpperCase();
+  if (p.includes("GK") || p === "G") return "gk";
+  if (p.includes("CDM") || p.includes("DM")) return "cdm";
+  if (p.includes("CB") || (p.includes("CD") && !p.includes("DM"))) return "centerback";
+  if (p.includes("LB") || p.includes("RB") || p.includes("WB") || p.includes("FB")) return "fullback";
+  if (p.includes("AM") || p.includes("CAM")) return "am";
+  if (p.includes("LW") || p.includes("RW") || p.includes("LM") || p.includes("RM") || p.includes("W")) return "winger";
+  if (p.includes("CM") || p === "M" || p === "MID" || p.includes("M-")) return "cm";
+  if (p.includes("ST") || p.includes("CF") || p.includes("FW") || p.includes("F") || p.includes("LF") || p.includes("RF") || p.includes("SS")) return "striker";
+  return "other";
+}
+
+function centrality(pos: string | null): number {
+  if (!pos) return 1;
+  const p = pos.toUpperCase();
+  if (p === "CM" || p === "CDM" || p === "DM" || p === "AM" || p === "CAM" || p === "M" || p === "MID") return 0;
+  if (p.includes("CM") || p.includes("CDM") || p.includes("DM") || p.includes("AM") || p.includes("CAM")) return 0;
+  return 1; // wide (LM, RM, LW, RW, etc.)
+}
+
+function broadBucket(pos: string): Unit {
+  const b = bucketOf(pos);
+  if (b === "gk") return "GK";
+  if (b === "fullback" || b === "centerback") return "DEF";
+  if (b === "striker") return "FWD";
+  if (b === "other") return "OTHER";
+  return "MID";
+}
+
+function roleGroup(pos: string): string {
+  const b = bucketOf(pos);
+  if (b === "cdm" || b === "cm") return "holding";
+  if (b === "am" || b === "winger") return "attacking";
+  return b;
+}
+function slotCost(playerPos: string | null, slotRole: string, unit?: Unit): number {
+  if (!playerPos) return 4;
+  const p = playerPos.toUpperCase();
+  if (p === slotRole) return 0;
+  if (sideOfRole(p) === sideOfRole(slotRole) && bucketOf(p) === bucketOf(slotRole)) return 1;
+  if (bucketOf(p) === bucketOf(slotRole)) return 2;
+  if (roleGroup(p) === roleGroup(slotRole)) return 3;
+  const pBroad = broadBucket(p);
+  const sBroad = broadBucket(slotRole);
+  if (pBroad === sBroad && pBroad !== "OTHER") return 5;
+  if (unit) return 5;
+  return 6;
 }
 
 /** One horizontal band of the pitch. */
