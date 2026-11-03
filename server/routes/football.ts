@@ -197,7 +197,7 @@ matchesRouter.get("/api/matches/:id/players", (req, res) => {
   if (!assertMatchAllowed(res, matchId)) return;
   const rows = all(
     db,
-    // This match's own position wins over the club roster's coarse label � the
+    // This match's own position wins over the club roster's coarse label - the
     // same rule the lineup read follows, so the stats table and the pitch can
     // never disagree about where a player played.
     `SELECT s.*, p.full_name, p.short_name,
@@ -217,7 +217,7 @@ matchesRouter.get("/api/matches/:id/players", (req, res) => {
 /**
  * Team-vs-team box score for the match detail comparison view, straight from
  * the per-match team stats synced off ESPN's summary boxscore
- * (match_team_stats). Goals ride on the matches row itself � the boxscore
+ * (match_team_stats). Goals ride on the matches row itself - the boxscore
  * table carries no goals column. A match whose stats have not synced yet
  * answers nulls, never 404: the match exists, the numbers just are not in.
  */
@@ -460,7 +460,7 @@ interface MatchNewsRow {
 }
 
 /**
- * Articles from the summary `news` block � the same NewsArticle shape the
+ * Articles from the summary `news` block - the same NewsArticle shape the
  * league-news route serves, so the TeamPage card renders these unchanged.
  * A match with no stored articles gets the same one-shot backfill.
  */
@@ -491,7 +491,7 @@ matchesRouter.get("/api/matches/:id/news", async (req, res) => {
 /* ------------------------------------------------------------ teams */
 
 /*
- * All teams, optionally filtered by league � feeds the My Teams picker from
+ * All teams, optionally filtered by league - feeds the My Teams picker from
  * real data.
  *
  * `group_key` is the picker tab each side belongs under, and it is NOT the same
@@ -499,7 +499,7 @@ matchesRouter.get("/api/matches/:id/news", async (req, res) => {
  * the client would otherwise have no bucket to show them in. Domestic clubs
  * group under their own league slug; sides that turn up in an international
  * tournament are national teams ("international"); the rest are clubs we know
- * only through cup football ("other" � Ajax, Benfica, the European long tail).
+ * only through cup football ("other" - Ajax, Benfica, the European long tail).
  */
 matchesRouter.get("/api/teams", (req, res) => {
   const league = req.query.league ? String(req.query.league) : null;
@@ -531,13 +531,13 @@ matchesRouter.get("/api/teams", (req, res) => {
 // A single team with its season stat line.
 matchesRouter.get("/api/teams/:id", (req, res) => {
   const teamId = String(req.params.id);
-  // A blocked club has no team page either � same 404 as any unknown id.
+  // A blocked club has no team page either - same 404 as any unknown id.
   if (isBlockedTeamId(teamId)) return bad(res, "not found", 404);
   const team = get<{ league: string }>(db, "SELECT * FROM teams WHERE id = ?", [teamId]);
   if (!team) return bad(res, "not found", 404);
   if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
   // One season line for THIS club's own competition. 36 clubs also hold a row
-  // for their cup or European campaign, and those rows share the season label �
+  // for their cup or European campaign, and those rows share the season label -
   // so `ORDER BY season DESC` alone returned whichever row SQLite reached first,
   // a one-game cup line where the league season (the nine games the rest of
   // this page counts) should be. The club's own league wins; a cup-only club
@@ -800,8 +800,8 @@ matchesRouter.get("/api/teams/:id/understat", requireUser, (req, res) => {
 
 /* ------------------------------------------------------------ season stat boards */
 
-// Season player stats per league � sortable leaderboard (the "most assists and
-// goals and� everything" tables).
+// Season player stats per league - sortable leaderboard (the "most assists and
+// goals and- everything" tables).
 matchesRouter.get("/api/leagues/:league/players", (req, res) => {
   const league = String(req.params.league);
   if (!isAllowedLeague(league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
@@ -875,7 +875,7 @@ interface NewsArticle {
   byline: string | null;
   imageUrl: string | null;
   webUrl: string | null;
-  /** ESPN club ids the article is tagged with � the ids the app already uses. */
+  /** ESPN club ids the article is tagged with - the ids the app already uses. */
   teamIds: string[];
 }
 

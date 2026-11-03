@@ -5,7 +5,7 @@ import { getDb, all, get } from "../db/index.js";
 import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
 import { onMatchFinished } from "../predictions/resolver.js";
 import { syncAllFavoriteTeamsUnderstat, syncLeagueUnderstatTables } from "./understat.js";
-import { recomputeSeasonStats, recomputeSeasonTeamStats } from "./teamStats.js";
+import { getSeasonKey, recomputeSeasonStats, recomputeSeasonTeamStats } from "./teamStats.js";
 import { queueGoalAlerts, queueMatchdayAlerts } from "../notifications.js";
 import { broadcast } from "../live/sse.js";
 import { seasonWindow } from "../scoring/season.js";
@@ -119,16 +119,13 @@ export const FIXTURE_HORIZON_DAYS = 95;
  * of a fixed day window.
  */
 export async function syncSeasonFull(): Promise<void> {
-  const months: string[] = [];
-  // Aug 2026 -> May 2027
-  for (let y = 2026; y <= 2027; y++) {
-    const startM = y === 2026 ? 8 : 1;
-    const endM = y === 2027 ? 5 : 12;
-    for (let m = startM; m <= endM; m++) {
-      months.push(`${y}${String(m).padStart(2, "0")}`);
-    }
-  }
   for (const league of LEAGUES) {
+    const seasonKey = getSeasonKey(db, league);
+    const startYear = Number(seasonKey.split("-")[0]);
+    const endYear = startYear + 1;
+    const months: string[] = [];
+    for (let m = 8; m <= 12; m++) months.push(`${startYear}${String(m).padStart(2, "0")}`);
+    for (let m = 1; m <= 5; m++) months.push(`${endYear}${String(m).padStart(2, "0")}`);
     for (const ym of months) {
       try {
         const json = await fetchScoreboard(league, ym);
