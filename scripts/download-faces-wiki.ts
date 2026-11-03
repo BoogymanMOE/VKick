@@ -26,9 +26,17 @@ const CHECKPOINT_PATH = path.join(ROOT, "scripts", "download-faces-wiki-progress
 const LEAGUE_ORDER = ["eng.1", "fra.1", "esp.1", "ita.1", "ger.1"] as const;
 const UA = "VKickBot/1.0 (contact: github.com/BoogymanMOE/VKick)";
 const API = "https://en.wikipedia.org/w/api.php";
+const MANIFEST_PATH = path.join(FACES_DIR, "manifest.json");
+const WD_API = "https://www.wikidata.org/w/api.php";
 const BATCH = 50;
 const MAX_CONCURRENCY = 2;
 const MAXLAG = 5;
+let teamQidMap: Record<string, string> = {};
+let top5Qids = new Set<string>();
+try {
+  teamQidMap = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "team-qid-map.json"), "utf8"));
+  top5Qids = new Set(Object.values(teamQidMap));
+} catch {}
 
 const args = process.argv.slice(2);
 const REFRESH = args.includes("--refresh");
@@ -102,8 +110,18 @@ function isFootballPage(p: PageResult): boolean {
 }
 
 async function apiGet(params: Record<string, string>): Promise<any> {
-  const full = { ...params, format: "json", maxlag: String(MAXLAG) };
-  const url = API + "?" + new URLSearchParams(full).toString();
+  return apiGetLang("en", params, API);
+}
+
+async function apiGetLang(lang: string, params: Record<string, string>, base?: string): Promise<any> {
+  const apiUrl = base ?? `https://${lang}.wikipedia.org/w/api.php`;
+  const full = { ...params, format: "json" };
+  if (lang === "en" || lang === "es" || lang === "fr" || lang === "de" || lang === "fa") {
+    (full as any).maxlag = String(MAXLAG);
+  }
+  const url = apiUrl + "?" + new URLSearchParams(full).toString();
+  // throttle: 1 request per 500ms per language API
+  await sleep(500);
   for (let attempt = 0; attempt <= 6; attempt++) {
     try {
       const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(30_000) });
@@ -130,18 +148,45 @@ async function apiGet(params: Record<string, string>): Promise<any> {
   throw new Error("unreachable");
 }
 
+async function wdFetch(params: Record<string, string>): Promise<any> {
+  await sleep(1500);
+  const url = WD_API + "?" + new URLSearchParams({ ...params, format: "json" }).toString();
+  for (let attempt = 0; attempt <= 6; attempt++) {
+    try {
+      const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(30_000) });
+      if (res.status === 429 || res.status === 503) {
+        const retry = parseInt(res.headers.get("retry-after") ?? "10", 10);
+        await sleep((retry || 10) * 1000 * (attempt + 1));
+        continue;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json?.error) throw new Error(`WD error: ${json.error.code} ${json.error.info}`);
+      return json;
+    } catch (e) {
+      if (attempt === 6) throw e;
+      await sleep(2000 * (attempt + 1));
+    }
+  }
+  throw new Error("unreachable");
+}
+
 async function fetchPages(titles: string[]): Promise<Map<string, PageResult>> {
+  return fetchPagesLang("en", titles, "192");
+}
+
+async function fetchPagesLang(lang: string, titles: string[], thumbsize: string): Promise<Map<string, PageResult>> {
   if (titles.length === 0) return new Map();
   const map = new Map<string, PageResult>();
   const chunks: string[][] = [];
   for (let i = 0; i < titles.length; i += BATCH) chunks.push(titles.slice(i, i + BATCH));
   await Promise.all(chunks.map((chunk) => withConcurrency(async () => {
-    const json = await apiGet({
+    const json = await apiGetLang(lang, {
       action: "query",
       titles: chunk.join("|"),
       prop: "pageimages|description|pageprops|categories",
       piprop: "thumbnail",
-      pithumbsize: "192",
+      pithumbsize: thumbsize,
       redirects: "1",
       cllimit: "20",
     });
@@ -149,12 +194,9 @@ async function fetchPages(titles: string[]): Promise<Map<string, PageResult>> {
     for (const pid of Object.keys(pages)) {
       const p = pages[pid] as PageResult;
       map.set(p.title, p);
-      // also map by original title (redirects)
     }
-    // map normalized titles
     const normalized = json?.query?.normalized ?? [];
     for (const n of normalized) {
-      // find page with to title
       const p = map.get(n.to);
       if (p) map.set(n.from, p);
     }
@@ -190,6 +232,40 @@ async function fetchImageInfo(filenames: string[]): Promise<Map<string, { author
     }
   })));
   return map;
+}
+
+function hasOccupation(claims: any, qid: string): boolean {
+  const arr = claims?.P106 ?? [];
+  return Array.isArray(arr) && arr.some((c: any) => c?.mainsnak?.datavalue?.value?.id === qid);
+}
+function p54Teams(claims: any): string[] {
+  const arr = claims?.P54 ?? [];
+  if (!Array.isArray(arr)) return [];
+  return arr.map((c: any) => c?.mainsnak?.datavalue?.value?.id).filter(Boolean);
+}
+async function searchWikidataEntities(name: string): Promise<Array<{ id: string; label: string; description?: string; aliases?: string[] }>> {
+  try {
+    const json = await wdFetch({ action: "wbsearchentities", search: name, language: "en", limit: "5" });
+    return json?.search ?? [];
+  } catch {
+    return [];
+  }
+}
+async function fetchWikidataEntity(qid: string): Promise<{ claims: any; sitelinks: any } | null> {
+  try {
+    const json = await wdFetch({ action: "wbgetentities", ids: qid, props: "claims|sitelinks" });
+    const ent = json?.entities?.[qid];
+    if (!ent) return null;
+    return { claims: ent.claims ?? {}, sitelinks: ent.sitelinks ?? {} };
+  } catch {
+    return null;
+  }
+}
+function fallbackLangOrder(league: string): string[] {
+  if (league === "esp.1") return ["es", "fr", "de", "fa"];
+  if (league === "fra.1") return ["fr", "es", "de", "fa"];
+  if (league === "ger.1") return ["de", "es", "fr", "fa"];
+  return ["es", "fr", "de", "fa"];
 }
 
 async function downloadImage(url: string, dest: string): Promise<boolean> {
@@ -268,7 +344,7 @@ async function main() {
   let downloaded = 0;
   let noImage = 0;
   let rejected = 0;
-  const credits: Array<{ player_id: string; source_url: string; author: string | null; license: string | null }> = [];
+  const credits: Array<{ player_id: string; player_name?: string; source?: string; source_url: string; author: string | null; license: string | null }> = [];
   const rejects: string[] = [];
 
   // load existing rejects
@@ -300,20 +376,21 @@ async function main() {
     const ftTitles = toFetch.map((p) => `${p.full_name} (footballer)`);
     const ftPages = await fetchPages(ftTitles);
 
-    const chosen = new Map<string, { title: string; page: PageResult }>(); // playerId -> chosen
+    const chosen = new Map<string, { title: string; page: PageResult; source: string }>(); // playerId -> chosen
     const needPlain: DbPlayer[] = [];
 
     for (const p of toFetch) {
       const title = `${p.full_name} (footballer)`;
       const page = ftPages.get(title);
       if (page && isFootballPage(page) && page.thumbnail?.source) {
-        chosen.set(p.id, { title, page });
+        chosen.set(p.id, { title, page, source: "en_wikipedia" });
       } else {
         needPlain.push(p);
       }
     }
 
     // Pass 2: plain name titles
+    const stillUnmatched: DbPlayer[] = [];
     if (needPlain.length > 0) {
       const plainTitles = needPlain.map((p) => p.full_name);
       const plainPages = await fetchPages(plainTitles);
@@ -321,13 +398,33 @@ async function main() {
         const title = p.full_name;
         const page = plainPages.get(title);
         if (page && isFootballPage(page) && page.thumbnail?.source) {
-          // reject disambiguation (already handled) and require unique-ish: if page title != name, still ok if football
-          chosen.set(p.id, { title, page });
+          chosen.set(p.id, { title, page, source: "en_wikipedia" });
         } else {
-          // rejected
-          rejected++;
-          rejects.push(`${p.id}\t${p.full_name}\t${p.team_name}\t${p.league}\tno football page`);
+          stillUnmatched.push(p);
         }
+      }
+    }
+
+    // Pass 3: other-language Wikipedia by player name (batched)
+    const langs = fallbackLangOrder(toFetch[0]?.league ?? "");
+    for (const lang of langs) {
+      const candidates = stillUnmatched.filter((p) => !chosen.has(p.id));
+      if (candidates.length === 0) continue;
+      const titles = candidates.map((p) => p.full_name);
+      const pages = await fetchPagesLang(lang, titles, "200");
+      for (const p of candidates) {
+        if (chosen.has(p.id)) continue;
+        const page = pages.get(p.full_name);
+        if (page && !page.missing && page.thumbnail?.source) {
+          chosen.set(p.id, { title: page.title ?? p.full_name, page, source: `${lang}_wikipedia` });
+        }
+      }
+    }
+
+    for (const p of stillUnmatched) {
+      if (!chosen.has(p.id)) {
+        rejected++;
+        rejects.push(`${p.id}\t${p.full_name}\t${p.team_name}\t${p.league}\tno football page`);
       }
     }
 
@@ -372,6 +469,7 @@ async function main() {
       credits.push({
         player_id: p.id,
         player_name: p.full_name,
+        source: chosen.get(p.id)!.source,
         source_url: url,
         author: info?.author ?? null,
         license: info?.license ?? null,
@@ -402,6 +500,35 @@ async function main() {
   if (missingCredits.length > 0) {
     throw new Error(`Missing credits for ${missingCredits.length} files: ${missingCredits.slice(0, 10).join(", ")}`);
   }
+
+  // manifest with source breakdown
+  function inferSource(c: any): string {
+    if (c?.source) return c.source;
+    const url = String(c?.source_url ?? "");
+    if (url.includes("commons.wikimedia.org")) return "wikidata_p18";
+    if (url.includes("es.wikipedia.org")) return "es_wikipedia";
+    if (url.includes("fr.wikipedia.org")) return "fr_wikipedia";
+    if (url.includes("de.wikipedia.org")) return "de_wikipedia";
+    if (url.includes("fa.wikipedia.org")) return "fa_wikipedia";
+    if (url.includes("wikipedia.org")) return "en_wikipedia";
+    return "unknown";
+  }
+  const counts: Record<string, number> = {
+    wikidata_p18: 0, en_wikipedia: 0, es_wikipedia: 0, fr_wikipedia: 0, de_wikipedia: 0, fa_wikipedia: 0,
+  };
+  for (const c of merged) {
+    const s = inferSource(c);
+    if (counts[s] !== undefined) counts[s]++;
+  }
+  const manifest = {
+    generated_at: new Date().toISOString(),
+    source: "download-faces-wiki",
+    leagues: leaguesToRun,
+    total_faces: webpFiles.length,
+    ...counts,
+  };
+  await writeFile(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\\n");
+  console.log(`Source breakdown:`, counts);
 
   // summary
   const webpCount = fs.readdirSync(FACES_DIR).filter((f) => f.endsWith(".webp")).length;

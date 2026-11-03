@@ -104,3 +104,7 @@ VKick runs on Render free tier, which has no persistent disk and resets the file
 - On boot: if the DB is empty, restore from the latest GitHub release before starting the sync loop.
 - The sync pipeline then refetches any matches missed during the downtime.
 Data loss window: up to 24 hours of matches. The sync catches up within ~1 hour after restore. No persistent disk required, no Turso migration needed.
+
+## Media
+
+Player faces are downloaded from Wikipedia. The pipeline first tries the English Wikipedia pageimages API; if no thumbnail is found there, it falls back to the player's other-language Wikipedia articles (Spanish, French, German, Persian), preferring the player's home-league language first. Source breakdown is recorded in `public/faces/manifest.json`.
