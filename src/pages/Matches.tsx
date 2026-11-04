@@ -289,8 +289,9 @@ export default function Matches() {
         weekday: "long",
         day: "numeric",
         month: "short",
+        calendar: lang === "fa" ? "persian" : "gregory",
       }),
-    [locale],
+    [locale, lang],
   );
   const digitsFormatter = useMemo(
     () => new Intl.NumberFormat(lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : "en", { useGrouping: false }),

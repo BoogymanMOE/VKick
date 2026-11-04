@@ -144,10 +144,10 @@ export const MatchRow = memo(function MatchRow({
 
   // The accessible name carries the state: score + minute when in play, final
   // score when finished, kickoff time when upcoming.
-  const status = isLive
-    ? `${t("status.live")} ${minuteLabel ?? ""}`.trim()
-    : isHalftime
-      ? t("matches.groupHalftime")
+  const status = isHalftime
+    ? t("matches.groupHalftime")
+    : isLive
+      ? `${t("status.live")} ${minuteLabel ?? ""}`.trim()
       : isFinished
         ? pens
           ? `${t("status.finished")}, ${pens.home}-${pens.away} ${t("match.pensShort")}`
@@ -156,7 +156,7 @@ export const MatchRow = memo(function MatchRow({
             : t("status.finished")
         : (notPlayedLabel ?? clock);
   const label = hasScore
-    ? `${home} ${match.homeScore ?? 0}-${match.awayScore ?? 0}, ${away} ${match.awayScore ?? 0}, ${status}`
+    ? `${home} ${match.homeScore ?? 0}, ${away} ${match.awayScore ?? 0}, ${status}`
     : `${home} ${t("common.versus")} ${away}, ${status}`;
 
   const homeFollowed = isFavoriteTeam(match.home.id);

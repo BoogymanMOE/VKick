@@ -104,8 +104,9 @@ export function DateStrip({ selected, onSelect, daysWithFavorites }: DateStripPr
         weekday: "long",
         day: "numeric",
         month: "long",
+        calendar: lang === "fa" ? "persian" : "gregory",
       }),
-    [locale],
+    [locale, lang],
   );
 
   // Local midnight as a number: it changes once a day (the feed re-renders
@@ -160,7 +161,7 @@ export function DateStrip({ selected, onSelect, daysWithFavorites }: DateStripPr
             // "Today" keeps its own marker even when another day is selected,
             // so the user always knows where they are in the week.
             aria-current={isToday ? "date" : undefined}
-            aria-label={fullDate.format(day)}
+            aria-label={`${t(`dates.day.${DAY_NAMES[day.getDay()]}`)} ${digits.format(dayNum)}, ${fullDate.format(day)}`}
             onClick={() => onSelect(day)}
             className={`relative flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl border text-center transition-all duration-[var(--t-fast)] active:scale-[0.96] after:absolute after:-inset-x-1 after:inset-y-0 after:content-[''] ${
               isSelected
