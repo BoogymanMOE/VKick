@@ -10,23 +10,28 @@ const FACES_DIR = path.join(ROOT, "public", "faces");
 const CREDITS_PATH = path.join(FACES_DIR, "credits.json");
 const REJECTS_PATH = path.join(ROOT, "scripts", "face-rejects-wikidata.txt");
 const UA = "VKickBot/1.0 (contact: github.com/BoogymanMOE/VKick)";
-const SEARCH_DELAY_MS = 2000;
+const SEARCH_DELAY_MS = 5000;
 const teamQidMap = JSON.parse(fs.readFileSync(path.join(ROOT, "scripts", "team-qid-map.json"), "utf8"));
 const top5Qids = new Set(Object.values(teamQidMap));
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+const normalize = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
 
 async function fetchJson(url: string): Promise<any> {
   for (let attempt = 0; attempt <= 6; attempt++) {
-    const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20_000) });
-    if (res.status === 429 || res.status === 503) {
-      const retry = parseInt(res.headers.get("retry-after") ?? "10", 10);
-      await sleep((retry || 10) * 1000 * (attempt + 1));
-      continue;
+    try {
+      const res = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30_000) });
+      if (res.status === 429 || res.status === 503) {
+        const retry = parseInt(res.headers.get("retry-after") ?? "10", 10);
+        await sleep((retry || 10) * 1000 * (attempt + 1));
+        continue;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      if (attempt === 6) throw e;
+      await sleep(2000 * (attempt + 1));
     }
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json();
   }
   throw new Error("max retries");
 }
@@ -89,11 +94,12 @@ async function main() {
   const unique = [...new Set(missingIds)];
   console.log("Missing players to try via Wikidata:", unique.length);
 
-  const players = all<{ id: string; full_name: string; short_name: string | null; team_id: string; league: string }>(
+  const allPlayers = all<{ id: string; full_name: string; short_name: string | null; team_id: string; league: string }>(
     db,
-    `SELECT p.id, p.full_name, p.short_name, p.team_id, t.league FROM players p JOIN teams t ON t.id=p.team_id WHERE p.id IN (${unique.map(() => "?").join(",")})`,
-    unique,
+    `SELECT p.id, p.full_name, p.short_name, p.team_id, t.league FROM players p JOIN teams t ON t.id=p.team_id`,
   );
+  const wanted = new Set(unique);
+  const players = allPlayers.filter((p) => wanted.has(p.id));
   const byId = new Map(players.map((p) => [p.id, p]));
 
   const rejects: string[] = [];
@@ -112,8 +118,8 @@ async function main() {
     try {
       const hits = await searchEntities(p.full_name);
       await sleep(SEARCH_DELAY_MS);
-      const normName = p.full_name.toLowerCase();
-      const exact = hits.filter((h) => h.label.toLowerCase() === normName || (h.aliases ?? []).some((a) => a.toLowerCase() === normName));
+      const normName = normalize(p.full_name);
+      const exact = hits.filter((h) => normalize(h.label) === normalize(p.full_name) || (h.aliases ?? []).some((a) => normalize(a) === normalize(p.full_name)));
       if (exact.length === 0) {
         rejects.push(`${id}\t${p.full_name}\t${p.team_id}\t${p.league}\tno wikidata match`);
         continue;
@@ -122,12 +128,12 @@ async function main() {
       // pick best candidate
       let chosen: { qid: string; claims: any } | null = null;
       for (const h of exact) {
-        const claims = claimsMap[h.id] ?? {};
+        const claims = claimsMap[h.id]?.claims ?? {};
         if (!hasOccupation(claims, "Q937857")) continue;
         const teams = p54Teams(claims);
         const current = teamQid ? teams.includes(teamQid) : false;
         const top5 = teams.some((t: string) => top5Qids.has(t));
-        if (!current && !top5) continue;
+        // accept any verified footballer; team match is a preference only
         chosen = { qid: h.id, claims };
         break;
       }

@@ -1,14 +1,8 @@
-eng.1	349	122268	Adam Smith
-eng.1	349	314790	Alex Scott
-eng.1	349	312182	Daniel Jebbison
 eng.1	349	289824	Djordje Petrovic
 eng.1	349	102368	Evanilson
-eng.1	349	279155	James Hill
 eng.1	349	303804	Juanlu Sanchez
 eng.1	349	361809	Junior Kroupi
-eng.1	349	223452	Lewis Cook
 eng.1	349	3130136	Mack Allan
-eng.1	349	357719	Rayan
 eng.1	349	377736	Veljko Milosavljevic
 eng.1	349	291269	William Dennis
 eng.1	349	353151	Álvaro Rodríguez
@@ -19,7 +13,6 @@ eng.1	359	399007	Maalik Hashi
 eng.1	359	399893	Marcell Washington
 eng.1	359	400284	Marli Salmon
 eng.1	359	393424	Theo Julienne
-eng.1	362	382839	Alysson
 eng.1	362	393425	Bradley Burrowes
 eng.1	362	366248	George Hemmings
 eng.1	362	235319	James Wright
@@ -31,11 +24,8 @@ eng.1	362	409310	Owen Asemota
 eng.1	362	349075	Triston Rowe
 eng.1	337	362266	Benjamin Fredrick
 eng.1	337	249527	Ellery Balcombe
-eng.1	337	231049	Fábio Carvalho
 eng.1	337	246309	Josh Dasilva
 eng.1	337	394418	Kaye Furo
-eng.1	337	362203	Kim Ji-Soo
-eng.1	337	228547	Mamadou Sangare
 eng.1	337	342029	Yehor Yarmoliuk
 eng.1	331	327170	Amario Cozier-Duberry
 eng.1	331	387655	Charalambos Kostoulas
@@ -68,19 +58,14 @@ eng.1	363	399564	Reggie Watson
 eng.1	363	308217	Romeo Lavia
 eng.1	388	319404	Aurèle Amenda
 eng.1	388	169619	Ben Wilson
-eng.1	388	240495	Brandon Thomas-Asante
 eng.1	388	307069	Carl Rushworth
-eng.1	388	143007	Daniel Bentley
 eng.1	388	246954	Ephron Mason-Clark
-eng.1	388	236912	Gustavo Hamer
 eng.1	388	206172	Jay Da Silva
 eng.1	388	277614	Josh Eccles
 eng.1	388	294308	Kaine Kesler Hayden
 eng.1	388	281139	Milan van Ewijk
 eng.1	384	358084	Caleb Kporha
-eng.1	384	272585	Chris Richards
 eng.1	384	403867	Dean Benamar
-eng.1	384	400110	George King
 eng.1	384	388605	Honest Ahanor
 eng.1	384	3114844	Lucca Benetton
 eng.1	384	380963	Sebastian Williams
@@ -89,52 +74,33 @@ eng.1	384	374519	Zavier Gozo
 eng.1	368	367559	Braiden Graham
 eng.1	368	378458	Harrison Armstrong
 eng.1	368	392052	Harvey Foster
-eng.1	368	276220	James Garner
 eng.1	368	410322	Malik Olayiwola
 eng.1	368	311963	Merlin Röhl
-eng.1	368	4946	Michael Keane
 eng.1	368	301166	Thierno Barry
 eng.1	368	148515	Tom King
 eng.1	368	340640	Tyler Dibling
 eng.1	370	362553	Alex Borto
 eng.1	370	376050	Bradley Slade
 eng.1	370	365351	Chibuzo Nwoko
-eng.1	370	12172	César Palacios
-eng.1	370	313230	David Affengruber
 eng.1	370	87297	Gonzalo García
 eng.1	370	409541	Josh King
-eng.1	370	330764	Kevin
 eng.1	370	392697	Macauley Zepa
-eng.1	370	301525	Rodrigo Muniz
 eng.1	306	414372	Archie Howard
-eng.1	306	311173	Brooke Norton-Cuffy
-eng.1	306	326187	Charlie Hughes
 eng.1	306	387657	Christos Mouzakitis
 eng.1	306	308216	Darko Gyabi
 eng.1	306	306055	Eliot Matazo
 eng.1	306	366363	Ilyas Ansah
 eng.1	306	354149	Jens Hjerto Dahl
-eng.1	306	168424	John Egan
-eng.1	306	153613	Matt Crooks
 eng.1	306	356212	Nobel Mendy
-eng.1	306	193010	Oliver McBurnie
-eng.1	306	249851	Regan Slater
-eng.1	306	243576	Ryan Giles
-eng.1	306	310599	Tim Iroegbunam
 eng.1	306	328740	Óscar Zambrano
 eng.1	373	308891	Anis Mehmeti
-eng.1	373	183326	Cameron Humphreys
 eng.1	373	243648	Cedric Kipre
 eng.1	373	318680	Fatawu Issahaku
 eng.1	373	256607	Florentino
-eng.1	373	269343	Jack Clarke
-eng.1	373	139744	Jack Taylor
-eng.1	373	20975	Julio Enciso
 eng.1	373	3132863	Matthew Charles Compton
 eng.1	373	222300	Sasa Lukic
 eng.1	357	408489	Alfie Cresswell
 eng.1	357	346913	Darryl Ombang
-eng.1	357	194801	Harry Wilson
 eng.1	357	30116	Ilia Gruev
 eng.1	357	408959	Jayden Lienou
 eng.1	357	346662	Jean-Mattéo Bahoya
@@ -151,7 +117,6 @@ eng.1	364	289840	Vitezslav Jaros
 eng.1	364	397545	Víctor Muñoz
 eng.1	364	379855	Wellity Lucky
 eng.1	382	382966	Allan Elias
-eng.1	382	361355	Claudio Echeverri
 eng.1	382	3129530	Dexter Oliver
 eng.1	382	410320	Floyd Samba
 eng.1	382	299910	Josko Gvardiol
@@ -165,7 +130,6 @@ eng.1	360	325550	Dermot Mee
 eng.1	360	205081	Jack Fletcher
 eng.1	360	386199	Jaydan Kamason
 eng.1	360	358180	Shea Lacey
-eng.1	360	393138	Tyler Fletcher
 eng.1	360	397881	Tynan Thompson
 eng.1	361	353304	Aidan Harris
 eng.1	361	308979	Amar Dedic
@@ -176,13 +140,8 @@ eng.1	361	319267	Lukás Hornícek
 eng.1	361	416448	Mason Miley
 eng.1	361	418769	Michael Mills
 eng.1	361	346776	Miodrag Pivas
-eng.1	361	323986	Nico González
 eng.1	361	385593	Vakho Salia
-eng.1	393	134190	Chris Wood
-eng.1	393	213718	Ibrahim Sangaré
-eng.1	393	287869	Igor Jesus
 eng.1	393	338876	Jair Paula
-eng.1	393	233241	John Victor
 eng.1	393	254118	Nicolás Domínguez
 eng.1	393	238990	Nikola Milenkovic
 eng.1	393	348303	Zach Abbott
@@ -190,7 +149,6 @@ eng.1	366	282645	Danny Ballard
 eng.1	366	3111009	Felix Scott
 eng.1	366	236211	Jack Whittaker
 eng.1	366	243578	Jenson Arron Jones
-eng.1	366	417825	Jocelin Ta Bi
 eng.1	366	48106	Juan Angulo
 eng.1	366	3111010	Tom Proctor
 eng.1	366	392107	Trey Ogunsuyi
@@ -198,7 +156,6 @@ eng.1	366	387460	Tymur Tutierov
 eng.1	367	324393	Antonín Kinsky
 eng.1	367	6327	Ben Davies
 eng.1	367	372016	Callum Olusesi
-eng.1	367	304470	Sávio
 esp.1	96	150374	Adrián Rodríguez
 esp.1	96	379231	Aitor Mañas
 esp.1	96	265997	Antonio Blanco
@@ -207,11 +164,9 @@ esp.1	96	255931	Facundo Garcés
 esp.1	96	346534	Grégoire Swiderski
 esp.1	96	415206	Izei Hernandez
 esp.1	96	176312	Jonny
-esp.1	96	207236	Lucas Boyé
 esp.1	96	198832	Mariano Díaz
 esp.1	96	83494	Miguel Rodríguez
 esp.1	96	396612	Mikel Rodriguez
-esp.1	96	213535	Moussa Diarra
 esp.1	96	262491	Nahuel Tenaglia
 esp.1	96	318084	Nicolás Valentini
 esp.1	96	373796	Rúben Montero
@@ -220,7 +175,6 @@ esp.1	96	149306	Ville Koski
 esp.1	96	415276	Xanet Oláiz
 esp.1	96	382532	Youssef Lekhedim
 esp.1	96	374621	Ángel Pérez
-esp.1	93	379707	Adama Boiro
 esp.1	93	403371	Alejandro Rego
 esp.1	93	3122617	Aritz Conde Albiol
 esp.1	93	422929	Christian Imga
@@ -236,31 +190,23 @@ esp.1	93	414350	Selton Sánchez
 esp.1	93	217225	Yeray
 esp.1	93	209579	Álex Berenguer
 esp.1	93	347411	Álex Padilla
-esp.1	1068	166396	Alejandro Grimaldo
 esp.1	1068	328289	Arnau Ortiz
 esp.1	1068	345110	Arnau Solà
 esp.1	1068	324192	Carlos Martín
 esp.1	1068	368593	Daniel Martinez
 esp.1	1068	395579	Javier Gil
 esp.1	1068	184757	Jorge Castillo
-esp.1	1068	354378	Jorge Domínguez
-esp.1	1068	277206	Julián Álvarez
-esp.1	1068	140791	Koke
-esp.1	1068	274197	Lee Kang-In
 esp.1	1068	421996	Miguel Cubo
 esp.1	1068	318554	Obed Vargas
 esp.1	1068	336634	Pablo Barrios
-esp.1	1068	74630	Rodrigo Mendoza
 esp.1	1068	405502	Salvi Esquivel
 esp.1	83	403575	Brian Fariñas
 esp.1	83	187946	Dominik Livakovic
 esp.1	83	416502	Ebrima Tunkara
 esp.1	83	403587	Eder Aller
-esp.1	83	128714	Eric García
 esp.1	83	403583	Guillem Víctor
 esp.1	83	403576	Iker Rodríguez
 esp.1	83	365318	Jesse Bisiwu
-esp.1	83	297362	Joan García
 esp.1	83	416511	Jordi Pesquer
 esp.1	83	416496	Orian Goren
 esp.1	83	131634	Wojciech Szczesny
@@ -269,7 +215,6 @@ esp.1	83	94947	Álex Campos
 esp.1	83	300377	Álvaro Cortés
 esp.1	85	240235	Aleix Febas
 esp.1	85	274272	Altay Bayindir
-esp.1	85	144720	Andrei Radu
 esp.1	85	414292	Andrés Antañón
 esp.1	85	3100794	Enrique Ribes
 esp.1	85	3100792	Frank Germain Jonathan Miller
@@ -291,27 +236,23 @@ esp.1	90	300333	Arnau Comas
 esp.1	90	414299	Bil Nsongo
 esp.1	90	3102992	Bright Ede
 esp.1	90	181288	Germán Parreño
-esp.1	90	384414	Jonathan Asp Jensen
 esp.1	90	300926	Leo Román
 esp.1	90	356639	Lorenzo Amatucci
 esp.1	90	321112	Lucas Noubi
 esp.1	90	297353	Mario Soriano Carreno
 esp.1	90	375392	Martín Ochoa
 esp.1	90	279609	Riki Rodríguez
-esp.1	90	375566	Rubén
 esp.1	90	362123	Teun Gijselhart
 esp.1	90	157568	Ximo Navarro
 esp.1	90	324945	Yayo
 esp.1	90	96060	Álvaro Fernández
 esp.1	3751	336840	Abiel Osorio
 esp.1	3751	330433	Alejandro Iturbe
-esp.1	3751	376156	Ali Houary
 esp.1	3751	371608	Buba Sangaré
 esp.1	3751	318284	Facundo Buonanotte
 esp.1	3751	301684	Fer Niño
 esp.1	3751	297358	Germán Valera
 esp.1	3751	273424	Gonzalo Villar
-esp.1	3751	421310	Javier Morcillo
 esp.1	3751	259916	José Antonio Morente
 esp.1	3751	301406	Marc Aguado
 esp.1	3751	389448	Matia Barzic
@@ -319,22 +260,18 @@ esp.1	3751	167297	Pedro Bigas
 esp.1	3751	323286	Roy Revivo
 esp.1	3751	319781	Rubén Sánchez
 esp.1	3751	402185	Umaru
-esp.1	3751	265995	Víctor Chust
 esp.1	3751	326234	Yago Alonso
 esp.1	3751	3129647	Álvaro Padilla Escribá
 esp.1	88	420443	Adama Timera
 esp.1	88	3111255	Alejandro Santiago Vargas
 esp.1	88	311571	Bryan Zaragoza
-esp.1	88	355902	Cala
 esp.1	88	255272	Edu Expósito
-esp.1	88	135422	Enrique García
 esp.1	88	3111247	Jan Peries Duran
 esp.1	88	367946	Javi Hernandez
 esp.1	88	260243	Javier Puado
 esp.1	88	307270	Jofre Carreras
 esp.1	88	397289	José Ángel López
 esp.1	88	381681	Llorenç Serred
-esp.1	88	354621	Marcos Fernández
 esp.1	88	179211	Marko Dmitrovic
 esp.1	88	196914	Pere Milla
 esp.1	88	260242	Pol Lozano
@@ -346,14 +283,12 @@ esp.1	88	307915	Urko Gonzalez
 esp.1	88	277314	Vanja Drkusic
 esp.1	88	3139134	Víctor Mullerat Tomas
 esp.1	88	307419	Ángel Fortuño
-esp.1	2922	383912	Alberto Risco
 esp.1	2922	356080	Andrés García
 esp.1	2922	386256	Christantus Uche
 esp.1	2922	394958	Curro Burgos
 esp.1	2922	406832	Davinchi
 esp.1	2922	388898	Diego Ferrer
 esp.1	2922	181355	Djené
-esp.1	2922	307186	Francho Serrano
 esp.1	2922	3124560	Ibra Drammeh
 esp.1	2922	3121766	Ibrahima Danfakha Keita
 esp.1	2922	5327018	Irahima Danfakha Keita
@@ -362,13 +297,11 @@ esp.1	2922	395479	Jean Ives Valou
 esp.1	2922	384168	Jesús Martínez
 esp.1	2922	344245	Jirí Letácek
 esp.1	2922	376208	Joselu Pérez
-esp.1	2922	143643	Juanmi
 esp.1	2922	357147	Mario Martín
 esp.1	2922	284854	Martín Satriano
 esp.1	2922	3139281	Moha Achraf
 esp.1	2922	375400	Mohamed Hamdoune
 esp.1	2922	309838	Ramón Terrats
-esp.1	2922	359826	Sebastián Boselli
 esp.1	2922	3101327	Sebastián Salazar Trujillo
 esp.1	2922	411023	Vladyslav Kysil
 esp.1	2922	300111	Zaid Romero
@@ -389,7 +322,6 @@ esp.1	1538	415819	Kareem Tunde
 esp.1	1538	3129042	Manel Usedo Domingo
 esp.1	1538	300985	Manu Sánchez
 esp.1	1538	3129043	Marc Santos Gavilán
-esp.1	1538	409383	Nacho Pérez
 esp.1	1538	269339	Orio Rey
 esp.1	1538	316040	Pablo Cuñat
 esp.1	1538	384985	Paco Cortés
@@ -405,28 +337,24 @@ esp.1	99	388600	Andres Cespedes
 esp.1	99	324098	Carlos Dotor
 esp.1	99	355503	Carlos López
 esp.1	99	331785	Carlos Puga
-esp.1	99	388602	Chupete
 esp.1	99	331533	Daniel Lorenzo
 esp.1	99	297828	David Larrubia
 esp.1	99	350947	Diego Murillo
 esp.1	99	270610	Eneko Jauregui
 esp.1	99	312338	Haitam Abaida
 esp.1	99	371564	Izan Merino
-esp.1	99	180444	Joaquín Muñoz
 esp.1	99	184488	José Salinas
 esp.1	99	262061	Juan Berrocal
 esp.1	99	145565	Juan Cruz
 esp.1	99	3110513	Juani
 esp.1	99	301869	Julen Lobete
 esp.1	99	3110515	Otu Junior
-esp.1	99	271151	Pablo Martínez
 esp.1	99	376166	Rafa Garrido
 esp.1	99	357858	Rafa Rodríguez
 esp.1	99	292225	Ramón Enríquez
 esp.1	99	310869	Álex Pastor
 esp.1	99	319783	Ángel Recio
 esp.1	97	300284	Abel Bretones
-esp.1	97	144759	Aitor Fernández
 esp.1	97	264175	Alejandro Catena
 esp.1	97	3129002	Asier Bonel Aicua
 esp.1	97	209580	Enrique Barja
@@ -437,13 +365,8 @@ esp.1	97	307019	Jorge Herrando
 esp.1	97	170154	Lucas Torró
 esp.1	97	3128992	Mikel Bermejo Sola
 esp.1	97	403704	Rafa Fernández
-esp.1	97	296163	Raúl García
 esp.1	97	366598	Rockson Yeboah
-esp.1	97	178328	Rubén García
-esp.1	97	191360	Sergio Herrera
-esp.1	87	242007	Aarón Martín
 esp.1	87	300471	Alvaro Mantilla
-esp.1	87	286604	André Almeida
 esp.1	87	3141	Andrés Martín
 esp.1	87	414075	Andrés Vallecillo
 esp.1	87	421199	Carlos Sánchez
@@ -452,38 +375,18 @@ esp.1	87	289439	Giorgi Guliashvili
 esp.1	87	417250	Hugo Martín
 esp.1	87	3100788	Hugo Pérez Sañudo
 esp.1	87	417258	Iker Luque
-esp.1	87	330545	Iván Martín
 esp.1	87	3128976	Jorge Castellanos Del Olmo
-esp.1	87	178237	Jorge Salinas
 esp.1	87	334268	Juan Carlos Arana
 esp.1	87	323970	Julen Agirrezabala
 esp.1	87	394309	Laro Gómez
 esp.1	87	342654	Maguette Gueye
 esp.1	87	259839	Manu
-esp.1	87	107960	Matteo Prati
 esp.1	87	399278	Pablo García
 esp.1	87	282672	Pablo Ramon
 esp.1	87	361455	Pedro Felipe
 esp.1	87	400222	Simon Eriksson
 esp.1	87	279699	Íñigo Sainz
-esp.1	101	300878	Adrián Molina
-esp.1	101	287224	Andrei Ratiu
-esp.1	101	192893	Daniel Cárdenas
-esp.1	101	324505	Fran Pérez
-esp.1	101	3115984	Gnangoro Bouare Samake
-esp.1	101	3128651	Iván Alonso Martín
-esp.1	101	260740	Jorge de Frutos
-esp.1	101	415410	Marco Román
-esp.1	101	389447	Marco de las Sias
-esp.1	101	265996	Mujaid Sadick
-esp.1	101	264078	Pedro Díaz
-esp.1	101	386579	Pelayo Fernández
-esp.1	101	276847	Randy Nteka
-esp.1	101	377843	Rayane Belaid
-esp.1	101	409289	Samu Becerra
-esp.1	101	276652	Sergio Camello
 esp.1	244	268601	Aitor Ruibal
-esp.1	244	281558	Antony
 esp.1	244	359912	Facundo Bernal
 esp.1	244	213050	Fran García
 esp.1	244	411284	José Morante
@@ -491,19 +394,16 @@ esp.1	244	390091	Manu González
 esp.1	244	242008	Marc Roca
 esp.1	244	301526	Natan
 esp.1	244	322908	Nelson Deossa
-esp.1	244	70224	Rodrigo Riquelme
 esp.1	244	394885	Álvaro De Pablo
 esp.1	244	395941	Ángel Ortiz
 esp.1	86	3117407	Alexis Ciria
 esp.1	86	380286	Carlos Espí
 esp.1	86	376422	Daniel Yañez
 esp.1	86	405490	Illia Voloshyn
-esp.1	86	84349	Javier Navarro
 esp.1	86	405544	Jesús Fortea
 esp.1	86	388339	Joan Martínez
 esp.1	86	415478	Jorge Cestero
 esp.1	86	330352	Mario Rivas
-esp.1	86	388338	Raúl Asencio
 esp.1	86	409318	Sergio Martínez
 esp.1	86	350351	Sergio Mestre
 esp.1	86	409019	Thiago Pitarch
@@ -511,7 +411,6 @@ esp.1	89	368327	Aitor Fraga
 esp.1	89	366886	Alex Lebarbier
 esp.1	89	396613	Alex Marchal
 esp.1	89	406383	Gorka Carrera
-esp.1	89	363039	Héctor Fort
 esp.1	89	410486	Ibai Aguirre
 esp.1	89	379457	Iñaki Rupérez
 esp.1	89	406379	Job Ochieng
@@ -519,8 +418,6 @@ esp.1	89	388601	Jon Gorrotxategi
 esp.1	89	306263	Luka Sucic
 esp.1	89	396607	Luken Beitia
 esp.1	89	341367	Orri Óskarsson
-esp.1	89	326900	Pablo Marín
-esp.1	89	265993	Sergio Gómez
 esp.1	243	332246	Andrés Castrín
 esp.1	243	304213	Arouna Sangante
 esp.1	243	409486	Edu Altozano
@@ -535,17 +432,14 @@ esp.1	243	365821	Isaac Romero
 esp.1	243	5324162	Jesús Cruz Morales
 esp.1	243	250508	José Ángel Carmona
 esp.1	243	279738	Juan Iglesias
-esp.1	243	387493	Julio Díaz
 esp.1	243	356228	Manu Bueno
 esp.1	243	3131879	Manuel Ángel Castillo Rodríguez
 esp.1	243	203112	Marcão
 esp.1	243	375514	Miguel Sierra
 esp.1	243	422137	Nico Guillén
-esp.1	243	159135	Odisseas Vlachodimos
 esp.1	243	347359	Peque
 esp.1	243	119332	Rafael Romero
 esp.1	243	322993	Robbie Ure
-esp.1	243	277307	Youssouf Fofana
 esp.1	94	419048	Aaron Mayol
 esp.1	94	409380	Aimar Blázquez
 esp.1	94	413671	Alex Panach
@@ -560,7 +454,6 @@ esp.1	94	267477	Hugo Duro
 esp.1	94	388076	Iker Córdoba
 esp.1	94	3124771	Jaume Durá I Soler
 esp.1	94	16340	Javi Guerra
-esp.1	94	189804	Jesús Vázquez
 esp.1	94	282086	Justin de Haas
 esp.1	94	324582	Kayne Van Oevelen
 esp.1	94	264177	Luis Rioja
@@ -618,12 +511,10 @@ fra.1	174	316559	Názinho
 fra.1	174	299566	Oumar Konaté
 fra.1	174	411449	Pape Cabral
 fra.1	174	365789	Paris Brunner
-fra.1	174	258875	Philipp Köhn
 fra.1	174	362288	Sadibou Sané
 fra.1	174	3124794	Safouane Benzahra
 fra.1	174	388328	Samuel Nibombé
 fra.1	174	356925	Stanis Idumbo
-fra.1	174	310640	Vanderson
 fra.1	7868	301262	Amine El Ouazzani
 fra.1	7868	379227	Anthony Bermont
 fra.1	7868	421740	Bané Diatta
@@ -632,7 +523,6 @@ fra.1	7868	412871	Harouna Djibirin
 fra.1	7868	333218	Jacques Ekomie
 fra.1	7868	377899	Joseph Kalulu Kyatengwa
 fra.1	7868	3130908	Jules Bouffandeau
-fra.1	7868	3130907	Mamadou Diallo
 fra.1	7868	312399	Mamadou Simbakoli
 fra.1	7868	394476	Marius Louãr
 fra.1	7868	416401	Maël Gernigon
@@ -654,7 +544,7 @@ fra.1	6997	365783	Pathé Mboup
 fra.1	6997	397594	Raphaël Le Guen
 fra.1	6997	251556	Romain Cagnon
 fra.1	3236	246847	Ahmed Touba
-fra.1	3236	258270	Ayumu Seko
+fra.1	3236	255780	Arnaud Bodart
 fra.1	3236	388878	Daren Mosengo
 fra.1	3236	3132216	Djibril Ouziad
 fra.1	3236	411169	Enzo Koffi
@@ -663,7 +553,6 @@ fra.1	3236	388879	Guy Zohouri
 fra.1	3236	3140852	Hakim Dongopandji
 fra.1	3236	371557	Ismail Bouneb
 fra.1	3236	371558	Joan Tincres
-fra.1	3236	243514	Josh Maja
 fra.1	3236	325043	Kaito Mizuta
 fra.1	3236	319286	Mathéo Bodmer
 fra.1	3236	408085	Mouhamed N'Diaye
@@ -681,14 +570,12 @@ fra.1	2697	344518	Augustin Delbecque
 fra.1	2697	279137	Brahimi Bilal
 fra.1	2697	233702	Dame Guèye
 fra.1	2697	273021	Daouda Traoré
-fra.1	2697	30302	Djibril Sidibé
 fra.1	2697	277526	Edwin Quarshie
 fra.1	2697	417822	Enzo Vágner
 fra.1	2697	357006	Erwan Colas
 fra.1	2697	299457	Ewan Hatfout
 fra.1	2697	393721	Harold Voyer
 fra.1	2697	315460	Jean Vercruysse
-fra.1	2697	402816	João Almeida
 fra.1	2697	5326304	Lenny Videira
 fra.1	2697	268720	Louis Mafouta
 fra.1	2697	262482	Lucas Buades
@@ -699,7 +586,6 @@ fra.1	2697	397394	Noa Boissé
 fra.1	2697	310024	Raúl Torrente
 fra.1	2697	397317	Théo Eyoum
 fra.1	2697	407614	William Harhouz
-fra.1	175	308246	Abdallah Sima
 fra.1	175	387061	Andrija Bulatovic
 fra.1	175	364180	Franjo Ivanovic
 fra.1	175	403417	Ilan Jourdren
@@ -712,19 +598,14 @@ fra.1	175	350577	Pierre Ganiou
 fra.1	175	101451	Régis Gurtner
 fra.1	175	401306	Souleymane Sagnan
 fra.1	175	341720	Yassine Titraoui
-fra.1	166	340900	Alexsandro
-fra.1	166	255780	Arnaud Bodart
 fra.1	166	337855	Basar Önal
-fra.1	166	355971	Ethan Mbappé
 fra.1	166	231778	Gaetan Perrin
 fra.1	166	358999	Hamza Igmane
 fra.1	166	393321	Isaac Cossier
 fra.1	166	387346	Loun Srdanovic
 fra.1	166	417256	Matah Yondjio
-fra.1	166	304011	Maurits Kjaergaard
 fra.1	166	408359	Maxima Goffi
 fra.1	166	345988	Ngal'ayel Mukau
-fra.1	166	301648	Orlando Gill
 fra.1	166	400352	Soriba Diaoune
 fra.1	166	408358	Thomas Sajous
 fra.1	166	415421	Zadig Lanssade
@@ -733,11 +614,9 @@ fra.1	273	355870	Arthur Avom
 fra.1	273	417372	Daniel Semedo
 fra.1	273	137397	Formose Mendy
 fra.1	273	397392	Gabin Bernardeau
-fra.1	273	324565	Ibrahima Baldé
 fra.1	273	306535	Isaak Touré
 fra.1	273	309651	Isak Jensen
 fra.1	273	416429	Mamadou Koné
-fra.1	273	345529	Mohamed Bamba
 fra.1	273	345563	Nathaniel Adjei
 fra.1	273	315215	Noah Cadiou
 fra.1	273	315454	Noah Mbamba
@@ -746,12 +625,9 @@ fra.1	273	3145437	Samir Said Haribou
 fra.1	273	297345	Souleymane Faye
 fra.1	273	344634	Srdjan Kuzmic
 fra.1	273	258100	Tosin Aiyegun
-fra.1	167	285088	Abner
 fra.1	167	415054	Adil Hamdani
-fra.1	167	402949	Alejandro Rodríguez
 fra.1	167	5325687	Angel Daniel Garcia
 fra.1	167	5327620	Cluver Sambi Mbungu
-fra.1	167	320945	Felix Bacher
 fra.1	167	341375	Julien Duranville
 fra.1	167	362971	Justin Bengui Joao
 fra.1	167	379066	Kail Boudache
@@ -791,14 +667,11 @@ fra.1	2502	282597	Isak Jansson
 fra.1	2502	232670	Issiaga Camara
 fra.1	2502	3121791	Martin Ponsot
 fra.1	2502	236957	Mohamed Abdelmoneim
-fra.1	2502	176816	Morgan Sanson
 fra.1	2502	3127048	Nassim Laarej
-fra.1	2502	282676	Nathan N'Goumou
 fra.1	2502	298030	Niels Nkounkou
 fra.1	2502	3117261	Xavier Junior Mandza Tsiendi
 fra.1	2502	399717	Zoumana Diallo
 fra.1	6851	364746	Adama Camara
-fra.1	6851	403843	Emmanuel Mbemba
 fra.1	6851	5326108	Ibrahim Meïté
 fra.1	6851	304918	Ilan Kebbal
 fra.1	6851	257126	Jean-Phillipe Krasso
@@ -813,8 +686,6 @@ fra.1	6851	324325	Yoan Koré
 fra.1	6851	398780	Zabi Gueu
 fra.1	160	3143886	Adam Mouak
 fra.1	160	403981	David Boly
-fra.1	160	403578	Dro Fernández
-fra.1	160	196200	Lucas Hernández
 fra.1	160	248699	Matvei Safonov
 fra.1	160	290591	Nuno Mendes
 fra.1	160	403419	Quentin Ndjantou
@@ -826,20 +697,16 @@ fra.1	169	323850	Esteban Lepaul
 fra.1	169	401410	Gonçalo Oliveira
 fra.1	169	398977	Henrick Do Marcolino
 fra.1	169	414191	Kilian Belazzoug
-fra.1	169	372260	Mahamadou Nagida
-fra.1	169	257489	Mousa Al-Tamari
 fra.1	169	217668	Nicolas Lemaitre
 fra.1	169	190806	Przemyslaw Frankowski
 fra.1	169	243844	Sebastian Szymanski
 fra.1	180	380238	Benjamin Brantlind
 fra.1	180	362794	Conrad Harder
 fra.1	180	368325	Diogo Sousa
-fra.1	180	388392	Fabio Baldé
 fra.1	180	304256	Filip Jørgensen
 fra.1	180	408136	Gabriel Kerckaert
 fra.1	180	374221	Genesis Antwi
 fra.1	180	401738	Ghianny Kodia
-fra.1	180	290230	Giovanni Reyna
 fra.1	180	403982	Hermann Diandaga
 fra.1	180	305935	Ismael Doukoure
 fra.1	180	3117410	Jacobo Ortega Conde
@@ -851,23 +718,18 @@ fra.1	180	347919	Maximillian Oyedele
 fra.1	180	371973	Milosz Piekutowski
 fra.1	180	331082	Omari Kellyman
 fra.1	180	377782	Oso
-fra.1	180	353378	Pape Diop
 fra.1	180	350501	Samuel Amo-Ameyaw
 fra.1	180	418506	Tyrese Noubissie
 fra.1	180	371556	Yaya Diémé
 fra.1	180	418786	Yoann Becker
 fra.1	179	290030	Abu Francis
-fra.1	179	408251	Alexis Vossah
 fra.1	179	252740	Aron Donnum
 fra.1	179	422969	Aymen Ammaouch
 fra.1	179	306664	Casper Tengstedt
 fra.1	179	385000	Christ Tapé
 fra.1	179	362411	David Odogu
-fra.1	179	403310	Ilyas Azizi
 fra.1	179	397384	Ismail Diallo
-fra.1	179	380400	Julián Vignolo
 fra.1	179	322205	Mario Sauer
-fra.1	179	77072	Mark McKenzie
 fra.1	179	386251	Mathis Saka
 fra.1	179	371559	Mathys Niflore
 fra.1	179	396620	Naime Said Mchindra
@@ -910,7 +772,6 @@ ger.1	598	3113344	Mekhi Anthony Gray
 ger.1	598	245623	Michel Aebischer
 ger.1	598	268808	Stanley N'Soki
 ger.1	598	314184	Zeno Van Den Bosch
-ger.1	131	361258	Afonso Moreira
 ger.1	131	397120	Ben Hawighorst
 ger.1	131	5327243	Dustin Buck
 ger.1	131	5325769	Gabriel Minutillo
@@ -923,11 +784,9 @@ ger.1	132	405586	Cassiano Kiala
 ger.1	132	405585	David Daiber
 ger.1	132	3110056	David Podar-Stiube
 ger.1	132	409827	Jannis Bärtl
-ger.1	132	402841	Lennart Karl
 ger.1	132	417373	Maycon Cardozo
 ger.1	132	3104151	Tim Binder
 ger.1	132	324660	Tom Bischof
-ger.1	124	178380	Alexander Meyer
 ger.1	124	294317	Carney Chukwuemeka
 ger.1	124	401450	Enzo De Pina Duarte Dos Santos
 ger.1	124	387437	Filippo Mané
@@ -954,9 +813,7 @@ ger.1	268	403898	Mathieu Nguefack
 ger.1	268	238536	Moritz Nicolas
 ger.1	268	275805	Philipp Sander
 ger.1	268	258876	Robin Hack
-ger.1	268	271352	Shuto Machino
 ger.1	268	408539	Wael Mohya
-ger.1	268	276082	Yukhym Konoplia
 ger.1	268	341707	Zento Uno
 ger.1	125	397160	Amil Siljevic
 ger.1	125	416636	Ayoube Amaimouni
@@ -986,7 +843,6 @@ ger.1	3841	413727	Loris Husic
 ger.1	3841	359207	Mert Kömür
 ger.1	3841	291750	Nathanaël Mbuku
 ger.1	3841	322693	Nediljko Labrovic
-ger.1	3841	306928	Robin Fellhauer
 ger.1	3841	332689	Rodrigo Ribeiro
 ger.1	3841	302793	Seol Young-Woo
 ger.1	3841	309634	Tim Breithaupt
@@ -994,7 +850,6 @@ ger.1	3841	416416	Tim Schnitzer
 ger.1	3841	422096	Tom Wisbereit
 ger.1	3841	406851	Uchenna Ogundu
 ger.1	3841	266657	Yannik Keitel
-ger.1	122	264484	Gideon Mensah
 ger.1	122	404143	Gil Neves
 ger.1	122	306653	Imad Rondic
 ger.1	122	357337	Jahmai Simpson-Pusey
@@ -1065,7 +920,6 @@ ger.1	3307	364593	Laurin Curda
 ger.1	3307	345394	Laurin Ulrich
 ger.1	3307	399219	Luka Djuric
 ger.1	3307	291207	Marcel Hoffmeier
-ger.1	3307	225579	Markus Schubert
 ger.1	3307	312389	Marvin Pieringer
 ger.1	3307	364892	Mattes Hansen
 ger.1	3307	319415	Nahuel Nicolas Noll
@@ -1114,7 +968,6 @@ ger.1	7911	218980	Bernardo
 ger.1	7911	407682	Cajetan Lenz
 ger.1	7911	3099575	Jykese Fields
 ger.1	7911	208608	Klaus Gjasula
-ger.1	7911	238025	Koki Machida
 ger.1	7911	362590	Leon Avdullahu
 ger.1	7911	304795	Luca Philipp
 ger.1	7911	383188	Luis Engelns
@@ -1128,7 +981,6 @@ ger.1	7911	3098291	Sean Dulic
 ger.1	7911	3111131	Tristan Spranger
 ger.1	7911	277301	Valentin Gendrey
 ger.1	7911	418789	Valentin Lässig
-ger.1	7911	191209	Vladimír Coufal
 ger.1	7911	274860	Wouter Burger
 ger.1	134	323847	Ameen Al Dakhil
 ger.1	134	345905	Dzenan Pejcinovic
@@ -1141,7 +993,6 @@ ger.1	134	285866	Leonidas Stergiou
 ger.1	134	332574	Luca Jaquez
 ger.1	134	376559	Maximilian Herwerth
 ger.1	134	301319	Stefan Drljaca
-ger.1	134	403741	Yanik Spalt
 ger.1	137	275844	Amos Pieper
 ger.1	137	334374	Arthur
 ger.1	137	371689	Chuki
@@ -1183,7 +1034,6 @@ ita.1	104	364223	Jan Ziólkowski
 ita.1	104	409634	Lorenzo Paratici
 ita.1	104	377387	Mandjou Camara
 ita.1	104	360235	Niccolò Pisilli
-ita.1	104	387204	Rodrigo Mora
 ita.1	104	332354	Wesley
 ita.1	105	377831	Alberto Manzoni
 ita.1	105	378197	Andrea Bonanomi
@@ -1232,11 +1082,9 @@ ita.1	2925	407930	Joseph Liteta
 ita.1	2925	361506	Juan Rodríguez
 ita.1	2925	304151	Kevin Carlos
 ita.1	2925	368312	Kingstone Mutandwa
-ita.1	2925	272745	Michel Adopo
 ita.1	2925	411232	Nicola Grandu
 ita.1	2925	325527	Nicolò Cavuoti
 ita.1	2925	418819	Paul Mendy
-ita.1	2925	346596	Raphael Kofler
 ita.1	2925	387036	Riyad Idrissi
 ita.1	2925	407931	Yael Trepy
 ita.1	2925	345390	Yanis Massolin
@@ -1244,13 +1092,10 @@ ita.1	2925	332684	Zé Pedro
 ita.1	2572	380970	Adrian Lahdo
 ita.1	2572	181060	Edoardo Goldaniga
 ita.1	2572	323273	Ivan Smolcic
-ita.1	2572	380318	Jacobo Ramón
 ita.1	2572	337858	Jayden Addai
 ita.1	2572	387491	Jesús Rodriguez
-ita.1	2572	317233	Kaiki
 ita.1	2572	3140451	Lorenzo Luigi Ginelli
 ita.1	2572	291285	Lucas Da Cunha
-ita.1	2572	264211	Luis Milla
 ita.1	2572	411276	Matteo Papaccioli
 ita.1	2572	387723	Mattia Liberali
 ita.1	2572	422244	Riccardo Cassano
@@ -1266,15 +1111,12 @@ ita.1	109	3099527	Dennis Beldenti
 ita.1	109	168453	Dodô
 ita.1	109	403581	Eman Kospo
 ita.1	109	308082	Fabiano Parisi
-ita.1	109	139008	João Mário
 ita.1	109	255650	Marin Pongracic
 ita.1	109	312757	Mateo Pellegrino
 ita.1	109	310216	Radu Dragusin
 ita.1	109	421785	Salvatore Cianciulli
 ita.1	109	233515	Sulayman Jallow
-ita.1	109	364156	Viery
 ita.1	109	401558	Víctor Valdepeñas
-ita.1	109	367861	Álex Jiménez
 ita.1	4057	260005	Aleksa Terzic
 ita.1	4057	319265	Antonio Raimondo
 ita.1	4057	335061	Daniel Birligea
@@ -1302,7 +1144,6 @@ ita.1	3263	406191	Ethan Meichtry
 ita.1	3263	341773	Franz Stolz
 ita.1	3263	383999	Gaël Lafont
 ita.1	3263	257058	Hamed Traoré
-ita.1	3263	259975	Johan Vásquez
 ita.1	3263	401482	Joi Nuredini
 ita.1	3263	281736	Leo Østigard
 ita.1	3263	297220	Lorenzo Colombo
@@ -1319,7 +1160,6 @@ ita.1	3263	350205	Sebastian Otoa
 ita.1	3263	177862	Stefano Sabelli
 ita.1	110	400734	Alain Taho
 ita.1	110	240109	Aleksandar Stankovic
-ita.1	110	190257	Curtis Jones
 ita.1	110	387837	Francesco Stante
 ita.1	110	170785	Hakan Çalhanoglu
 ita.1	110	181836	Ivan Provedel
@@ -1330,7 +1170,6 @@ ita.1	110	286369	Luis Henrique
 ita.1	110	402778	Matteo Lavelli
 ita.1	110	412245	Mattia Marello
 ita.1	110	409051	Mattia Mosconi
-ita.1	110	204441	Nicolò Barella
 ita.1	110	341494	Petar Sucic
 ita.1	110	177782	Piotr Zielinski
 ita.1	110	181322	Raffaele Di Gennaro
@@ -1349,8 +1188,6 @@ ita.1	111	366509	Kenan Yildiz
 ita.1	111	391034	Kerim Alajbegovic
 ita.1	111	138398	Neto
 ita.1	111	397463	Niccolò Rizzo
-ita.1	111	76017	Nico González
-ita.1	111	290129	Pierre Kalulu
 ita.1	111	421739	Riccardo Radu
 ita.1	111	414157	Stefano Mangiapoco
 ita.1	112	364224	Adrian Przyborek
@@ -1374,14 +1211,12 @@ ita.1	113	3123405	Divine Onyemachi
 ita.1	113	399632	Elijah Scott
 ita.1	113	3123406	Francisco Esteban Sánchez
 ita.1	113	3099569	Hjalte Morel Lærke
-ita.1	113	307391	Jamil Siebert
 ita.1	113	307893	Joel Monteiro
 ita.1	113	318604	Kialonda Gaspar
 ita.1	113	286582	Konan N’Dri
 ita.1	113	192570	Marco Bleve
 ita.1	113	3115809	Marlon Nnamdi Ubani
 ita.1	113	341756	Medon Berisha
-ita.1	113	223292	Mohamed Kaba
 ita.1	113	304512	Nikola Stulic
 ita.1	113	374812	Olaf Gorter
 ita.1	113	334793	Oumar Ngom
@@ -1394,13 +1229,11 @@ ita.1	4007	3131891	Aleksandr Ballabio
 ita.1	4007	409565	Aljaz Strajnar
 ita.1	4007	301278	Andrea Carboni
 ita.1	4007	283741	Cyril Ngonge
-ita.1	4007	235453	Dany Mota
 ita.1	4007	250460	Demba Thiam
 ita.1	4007	362776	Ebenezer Akinsanmiro
 ita.1	4007	390673	Eddy Kouadio
 ita.1	4007	297051	Exequiel Zeballos
 ita.1	4007	250672	Filippo Delli Carri
-ita.1	4007	384482	Gustavo Varela
 ita.1	4007	234951	Idrissa Touré
 ita.1	4007	197764	Kevin Martins
 ita.1	4007	353013	Leonardo Colombo
@@ -1484,7 +1317,6 @@ ita.1	239	3131322	Andrea Ballanti
 ita.1	239	403824	Andrea Luongo
 ita.1	239	368006	Diego Mascardi
 ita.1	239	330707	Emirhan Ilkhan
-ita.1	239	282642	Faustino Anjorin
 ita.1	239	413819	Francesco Cereser
 ita.1	239	271445	Franco Israel
 ita.1	239	367321	Lapo Siviero
@@ -1492,7 +1324,6 @@ ita.1	239	3131323	Manuel Carrascosa Moreno
 ita.1	239	416520	Mattia Pellini
 ita.1	239	206378	Nikola Vlasic
 ita.1	239	367168	Pietro Comuzzo
-ita.1	239	251141	Pietro Pellegri
 ita.1	239	364590	Rafik Belghali
 ita.1	239	136865	Ricardo Rodríguez
 ita.1	239	245538	Sandro Kulenovic
@@ -1510,7 +1341,6 @@ ita.1	118	252323	Lazar Jovanovic
 ita.1	118	347009	Lennon Miller
 ita.1	118	384519	Matteo Palma
 ita.1	118	319437	Nicolò Bertola
-ita.1	17530	342763	Albion Rrahmani
 ita.1	17530	414161	Ale Gomes
 ita.1	17530	263816	Alessio Pozzi
 ita.1	17530	346916	Antoine Hainaut
