@@ -17,4 +17,3 @@ export const RATINGS_ENABLED = false;
  * Default off until enabled on Render.
  */
 export const ALGORITHMIC_RATINGS = import.meta.env.VITE_ALGORITHMIC_RATINGS === "true";
-console.log("ALGORITHMIC_RATINGS=", import.meta.env.VITE_ALGORITHMIC_RATINGS, "->", ALGORITHMIC_RATINGS);

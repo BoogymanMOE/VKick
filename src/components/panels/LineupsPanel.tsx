@@ -58,7 +58,7 @@ export function LineupPitch({
   return (
     <div>
       <p className="mb-1 text-center label text-ink-3">↑ {t("shot.attackingEnd")}</p>
-      <div className="relative overflow-hidden rounded-card border border-line bg-pitch/20 p-2">
+      <div className="relative overflow-visible rounded-card border border-line bg-pitch/20 p-2">
         {/* One big pitch (~280px), not two small ones: the rows are spread
             evenly down the full height so an XI breathes on a phone. */}
         <div className="relative flex min-h-[264px] flex-col justify-evenly gap-2.5">
@@ -198,7 +198,6 @@ function PitchSlot({
       </span>
     );
   }
-  console.log("PitchSlot", player.id, "rating=", player.rating, "gate=", ALGORITHMIC_RATINGS);
   return (
     <span className="flex min-w-0 flex-1 flex-col items-center">
       <span className="relative">
@@ -218,7 +217,7 @@ function PitchSlot({
       {ALGORITHMIC_RATINGS && player.rating != null ? (
         <span
           className={cx(
-            "mt-0.5 text-[10px] font-extrabold",
+            "relative z-10 mt-0.5 inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-base/80 px-1 text-[10px] font-extrabold leading-none",
             player.rating >= 7.5 ? "text-pitch" : player.rating >= 6.5 ? "text-gold" : "text-danger",
           )}
         >
