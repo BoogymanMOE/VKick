@@ -136,6 +136,7 @@ export function migrate(db: DatabaseSync): void {
       stat_breakdown  TEXT,                    -- JSON of per-rule line items
       position        TEXT,                    -- this match's GK/DEF/MID/FWD
       espn_position   TEXT,                    -- the boxscore's granular code ("G", "CD-L")
+      rating          REAL,                    -- algorithmic per-match rating, null until computed
       PRIMARY KEY (match_id, player_id)
     );
     CREATE INDEX IF NOT EXISTS idx_mps_team ON match_player_stats(team_id);
@@ -450,6 +451,7 @@ export function migrate(db: DatabaseSync): void {
       own_goals       INTEGER NOT NULL DEFAULT 0,
       stat_score_total INTEGER NOT NULL DEFAULT 0,
       stat_score_avg  REAL NOT NULL DEFAULT 0,
+      avg_rating      REAL,                    -- algorithmic season avg rating
       updated_at      TEXT NOT NULL,
       PRIMARY KEY (league, season, player_id)
     );
@@ -881,6 +883,15 @@ export function migrate(db: DatabaseSync): void {
     if (!mpsCols.some((c) => c.name === col)) {
       db.exec(`ALTER TABLE match_player_stats ADD COLUMN ${col} TEXT;`);
     }
+  }
+  if (!mpsCols.some((c) => c.name === "rating")) {
+    db.exec("ALTER TABLE match_player_stats ADD COLUMN rating REAL;");
+  }
+  const pssCols = db.prepare("SELECT name FROM pragma_table_info('player_season_stats')").all() as Array<{
+    name: string;
+  }>;
+  if (!pssCols.some((c) => c.name === "avg_rating")) {
+    db.exec("ALTER TABLE player_season_stats ADD COLUMN avg_rating REAL;");
   }
 
   // versus_pairs removal (curated Versus pairs never shipped as a mechanic —

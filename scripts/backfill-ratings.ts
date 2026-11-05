@@ -1,0 +1,105 @@
+import { getDb } from "../server/db/index.js";
+import { computePlayerRating } from "../server/scoring/ratings.js";
+
+const db = getDb();
+
+const matches = db
+  .prepare(
+    `SELECT m.id, m.home_team_id, m.away_team_id, m.home_score, m.away_score, m.round, m.league, m.espn_season
+     FROM matches m
+     WHERE m.status = 'finished'
+       AND EXISTS (SELECT 1 FROM match_player_stats mps WHERE mps.match_id = m.id AND mps.rating IS NULL)`,
+  )
+  .all() as Array<{
+  id: string;
+  home_team_id: string;
+  away_team_id: string;
+  home_score: number | null;
+  away_score: number | null;
+  round: string | null;
+  league: string;
+  espn_season: string | null;
+}>;
+
+let done = 0;
+let totalRated = 0;
+for (const m of matches) {
+  const stats = db
+    .prepare(
+      `SELECT player_id, team_id, minutes_played, goals, assists, shots, shots_on_target,
+              yellow_cards, red_cards, saves, goals_conceded, fouls_committed, offsides, own_goals,
+              position, espn_position
+       FROM match_player_stats WHERE match_id = ?`,
+    )
+    .all(m.id) as Array<{
+    player_id: string;
+    team_id: string;
+    minutes_played: number | null;
+    goals: number;
+    assists: number;
+    shots: number;
+    shots_on_target: number;
+    yellow_cards: number;
+    red_cards: number;
+    saves: number | null;
+    goals_conceded: number | null;
+    fouls_committed: number;
+    offsides: number;
+    own_goals: number;
+    position: string | null;
+    espn_position: string | null;
+  }>;
+
+  for (const s of stats) {
+    const rating = computePlayerRating(
+      {
+        minutes_played: s.minutes_played,
+        goals: s.goals,
+        assists: s.assists,
+        shots: s.shots,
+        shots_on_target: s.shots_on_target,
+        yellow_cards: s.yellow_cards,
+        red_cards: s.red_cards,
+        saves: s.saves,
+        goals_conceded: s.goals_conceded,
+        fouls_committed: s.fouls_committed,
+        offsides: s.offsides,
+        own_goals: s.own_goals,
+        started: false,
+      },
+      s.espn_position,
+      s.position,
+      {
+        teamId: s.team_id,
+        homeTeamId: m.home_team_id,
+        awayTeamId: m.away_team_id,
+        homeScore: m.home_score,
+        awayScore: m.away_score,
+        round: m.round,
+      },
+    );
+    db.prepare("UPDATE match_player_stats SET rating = ? WHERE match_id = ? AND player_id = ?").run(
+      rating,
+      m.id,
+      s.player_id,
+    );
+    totalRated++;
+  }
+  done++;
+  if (done % 100 === 0) console.log(`[backfill] ${done}/${matches.length} matches, ${totalRated} ratings`);
+}
+
+console.log(`[backfill] done: ${done} matches, ${totalRated} ratings`);
+
+// Distribution
+const rows = db.prepare("SELECT rating FROM match_player_stats WHERE rating IS NOT NULL").all() as Array<{ rating: number }>;
+const buckets: Record<string, number> = {};
+let sum = 0;
+for (const r of rows) {
+  const b = Math.floor(r.rating).toString() + ".x";
+  buckets[b] = (buckets[b] || 0) + 1;
+  sum += r.rating;
+}
+console.log("[backfill] total rated rows:", rows.length);
+console.log("[backfill] average rating:", (sum / rows.length).toFixed(3));
+console.log("[backfill] distribution:", JSON.stringify(buckets, null, 2));

@@ -12,7 +12,7 @@ import { adaptComments } from "../lib/adaptComments";
 import { buildPlayerEvents } from "../lib/lineupEvents";
 import { buildMatchLineups } from "../lib/lineups";
 import { TopBar } from "../components/TopBar";
-import { PinIcon } from "../components/icons";
+import { PinIcon, StarFilledIcon } from "../components/icons";
 import { LineupPitch, LineupsPanel } from "../components/panels/LineupsPanel";
 import { NewsCard } from "../components/panels/NewsCard";
 
@@ -24,6 +24,7 @@ import {
   ErrorState,
   LiveDot,
   Num,
+  SectionHeading,
   TeamBadge,
 } from "../components/ui";
 import { cx } from "../lib/cx";
@@ -38,7 +39,7 @@ import {
   useRecentLineup,
 } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
-import { RATINGS_ENABLED } from "../lib/features";
+import { RATINGS_ENABLED, ALGORITHMIC_RATINGS } from "../lib/features";
 import { flipIntoPlace, getFlipFirst } from "../lib/flip";
 import { formatClock, formatKickoffDate, kickoffParts, parseMinute, toFaDigits } from "../lib/format";
 import { useNow } from "../hooks/useNow";
@@ -732,6 +733,30 @@ function StatsTab({
       ) : null}
       {awayRows.length > 0 ? (
         <MatchPlayerTable title={localize(away.shortName)} color={away.color} rows={awayRows} />
+      ) : null}
+      {ALGORITHMIC_RATINGS ? (
+        <Card className="p-3">
+          <SectionHeading title={t("match.playerRatings")} />
+          <ul className="space-y-1">
+            {[...rows]
+              .filter((r) => typeof r.rating === "number")
+              .sort((a, b) => Number(b.rating) - Number(a.rating))
+              .map((r, i) => (
+                <li key={String(r.player_id)} className="flex items-center gap-2 py-1">
+                  {i < 3 ? <StarFilledIcon className="h-4 w-4 text-gold" /> : <span className="w-4" />}
+                  <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(String(r.full_name))}</span>
+                  <span
+                    className={cx(
+                      "text-sm font-extrabold",
+                      Number(r.rating) >= 7.5 ? "text-pitch" : Number(r.rating) >= 6.5 ? "text-gold" : "text-danger",
+                    )}
+                  >
+                    {Number(r.rating).toFixed(1)}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </Card>
       ) : null}
     </div>
   );

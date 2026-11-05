@@ -161,6 +161,7 @@ export interface LineupPlayer {
   name: string;
   position: Position;
   number: number;
+  rating?: number | null;
   minutesPlayed?: number;
   availability?: PlayerAvailability | null;
   /**

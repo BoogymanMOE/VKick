@@ -560,6 +560,7 @@ export interface LeaderPlayerRow {
   ownGoals: number;
   statScoreTotal: number;
   statScoreAvg: number;
+  avgRating: number | null;
 }
 
 export type LeaderSort =
@@ -576,7 +577,8 @@ export type LeaderSort =
   | "fouls_committed"
   | "own_goals"
   | "stat_score_total"
-  | "stat_score_avg";
+  | "stat_score_avg"
+  | "avg_rating";
 
 export function useLeaguePlayers(league: string, sort: LeaderSort = "goals", limit = 50) {
   return useQuery({
@@ -608,6 +610,7 @@ export function useLeaguePlayers(league: string, sort: LeaderSort = "goals", lim
         ownGoals: p.own_goals ?? 0,
         statScoreTotal: p.stat_score_total ?? 0,
         statScoreAvg: p.stat_score_avg ?? 0,
+        avgRating: p.avg_rating ?? null,
       })),
     enabled: Boolean(league),
     staleTime: 5 * 60_000,

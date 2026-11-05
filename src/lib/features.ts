@@ -11,3 +11,9 @@ export const PREDICTIONS_ENABLED = false;
  * The ratings code stays in the repo.
  */
 export const RATINGS_ENABLED = false;
+
+/**
+ * Algorithmic per-player ratings derived from ESPN event data.
+ * Default off until enabled on Render.
+ */
+export const ALGORITHMIC_RATINGS = import.meta.env.VITE_ALGORITHMIC_RATINGS === "true";

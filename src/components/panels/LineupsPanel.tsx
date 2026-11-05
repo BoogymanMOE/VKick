@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useI18n } from "../../i18n/context";
+import { ALGORITHMIC_RATINGS } from "../../lib/features";
 import type { LineupPlayer, LineupPlayerEvents, MatchLineup, Team } from "../../types";
 import { Card, Chip, Num, PlayerAvatar, Segmented, TeamBadge } from "../ui";
 import { BallIcon } from "../icons";
@@ -213,6 +214,16 @@ function PitchSlot({
         </Num>
       </span>
       <span className="mt-1 block w-full truncate text-center text-xs font-bold text-ink-2">{name}</span>
+      {ALGORITHMIC_RATINGS && player.rating != null ? (
+        <span
+          className={cx(
+            "mt-0.5 text-[10px] font-extrabold",
+            player.rating >= 7.5 ? "text-pitch" : player.rating >= 6.5 ? "text-gold" : "text-danger",
+          )}
+        >
+          {player.rating.toFixed(1)}
+        </span>
+      ) : null}
       <PlayerMarks events={events} />
     </span>
   );

@@ -24,6 +24,7 @@ import {
   getSeasonKey,
   type EspnTeamStatsPayload,
 } from "./teamStats.js";
+import { computePlayerRating } from "../scoring/ratings.js";
 import { isBlockedTeam, isBlockedTeamId } from "../db/blockedTeams.js";
 import type { NormMatch, NormTeam, OurStatus } from "../espn/types.js";
 
@@ -280,6 +281,45 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
       );
     }
 
+    // Algorithmic per-player ratings (only when the match is finished).
+    if (match.status === "finished") {
+      for (const s of stats) {
+        const rating = computePlayerRating(
+          {
+            minutes_played: s.minutes_played,
+            goals: s.goals,
+            assists: s.assists,
+            shots: s.shots,
+            shots_on_target: s.shots_on_target,
+            yellow_cards: s.yellow_cards,
+            red_cards: s.red_cards,
+            saves: s.saves,
+            goals_conceded: s.goals_conceded,
+            fouls_committed: s.fouls_committed,
+            offsides: s.offsides,
+            own_goals: s.own_goals,
+            started: s.started,
+          },
+          s.espn_position,
+          s.position,
+          {
+            teamId: s.team_id,
+            homeTeamId: match.home_team_id,
+            awayTeamId: match.away_team_id,
+            homeScore: match.home_score,
+            awayScore: match.away_score,
+            round: match.round,
+          },
+        );
+        db.prepare("UPDATE match_player_stats SET rating = ? WHERE match_id = ? AND player_id = ?").run(
+          rating,
+          match.id,
+          s.player_id,
+        );
+      }
+      console.log(`[ratings] computed ${stats.length} ratings for match ${match.id}`);
+    }
+
     // Timeline
     for (const ev of normalizeTimeline(json)) {
       if (ev.espn_event_key) {
@@ -395,6 +435,19 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
       const season = getSeasonKey(db, lg);
       recomputeSeasonStats(db, lg, season);
       recomputeSeasonTeamStats(db, lg, season);
+      // Season avg rating aggregate.
+      db.prepare(
+        `UPDATE player_season_stats
+           SET avg_rating = (
+             SELECT AVG(mps.rating) FROM match_player_stats mps
+             JOIN matches m ON m.id = mps.match_id
+             WHERE mps.player_id = player_season_stats.player_id
+               AND m.league = player_season_stats.league
+               AND m.espn_season = player_season_stats.season
+               AND mps.rating IS NOT NULL
+           )
+         WHERE league = ? AND season = ?`,
+      ).run(lg, season);
     }
   }
 

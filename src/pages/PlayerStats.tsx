@@ -3,6 +3,7 @@ import { TopBar } from "../components/TopBar";
 import { RowSkeleton } from "../components/Skeletons";
 import { EmptyState, ErrorState, PlayerAvatar } from "../components/ui";
 import { cx } from "../lib/cx";
+import { ALGORITHMIC_RATINGS } from "../lib/features";
 import { Card, Chip, Num, SectionHeading, Segmented, TeamBadge } from "../components/ui";
 import {
   slugForLeague,
@@ -23,6 +24,7 @@ const SORTS: Array<{ key: LeaderSort; labelKey: StringKey }> = [
   { key: "goals", labelKey: "stats.goals" },
   { key: "assists", labelKey: "stats.assists" },
   { key: "stat_score_total", labelKey: "ratings.points" },
+  ...(ALGORITHMIC_RATINGS ? [{ key: "avg_rating" as LeaderSort, labelKey: "ratings.avgRating" as StringKey }] : []),
   { key: "appearances", labelKey: "table.played" },
   { key: "minutes", labelKey: "stats.minutes" },
   { key: "shots", labelKey: "stats.shots" },
@@ -190,6 +192,7 @@ function PlayerBoard({
 function formatValue(row: LeaderPlayerRow, sort: LeaderSort): string {
   const value =
     sort === "stat_score_total" ? row.statScoreTotal : (row[sort as keyof LeaderPlayerRow] as number);
+  if (sort === "avg_rating" && (value == null || Number.isNaN(value))) return "-";
   if (sort === "minutes" && typeof value === "number" && value >= 1000) {
     return `${Math.round(value / 100) / 10}k`;
   }

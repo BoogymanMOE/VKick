@@ -16,6 +16,7 @@ import {
   TeamBadge,
 } from "../components/ui";
 import { cx } from "../lib/cx";
+import { ALGORITHMIC_RATINGS } from "../lib/features";
 import {
   matchFromApi,
   useLeagueNews,
@@ -589,6 +590,16 @@ function RecentLineupBlock({
         />
         <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{localize(player.name)}</span>
         <span className="text-xs text-ink-3">{t(`pos.${player.position}`)}</span>
+        {ALGORITHMIC_RATINGS && player.rating != null ? (
+          <span
+            className={cx(
+              "flex-none text-xs font-extrabold",
+              player.rating >= 7.5 ? "text-pitch" : player.rating >= 6.5 ? "text-gold" : "text-danger",
+            )}
+          >
+            {player.rating.toFixed(1)}
+          </span>
+        ) : null}
         {player.availability ? <AvailabilityBadge status={player.availability.status} reason={player.availability.reason ?? player.availability.expected_return} /> : null}
       </li>
     ));

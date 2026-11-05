@@ -640,6 +640,7 @@ matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
         row.player_id as string | number,
       ),
       espnPosition: typeof row.espn_position === "string" ? row.espn_position : null,
+      rating: typeof row.rating === "number" ? row.rating : null,
       formationPlace: typeof row.formation_place === "string" ? row.formation_place : null,
       started: Number(row.started) === 1,
       availability: row.availability_status
@@ -822,6 +823,7 @@ matchesRouter.get("/api/leagues/:league/players", (req, res) => {
     "own_goals",
     "stat_score_total",
     "stat_score_avg",
+    "avg_rating",
   ]);
   const col = sortable.has(sort) ? sort : "goals";
   const season = getSeasonKeyDb(league);

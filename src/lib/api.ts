@@ -269,6 +269,7 @@ export interface LeaguePlayerStatRow {
   own_goals?: number | null;
   stat_score_total?: number | null;
   stat_score_avg?: number | null;
+  avg_rating?: number | null;
 }
 
 /** Row behind GET /api/leagues/:league/teams — same optional-stat convention. */
