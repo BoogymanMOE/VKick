@@ -18,6 +18,7 @@ const Matches = lazy(() => import("./pages/Matches"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Profile = lazy(() => import("./pages/Profile"));
+const Leaderboards = lazy(() => import("./pages/Leaderboards"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Ratings = lazy(() => import("./pages/Ratings"));
 const TeamPage = lazy(() => import("./pages/TeamPage"));
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="/ratings" element={RATINGS_ENABLED ? <Ratings /> : <Navigate to="/matches" replace />} />
             <Route path="/table" element={<Table />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/leaderboards" element={<Leaderboards />} />
             <Route path="/admin" element={<Admin />} />
             {/* Legal pages: reachable from Profile and the onboarding footer. */}
             <Route path={LEGAL_ROUTES.privacy} element={<Privacy />} />

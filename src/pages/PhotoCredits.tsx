@@ -11,7 +11,7 @@ interface Credit {
 }
 
 export default function PhotoCredits() {
-  const { dir } = useI18n();
+  const { dir, t } = useI18n();
   const [credits, setCredits] = useState<Credit[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,7 +25,7 @@ export default function PhotoCredits() {
 
   return (
     <>
-      <TopBar title="Photo credits" back />
+      <TopBar title={t("profile.photoCredits")} back />
       <div className="mt-md" dir={dir}>
         {loading ? <p className="text-ink-3">Loading…</p> : null}
         {!loading && credits.length === 0 ? <p className="text-ink-3">No credits available.</p> : null}

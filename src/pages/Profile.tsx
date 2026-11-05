@@ -250,9 +250,10 @@ export default function Profile() {
               setResetOpen(true);
             }}
           />
+          <GroupRow label={t("board.title")} onClick={() => navigate("/leaderboards")} />
           <GroupRow label={t("legal.privacyTitle")} onClick={() => navigate(LEGAL_ROUTES.privacy)} />
           <GroupRow label={t("legal.termsTitle")} onClick={() => navigate(LEGAL_ROUTES.terms)} />
-          <GroupRow label="Photo credits" onClick={() => navigate("/photo-credits")} />
+          <GroupRow label={t("profile.photoCredits")} onClick={() => navigate("/photo-credits")} />
         </div>
         {/* Version line: the About prose card is gone; one muted line under
             the group suffices and doesn't compete with the rows. The commit
