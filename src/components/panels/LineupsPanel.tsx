@@ -198,6 +198,7 @@ function PitchSlot({
       </span>
     );
   }
+  console.log("PitchSlot", player.id, "rating=", player.rating, "gate=", ALGORITHMIC_RATINGS);
   return (
     <span className="flex min-w-0 flex-1 flex-col items-center">
       <span className="relative">
