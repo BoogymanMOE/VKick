@@ -82,7 +82,7 @@ function CrestLink({ team, className }: { team: Team; className?: string }) {
       className={cx(
         "relative flex h-[22px] w-[22px] items-center justify-center rounded-full"
         + " transition-opacity duration-[var(--t-fast)] hover:opacity-80"
-        + " after:absolute after:-inset-x-2 after:-inset-y-1"
+        + " after:absolute after:-inset-3"
         + " focus-visible:outline-2 focus-visible:outline-volt focus-visible:-outline-offset-2",
         className,
       )}
@@ -168,7 +168,7 @@ export const MatchRow = memo(function MatchRow({
        full row still opens the match — while the crest cells above it (later
        siblings, position:relative) win their own taps and go to the teams. */
     <li
-      className="list-in relative grid grid-cols-[minmax(2.75rem,auto)_1.375rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-[7px] px-3.5 py-[9px] transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated"
+      className="list-in relative grid grid-cols-[minmax(2.75rem,auto)_1.375rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-[7px] px-3.5 py-[11px] transition-[background-color] duration-[var(--t-fast)] hover:bg-elevated active:bg-elevated"
       dir={lang === "fa" ? "rtl" : "ltr"}
       style={{
         "--stagger": `${Math.min(index, 8) * 30}ms`,
