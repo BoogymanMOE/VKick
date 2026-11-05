@@ -1,5 +1,5 @@
 import { getDb } from "../server/db/index.js";
-import { computePlayerRating } from "../server/scoring/ratings.js";
+import { computePlayerRating, applyManOfTheMatch } from "../server/scoring/ratings.js";
 
 const db = getDb();
 
@@ -8,7 +8,7 @@ const matches = db
     `SELECT m.id, m.home_team_id, m.away_team_id, m.home_score, m.away_score, m.round, m.league, m.espn_season
      FROM matches m
      WHERE m.status = 'finished'
-       AND EXISTS (SELECT 1 FROM match_player_stats mps WHERE mps.match_id = m.id AND mps.rating IS NULL)`,
+       AND EXISTS (SELECT 1 FROM match_player_stats mps WHERE mps.match_id = m.id)`,
   )
   .all() as Array<{
   id: string;
@@ -85,6 +85,7 @@ for (const m of matches) {
     );
     totalRated++;
   }
+  applyManOfTheMatch(db, m.id);
   done++;
   if (done % 100 === 0) console.log(`[backfill] ${done}/${matches.length} matches, ${totalRated} ratings`);
 }

@@ -24,7 +24,7 @@ import {
   getSeasonKey,
   type EspnTeamStatsPayload,
 } from "./teamStats.js";
-import { computePlayerRating } from "../scoring/ratings.js";
+import { computePlayerRating, applyManOfTheMatch } from "../scoring/ratings.js";
 import { isBlockedTeam, isBlockedTeamId } from "../db/blockedTeams.js";
 import type { NormMatch, NormTeam, OurStatus } from "../espn/types.js";
 
@@ -317,6 +317,7 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
           s.player_id,
         );
       }
+      applyManOfTheMatch(db, match.id);
       console.log(`[ratings] computed ${stats.length} ratings for match ${match.id}`);
     }
 

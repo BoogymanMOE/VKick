@@ -1,3 +1,5 @@
+import type { DB } from "../db/index.js";
+
 // server/scoring/ratings.ts
 //
 // Algorithmic per-player ratings derived from ESPN match data.
@@ -92,7 +94,7 @@ export function computePlayerRating(
   // Per-position weights (only columns that exist in match_player_stats).
   switch (bucket) {
     case "GK":
-      rating += saves * 0.15;
+      rating += Math.min(1.5, saves * 0.25);
       if (conceded === 0 && minutes >= 45) rating += 1.5;
       rating += Math.max(-2.5, -0.3 * conceded);
       break;
@@ -116,23 +118,27 @@ export function computePlayerRating(
       rating -= red * 2.0;
       break;
     case "CM":
+      if (conceded === 0 && minutes >= 45) rating += 0.5;
       rating -= fouls * 0.3;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
       break;
     case "WM":
+      if (conceded === 0 && minutes >= 45) rating += 0.3;
       rating -= fouls * 0.3;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
       break;
     case "WF":
+      if (conceded === 0 && minutes >= 45) rating += 0.3;
       rating -= fouls * 0.3;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
       break;
     case "CF":
-      rating += goals * 1.5;
-      rating += assists * 0.8;
+      if (conceded === 0 && minutes >= 45) rating += 0.3;
+      rating += goals * 1.8;
+      rating += assists * 1.0;
       rating += sot * 0.3;
       rating -= (shots - sot) * 0.2; // shots off target
       rating -= offsides * 0.3;
@@ -143,8 +149,8 @@ export function computePlayerRating(
 
   // Universal: goals/assists for non-CF positions (so a defender scoring counts)
   if (bucket !== "CF") {
-    rating += goals * 1.5;
-    rating += assists * 0.8;
+    rating += goals * 1.8;
+    rating += assists * 1.0;
   }
   // Universal: SoT bonus for non-CF
   if (bucket !== "CF" && sot > 0) rating += sot * 0.15;
@@ -155,11 +161,11 @@ export function computePlayerRating(
   const isHome = ctx.teamId === ctx.homeTeamId;
   const teamScore = isHome ? homeScore : awayScore;
   const oppScore = isHome ? awayScore : homeScore;
-  if (teamScore > oppScore) rating += 0.3;
-  else if (teamScore < oppScore) rating -= 0.3;
+  if (teamScore > oppScore) rating += 0.4;
+  else if (teamScore < oppScore) rating -= 0.4;
 
-  // Big match: cup tie (round present) — +0.3
-  if (ctx.round) rating += 0.3;
+  // Big match: cup tie (round present) — +0.5
+  if (ctx.round) rating += 0.5;
 
   // Own goal penalty
   rating -= ownGoals * 1.0;
@@ -170,7 +176,32 @@ export function computePlayerRating(
     rating = 6.0 + (rating - 6.0) * factor;
   }
 
+  // Veteran consistency floor: full match, no cards, no own goals.
+  if (minutes >= 75 && yellow === 0 && red === 0 && ownGoals === 0) {
+    rating = Math.max(rating, 6.3);
+  }
+
   // Clamp and round
   rating = Math.max(0, Math.min(10, rating));
   return Math.round(rating * 10) / 10;
+}
+
+/** Add a +0.3 Man-of-the-Match bonus to the highest-rated player on each team. */
+export function applyManOfTheMatch(db: DB, matchId: string): void {
+  const teams = db
+    .prepare("SELECT DISTINCT team_id FROM match_player_stats WHERE match_id = ?")
+    .all(matchId) as Array<{ team_id: string }>;
+  for (const t of teams) {
+    const row = db
+      .prepare(
+        "SELECT player_id FROM match_player_stats WHERE match_id = ? AND team_id = ? AND rating IS NOT NULL ORDER BY rating DESC, minutes_played DESC LIMIT 1",
+      )
+      .get(matchId, t.team_id) as { player_id: string } | undefined;
+    if (row) {
+      db.prepare("UPDATE match_player_stats SET rating = MIN(10, rating + 0.3) WHERE match_id = ? AND player_id = ?").run(
+        matchId,
+        row.player_id,
+      );
+    }
+  }
 }
