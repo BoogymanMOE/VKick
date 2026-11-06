@@ -3,7 +3,7 @@ import { LEAGUE_SLUGS } from "./ids.js";
 const BASE = "https://understat.com";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 let lastCallAt = 0;
 const MIN_INTERVAL_MS = 1500;
@@ -20,7 +20,8 @@ async function fetchJsonWithRetry(url: string, options: RequestInit = {}, attemp
     await politeDelay();
     const headers = {
       "User-Agent": UA,
-      Accept: "application/json",
+      Accept: "application/json, text/plain, */*",
+      "Accept-Language": "en-US,en;q=0.9",
       "X-Requested-With": "XMLHttpRequest",
       Referer: BASE + "/",
       ...options.headers,
@@ -36,7 +37,21 @@ async function fetchJsonWithRetry(url: string, options: RequestInit = {}, attemp
       continue;
     }
 
-    if (res.ok) return res.json();
+    if (res.ok) {
+      const ct = res.headers.get("content-type") || "";
+      // Understat occasionally answers with an HTML page (maintenance, block,
+      // or a 200 error page) instead of JSON. Don't let res.json() throw a
+      // SyntaxError; treat it as "no data" so callers degrade gracefully.
+      if (!ct.includes("application/json")) {
+        const text = await res.text();
+        if (text.trim().startsWith("<")) {
+          console.warn(`[understat] ${url} returned HTML instead of JSON (status ${res.status}); treating as no data`);
+          return null;
+        }
+        throw new Error(`Understat returned non-JSON (${ct}): ${url} :: ${text.slice(0, 120)}`);
+      }
+      return res.json();
+    }
     // Understat doesn't cover this team/season — not an error, just empty.
     if (res.status === 404) return null;
 
