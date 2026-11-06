@@ -783,6 +783,8 @@ export const api = {
         /** ESPN's granular role ("CD-L", "AM-R") — places a player on a side
          *  of their line. Null for feeds that don't publish one. */
         espn_position: string | null;
+        /** Algorithmic per-match rating (null until computed). */
+        rating: number | null;
         /** ESPN's slot in the formation (1..11). */
         formation_place: string | null;
         started: number;

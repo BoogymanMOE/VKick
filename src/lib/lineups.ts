@@ -16,6 +16,7 @@ export interface LineupPlayerFromAPI {
   minutes_played: number | null;
   avatarUrl?: string | null;
   team_id: string | number;
+  rating?: number | null;
 }
 
 export interface LineupSide {
@@ -30,6 +31,7 @@ export interface LineupPlayer {
   name: string;
   position: "GK" | "DEF" | "MID" | "FWD";
   number: number;
+  rating?: number | null;
   avatarUrl?: string | null;
   headshotUrl?: string | null;
   espnPosition: string | null;
@@ -46,6 +48,7 @@ const toPlayer = (r: LineupPlayerFromAPI): LineupPlayer => {
     name: String(r.full_name),
     position: (r.position ?? "MID") as "GK" | "DEF" | "MID" | "FWD",
     number: typeof r.jersey_number === "number" ? r.jersey_number : 0,
+    rating: typeof r.rating === "number" ? r.rating : (r.rating ?? null),
     espnPosition: typeof r.espn_position === "string" ? r.espn_position : null,
     formationPlace: typeof r.formation_place === "string" ? r.formation_place : null,
     starter: r.started === 1,

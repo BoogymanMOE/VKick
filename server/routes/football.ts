@@ -305,6 +305,7 @@ interface MatchPlayerRow extends Record<string, unknown> {
   position: string | null;
   espn_position: string | null;
   headshot_url: string | null;
+  rating: number | null;
   availability_status: string | null;
   availability_reason: string | null;
   availability_expected_return: string | null;
@@ -320,6 +321,7 @@ function lineupRows(matchId: string): MatchPlayerRow[] {
             COALESCE(s.position, p.position) AS position,
             COALESCE(s.espn_position, p.espn_position) AS espn_position,
             p.jersey_number, p.headshot_url,
+            s.rating AS rating,
             a.status AS availability_status, a.reason AS availability_reason,
             a.expected_return AS availability_expected_return
      FROM match_player_stats s JOIN players p ON p.id = s.player_id
