@@ -1,747 +1,482 @@
 {
-  "83": {
-    "name": "Barcelona",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "85": {
-    "name": "Celta Vigo",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "86": {
-    "name": "Real Madrid",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "87": {
-    "name": "Racing Santander",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "88": {
-    "name": "Espanyol",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "89": {
-    "name": "Real Sociedad",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "90": {
-    "name": "Deportivo",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "91": {
-    "name": "Real Zaragoza",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "93": {
-    "name": "Athletic Club",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "94": {
-    "name": "Valencia",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "96": {
-    "name": "Alavés",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "97": {
-    "name": "Osasuna",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "98": {
-    "name": "Las Palmas",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "99": {
-    "name": "Málaga",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "101": {
-    "name": "Rayo Vallecano",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "102": {
-    "name": "Villarreal",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "103": {
-    "name": "AC Milan",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "104": {
-    "name": "AS Roma",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "105": {
-    "name": "Atalanta",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "107": {
-    "name": "Bologna",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "109": {
-    "name": "Fiorentina",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "110": {
-    "name": "Internazionale",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "111": {
-    "name": "Juventus",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "112": {
-    "name": "Lazio",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "113": {
-    "name": "Lecce",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "114": {
-    "name": "Napoli",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "115": {
-    "name": "Parma",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "118": {
-    "name": "Udinese",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "122": {
-    "name": "FC Cologne",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "124": {
-    "name": "Borussia Dortmund",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "125": {
-    "name": "Eintracht Frankfurt",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "126": {
-    "name": "SC Freiburg",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "127": {
-    "name": "Hamburg SV",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "131": {
-    "name": "Bayer Leverkusen",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "132": {
-    "name": "Bayern Munich",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "133": {
-    "name": "Schalke 04",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "134": {
-    "name": "VfB Stuttgart",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "137": {
-    "name": "Werder Bremen",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "142": {
-    "name": "Feyenoord Rotterdam",
-    "league": "uefa.champions",
-    "fbref_squad_id": null
-  },
-  "152": {
-    "name": "FC Twente",
-    "league": "uefa.europa.conf",
-    "fbref_squad_id": null
-  },
-  "160": {
-    "name": "Paris Saint-Germain",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "166": {
-    "name": "Lille",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "167": {
-    "name": "Lyon",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "169": {
-    "name": "Stade Rennais",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "170": {
-    "name": "Troyes",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "172": {
-    "name": "AJ Auxerre",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "174": {
-    "name": "AS Monaco",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "175": {
-    "name": "Lens",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "176": {
-    "name": "Marseille",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "179": {
-    "name": "Toulouse",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "180": {
-    "name": "Strasbourg",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "239": {
-    "name": "Torino",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "243": {
-    "name": "Sevilla",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "244": {
-    "name": "Real Betis",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "262": {
-    "name": "Heart of Midlothian",
-    "league": "uefa.europa.conf",
-    "fbref_squad_id": null
-  },
-  "268": {
-    "name": "Borussia Mönchengladbach",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "273": {
-    "name": "Lorient",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "306": {
-    "name": "Hull City",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "331": {
-    "name": "Brighton & Hove Albion",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "337": {
-    "name": "Brentford",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "342": {
-    "name": "Peterborough United",
-    "league": "eng.league_cup",
-    "fbref_squad_id": null
-  },
   "349": {
     "name": "AFC Bournemouth",
     "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "357": {
-    "name": "Leeds United",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "359": {
-    "name": "Arsenal",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "360": {
-    "name": "Manchester United",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "361": {
-    "name": "Newcastle United",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "362": {
-    "name": "Aston Villa",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "363": {
-    "name": "Chelsea",
-    "league": "eng.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "4ba7cbea"
   },
   "364": {
     "name": "Liverpool",
     "league": "eng.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "e84ae6e6"
   },
-  "366": {
-    "name": "Sunderland",
+  "357": {
+    "name": "Leeds United",
     "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "367": {
-    "name": "Tottenham Hotspur",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "368": {
-    "name": "Everton",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "370": {
-    "name": "Fulham",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "373": {
-    "name": "Ipswich Town",
-    "league": "eng.1",
-    "fbref_squad_id": null
-  },
-  "382": {
-    "name": "Manchester City",
-    "league": "eng.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "5bfb9659"
   },
   "384": {
     "name": "Crystal Palace",
     "league": "eng.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "47c64c55"
   },
-  "387": {
-    "name": "Bradford City",
-    "league": "eng.league_cup",
-    "fbref_squad_id": null
-  },
-  "388": {
-    "name": "Coventry City",
+  "382": {
+    "name": "Manchester City",
     "league": "eng.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "b8fd03ef"
+  },
+  "366": {
+    "name": "Sunderland",
+    "league": "eng.1",
+    "fbref_squad_id": "8ef52968"
+  },
+  "370": {
+    "name": "Fulham",
+    "league": "eng.1",
+    "fbref_squad_id": "fd962109"
+  },
+  "360": {
+    "name": "Manchester United",
+    "league": "eng.1",
+    "fbref_squad_id": "19538871"
+  },
+  "359": {
+    "name": "Arsenal",
+    "league": "eng.1",
+    "fbref_squad_id": "17fa6b14"
+  },
+  "331": {
+    "name": "Brighton & Hove Albion",
+    "league": "eng.1",
+    "fbref_squad_id": "d07537b9"
+  },
+  "337": {
+    "name": "Brentford",
+    "league": "eng.1",
+    "fbref_squad_id": "cd051869"
+  },
+  "368": {
+    "name": "Everton",
+    "league": "eng.1",
+    "fbref_squad_id": "d3fd31cc"
+  },
+  "306": {
+    "name": "Hull City",
+    "league": "eng.1",
+    "fbref_squad_id": "bd8769d1"
+  },
+  "361": {
+    "name": "Newcastle United",
+    "league": "eng.1",
+    "fbref_squad_id": "b2b47a98"
+  },
+  "363": {
+    "name": "Chelsea",
+    "league": "eng.1",
+    "fbref_squad_id": "cff3d9bb"
+  },
+  "373": {
+    "name": "Ipswich Town",
+    "league": "eng.1",
+    "fbref_squad_id": "b74092de"
   },
   "393": {
     "name": "Nottingham Forest",
     "league": "eng.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "e4a775cb"
   },
-  "432": {
-    "name": "Galatasaray",
-    "league": "uefa.champions",
-    "fbref_squad_id": null
+  "362": {
+    "name": "Aston Villa",
+    "league": "eng.1",
+    "fbref_squad_id": "8602292d"
   },
-  "455": {
-    "name": "Greece",
-    "league": "",
-    "fbref_squad_id": null
+  "388": {
+    "name": "Coventry City",
+    "league": "eng.1",
+    "fbref_squad_id": "f7e3dfe9"
   },
-  "474": {
-    "name": "Austria",
-    "league": "",
-    "fbref_squad_id": null
-  },
-  "493": {
-    "name": "Shakhtar Donetsk",
-    "league": "uefa.champions",
-    "fbref_squad_id": null
-  },
-  "510": {
-    "name": "Viking FK",
-    "league": "uefa.champions",
-    "fbref_squad_id": null
-  },
-  "570": {
-    "name": "Club Brugge",
-    "league": "uefa.champions",
-    "fbref_squad_id": null
-  },
-  "598": {
-    "name": "1. FC Union Berlin",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "909": {
-    "name": "F.C. København",
-    "league": "uefa.europa.conf",
-    "fbref_squad_id": null
-  },
-  "1068": {
-    "name": "Atlético Madrid",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "1538": {
-    "name": "Levante",
-    "league": "esp.1",
-    "fbref_squad_id": null
-  },
-  "2250": {
-    "name": "Sporting CP",
-    "league": "uefa.champions",
-    "fbref_squad_id": null
-  },
-  "2502": {
-    "name": "Nice",
-    "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "2571": {
-    "name": "Recreativo Huelva",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "2572": {
-    "name": "Como",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "2697": {
-    "name": "Le Mans",
-    "league": "fra.1",
-    "fbref_squad_id": null
+  "367": {
+    "name": "Tottenham Hotspur",
+    "league": "eng.1",
+    "fbref_squad_id": "361ca564"
   },
   "2922": {
     "name": "Getafe",
     "league": "esp.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "7848bd64"
   },
-  "2925": {
-    "name": "Cagliari",
-    "league": "ita.1",
-    "fbref_squad_id": null
+  "99": {
+    "name": "M\u00e1laga",
+    "league": "esp.1",
+    "fbref_squad_id": "ffbf3fa8"
   },
-  "2950": {
-    "name": "Mainz",
-    "league": "ger.1",
-    "fbref_squad_id": null
+  "1068": {
+    "name": "Atl\u00e9tico Madrid",
+    "league": "esp.1",
+    "fbref_squad_id": "db3b9613"
   },
-  "2994": {
-    "name": "Braga",
-    "league": "uefa.europa.conf",
-    "fbref_squad_id": null
+  "86": {
+    "name": "Real Madrid",
+    "league": "esp.1",
+    "fbref_squad_id": "53a2f082"
   },
-  "3024": {
-    "name": "FC Thun",
-    "league": "uefa.europa.conf",
-    "fbref_squad_id": null
+  "90": {
+    "name": "Deportivo",
+    "league": "esp.1",
+    "fbref_squad_id": "e3816a4b"
   },
-  "3101": {
-    "name": "FC Nordsjælland",
-    "league": "uefa.europa.conf",
-    "fbref_squad_id": null
+  "244": {
+    "name": "Real Betis",
+    "league": "esp.1",
+    "fbref_squad_id": "fc536746"
   },
-  "3236": {
-    "name": "Le Havre AC",
-    "league": "fra.1",
-    "fbref_squad_id": null
+  "102": {
+    "name": "Villarreal",
+    "league": "esp.1",
+    "fbref_squad_id": "2a8183b3"
   },
-  "3263": {
-    "name": "Genoa",
-    "league": "ita.1",
-    "fbref_squad_id": null
+  "1538": {
+    "name": "Levante",
+    "league": "esp.1",
+    "fbref_squad_id": "9800b6a1"
   },
-  "3307": {
-    "name": "SC Paderborn 07",
-    "league": "ger.1",
-    "fbref_squad_id": null
+  "94": {
+    "name": "Valencia",
+    "league": "esp.1",
+    "fbref_squad_id": "dcc91a7b"
   },
-  "3748": {
-    "name": "Pontevedra",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
+  "89": {
+    "name": "Real Sociedad",
+    "league": "esp.1",
+    "fbref_squad_id": "e31d1cd9"
+  },
+  "83": {
+    "name": "Barcelona",
+    "league": "esp.1",
+    "fbref_squad_id": "d25e7cd1"
+  },
+  "243": {
+    "name": "Sevilla",
+    "league": "esp.1",
+    "fbref_squad_id": "ad2be733"
+  },
+  "96": {
+    "name": "Alav\u00e9s",
+    "league": "esp.1",
+    "fbref_squad_id": "8d6fd021"
+  },
+  "93": {
+    "name": "Athletic Club",
+    "league": "esp.1",
+    "fbref_squad_id": "2b390eca"
+  },
+  "101": {
+    "name": "Rayo Vallecano",
+    "league": "esp.1",
+    "fbref_squad_id": "98e8af82"
+  },
+  "97": {
+    "name": "Osasuna",
+    "league": "esp.1",
+    "fbref_squad_id": "03c57e2b"
+  },
+  "85": {
+    "name": "Celta Vigo",
+    "league": "esp.1",
+    "fbref_squad_id": "f25da7fb"
+  },
+  "88": {
+    "name": "Espanyol",
+    "league": "esp.1",
+    "fbref_squad_id": "a8661628"
+  },
+  "87": {
+    "name": "Racing Santander",
+    "league": "esp.1",
+    "fbref_squad_id": "dee3bbc8"
   },
   "3751": {
     "name": "Elche",
     "league": "esp.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "6c8b07df"
   },
-  "3841": {
-    "name": "FC Augsburg",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "3891": {
-    "name": "Fleetwood Town",
-    "league": "eng.league_cup",
-    "fbref_squad_id": null
-  },
-  "3997": {
-    "name": "Sassuolo",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "4007": {
-    "name": "Monza",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "4057": {
-    "name": "Frosinone",
-    "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "4411": {
-    "name": "LASK Linz",
-    "league": "uefa.champions",
-    "fbref_squad_id": null
-  },
-  "4515": {
-    "name": "Mirandés",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "5424": {
-    "name": "Sant Andreu",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "5463": {
-    "name": "Ponferradina",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "6825": {
-    "name": "Gimnastica Segoviana",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "6832": {
-    "name": "Almería",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "6851": {
-    "name": "Paris FC",
+  "172": {
+    "name": "AJ Auxerre",
     "league": "fra.1",
-    "fbref_squad_id": null
-  },
-  "6856": {
-    "name": "Sestao",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
+    "fbref_squad_id": "5ae09109"
   },
   "6997": {
     "name": "Brest",
     "league": "fra.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "31742d51"
+  },
+  "2502": {
+    "name": "Nice",
+    "league": "fra.1",
+    "fbref_squad_id": "132ebc33"
+  },
+  "166": {
+    "name": "Lille",
+    "league": "fra.1",
+    "fbref_squad_id": "cb188c0c"
+  },
+  "176": {
+    "name": "Marseille",
+    "league": "fra.1",
+    "fbref_squad_id": "5725cc7b"
+  },
+  "160": {
+    "name": "Paris Saint-Germain",
+    "league": "fra.1",
+    "fbref_squad_id": "e2d8892c"
+  },
+  "175": {
+    "name": "Lens",
+    "league": "fra.1",
+    "fbref_squad_id": "fd4e0f7d"
+  },
+  "174": {
+    "name": "AS Monaco",
+    "league": "fra.1",
+    "fbref_squad_id": "fd6114db"
+  },
+  "167": {
+    "name": "Lyon",
+    "league": "fra.1",
+    "fbref_squad_id": "ae730d47"
+  },
+  "6851": {
+    "name": "Paris FC",
+    "league": "fra.1",
+    "fbref_squad_id": "056a5a75"
+  },
+  "169": {
+    "name": "Stade Rennais",
+    "league": "fra.1",
+    "fbref_squad_id": "b3072e00"
   },
   "7868": {
     "name": "Angers",
     "league": "fra.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "f9c4cb51"
   },
-  "7911": {
-    "name": "TSG Hoffenheim",
+  "180": {
+    "name": "Strasbourg",
+    "league": "fra.1",
+    "fbref_squad_id": "19926992"
+  },
+  "2697": {
+    "name": "Le Mans",
+    "league": "fra.1",
+    "fbref_squad_id": "cd5d7aa6"
+  },
+  "273": {
+    "name": "Lorient",
+    "league": "fra.1",
+    "fbref_squad_id": "d2c87802"
+  },
+  "179": {
+    "name": "Toulouse",
+    "league": "fra.1",
+    "fbref_squad_id": "3f8c4b5f"
+  },
+  "170": {
+    "name": "Troyes",
+    "league": "fra.1",
+    "fbref_squad_id": "54195385"
+  },
+  "3236": {
+    "name": "Le Havre AC",
+    "league": "fra.1",
+    "fbref_squad_id": "5c2737db"
+  },
+  "131": {
+    "name": "Bayer Leverkusen",
     "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "7922": {
-    "name": "Jablonec",
-    "league": "uefa.europa.conf",
-    "fbref_squad_id": null
-  },
-  "8447": {
-    "name": "Córdoba",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "9028": {
-    "name": "Rayo Majadahonda",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "9141": {
-    "name": "Don Benito",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "9812": {
-    "name": "Girona",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "10388": {
-    "name": "SV Elversberg",
-    "league": "ger.1",
-    "fbref_squad_id": null
-  },
-  "10629": {
-    "name": "Cultural Leonesa",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
+    "fbref_squad_id": "231a532f"
   },
   "11420": {
     "name": "RB Leipzig",
     "league": "ger.1",
-    "fbref_squad_id": null
+    "fbref_squad_id": "acbb6a5b"
   },
-  "12585": {
-    "name": "CD Tudelano",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
+  "133": {
+    "name": "Schalke 04",
+    "league": "ger.1",
+    "fbref_squad_id": "c539e393"
+  },
+  "10388": {
+    "name": "SV Elversberg",
+    "league": "ger.1",
+    "fbref_squad_id": "fe686760"
+  },
+  "3307": {
+    "name": "SC Paderborn 07",
+    "league": "ger.1",
+    "fbref_squad_id": "d9f93f02"
+  },
+  "7911": {
+    "name": "TSG Hoffenheim",
+    "league": "ger.1",
+    "fbref_squad_id": "033ea6b8"
+  },
+  "132": {
+    "name": "Bayern Munich",
+    "league": "ger.1",
+    "fbref_squad_id": "054efa67"
+  },
+  "124": {
+    "name": "Borussia Dortmund",
+    "league": "ger.1",
+    "fbref_squad_id": "add600ae"
+  },
+  "126": {
+    "name": "SC Freiburg",
+    "league": "ger.1",
+    "fbref_squad_id": "a486e511"
+  },
+  "3841": {
+    "name": "FC Augsburg",
+    "league": "ger.1",
+    "fbref_squad_id": "0cdc4311"
+  },
+  "2950": {
+    "name": "Mainz",
+    "league": "ger.1",
+    "fbref_squad_id": "ce4c058d"
+  },
+  "137": {
+    "name": "Werder Bremen",
+    "league": "ger.1",
+    "fbref_squad_id": "62add3bf"
+  },
+  "125": {
+    "name": "Eintracht Frankfurt",
+    "league": "ger.1",
+    "fbref_squad_id": "f0ac8ee6"
+  },
+  "122": {
+    "name": "FC Cologne",
+    "league": "ger.1",
+    "fbref_squad_id": "bc357bf7"
+  },
+  "134": {
+    "name": "VfB Stuttgart",
+    "league": "ger.1",
+    "fbref_squad_id": "598bc722"
+  },
+  "127": {
+    "name": "Hamburg SV",
+    "league": "ger.1",
+    "fbref_squad_id": "2ec979d4"
+  },
+  "598": {
+    "name": "1. FC Union Berlin",
+    "league": "ger.1",
+    "fbref_squad_id": "7a41008f"
+  },
+  "268": {
+    "name": "Borussia M\u00f6nchengladbach",
+    "league": "ger.1",
+    "fbref_squad_id": "32f3ee20"
+  },
+  "109": {
+    "name": "Fiorentina",
+    "league": "ita.1",
+    "fbref_squad_id": "421387cf"
+  },
+  "114": {
+    "name": "Napoli",
+    "league": "ita.1",
+    "fbref_squad_id": "d48ad4ff"
+  },
+  "4057": {
+    "name": "Frosinone",
+    "league": "ita.1",
+    "fbref_squad_id": "6a7ad59d"
+  },
+  "2572": {
+    "name": "Como",
+    "league": "ita.1",
+    "fbref_squad_id": "28c9c3cd"
+  },
+  "115": {
+    "name": "Parma",
+    "league": "ita.1",
+    "fbref_squad_id": "eab4234c"
+  },
+  "3263": {
+    "name": "Genoa",
+    "league": "ita.1",
+    "fbref_squad_id": "658bf2de"
+  },
+  "111": {
+    "name": "Juventus",
+    "league": "ita.1",
+    "fbref_squad_id": "e0652b02"
+  },
+  "105": {
+    "name": "Atalanta",
+    "league": "ita.1",
+    "fbref_squad_id": "922493f3"
+  },
+  "103": {
+    "name": "AC Milan",
+    "league": "ita.1",
+    "fbref_squad_id": "dc56fe14"
+  },
+  "113": {
+    "name": "Lecce",
+    "league": "ita.1",
+    "fbref_squad_id": "ffcbe334"
+  },
+  "104": {
+    "name": "AS Roma",
+    "league": "ita.1",
+    "fbref_squad_id": "cf74a709"
+  },
+  "110": {
+    "name": "Internazionale",
+    "league": "ita.1",
+    "fbref_squad_id": "d609edc0"
+  },
+  "112": {
+    "name": "Lazio",
+    "league": "ita.1",
+    "fbref_squad_id": "7213da33"
+  },
+  "2925": {
+    "name": "Cagliari",
+    "league": "ita.1",
+    "fbref_squad_id": "c4260e09"
+  },
+  "3997": {
+    "name": "Sassuolo",
+    "league": "ita.1",
+    "fbref_squad_id": "e2befd26"
+  },
+  "118": {
+    "name": "Udinese",
+    "league": "ita.1",
+    "fbref_squad_id": "04eea015"
+  },
+  "239": {
+    "name": "Torino",
+    "league": "ita.1",
+    "fbref_squad_id": "105360fe"
+  },
+  "4007": {
+    "name": "Monza",
+    "league": "ita.1",
+    "fbref_squad_id": "21680aa4"
+  },
+  "107": {
+    "name": "Bologna",
+    "league": "ita.1",
+    "fbref_squad_id": "1d8099f8"
   },
   "17530": {
     "name": "Venezia",
     "league": "ita.1",
-    "fbref_squad_id": null
-  },
-  "18272": {
-    "name": "Kosovo",
-    "league": "",
-    "fbref_squad_id": null
-  },
-  "20028": {
-    "name": "Kauno Zalgiris",
-    "league": "uefa.europa.conf",
-    "fbref_squad_id": null
-  },
-  "20824": {
-    "name": "Llanera",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "21290": {
-    "name": "CE Europa",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "21713": {
-    "name": "Manacor",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "21717": {
-    "name": "Atlético Paso",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "21722": {
-    "name": "Manresa",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "22080": {
-    "name": "Arosa",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "22281": {
-    "name": "Pafos",
-    "league": "uefa.europa.conf",
-    "fbref_squad_id": null
-  },
-  "22430": {
-    "name": "CD Extremadura",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "22432": {
-    "name": "CD Cuarte",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "131463": {
-    "name": "Alcalá",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "131465": {
-    "name": "Atlético Tordesillas",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "133832": {
-    "name": "Atlético Pinatarense",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "133834": {
-    "name": "Ciudad De Lucena",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "133839": {
-    "name": "CF Calamocha",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "133843": {
-    "name": "Sporting de Alcázar",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
-  },
-  "133845": {
-    "name": "UD Castellonense",
-    "league": "esp.copa_del_rey",
-    "fbref_squad_id": null
+    "fbref_squad_id": "af5d5982"
   }
 }

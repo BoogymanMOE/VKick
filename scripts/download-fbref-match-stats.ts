@@ -29,9 +29,26 @@ function num(v: string | undefined): number | null {
 }
 
 async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html" } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.text();
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html" } });
+    if (res.ok) {
+      const text = await res.text();
+      if (!text.includes("Just a moment")) return text;
+    }
+  } catch {
+    // fall through
+  }
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch({ channel: "chrome", headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.setExtraHTTPHeaders({ "User-Agent": UA });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForTimeout(3000);
+    return await page.content();
+  } finally {
+    await browser.close();
+  }
 }
 
 // For a given match page, extract per-player advanced stats keyed by normalized player name + team side.
