@@ -11,6 +11,7 @@ const OUT = path.join(ROOT, "scripts", "fbref-match-map.json");
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
+const HEADED = process.argv.includes("--headed");
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const db = getDb();
@@ -36,12 +37,19 @@ async function fetchHtml(url: string): Promise<string> {
   }
   // Playwright fallback for Cloudflare-protected pages.
   const { chromium } = await import("playwright");
-  const browser = await chromium.launch({ channel: "chrome", headless: true });
+  const browser = await chromium.launch({ channel: "chrome", headless: !HEADED });
   try {
     const page = await browser.newPage();
-    await page.setExtraHTTPHeaders({ "User-Agent": UA });
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForTimeout(3000);
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.setExtraHTTPHeaders({ "User-Agent": UA, "Accept-Language": "en-US,en;q=0.9" });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(2000);
+    try {
+      await page.waitForSelector("table", { timeout: 30000 });
+    } catch {
+      // Cloudflare challenge may still be present; keep waiting.
+    }
+    await page.waitForTimeout(2000);
     return await page.content();
   } finally {
     await browser.close();
