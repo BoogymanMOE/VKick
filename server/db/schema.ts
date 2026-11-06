@@ -141,6 +141,29 @@ export function migrate(db: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_mps_team ON match_player_stats(team_id);
 
+    CREATE TABLE IF NOT EXISTS match_player_advanced_stats (
+      match_id             TEXT NOT NULL REFERENCES matches(id),
+      player_id            TEXT NOT NULL REFERENCES players(id),
+      tackles              INTEGER,
+      interceptions        INTEGER,
+      clearances           INTEGER,
+      blocks               INTEGER,
+      dribbles_attempts     INTEGER,
+      dribbles_success     INTEGER,
+      dribbled_past        INTEGER,
+      key_passes           INTEGER,
+      crosses              INTEGER,
+      aerials_won          INTEGER,
+      aerials_lost         INTEGER,
+      passes_total         INTEGER,
+      passes_accurate      INTEGER,
+      xg                   REAL,
+      xa                   REAL,
+      updated_at           TEXT NOT NULL,
+      PRIMARY KEY (match_id, player_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_mpas_match ON match_player_advanced_stats(match_id);
+
     CREATE TABLE IF NOT EXISTS timeline_events (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
       espn_event_key TEXT,                     -- ESPN keyEvent id when available

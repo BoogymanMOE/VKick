@@ -30,6 +30,17 @@ export interface PlayerMatchStats {
   offsides: number;
   own_goals: number;
   started: boolean;
+  // FBref advanced stats (optional; null/undefined when unavailable).
+  tackles?: number | null;
+  interceptions?: number | null;
+  clearances?: number | null;
+  blocks?: number | null;
+  dribbles_success?: number | null;
+  key_passes?: number | null;
+  crosses?: number | null;
+  aerials_won?: number | null;
+  xg?: number | null;
+  xa?: number | null;
 }
 
 export interface MatchContext {
@@ -88,6 +99,15 @@ export function computePlayerRating(
   const fouls = stats.fouls_committed ?? 0;
   const offsides = stats.offsides ?? 0;
   const ownGoals = stats.own_goals ?? 0;
+  const tackles = stats.tackles ?? 0;
+  const interceptions = stats.interceptions ?? 0;
+  const clearances = stats.clearances ?? 0;
+  const dribblesSuccess = stats.dribbles_success ?? 0;
+  const keyPasses = stats.key_passes ?? 0;
+  const crosses = stats.crosses ?? 0;
+  const aerialsWon = stats.aerials_won ?? 0;
+  const xg = stats.xg ?? null;
+  const xa = stats.xa ?? null;
 
   let rating = 6.0;
 
@@ -100,6 +120,10 @@ export function computePlayerRating(
       break;
     case "CB":
       if (conceded === 0 && minutes >= 45) rating += 1.2;
+      rating += tackles * 0.4;
+      rating += interceptions * 0.3;
+      rating += clearances * 0.2;
+      rating += aerialsWon * 0.2;
       rating -= fouls * 0.3;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
@@ -113,24 +137,36 @@ export function computePlayerRating(
       break;
     case "CDM":
       if (conceded === 0 && minutes >= 45) rating += 0.8;
+      rating += tackles * 0.4;
+      rating += interceptions * 0.3;
+      rating += clearances * 0.2;
       rating -= fouls * 0.3;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
       break;
     case "CM":
       if (conceded === 0 && minutes >= 45) rating += 0.5;
+      rating += dribblesSuccess * 0.4;
+      rating += keyPasses * 0.4;
+      rating += crosses * 0.3;
       rating -= fouls * 0.3;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
       break;
     case "WM":
       if (conceded === 0 && minutes >= 45) rating += 0.3;
+      rating += dribblesSuccess * 0.4;
+      rating += keyPasses * 0.4;
+      rating += crosses * 0.3;
       rating -= fouls * 0.3;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
       break;
     case "WF":
       if (conceded === 0 && minutes >= 45) rating += 0.3;
+      rating += dribblesSuccess * 0.4;
+      rating += keyPasses * 0.4;
+      rating += crosses * 0.3;
       rating -= fouls * 0.3;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
@@ -142,6 +178,7 @@ export function computePlayerRating(
       rating += sot * 0.3;
       rating -= (shots - sot) * 0.2; // shots off target
       rating -= offsides * 0.3;
+      rating += aerialsWon * 0.2;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
       break;
@@ -169,6 +206,10 @@ export function computePlayerRating(
 
   // Own goal penalty
   rating -= ownGoals * 1.0;
+
+  // xG / xA overperformance (FBref advanced data), when available.
+  if (xg !== null && goals - xg >= 1) rating += 0.5;
+  if (xa !== null && assists - xa >= 1) rating += 0.5;
 
   // Minutes prorate: floor 0.6
   if (minutes < 90) {

@@ -284,6 +284,24 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
     // Algorithmic per-player ratings (only when the match is finished).
     if (match.status === "finished") {
       for (const s of stats) {
+        const adv = db
+          .prepare(
+            "SELECT tackles, interceptions, clearances, blocks, dribbles_success, key_passes, crosses, aerials_won, xg, xa FROM match_player_advanced_stats WHERE match_id = ? AND player_id = ?",
+          )
+          .get(match.id, s.player_id) as
+          | {
+              tackles: number | null;
+              interceptions: number | null;
+              clearances: number | null;
+              blocks: number | null;
+              dribbles_success: number | null;
+              key_passes: number | null;
+              crosses: number | null;
+              aerials_won: number | null;
+              xg: number | null;
+              xa: number | null;
+            }
+          | undefined;
         const rating = computePlayerRating(
           {
             minutes_played: s.minutes_played,
@@ -299,6 +317,16 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
             offsides: s.offsides,
             own_goals: s.own_goals,
             started: s.started,
+            tackles: adv?.tackles ?? null,
+            interceptions: adv?.interceptions ?? null,
+            clearances: adv?.clearances ?? null,
+            blocks: adv?.blocks ?? null,
+            dribbles_success: adv?.dribbles_success ?? null,
+            key_passes: adv?.key_passes ?? null,
+            crosses: adv?.crosses ?? null,
+            aerials_won: adv?.aerials_won ?? null,
+            xg: adv?.xg ?? null,
+            xa: adv?.xa ?? null,
           },
           s.espn_position,
           s.position,

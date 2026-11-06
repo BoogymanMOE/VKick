@@ -26,10 +26,13 @@ let totalRated = 0;
 for (const m of matches) {
   const stats = db
     .prepare(
-      `SELECT player_id, team_id, minutes_played, goals, assists, shots, shots_on_target,
-              yellow_cards, red_cards, saves, goals_conceded, fouls_committed, offsides, own_goals,
-              position, espn_position
-       FROM match_player_stats WHERE match_id = ?`,
+      `SELECT mps.player_id, mps.team_id, mps.minutes_played, mps.goals, mps.assists, mps.shots, mps.shots_on_target,
+              mps.yellow_cards, mps.red_cards, mps.saves, mps.goals_conceded, mps.fouls_committed, mps.offsides, mps.own_goals,
+              mps.position, mps.espn_position,
+              adv.tackles, adv.interceptions, adv.clearances, adv.blocks, adv.dribbles_success, adv.key_passes, adv.crosses, adv.aerials_won, adv.xg, adv.xa
+       FROM match_player_stats mps
+       LEFT JOIN match_player_advanced_stats adv ON adv.match_id = mps.match_id AND adv.player_id = mps.player_id
+       WHERE mps.match_id = ?`,
     )
     .all(m.id) as Array<{
     player_id: string;
@@ -48,6 +51,16 @@ for (const m of matches) {
     own_goals: number;
     position: string | null;
     espn_position: string | null;
+    tackles: number | null;
+    interceptions: number | null;
+    clearances: number | null;
+    blocks: number | null;
+    dribbles_success: number | null;
+    key_passes: number | null;
+    crosses: number | null;
+    aerials_won: number | null;
+    xg: number | null;
+    xa: number | null;
   }>;
 
   for (const s of stats) {
@@ -66,6 +79,16 @@ for (const m of matches) {
         offsides: s.offsides,
         own_goals: s.own_goals,
         started: false,
+        tackles: s.tackles,
+        interceptions: s.interceptions,
+        clearances: s.clearances,
+        blocks: s.blocks,
+        dribbles_success: s.dribbles_success,
+        key_passes: s.key_passes,
+        crosses: s.crosses,
+        aerials_won: s.aerials_won,
+        xg: s.xg,
+        xa: s.xa,
       },
       s.espn_position,
       s.position,
