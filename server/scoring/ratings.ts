@@ -56,6 +56,9 @@ export interface MatchContext {
   teamShotsOnTarget?: number | null;
   teamCorners?: number | null;
   teamGoalsConceded?: number | null;
+  teamPossessionPct?: number | null;
+  teamPassAccuracyPct?: number | null;
+  teamCrossesAccurate?: number | null;
 }
 
 export type PositionBucket =
@@ -218,9 +221,10 @@ export function computePlayerRating(
   if (xa !== null && assists - xa >= 1) rating += 0.5;
 
   // Team-level advanced stat proxies (ESPN boxscore), since per-player
-  // advanced data is unavailable.
+  // advanced data is unavailable. Accumulated and capped at +0.8 total.
   const cleanSheet = oppScore === 0;
   const isDefenderBucket = bucket === "GK" || bucket === "CB" || bucket === "FB" || bucket === "CDM";
+  let proxyBonus = 0;
   if (
     isDefenderBucket &&
     minutes >= 75 &&
@@ -228,18 +232,45 @@ export function computePlayerRating(
     (ctx.teamTacklesTotal ?? 0) > 15 &&
     (ctx.teamInterceptions ?? 0) > 10
   ) {
-    rating += 0.5; // strong defensive team
+    proxyBonus += 0.5; // strong defensive team
   }
-  // Attacking output: team created chances
+  // CDM/CM defensive contribution
+  if ((bucket === "CDM" || bucket === "CM") && minutes >= 75) {
+    if ((ctx.teamInterceptions ?? 0) > 12) proxyBonus += 0.4;
+    if ((ctx.teamTacklesTotal ?? 0) > 18) proxyBonus += 0.3;
+  }
+  // CM/CAM control
+  if (bucket === "CM" && minutes >= 75) {
+    if ((ctx.teamPossessionPct ?? 0) > 55) proxyBonus += 0.2;
+    if ((ctx.teamPassAccuracyPct ?? 0) > 82) proxyBonus += 0.2;
+  }
+  // Wingers
+  if ((bucket === "WM" || bucket === "WF") && minutes >= 60) {
+    if ((ctx.teamCrossesAccurate ?? 0) > 6) proxyBonus += 0.3;
+    if ((ctx.teamShotsOnTarget ?? 0) > 7) proxyBonus += 0.2;
+  }
+  if ((bucket === "WM" || bucket === "WF") && minutes >= 75 && (ctx.teamCorners ?? 0) > 10) {
+    proxyBonus += 0.1;
+  }
+  // CAM (CM bucket) chances
+  if (bucket === "CM" && minutes >= 75) {
+    if ((ctx.teamShotsOnTarget ?? 0) > 8) proxyBonus += 0.3;
+    if ((ctx.teamPossessionPct ?? 0) > 55) proxyBonus += 0.2;
+  }
+  // CF/ST
+  if (bucket === "CF") {
+    if ((ctx.teamShotsOnTarget ?? 0) > 5) proxyBonus += 0.2;
+    if ((ctx.teamShotsOnTarget ?? 0) > 8) proxyBonus += 0.3;
+    if ((teamScore ?? 0) > 2) proxyBonus += 0.2;
+  }
+  // Attacking output: team created chances (forwards/mids)
   if (
-    (bucket === "CM" || bucket === "WM" || bucket === "WF" || bucket === "CF") &&
+    (bucket === "CM" || bucket === "WM" || bucket === "WF") &&
     (ctx.teamShotsOnTarget ?? 0) > 5
   ) {
-    rating += 0.2;
+    proxyBonus += 0.2;
   }
-  if ((bucket === "WM" || bucket === "WF") && (ctx.teamCorners ?? 0) > 10) {
-    rating += 0.1;
-  }
+  rating += Math.min(proxyBonus, 0.8);
 
   // Minutes prorate: floor 0.6
   if (minutes < 90) {
