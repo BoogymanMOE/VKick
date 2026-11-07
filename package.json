@@ -39,7 +39,10 @@
     "list-missing-faces": "tsx scripts/list-missing-faces.ts",
     "set-override": "tsx scripts/set-override.ts",
     "export-seed": "tsx scripts/export-seed.ts",
-    "pull-backup": "tsx scripts/pull-backup.ts"
+    "pull-backup": "tsx scripts/pull-backup.ts",
+    "build-fbref-team-map": "tsx scripts/build-fbref-team-map.ts",
+    "build-fbref-match-map": "tsx scripts/build-fbref-match-map.ts",
+    "download-fbref-match-stats": "tsx scripts/download-fbref-match-stats.ts"
   },
   "dependencies": {
     "@fontsource/archivo": "^5.3.0",
