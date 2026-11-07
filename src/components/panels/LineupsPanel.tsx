@@ -5,7 +5,6 @@ import type { LineupPlayer, LineupPlayerEvents, MatchLineup, Team } from "../../
 import { Card, Chip, Num, PlayerAvatar, Segmented, TeamBadge } from "../ui";
 import { BallIcon } from "../icons";
 import { cx } from "../../lib/cx";
-import { toFaDigits } from "../../lib/format";
 import { placePublishedXI, type SlotCandidate } from "../../lib/formations";
 
 /** `LineupPlayer` → the shape the placement helpers reason about. */
@@ -200,8 +199,6 @@ function PitchSlot({
   teamColor?: string | null;
   events?: LineupPlayerEvents;
 }) {
-  const { dir } = useI18n();
-  const fa = dir === "rtl";
   if (!player) {
     return (
       <span className="flex min-w-0 flex-1 justify-center">
@@ -236,11 +233,6 @@ function PitchSlot({
         )}
       </span>
       <span className="mt-1 block w-full truncate text-center text-xs font-bold text-ink-2">{name}</span>
-      {showRating ? (
-        <span className="mt-0.5 text-[9px] font-medium text-ink-3">
-          {player.number > 0 ? (fa ? toFaDigits(`#${player.number}`) : `#${player.number}`) : ""}
-        </span>
-      ) : null}
       <PlayerMarks events={events} />
     </span>
   );
