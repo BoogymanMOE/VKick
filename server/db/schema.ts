@@ -435,7 +435,17 @@ export function migrate(db: DatabaseSync): void {
       saves             INTEGER,
       passes_total      INTEGER,
       passes_accurate   INTEGER,
-      pass_accuracy_pct REAL,
+      pass_accuracy_pct   REAL,
+      tackles_total       INTEGER,
+      tackles_effective   INTEGER,
+      tackle_pct          REAL,
+      interceptions       INTEGER,
+      clearances_total    INTEGER,
+      clearances_effective INTEGER,
+      crosses_total       INTEGER,
+      crosses_accurate    INTEGER,
+      cross_pct           REAL,
+      blocked_shots       INTEGER,
       PRIMARY KEY (match_id, team_id)
     );
 
@@ -909,6 +919,25 @@ export function migrate(db: DatabaseSync): void {
   }
   if (!mpsCols.some((c) => c.name === "rating")) {
     db.exec("ALTER TABLE match_player_stats ADD COLUMN rating REAL;");
+  }
+
+  // match_team_stats advanced columns (ESPN boxscore)
+  const mtsCols = db.prepare("SELECT name FROM pragma_table_info('match_team_stats')").all() as Array<{ name: string }>;
+  const mtsColSet = new Set(mtsCols.map((c) => c.name));
+  const mtsAdd: Array<[string, string]> = [
+    ["tackles_total", "INTEGER"],
+    ["tackles_effective", "INTEGER"],
+    ["tackle_pct", "REAL"],
+    ["interceptions", "INTEGER"],
+    ["clearances_total", "INTEGER"],
+    ["clearances_effective", "INTEGER"],
+    ["crosses_total", "INTEGER"],
+    ["crosses_accurate", "INTEGER"],
+    ["cross_pct", "REAL"],
+    ["blocked_shots", "INTEGER"],
+  ];
+  for (const [col, type] of mtsAdd) {
+    if (!mtsColSet.has(col)) db.exec(`ALTER TABLE match_team_stats ADD COLUMN ${col} ${type};`);
   }
   const pssCols = db.prepare("SELECT name FROM pragma_table_info('player_season_stats')").all() as Array<{
     name: string;

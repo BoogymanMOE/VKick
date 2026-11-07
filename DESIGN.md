@@ -109,8 +109,9 @@ Data loss window: up to 24 hours of matches. The sync catches up within ~1 hour 
 
 ## Data Sources
 
-- ESPN: match data, lineups, stats, standings, rosters (primary).
+- ESPN per-player: goals, assists, shots, SoT, cards, saves, goals_conceded, fouls, offsides (from match summary rosters).
+- ESPN team-level (new): tackles, interceptions, clearances, crosses, blocked shots (from boxscore), used as proxies in ratings.
 - Understat: xG/xPts/PPDA for big-five leagues (optional; graceful degradation when unavailable).
-- FBref: advanced per-player match stats (tackles, interceptions, dribbles, aerials, key passes, xG/xA) stored in `match_player_advanced_stats`, used by the rating formula. Scraped with cheerio at 1 request per 5 seconds.
+- Per-player tackles/interceptions/dribbles/key passes/aerials: NOT available free; rating formula uses team-level proxies.
 
 Player faces are downloaded from Wikipedia. The pipeline first tries the English Wikipedia pageimages API; if no thumbnail is found there, it falls back to the player's other-language Wikipedia articles (Spanish, French, German, Persian), preferring the player's home-league language first. Source breakdown is recorded in `public/faces/manifest.json`.

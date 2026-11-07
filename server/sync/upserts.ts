@@ -281,9 +281,25 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
       );
     }
 
+    // Team-level advanced stats for this match (ESPN boxscore), used as
+    // proxies in the rating formula.
+    const teamStatsRows = db
+      .prepare(
+        "SELECT team_id, tackles_total, interceptions, shots_on_target, corners FROM match_team_stats WHERE match_id = ?",
+      )
+      .all(match.id) as Array<{
+        team_id: string;
+        tackles_total: number | null;
+        interceptions: number | null;
+        shots_on_target: number | null;
+        corners: number | null;
+      }>;
+    const teamStatsByTeam = new Map(teamStatsRows.map((r) => [r.team_id, r]));
+
     // Algorithmic per-player ratings (only when the match is finished).
     if (match.status === "finished") {
       for (const s of stats) {
+        const ts = teamStatsByTeam.get(s.team_id);
         const adv = db
           .prepare(
             "SELECT tackles, interceptions, clearances, blocks, dribbles_success, key_passes, crosses, aerials_won, xg, xa FROM match_player_advanced_stats WHERE match_id = ? AND player_id = ?",
@@ -337,6 +353,10 @@ export function applySummary(db: DB, json: unknown, league: string): ApplySummar
             homeScore: match.home_score,
             awayScore: match.away_score,
             round: match.round,
+            teamTacklesTotal: ts?.tackles_total ?? null,
+            teamInterceptions: ts?.interceptions ?? null,
+            teamShotsOnTarget: ts?.shots_on_target ?? null,
+            teamCorners: ts?.corners ?? null,
           },
         );
         db.prepare("UPDATE match_player_stats SET rating = ? WHERE match_id = ? AND player_id = ?").run(

@@ -50,6 +50,12 @@ export interface MatchContext {
   homeScore: number | null;
   awayScore: number | null;
   round: string | null; // cup round label; null for leagues
+  // Team-level advanced stats for the player's team (ESPN boxscore), optional.
+  teamTacklesTotal?: number | null;
+  teamInterceptions?: number | null;
+  teamShotsOnTarget?: number | null;
+  teamCorners?: number | null;
+  teamGoalsConceded?: number | null;
 }
 
 export type PositionBucket =
@@ -115,32 +121,32 @@ export function computePlayerRating(
   switch (bucket) {
     case "GK":
       rating += Math.min(1.5, saves * 0.25);
-      if (conceded === 0 && minutes >= 45) rating += 1.5;
+      if (conceded === 0 && minutes >= 45) rating += 1.7;
       rating += Math.max(-2.5, -0.3 * conceded);
       break;
     case "CB":
-      if (conceded === 0 && minutes >= 45) rating += 1.2;
+      if (conceded === 0 && minutes >= 45) rating += 1.5;
       rating += tackles * 0.4;
       rating += interceptions * 0.3;
       rating += clearances * 0.2;
       rating += aerialsWon * 0.2;
-      rating -= fouls * 0.3;
+      rating -= fouls * 0.2;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
       rating -= ownGoals * 1.0;
       break;
     case "FB":
-      if (conceded === 0 && minutes >= 45) rating += 1.0;
-      rating -= fouls * 0.3;
+      if (conceded === 0 && minutes >= 45) rating += 1.3;
+      rating -= fouls * 0.2;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
       break;
     case "CDM":
-      if (conceded === 0 && minutes >= 45) rating += 0.8;
+      if (conceded === 0 && minutes >= 45) rating += 1.0;
       rating += tackles * 0.4;
       rating += interceptions * 0.3;
       rating += clearances * 0.2;
-      rating -= fouls * 0.3;
+      rating -= fouls * 0.2;
       rating -= yellow * 0.5;
       rating -= red * 2.0;
       break;
@@ -211,6 +217,30 @@ export function computePlayerRating(
   if (xg !== null && goals - xg >= 1) rating += 0.5;
   if (xa !== null && assists - xa >= 1) rating += 0.5;
 
+  // Team-level advanced stat proxies (ESPN boxscore), since per-player
+  // advanced data is unavailable.
+  const cleanSheet = oppScore === 0;
+  const isDefenderBucket = bucket === "GK" || bucket === "CB" || bucket === "FB" || bucket === "CDM";
+  if (
+    isDefenderBucket &&
+    minutes >= 75 &&
+    cleanSheet &&
+    (ctx.teamTacklesTotal ?? 0) > 15 &&
+    (ctx.teamInterceptions ?? 0) > 10
+  ) {
+    rating += 0.5; // strong defensive team
+  }
+  // Attacking output: team created chances
+  if (
+    (bucket === "CM" || bucket === "WM" || bucket === "WF" || bucket === "CF") &&
+    (ctx.teamShotsOnTarget ?? 0) > 5
+  ) {
+    rating += 0.2;
+  }
+  if ((bucket === "WM" || bucket === "WF") && (ctx.teamCorners ?? 0) > 10) {
+    rating += 0.1;
+  }
+
   // Minutes prorate: floor 0.6
   if (minutes < 90) {
     const factor = Math.max(0.6, minutes / 90);
@@ -219,7 +249,8 @@ export function computePlayerRating(
 
   // Veteran consistency floor: full match, no cards, no own goals.
   if (minutes >= 75 && yellow === 0 && red === 0 && ownGoals === 0) {
-    rating = Math.max(rating, 6.3);
+    const isDefender = bucket === "GK" || bucket === "CB" || bucket === "FB" || bucket === "CDM";
+    rating = Math.max(rating, isDefender ? 6.5 : 6.3);
   }
 
   // Clamp and round

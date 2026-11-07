@@ -13,6 +13,16 @@ export interface NormTeamStats {
   passes_total: number | null;
   passes_accurate: number | null;
   pass_accuracy_pct: number | null;
+  tackles_total: number | null;
+  tackles_effective: number | null;
+  tackle_pct: number | null;
+  interceptions: number | null;
+  clearances_total: number | null;
+  clearances_effective: number | null;
+  crosses_total: number | null;
+  crosses_accurate: number | null;
+  cross_pct: number | null;
+  blocked_shots: number | null;
 }
 
 /** name under which ESPN currently ships the stat for this league. */
@@ -92,6 +102,16 @@ export function normalizeTeamStats(json: EspnTeamStatsPayload, _league: string):
       passes_total: num(t.statistics, "totalPasses"),
       passes_accurate: num(t.statistics, "accuratePasses"),
       pass_accuracy_pct: pct(t.statistics, "passPct"),
+      tackles_total: num(t.statistics, "totalTackles"),
+      tackles_effective: num(t.statistics, "effectiveTackles"),
+      tackle_pct: pct(t.statistics, "tacklePct"),
+      interceptions: num(t.statistics, "interceptions"),
+      clearances_total: num(t.statistics, "totalClearance"),
+      clearances_effective: num(t.statistics, "effectiveClearance"),
+      crosses_total: num(t.statistics, "totalCrosses"),
+      crosses_accurate: num(t.statistics, "accurateCrosses"),
+      cross_pct: pct(t.statistics, "crossPct"),
+      blocked_shots: num(t.statistics, "blockedShots"),
     });
   }
   return out;

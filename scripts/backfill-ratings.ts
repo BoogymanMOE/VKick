@@ -24,6 +24,11 @@ const matches = db
 let done = 0;
 let totalRated = 0;
 for (const m of matches) {
+  const tsRows = db
+    .prepare("SELECT team_id, tackles_total, interceptions, shots_on_target, corners FROM match_team_stats WHERE match_id = ?")
+    .all(m.id) as Array<{ team_id: string; tackles_total: number | null; interceptions: number | null; shots_on_target: number | null; corners: number | null }>;
+  const tsByTeam = new Map(tsRows.map((r) => [r.team_id, r]));
+
   const stats = db
     .prepare(
       `SELECT mps.player_id, mps.team_id, mps.minutes_played, mps.goals, mps.assists, mps.shots, mps.shots_on_target,
@@ -64,6 +69,7 @@ for (const m of matches) {
   }>;
 
   for (const s of stats) {
+    const ts = tsByTeam.get(s.team_id);
     const rating = computePlayerRating(
       {
         minutes_played: s.minutes_played,
@@ -99,6 +105,10 @@ for (const m of matches) {
         homeScore: m.home_score,
         awayScore: m.away_score,
         round: m.round,
+        teamTacklesTotal: ts?.tackles_total ?? null,
+        teamInterceptions: ts?.interceptions ?? null,
+        teamShotsOnTarget: ts?.shots_on_target ?? null,
+        teamCorners: ts?.corners ?? null,
       },
     );
     db.prepare("UPDATE match_player_stats SET rating = ? WHERE match_id = ? AND player_id = ?").run(
