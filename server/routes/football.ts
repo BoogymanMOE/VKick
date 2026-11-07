@@ -677,6 +677,34 @@ matchesRouter.get("/api/teams/:id/recent-lineup", async (req, res) => {
   });
 });
 
+/** Awards (MVP + 2 honorable mentions) for the team's most recent finished match. */
+matchesRouter.get("/api/teams/:id/recent-awards", async (req, res) => {
+  const teamId = String(req.params.id);
+  if (isBlockedTeamId(teamId)) return bad(res, "not found", 404);
+  const team = get<{ league: string }>(db, "SELECT league FROM teams WHERE id = ?", [teamId]);
+  if (!team) return bad(res, "not found", 404);
+  if (!isAllowedLeague(team.league)) return bad(res, "LEAGUE_NOT_SUPPORTED", 404);
+
+  const match = get<{ id: string }>(
+    db,
+    `SELECT id FROM matches
+     WHERE (home_team_id = ? OR away_team_id = ?) AND status = 'finished'
+     ORDER BY kickoff_at DESC LIMIT 1`,
+    [teamId, teamId],
+  );
+  if (!match) return res.json({ mvp: null, honorable: [] });
+
+  const awards = computeMatchAwards(db, match.id, teamId);
+  const enrich = (a: (typeof awards.mvp)) => {
+    if (!a) return a;
+    a.avatarUrl = localHeadshotUrl(a.headshot_url, a.player_id);
+    return a;
+  };
+  enrich(awards.mvp);
+  awards.honorable = awards.honorable.map((a) => enrich(a) as NonNullable<typeof awards.mvp>);
+  res.json(awards);
+});
+
 /** Full squad for one club, position-grouped and shirt-number ordered. */
 matchesRouter.get("/api/teams/:id/players", (req, res) => {
   const teamId = String(req.params.id);

@@ -11,7 +11,7 @@
 
 import { currentAuthToken, getDeviceId } from "./auth";
 import type { Lang } from "../i18n/strings";
-import type { LineupPlayer, MatchAwards, MatchForm, MatchH2H, NewsArticle } from "../types";
+import type { LineupPlayer, MatchAwards, MatchForm, MatchH2H, NewsArticle, PlayerAward } from "../types";
 
 const BASE = "/api";
 /** A stalled API request must not leave a screen loading indefinitely. */
@@ -661,6 +661,12 @@ export const api = {
       subs: LineupPlayer[];
       bench: LineupPlayer[];
     }>(`/teams/${encodeURIComponent(teamId)}/recent-lineup`),
+
+  getRecentAwards: (teamId: string) =>
+    request<{
+      mvp: PlayerAward | null;
+      honorable: PlayerAward[];
+    }>(`/teams/${encodeURIComponent(teamId)}/recent-awards`),
 
   getTeamAvailability: (teamId: string) =>
     request<{ players: ApiTeamAvailability[]; stale?: boolean }>(

@@ -1,6 +1,12 @@
 import type { DB } from "../db/index.js";
 import { get, all } from "../db/index.js";
 
+export interface PlayerAwardEvent {
+  type: "goal" | "assist" | "save" | "clean_sheet" | "yellow" | "red";
+  minute?: number;
+  description: string;
+}
+
 export interface PlayerAward {
   player_id: string;
   name: string;
@@ -13,6 +19,7 @@ export interface PlayerAward {
   headshot_url: string | null;
   avatarUrl: string | null;
   reason: string;
+  events: PlayerAwardEvent[];
 }
 
 export interface MatchAwards {
@@ -29,7 +36,7 @@ function teamShortColor(db: DB, teamId: string): { short: string; color: string 
   return { short: row?.short_name ?? teamId, color: row?.color ?? null };
 }
 
-export function computeMatchAwards(db: DB, matchId: string): MatchAwards {
+export function computeMatchAwards(db: DB, matchId: string, focusTeamId?: string): MatchAwards {
   const match = get<{
     id: string;
     home_team_id: string;
@@ -64,23 +71,47 @@ export function computeMatchAwards(db: DB, matchId: string): MatchAwards {
      FROM match_player_stats mps JOIN players p ON p.id = mps.player_id
      WHERE mps.match_id = ?`,
     [matchId],
-  );
+  ).filter((p) => (focusTeamId ? p.team_id === focusTeamId : true));
 
-  // Count goals/assists from timeline as a cross-check (match_player_stats already has them).
+  // Parse timeline events for goals/assists/cards with minutes.
   const goalCounts = new Map<string, number>();
   const assistCounts = new Map<string, number>();
-  const events = all<{ participants: string | null }>(
+  const playerEvents = new Map<string, PlayerAwardEvent[]>();
+  const ensureEvents = (pid: string): PlayerAwardEvent[] => {
+    let arr = playerEvents.get(pid);
+    if (!arr) { arr = []; playerEvents.set(pid, arr); }
+    return arr;
+  };
+  const tlEvents = all<{ type: string; minute_display: string; description: string; participants: string | null }>(
     db,
-    "SELECT participants FROM timeline_events WHERE match_id = ? AND type = 'goal'",
+    "SELECT type, minute_display, description, participants FROM timeline_events WHERE match_id = ?",
     [matchId],
   );
-  for (const e of events) {
-    try {
-      const parts = JSON.parse(e.participants ?? "[]") as Array<{ id: string }>;
-      if (parts[0]?.id) goalCounts.set(parts[0].id, (goalCounts.get(parts[0].id) ?? 0) + 1);
-      if (parts[1]?.id) assistCounts.set(parts[1].id, (assistCounts.get(parts[1].id) ?? 0) + 1);
-    } catch {
-      // ignore
+  for (const e of tlEvents) {
+    let parts: Array<{ id: string }> = [];
+    try { parts = JSON.parse(e.participants ?? "[]"); } catch { parts = []; }
+    const minute = parseInt(e.minute_display, 10);
+    const min = Number.isFinite(minute) ? minute : undefined;
+    if (e.type === "goal") {
+      if (parts[0]?.id) {
+        goalCounts.set(parts[0].id, (goalCounts.get(parts[0].id) ?? 0) + 1);
+        ensureEvents(parts[0].id).push({ type: "goal", minute: min, description: "Goal" });
+      }
+      if (parts[1]?.id) {
+        assistCounts.set(parts[1].id, (assistCounts.get(parts[1].id) ?? 0) + 1);
+        ensureEvents(parts[1].id).push({ type: "assist", minute: min, description: "Assist" });
+      }
+    } else if (e.type === "card") {
+      const desc = e.description.toLowerCase();
+      const isRed = desc.includes("red card");
+      const isYellow = desc.includes("yellow card");
+      if (parts[0]?.id && (isRed || isYellow)) {
+        ensureEvents(parts[0].id).push({
+          type: isRed ? "red" : "yellow",
+          minute: min,
+          description: isRed ? "Red card" : "Yellow card",
+        });
+      }
     }
   }
 
@@ -126,6 +157,20 @@ export function computeMatchAwards(db: DB, matchId: string): MatchAwards {
       headshot_url: p.headshot_url,
       avatarUrl: null,
       reason,
+      events: (() => {
+        const ev = [...(playerEvents.get(p.player_id) ?? [])];
+        const position = (p.espn_position ?? p.position ?? "").toUpperCase();
+        const isGK = position.startsWith("G") || (p.position ?? "").toUpperCase() === "GK";
+        const isDef = position.includes("CB") || position.includes("CD") || position === "RB" || position === "LB" || (p.position ?? "").toUpperCase() === "DEF";
+        const conceded = p.team_id === match.home_team_id ? awayScore : homeScore;
+        if (conceded === 0 && (isGK || isDef)) {
+          ev.push({ type: "clean_sheet", description: "Clean sheet" });
+        }
+        if (isGK && (p.saves ?? 0) >= 3) {
+          ev.push({ type: "save", description: `${p.saves} saves` });
+        }
+        return ev;
+      })(),
       _impact: impact,
     };
   });

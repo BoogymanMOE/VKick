@@ -203,6 +203,12 @@ export interface LineupPlayerEvents {
   card?: "yellow" | "red" | "second-yellow";
 }
 
+export interface PlayerAwardEvent {
+  type: "goal" | "assist" | "save" | "clean_sheet" | "yellow" | "red";
+  minute?: number;
+  description: string;
+}
+
 export interface PlayerAward {
   player_id: string;
   name: string;
@@ -215,6 +221,7 @@ export interface PlayerAward {
   headshot_url: string | null;
   avatarUrl: string | null;
   reason: string;
+  events: PlayerAwardEvent[];
 }
 
 export interface MatchAwards {

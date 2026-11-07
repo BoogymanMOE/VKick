@@ -1,5 +1,6 @@
 ﻿import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { TopBar } from "../components/TopBar";
 import { PanelSkeleton } from "../components/Skeletons";
 import { NewsCard } from "../components/panels/NewsCard";
@@ -32,6 +33,7 @@ import { ChevronDownIcon, ChevronRightIcon } from "../components/icons";
 import { useI18n } from "../i18n/context";
 import { formatKickoff, formatKickoffDate, toFaDigits } from "../lib/format";
 import type { ApiMatch } from "../lib/api";
+import { api } from "../lib/api";
 import type { LineupPlayer } from "../types";
 import type { Position } from "../types";
 import { competitionName } from "../lib/leagues";
@@ -219,9 +221,66 @@ function TeamSheetTab({
   const lineupQuery = useRecentLineup(teamId);
   return (
     <div className="space-y-lg">
+      {ALGORITHMIC_RATINGS ? <MvpsBlock teamId={teamId} teamColor={teamColor} /> : null}
       <RecentLineupBlock query={lineupQuery} teamColor={teamColor} />
       <SquadBlock squadQuery={squadQuery} teamColor={teamColor} />
     </div>
+  );
+}
+
+function MvpsBlock({ teamId, teamColor }: { teamId: string; teamColor: string }) {
+  const query = useQuery({
+    queryKey: ["recent-awards", teamId],
+    queryFn: () => api.getRecentAwards(teamId),
+  });
+  const awards = query.data;
+  if (query.isLoading) return <PanelSkeleton height={120} />;
+  if (query.isError) return null;
+  if (!awards || !awards.mvp || awards.honorable.length === 0) return null;
+
+  const tierColor = (rating: number | null) => {
+    if (rating == null) return { bg: "#7d948e", text: "#ffffff" };
+    if (rating >= 8.0) return { bg: "#4ade80", text: "#0a1a14" };
+    if (rating >= 7.5) return { bg: "#1fbfa0", text: "#0a1a14" };
+    if (rating >= 6.5) return { bg: "#f5b840", text: "#0a1a14" };
+    if (rating >= 5.5) return { bg: "#7d948e", text: "#ffffff" };
+    return { bg: "#f87171", text: "#ffffff" };
+  };
+
+  const CardView = ({ a, big }: { a: (typeof awards.mvp) & {}; big: boolean }) => (
+    <div className={big ? "flex flex-col items-center gap-1" : "flex flex-1 flex-col items-center gap-1 rounded-card border border-line p-2"}>
+      <PlayerAvatar name={a.name} src={a.avatarUrl} fallbackSrc={a.headshot_url} teamColor={a.team_color ?? teamColor} size={big ? "md" : "sm"} />
+      <div className={big ? "text-sm font-extrabold text-ink" : "truncate text-xs font-bold text-ink"}>{a.name}</div>
+      <div className="text-[10px] text-ink-3">{a.position}</div>
+      {a.rating != null ? (
+        <span
+          className={big ? "inline-flex h-6 min-w-[2rem] items-center justify-center rounded-full px-2 text-xs font-extrabold" : "inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded-full px-1.5 text-[10px] font-extrabold"}
+          style={{ backgroundColor: tierColor(a.rating).bg, color: tierColor(a.rating).text }}
+        >
+          {a.rating.toFixed(1)}
+        </span>
+      ) : null}
+      <ul className="mt-1 space-y-0.5 text-[10px] text-ink-3">
+        {a.events.map((e, i) => (
+          <li key={i}>{e.description}{e.minute ? ` ${e.minute}'` : ""}</li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  return (
+    <Card className="p-3">
+      <div className="mb-2 text-sm font-bold text-ink">MVPs</div>
+      <div className="flex items-end justify-center gap-2">
+        {awards.honorable.slice(0, 1).map((a) => (
+          <CardView key={a.player_id} a={a} big={false} />
+        ))}
+        <CardView a={awards.mvp!} big={true} />
+        {awards.honorable.slice(1, 2).map((a) => (
+          <CardView key={a.player_id} a={a} big={false} />
+        ))}
+      </div>
+    </Card>
   );
 }
 
