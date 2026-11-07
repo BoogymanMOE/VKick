@@ -203,6 +203,25 @@ export interface LineupPlayerEvents {
   card?: "yellow" | "red" | "second-yellow";
 }
 
+export interface PlayerAward {
+  player_id: string;
+  name: string;
+  team_id: string;
+  team_short: string;
+  team_color: string | null;
+  position: string | null;
+  jersey_number: number;
+  rating: number | null;
+  headshot_url: string | null;
+  avatarUrl: string | null;
+  reason: string;
+}
+
+export interface MatchAwards {
+  mvp: PlayerAward | null;
+  honorable: PlayerAward[];
+}
+
 export interface MatchLineup {
   formation: string;
   coach: string;

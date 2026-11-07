@@ -22,6 +22,7 @@ import { fillTranslations, withTranslation } from "../news/translate.js";
 import { buildFeedQuery } from "../matches/feed.js";
 import { settleStaleLive, settleStaleLiveAll, type LiveMatchRow } from "../matches/reconcile.js";
 import { currentSeasonLabel } from "../scoring/ledger.js";
+import { computeMatchAwards } from "../scoring/matchAwards.js";
 import { seasonWindow } from "../scoring/season.js";
 import { bad, requireUser } from "./shared.js";
 // Sync freshness for the ops surface: the client shows "data as of <time>"
@@ -176,7 +177,16 @@ matchesRouter.get("/api/matches/:id", (req, res) => {
   if (!assertMatchAllowed(res, matchId)) return;
   const match = matchWithTeams(matchId);
   if (!match) return; // unreachable: assertMatchAllowed already 404'd
-  res.json({ match: settleStaleLive(match) });
+  const awards = computeMatchAwards(db, matchId);
+  // Enrich award avatars with local headshots.
+  const enrich = (a: (typeof awards.mvp)) => {
+    if (!a) return a;
+    a.avatarUrl = localHeadshotUrl(a.headshot_url, a.player_id);
+    return a;
+  };
+  enrich(awards.mvp);
+  awards.honorable = awards.honorable.map((a) => enrich(a) as NonNullable<typeof awards.mvp>);
+  res.json({ match: settleStaleLive(match), awards });
 });
 
 /** Full minute-by-minute commentary for one match (blow-by-blow tab). */

@@ -11,7 +11,7 @@
 
 import { currentAuthToken, getDeviceId } from "./auth";
 import type { Lang } from "../i18n/strings";
-import type { LineupPlayer, MatchForm, MatchH2H, NewsArticle } from "../types";
+import type { LineupPlayer, MatchAwards, MatchForm, MatchH2H, NewsArticle } from "../types";
 
 const BASE = "/api";
 /** A stalled API request must not leave a screen loading indefinitely. */
@@ -763,7 +763,7 @@ export const api = {
     return request<{ matches: ApiMatch[] }>(`/matches${suffix}`);
   },
 
-  getMatch: (id: string) => request<{ match: ApiMatch }>(`/matches/${id}`),
+  getMatch: (id: string) => request<{ match: ApiMatch; awards?: MatchAwards }>(`/matches/${id}`),
 
   getLineups: (id: string) =>
     request<{

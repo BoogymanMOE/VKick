@@ -24,6 +24,7 @@ import {
   ErrorState,
   LiveDot,
   Num,
+  PlayerAvatar,
   SectionHeading,
   TeamBadge,
 } from "../components/ui";
@@ -422,6 +423,69 @@ export default function MatchDetail() {
           ) : null}
         </div>
       </div>
+
+      {ALGORITHMIC_RATINGS && matchQuery.data?.awards?.mvp ? (
+        <Card className="p-3">
+          <div className="mb-2 text-center text-xs font-bold text-ink-3">Match Awards</div>
+          {/* MVP */}
+          <div className="mb-3 flex flex-col items-center gap-1">
+            <div className="relative">
+              <PlayerAvatar
+                name={matchQuery.data.awards.mvp.name}
+                src={matchQuery.data.awards.mvp.avatarUrl}
+                fallbackSrc={matchQuery.data.awards.mvp.headshot_url}
+                teamColor={matchQuery.data.awards.mvp.team_color}
+                size="lg"
+              />
+            </div>
+            <div className="text-sm font-extrabold text-ink">{matchQuery.data.awards.mvp.name}</div>
+            <div className="text-xs text-ink-3">{matchQuery.data.awards.mvp.team_short} · {matchQuery.data.awards.mvp.position}</div>
+            {matchQuery.data.awards.mvp.rating != null ? (
+              <span
+                className="mt-1 inline-flex h-6 min-w-[2rem] items-center justify-center rounded-full px-2 text-xs font-extrabold"
+                style={{
+                  backgroundColor:
+                    matchQuery.data.awards.mvp.rating >= 8 ? "#4ade80" :
+                    matchQuery.data.awards.mvp.rating >= 7.5 ? "#1fbfa0" :
+                    matchQuery.data.awards.mvp.rating >= 6.5 ? "#f5b840" :
+                    matchQuery.data.awards.mvp.rating >= 5.5 ? "#7d948e" : "#f87171",
+                  color:
+                    matchQuery.data.awards.mvp.rating >= 6.5 ? "#0a1a14" : "#ffffff",
+                }}
+              >
+                {matchQuery.data.awards.mvp.rating.toFixed(1)}
+              </span>
+            ) : null}
+            <div className="mt-1 text-xs text-ink-2">{matchQuery.data.awards.mvp.reason}</div>
+          </div>
+          {/* Honorable mentions */}
+          <div className="flex gap-2">
+            {matchQuery.data.awards.honorable.map((a) => (
+              <div key={a.player_id} className="flex flex-1 flex-col items-center gap-1 rounded-card border border-line p-2">
+                <PlayerAvatar name={a.name} src={a.avatarUrl} fallbackSrc={a.headshot_url} teamColor={a.team_color} size="sm" />
+                <div className="truncate text-xs font-bold text-ink">{a.name}</div>
+                <div className="text-[10px] text-ink-3">{a.team_short}</div>
+                {a.rating != null ? (
+                  <span
+                    className="inline-flex h-5 min-w-[1.5rem] items-center justify-center rounded-full px-1.5 text-[10px] font-extrabold"
+                    style={{
+                      backgroundColor:
+                        a.rating >= 8 ? "#4ade80" :
+                        a.rating >= 7.5 ? "#1fbfa0" :
+                        a.rating >= 6.5 ? "#f5b840" :
+                        a.rating >= 5.5 ? "#7d948e" : "#f87171",
+                      color: a.rating >= 6.5 ? "#0a1a14" : "#ffffff",
+                    }}
+                  >
+                    {a.rating.toFixed(1)}
+                  </span>
+                ) : null}
+                <div className="text-[10px] text-ink-3">{a.reason}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <UnderlineTabs
         id="match-tabs"

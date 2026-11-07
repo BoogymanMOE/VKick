@@ -4,6 +4,7 @@
  * `npm run build`-adjacent tooling can gate on it.
  */
 import { runLineupsTests } from "./lineups.test.js";
+import { runMatchAwardsTests } from "./matchAwards.test.js";
 import { runShotGridTests } from "./shotGrid.test.js";
 import { runValidateTests } from "./validate.test.js";
 import { runFormationTests } from "./formations.test.js";
@@ -107,6 +108,7 @@ const groups: Array<[string, () => void | Promise<void>]> = [
   ["sentinel", runSentinelTests],
 
   ["lineups", runLineupsTests],
+  ["matchAwards", runMatchAwardsTests],
   ["faStrings", runFaStringsTests],
   ["matchReconcile", runMatchReconcileTests],
   // Browser group: needs playwright (skips itself cleanly without it).

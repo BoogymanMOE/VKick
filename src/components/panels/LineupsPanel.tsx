@@ -5,6 +5,7 @@ import type { LineupPlayer, LineupPlayerEvents, MatchLineup, Team } from "../../
 import { Card, Chip, Num, PlayerAvatar, Segmented, TeamBadge } from "../ui";
 import { BallIcon } from "../icons";
 import { cx } from "../../lib/cx";
+import { toFaDigits } from "../../lib/format";
 import { placePublishedXI, type SlotCandidate } from "../../lib/formations";
 
 /** `LineupPlayer` → the shape the placement helpers reason about. */
@@ -180,6 +181,14 @@ function PlayerMarks({ events }: { events?: LineupPlayerEvents }) {
 
 /** One player on the pitch: face (or initials), shirt number, name, and — once
  *  the match has been played — what he did in it. */
+function ratingTierColor(rating: number): { bg: string; text: string } {
+  if (rating >= 8.0) return { bg: "#4ade80", text: "#0a1a14" };
+  if (rating >= 7.5) return { bg: "#1fbfa0", text: "#0a1a14" };
+  if (rating >= 6.5) return { bg: "#f5b840", text: "#1a1408" };
+  if (rating >= 5.5) return { bg: "#7d948e", text: "#ffffff" };
+  return { bg: "#f87171", text: "#ffffff" };
+}
+
 function PitchSlot({
   player,
   name,
@@ -191,6 +200,8 @@ function PitchSlot({
   teamColor?: string | null;
   events?: LineupPlayerEvents;
 }) {
+  const { dir } = useI18n();
+  const fa = dir === "rtl";
   if (!player) {
     return (
       <span className="flex min-w-0 flex-1 justify-center">
@@ -198,6 +209,8 @@ function PitchSlot({
       </span>
     );
   }
+  const showRating = ALGORITHMIC_RATINGS && player.rating != null;
+  const tier = showRating ? ratingTierColor(player.rating as number) : null;
   return (
     <span className="flex min-w-0 flex-1 flex-col items-center">
       <span className="relative">
@@ -209,19 +222,23 @@ function PitchSlot({
           size="md"
           className="border-pitch/60"
         />
-        <Num className="absolute -end-1 -bottom-1 grid h-4 min-w-4 place-items-center rounded-full bg-volt px-0.5 text-xs leading-none text-black">
-          {player.number > 0 ? player.number : "–"}
-        </Num>
+        {showRating && tier ? (
+          <span
+            className="absolute -end-1 -bottom-1 grid h-4 min-w-4 place-items-center rounded-full px-0.5 text-[10px] font-extrabold leading-none tabular-nums"
+            style={{ backgroundColor: tier.bg, color: tier.text }}
+          >
+            {(player.rating as number).toFixed(1)}
+          </span>
+        ) : (
+          <Num className="absolute -end-1 -bottom-1 grid h-4 min-w-4 place-items-center rounded-full bg-volt px-0.5 text-xs leading-none text-black">
+            {player.number > 0 ? player.number : "–"}
+          </Num>
+        )}
       </span>
       <span className="mt-1 block w-full truncate text-center text-xs font-bold text-ink-2">{name}</span>
-      {ALGORITHMIC_RATINGS && player.rating != null ? (
-        <span
-          className={cx(
-            "relative z-10 mt-0.5 inline-flex min-w-[1.5rem] items-center justify-center rounded-full bg-base/80 px-1 text-[10px] font-extrabold leading-none",
-            player.rating >= 7.5 ? "text-pitch" : player.rating >= 6.5 ? "text-gold" : "text-danger",
-          )}
-        >
-          {player.rating.toFixed(1)}
+      {showRating ? (
+        <span className="mt-0.5 text-[9px] font-medium text-ink-3">
+          {player.number > 0 ? (fa ? toFaDigits(`#${player.number}`) : `#${player.number}`) : ""}
         </span>
       ) : null}
       <PlayerMarks events={events} />
