@@ -189,7 +189,7 @@ export default function TeamPage() {
         key={tab}
       >
         {tab === "sheet" ? (
-          <TeamSheetTab teamId={team.id} teamColor={teamView.color} squadQuery={squadQuery} />
+          <TeamSheetTab teamId={team.id} teamColor={teamView.color} squadQuery={squadQuery} fixtures={fixtures} />
         ) : null}
         {tab === "fixtures" ? <FixturesTab fixtures={fixtures} teamId={team.id} /> : null}
         {tab === "season" ? <StatsTab fixtures={fixtures} teamId={team.id} /> : null}
@@ -213,16 +213,29 @@ function TeamSheetTab({
   teamId,
   teamColor,
   squadQuery,
+  fixtures,
 }: {
   teamId: string;
   teamColor: string;
   squadQuery: ReturnType<typeof useSquad>;
+  fixtures: ApiMatch[];
 }) {
   const lineupQuery = useRecentLineup(teamId);
+  const hasFinished = (fixtures ?? []).some((f) => f.status === "finished");
+  const upcoming = (fixtures ?? []).filter((f) => f.status !== "finished").sort((a, b) => new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime());
+  const nextMatch = upcoming[0] ?? null;
+  const noFinished = !hasFinished;
+
   return (
     <div className="space-y-lg">
-      {ALGORITHMIC_RATINGS ? <MvpsBlock teamId={teamId} teamColor={teamColor} /> : null}
-      <RecentLineupBlock query={lineupQuery} teamColor={teamColor} />
+      {noFinished ? (
+        <EmptyMatchesState nextMatch={nextMatch} teamId={teamId} />
+      ) : (
+        <>
+          {ALGORITHMIC_RATINGS ? <MvpsBlock teamId={teamId} teamColor={teamColor} /> : null}
+          <RecentLineupBlock query={lineupQuery} teamColor={teamColor} />
+        </>
+      )}
       <SquadBlock squadQuery={squadQuery} teamColor={teamColor} />
     </div>
   );
@@ -280,6 +293,48 @@ function MvpsBlock({ teamId, teamColor }: { teamId: string; teamColor: string })
           <CardView key={a.player_id} a={a} big={false} />
         ))}
       </div>
+    </Card>
+  );
+}
+
+function EmptyMatchesState({ nextMatch, teamId }: { nextMatch: ApiMatch | null; teamId: string }) {
+  const { lang } = useI18n();
+  const locale = lang === "fa" ? "fa-IR" : lang === "de" ? "de-DE" : undefined;
+  const now = new Date();
+  const opponent = nextMatch
+    ? (nextMatch.home_team_id === teamId ? nextMatch.away_short ?? nextMatch.away_name : nextMatch.home_short ?? nextMatch.home_name)
+    : null;
+  const kickoff = nextMatch ? new Date(nextMatch.kickoff_at) : null;
+  const ms = kickoff ? kickoff.getTime() - now.getTime() : 0;
+  const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  const isToday = kickoff ? kickoff.toDateString() === now.toDateString() : false;
+  const tomorrow = new Date(now); tomorrow.setDate(now.getDate() + 1);
+  const isTomorrow = kickoff ? kickoff.toDateString() === tomorrow.toDateString() : false;
+
+  let countdown = "";
+  if (kickoff) {
+    const timeStr = formatKickoff(kickoff, locale);
+    if (isToday) countdown = `Today at ${timeStr}`;
+    else if (isTomorrow) countdown = `Tomorrow at ${timeStr}`;
+    else if (days > 0) countdown = `Kicks off in ${days}d ${hours}h`;
+    else countdown = `Kicks off in ${hours}h`;
+  }
+
+  return (
+    <Card className="p-3 text-center">
+      <div className="mb-2 text-2xl">⚽</div>
+      <div className="text-sm font-bold text-ink">First match coming up</div>
+      {nextMatch ? (
+        <>
+          <div className="mt-1 text-xs text-ink-3">
+            vs {opponent} · {formatKickoffDate(kickoff!, locale)}
+          </div>
+          {countdown ? <div className="mt-1 text-xs font-bold text-volt">{countdown}</div> : null}
+        </>
+      ) : (
+        <div className="mt-1 text-xs text-ink-3">No upcoming fixtures</div>
+      )}
     </Card>
   );
 }
