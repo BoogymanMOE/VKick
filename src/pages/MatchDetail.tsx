@@ -13,7 +13,7 @@ import { buildPlayerEvents } from "../lib/lineupEvents";
 import { buildMatchLineups } from "../lib/lineups";
 import { TopBar } from "../components/TopBar";
 import { useToast } from "../components/toastContext";
-import { PinIcon, StarFilledIcon, StarIcon } from "../components/icons";
+import { ChartIcon, PinIcon, StarFilledIcon, StarIcon } from "../components/icons";
 import { LineupPitch, LineupsPanel } from "../components/panels/LineupsPanel";
 
 import {
@@ -513,7 +513,7 @@ export default function MatchDetail() {
         {tab === "timeline" ? (
           <TimelineTab matchId={id} live={inPlay} home={home} away={away} />
         ) : null}
-        {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
+        {tab === "stats" ? <StatsTab matchId={id} status={match.status} home={home} away={away} /> : null}
         {tab === "lineups" ? <LineupsTab matchId={id} status={match.status} home={home} away={away} /> : null}
         {tab === "h2h" ? <H2HTab matchId={id} home={home} away={away} /> : null}
         {tab === "form" ? <FormTab matchId={id} home={home} away={away} /> : null}
@@ -638,17 +638,23 @@ function TimelineTab({
 
 function StatsTab({
   matchId,
+  status,
   home,
   away,
 }: {
   matchId: string;
+  status: string | undefined;
   home: Team;
   away: Team;
 }) {
   const { t, localize } = useI18n();
+  // The header and timeline already poll on this window. The two stat feeds
+  // must follow the same clock, then stop once the referee ends the match.
+  const inPlay = status === "live" || status === "halftime";
   const query = useQuery({
     queryKey: ["matchPlayers", matchId],
     queryFn: () => api.getMatchPlayers(matchId),
+    refetchInterval: inPlay ? 20_000 : false,
   });
   const rows = (query.data?.players ?? []) as Array<Record<string, unknown>>;
   // The synced box score (possession/corners/pass accuracy only exist here).
@@ -658,6 +664,7 @@ function StatsTab({
     queryKey: ["matchTeamStats", matchId],
     queryFn: () => api.getMatchTeamStats(matchId),
     staleTime: 60_000,
+    refetchInterval: inPlay ? 20_000 : false,
   });
   const served =
     teamStatsQuery.data?.home && teamStatsQuery.data?.away
@@ -665,17 +672,35 @@ function StatsTab({
       : null;
 
   if (query.isLoading || teamStatsQuery.isLoading) return <StatsTableSkeleton />;
-  if (query.isError) {
-    return <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />;
+  // One quiet feed is a partial view, not a failure. Only a cold failure of
+  // both feeds earns the error card — and retry asks both, not just players.
+  if (query.isError && teamStatsQuery.isError) {
+    return (
+      <ErrorState
+        title={t("error.title")}
+        hint={t("error.hint")}
+        onRetry={() => {
+          void query.refetch();
+          void teamStatsQuery.refetch();
+        }}
+      />
+    );
   }
   if (rows.length === 0 && !served) {
-    return <EmptyState icon="📊" title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
+    return <EmptyState icon={<ChartIcon />} title={t("stats.noneYet")} hint={t("stats.noneHint")} />;
   }
 
   const asNum = (v: unknown): number => (typeof v === "number" ? v : 0);
   // A substitute who never came on is a row of zeros, not a player — hide them.
+  // Within a side, the XI reads top-down: starters first, then most minutes.
   const teamRows = (teamId: string) =>
-    rows.filter((r) => r.team_id === teamId && (r.started || asNum(r.minutes_played) > 0));
+    rows
+      .filter((r) => r.team_id === teamId && (r.started || asNum(r.minutes_played) > 0))
+      .sort(
+        (a, b) =>
+          Number(Boolean(b.started)) - Number(Boolean(a.started)) ||
+          asNum(b.minutes_played) - asNum(a.minutes_played),
+      );
 
   // Fallback totals aggregated from the per-player stat rows, used only when
   // the synced box score has no row for this match — never alongside it.
@@ -756,9 +781,13 @@ function StatsTab({
           </div>
         </div>
         {/* The source has no xG for 27 of the 32 competitions we sync — say so
-            once here instead of leaving a hole where a familiar stat belongs. */}
-        {served && (served.home.xg == null || served.away.xg == null) ? (
-          <p className="mt-3 border-t border-line pt-2 text-xs text-ink-3">{t("xg.emptyHint")}</p>
+            once here instead of leaving a hole where a familiar stat belongs.
+            The footer is tied to the synced box score, not the player fallback. */}
+        {served ? (
+          <div className="mt-3 space-y-2 border-t border-line pt-2 text-xs text-ink-3">
+            {served.home.xg == null || served.away.xg == null ? <p>{t("xg.emptyHint")}</p> : null}
+            <p>{t("stats.source")}</p>
+          </div>
         ) : null}
       </Card>
 
@@ -799,8 +828,9 @@ function StatsTab({
 }
 
 /** One team-stat row: home value, label, away value, and the proportion bar
-    underneath — volt half for home (left), live-coral half for away. A synced
-    percentage row (`pct`) prints "63%" and splits the bar by the raw
+    underneath — volt for the home half (left), muted neutral for away. The
+    larger value stays bold; only the bar carries the comparison. A synced
+    percentage row (`pct`) prints a rounded "63%" and splits the bar by the raw
     percentage itself; a count splits by ratio. A null rides as "–" and counts
     as zero; zeros on both sides settle into an even, muted 50/50. */
 function StatCompareRow({
@@ -821,7 +851,9 @@ function StatCompareRow({
   const fa = lang === "fa";
   const show = (v: number | null) => {
     if (v === null) return "–";
-    const value = decimals > 0 ? v.toFixed(decimals) : String(v);
+    // Numbers from the box score carry float tails (63.333333%); a plain
+    // percent is a whole number here, while an explicit decimals wins.
+    const value = decimals > 0 ? v.toFixed(decimals) : pct ? Math.round(v).toString() : String(v);
     return fa ? toFaDigits(pct ? `${value}%` : value) : pct ? `${value}%` : value;
   };
   const hv = homeValue ?? 0;
@@ -832,22 +864,37 @@ function StatCompareRow({
   // A percentage splits by its own raw value: 63% possession means a 63/37 bar.
   const homePct = total > 0 ? (pct ? hv : Math.round((hv / total) * 100)) : 50;
   const fill = total > 0;
+  const homeLeads = hv > av;
+  const awayLeads = av > hv;
   return (
     <div dir="ltr">
       <div className="flex items-center gap-2">
-        <Num className="w-10 text-end text-sm font-black leading-none text-ink">{show(homeValue)}</Num>
-        <span className="flex-1 truncate text-center text-[11px] font-bold text-ink-2">{label}</span>
-        <Num className="w-10 text-sm font-black leading-none text-ink">{show(awayValue)}</Num>
+        <Num
+          className={cx(
+            "w-10 text-end text-sm leading-none",
+            homeLeads ? "font-black text-ink" : "font-semibold text-ink-2",
+          )}
+        >
+          {show(homeValue)}
+        </Num>
+        <span dir="auto" className="flex-1 truncate text-center text-[11px] font-bold text-ink-2">
+          {label}
+        </span>
+        <Num
+          className={cx(
+            "w-10 text-sm leading-none",
+            awayLeads ? "font-black text-ink" : "font-semibold text-ink-2",
+          )}
+        >
+          {show(awayValue)}
+        </Num>
       </div>
       <div className="mt-1.5 flex h-2 gap-0.5 overflow-hidden rounded-full bg-ink-3/20">
         <span
           className={`rounded-full ${fill ? "bg-volt" : "bg-ink-3/40"}`}
           style={{ width: `${homePct}%` }}
         />
-        <span
-          className={`rounded-full ${fill ? "bg-live" : "bg-ink-3/40"}`}
-          style={{ width: `${100 - homePct}%` }}
-        />
+        <span className="rounded-full bg-ink-3/40" style={{ width: `${100 - homePct}%` }} />
       </div>
     </div>
   );
