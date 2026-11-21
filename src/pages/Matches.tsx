@@ -28,7 +28,6 @@ import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { CalendarSheet } from "../components/panels/CalendarSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
-import { PullIndicator } from "../components/PullToRefresh";
 import { LeagueGroup } from "../components/LeagueGroup";
 import {
   addJalaliMonths,
@@ -359,7 +358,7 @@ export default function Matches() {
   // collapse gesture never forms to begin with, and this manual refresh is the
   // gesture that stays. Distance is capped and rubber-banded so the drag never
   // reaches the header collapse threshold.
-  const pull = usePullToRefresh(refresh, !refreshing);
+  usePullToRefresh(refresh, !refreshing);
 
   return (
     // ≥600px: the whole screen (header row, strip, feed) re-centres into a
@@ -415,25 +414,10 @@ export default function Matches() {
         }
       />
 
-      {/* Everything below sits under the sticky header. The wrapper gives the
-          pull-to-refresh marker an anchor so it slides in between header and
-          feed instead of fighting the header for the same band. */}
-      <div className="relative" >
-        <PullIndicator pull={pull} />
-        {/* A full refresh in flight: the subtle carousel is the only visible
-            state, since the header no longer carries a refresh button. */}
-        {refreshing ? (
-          <span
-            role="status"
-            aria-label={t("common.loading")}
-            className="absolute end-0 top-0 z-10 grid h-7 w-7 place-items-center"
-          >
-            <span
-              aria-hidden="true"
-              className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-volt"
-            />
-          </span>
-        ) : null}
+      {/* Everything below sits under the sticky header. The pull gesture is
+          silent by design: the toast after a successful sync is the only
+          confirmation, so no marker or spinner competes with the feed. */}
+      <div className="relative">
 
         {/* Date strip: seven day chips across the full content width, today
             selected by default. mt-3 is the 12px gap under the header's bottom

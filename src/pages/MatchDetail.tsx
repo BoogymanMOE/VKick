@@ -12,9 +12,9 @@ import { adaptComments } from "../lib/adaptComments";
 import { buildPlayerEvents } from "../lib/lineupEvents";
 import { buildMatchLineups } from "../lib/lineups";
 import { TopBar } from "../components/TopBar";
-import { PinIcon, StarFilledIcon } from "../components/icons";
+import { useToast } from "../components/toastContext";
+import { PinIcon, StarFilledIcon, StarIcon } from "../components/icons";
 import { LineupPitch, LineupsPanel } from "../components/panels/LineupsPanel";
-import { NewsCard } from "../components/panels/NewsCard";
 
 import {
   Card,
@@ -22,7 +22,6 @@ import {
   CountUp,
   EmptyState,
   ErrorState,
-  LiveDot,
   Num,
   SectionHeading,
   TeamBadge,
@@ -35,26 +34,29 @@ import {
   useCompetitionLabel,
   useMatchH2H,
   useMatchForm,
-  useMatchNews,
   useRecentLineup,
 } from "../hooks/useApi";
+import { useFavorites } from "../hooks/useFavorites";
 import { useI18n } from "../i18n/context";
 import { RATINGS_ENABLED, ALGORITHMIC_RATINGS } from "../lib/features";
 import { flipIntoPlace, getFlipFirst } from "../lib/flip";
 import { formatClock, formatKickoffDate, kickoffParts, parseMinute, toFaDigits } from "../lib/format";
+import { haptic } from "../lib/telegram";
 import { useNow } from "../hooks/useNow";
 import { useLiveLinkConnected, useLiveUpdates } from "../hooks/useLiveUpdates";
 import type { FormGame, Team, TimelineEventType } from "../types";
 import { FormStrip } from "./Table";
 
-type Tab = "timeline" | "stats" | "lineups" | "h2h" | "form" | "news";
-const TABS: Tab[] = ["timeline", "stats", "lineups", "h2h", "form", "news"];
+type Tab = "timeline" | "stats" | "lineups" | "h2h" | "form";
+const TABS: Tab[] = ["timeline", "stats", "lineups", "h2h", "form"];
 
 export default function MatchDetail() {
   const { id = "" } = useParams();
   const { t, lang, localize } = useI18n();
   const locale = lang === "fa" ? "fa-IR" : undefined;
   const fa = lang === "fa";
+  const { isFavorite, toggle: toggleFavorite } = useFavorites();
+  const { push: pushToast } = useToast();
   useLiveUpdates();
 
   const matchQuery = useQuery({
@@ -156,6 +158,15 @@ export default function MatchDetail() {
   // "90'+3'" must read as 90+3, not 90: the added minutes are the whole point
   // of the stoppage-time clock, and reading only the first number dropped them.
   const liveMinute = useMemo(() => parseMinute(match?.minute_display), [match?.minute_display]);
+  // The progress line reads the whole clock, including added time. Stoppage at
+  // 90 still belongs to a 90-minute match; only a base minute past 90 means
+  // the game went to extra time.
+  const liveProgress = useMemo(() => {
+    if (!liveMinute) return 0;
+    const minute = liveMinute.base + liveMinute.added;
+    const basis = liveMinute.base > 90 ? 120 : 90;
+    return Math.max(0, Math.min(100, (minute / basis) * 100));
+  }, [liveMinute]);
   const liveLinkConnected = useLiveLinkConnected();
 
   const now = useNow(30_000);
@@ -165,6 +176,16 @@ export default function MatchDetail() {
   // Stable per locale: a fresh Intl.NumberFormat each render made the memo
   // below recompute every time (the missing-dependency warning).
   const nf = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+  // Browser-local offset, written the way a kickoff listing reads: GMT+3:30.
+  // The kickoff clock itself already comes from the viewer's locale, so this
+  // makes the timezone explicit instead of assuming every viewer is in Tehran.
+  const tzOffset = useMemo(() => {
+    const minutes = -new Date(match?.kickoff_at ?? Date.now()).getTimezoneOffset();
+    const sign = minutes >= 0 ? "+" : "-";
+    const hours = Math.floor(Math.abs(minutes) / 60);
+    const mins = Math.abs(minutes) % 60;
+    return `GMT${sign}${hours}:${String(mins).padStart(2, "0")}`;
+  }, [match?.kickoff_at]);
   const countdownLabel = useMemo(() => {
     if (!match || match.status !== "scheduled") return null;
     const ms = new Date(match.kickoff_at).getTime() - now;
@@ -201,7 +222,38 @@ export default function MatchDetail() {
   // Whatever has no "·" renders as a single-name pill.
   const venueParts = match?.venue ? match.venue.split("\u00B7") : [];
 
-
+  const home: Team | null = match
+    ? {
+        id: match.home_team_id,
+        name: match.home_name,
+        shortName: match.home_short ?? match.home_name,
+        abbreviation: match.home_abbr ?? "—",
+        color: match.home_color ?? TEAM_FALLBACK,
+        league: leagueIdOf(match.league) ?? "PL",
+        logoUrl: match.home_logo,
+      }
+    : null;
+  const away: Team | null = match
+    ? {
+        id: match.away_team_id,
+        name: match.away_name,
+        shortName: match.away_short ?? match.away_name,
+        abbreviation: match.away_abbr ?? "—",
+        color: match.away_color ?? TEAM_FALLBACK,
+        league: leagueIdOf(match.league) ?? "PL",
+        logoUrl: match.away_logo,
+      }
+    : null;
+  // One star for the match: the side already followed, or home when neither
+  // side is followed yet. It reflects real favorite state, never a decoration.
+  const starTeam = home && away
+    ? isFavorite(home.id)
+      ? home
+      : isFavorite(away.id)
+        ? away
+        : home
+    : null;
+  const starOn = starTeam ? isFavorite(starTeam.id) : false;
 
   if (matchQuery.isLoading) {
     return (
@@ -225,7 +277,7 @@ export default function MatchDetail() {
     );
   }
 
-  if (!match) {
+  if (!match || !home || !away) {
     return (
       <>
         <TopBar title={leagueLabel || t("match.summary")} />
@@ -236,29 +288,11 @@ export default function MatchDetail() {
     );
   }
 
-  const home = {
-    id: match.home_team_id,
-    name: match.home_name,
-    shortName: match.home_short ?? match.home_name,
-    abbreviation: match.home_abbr ?? "—",
-    color: match.home_color ?? TEAM_FALLBACK,
-    league: leagueIdOf(match.league) ?? "PL",
-  };
-  const away = {
-    ...home,
-    id: match.away_team_id,
-    name: match.away_name,
-    shortName: match.away_short ?? match.away_name,
-    abbreviation: match.away_abbr ?? "—",
-    color: match.away_color ?? TEAM_FALLBACK,
-  };
-
-
-
   // Cup matches carry ESPN's round ("Quarter-final"); league matches have no
   // round in the payload and no gameweek either — the API sends neither — so
   // the subtitle renders only when a round exists (never a bare placeholder).
   const roundLabel = match.round ? localize(match.round) : null;
+  const kickoff = kickoffParts(new Date(match.kickoff_at), locale);
 
   return (
     <>
@@ -267,7 +301,38 @@ export default function MatchDetail() {
       {/* Title = the competition, subtitle = the round (cups). No round back
           chevron next to the title — the scoreboard owns the screen and
           navigation lives in the mini app chrome. */}
-      <TopBar title={leagueLabel} subtitle={roundLabel ?? undefined} />
+      <TopBar
+        title={leagueLabel}
+        subtitle={roundLabel ?? undefined}
+        right={
+          starTeam ? (
+            <button
+              type="button"
+              aria-pressed={starOn}
+              aria-label={`${starOn ? t("onboarding.isFavorite") : t("onboarding.makeFavorite")}: ${localize(starTeam.shortName)}`}
+              title={`${starOn ? t("onboarding.isFavorite") : t("onboarding.makeFavorite")}: ${localize(starTeam.shortName)}`}
+              onClick={() => {
+                haptic("light");
+                const result = toggleFavorite(starTeam);
+                if (!result.ok && (result.reason === "cap" || result.reason === "intlCap")) {
+                  pushToast({
+                    text: t(result.reason === "intlCap" ? "myTeams.errIntlCap" : "myTeams.errCap"),
+                    tone: "danger",
+                  });
+                }
+              }}
+              className={cx(
+                "grid h-11 w-11 flex-none place-items-center rounded-full border transition-colors duration-[var(--t-fast)]",
+                starOn
+                  ? "border-gold/50 bg-gold/10 text-gold"
+                  : "border-line text-ink-2 hover:bg-elevated hover:text-ink",
+              )}
+            >
+              {starOn ? <StarFilledIcon className="h-4 w-4" /> : <StarIcon className="h-4 w-4" />}
+            </button>
+          ) : undefined
+        }
+      />
 
       {/* Scoreboard: crest with the team NAME under it, big score centered,
           live pill with the minute. Home first — the first flex child, which
@@ -315,24 +380,20 @@ export default function MatchDetail() {
               </span>
             )}
             {inPlay ? (
-              <Chip tone="live">
-                <LiveDot />
-                {match.status === "halftime" ? (
-                  t("timeline.halftime")
-                ) : liveMinute ? (
-                  <span>
-                    {t("status.live")} {"\u200F"}
-                    <Num>
-                      <span dir="ltr">
-                        {nf.format(liveMinute.base)}
-                        {liveMinute.added ? `+${nf.format(liveMinute.added)}` : ""}′
-                      </span>
-                    </Num>
+              <div role="status" className="mt-0.5 flex w-20 flex-col items-center gap-1">
+                <Num className="text-xs font-extrabold leading-none text-white">
+                  <span dir="ltr">
+                    {match.status === "halftime"
+                      ? t("timeline.halftime")
+                      : liveMinute
+                        ? `${nf.format(liveMinute.base)}${liveMinute.added ? `+${nf.format(liveMinute.added)}` : ""}′`
+                        : t("status.live")}
                   </span>
-                ) : (
-                  t("status.live")
-                )}
-              </Chip>
+                </Num>
+                <span className="h-[3px] w-full overflow-hidden rounded-full bg-white/20" aria-hidden="true">
+                  <span className="block h-full rounded-full bg-volt" style={{ width: `${liveProgress}%` }} />
+                </span>
+              </div>
             ) : notPlayedLabel ? (
               // A called-off fixture is a state, not a 0-0 score.
               <Chip tone="muted">{notPlayedLabel}</Chip>
@@ -383,8 +444,11 @@ export default function MatchDetail() {
             The clock is its own dir=ltr run so the bidi order never scrambles. */}
         <div className="mt-2 space-y-0.5 text-center text-xs text-ink-2">
           <p>
-            {kickoffParts(new Date(match.kickoff_at), locale).day}{" "}
-            <span dir="ltr">{kickoffParts(new Date(match.kickoff_at), locale).clock}</span>
+            {kickoff.day}{" "}
+            <span dir="ltr">{kickoff.clock}</span>{" "}
+            <Num dir="ltr" className="text-ink-3">
+              · {tzOffset}
+            </Num>
           </p>
           {match.venue ? (
             // The stadium as a quiet pill: pin glyph, name, then the city in a
@@ -433,7 +497,6 @@ export default function MatchDetail() {
           { value: "lineups", label: t("match.tabLineups") },
           { value: "h2h", label: t("match.tabH2H") },
           { value: "form", label: t("match.tabForm") },
-          { value: "news", label: t("match.tabNews") },
         ]}
       />
 
@@ -448,18 +511,12 @@ export default function MatchDetail() {
         key={tab}
       >
         {tab === "timeline" ? (
-          <TimelineTab
-            matchId={id}
-            live={inPlay}
-            minute={liveMinute?.base ?? 0}
-            teams={[home, away]}
-          />
+          <TimelineTab matchId={id} live={inPlay} home={home} away={away} />
         ) : null}
         {tab === "stats" ? <StatsTab matchId={id} home={home} away={away} /> : null}
         {tab === "lineups" ? <LineupsTab matchId={id} status={match.status} home={home} away={away} /> : null}
         {tab === "h2h" ? <H2HTab matchId={id} home={home} away={away} /> : null}
         {tab === "form" ? <FormTab matchId={id} home={home} away={away} /> : null}
-        {tab === "news" ? <MatchNewsTab matchId={id} /> : null}
       </section>
 
 
@@ -538,14 +595,14 @@ function UnderlineTabs<T extends string>({
 function TimelineTab({
   matchId,
   live,
-  minute,
-  teams,
+  home,
+  away,
 }: {
   matchId: string;
   live: boolean;
-  minute: number;
-  /** Both sides, for the timeline markers' club tint and the team label. */
-  teams: Array<{ id: string; shortName: string; color: string }>;
+  /** Both sides, so each event can wear its own real crest. */
+  home: Team;
+  away: Team;
 }) {
   const { t } = useI18n();
   const query = useQuery({
@@ -575,13 +632,7 @@ function TimelineTab({
   }
 
   return (
-    <TimelineList
-      events={adapted}
-      comments={pinned}
-      liveMinute={live ? minute : undefined}
-      homeTeamId={teams[0]?.id}
-      awayTeamId={teams[1]?.id}
-    />
+    <TimelineList events={adapted} comments={pinned} homeTeam={home} awayTeam={away} />
   );
 }
 
@@ -591,15 +642,8 @@ function StatsTab({
   away,
 }: {
   matchId: string;
-  home: {
-    id: string;
-    name: string;
-    shortName: string;
-    abbreviation: string;
-    color: string;
-    league: "PL" | "LL" | "SA" | "BL" | "L1";
-  };
-  away: typeof home;
+  home: Team;
+  away: Team;
 }) {
   const { t, localize } = useI18n();
   const query = useQuery({
@@ -697,20 +741,12 @@ function StatsTab({
         <div dir="ltr">
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="flex min-w-0 items-center gap-1.5 text-xs font-bold text-ink">
-              <span
-                className="h-2.5 w-2.5 flex-none rounded-full ring-1 ring-ink-3"
-                style={{ backgroundColor: home.color }}
-                aria-hidden="true"
-              />
+              <TeamBadge team={home} size="xs" />
               <span className="truncate">{localize(home.shortName)}</span>
             </span>
             <span className="flex min-w-0 items-center gap-1.5 text-xs font-bold text-ink">
               <span className="truncate">{localize(away.shortName)}</span>
-              <span
-                className="h-2.5 w-2.5 flex-none rounded-full ring-1 ring-ink-3"
-                style={{ backgroundColor: away.color }}
-                aria-hidden="true"
-              />
+              <TeamBadge team={away} size="xs" />
             </span>
           </div>
           <div className="space-y-3">
@@ -729,10 +765,10 @@ function StatsTab({
       {/* Every player who appeared, both sides in one pass — no Home/Away
           toggle to remember to tap. */}
       {homeRows.length > 0 ? (
-        <MatchPlayerTable title={localize(home.shortName)} color={home.color} rows={homeRows} />
+        <MatchPlayerTable title={localize(home.shortName)} team={home} rows={homeRows} />
       ) : null}
       {awayRows.length > 0 ? (
-        <MatchPlayerTable title={localize(away.shortName)} color={away.color} rows={awayRows} />
+        <MatchPlayerTable title={localize(away.shortName)} team={away} rows={awayRows} />
       ) : null}
       {ALGORITHMIC_RATINGS ? (
         <Card className="p-3">
@@ -798,12 +834,12 @@ function StatCompareRow({
   const fill = total > 0;
   return (
     <div dir="ltr">
-      <div className="flex items-center gap-2 text-xs">
-        <Num className="w-8 text-end font-black text-ink">{show(homeValue)}</Num>
-        <span className="flex-1 truncate text-center text-xs font-bold text-ink-2">{label}</span>
-        <Num className="w-8 font-black text-ink">{show(awayValue)}</Num>
+      <div className="flex items-center gap-2">
+        <Num className="w-10 text-end text-sm font-black leading-none text-ink">{show(homeValue)}</Num>
+        <span className="flex-1 truncate text-center text-[11px] font-bold text-ink-2">{label}</span>
+        <Num className="w-10 text-sm font-black leading-none text-ink">{show(awayValue)}</Num>
       </div>
-      <div className="mt-1 flex h-1.5 gap-0.5 overflow-hidden">
+      <div className="mt-1.5 flex h-2 gap-0.5 overflow-hidden rounded-full bg-ink-3/20">
         <span
           className={`rounded-full ${fill ? "bg-volt" : "bg-ink-3/40"}`}
           style={{ width: `${homePct}%` }}
@@ -819,11 +855,11 @@ function StatCompareRow({
 
 function MatchPlayerTable({
   title,
-  color,
+  team,
   rows,
 }: {
   title: string;
-  color: string;
+  team: Team;
   rows: Array<Record<string, unknown>>;
 }) {
   const { t, localize, lang } = useI18n();
@@ -833,13 +869,7 @@ function MatchPlayerTable({
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex items-center gap-2 border-b border-line p-3">
-        {/* The ring keeps a black (or near-black) club colour visible on the dark
-            background — a bare dot in the club's own colour can vanish. */}
-        <span
-          className="h-2.5 w-2.5 rounded-full ring-1 ring-ink-3"
-          style={{ backgroundColor: color }}
-          aria-hidden="true"
-        />
+        <TeamBadge team={team} size="xs" />
         <span className="text-sm font-bold text-ink">{title}</span>
       </div>
       <table className="w-full text-xs">
@@ -1258,36 +1288,5 @@ function FormSide({
         })}
       </ul>
     </Card>
-  );
-}
-
-/* ------------------------------------------------------------ match news */
-
-/**
- * Articles from this match's summary news block, on the shared NewsCard the
- * club page's News tab uses — same NewsArticle shape, same open-link path.
- */
-function MatchNewsTab({ matchId }: { matchId: string }) {
-  const { t, lang } = useI18n();
-  const query = useMatchNews(matchId);
-  if (query.isLoading) return <LineupsSkeleton />;
-  if (query.isError) {
-    return (
-      <ErrorState title={t("error.title")} hint={t("error.hint")} onRetry={() => query.refetch()} />
-    );
-  }
-  const articles = query.data?.articles ?? [];
-  if (articles.length === 0) {
-    return <EmptyState title={t("match.news.empty")} />;
-  }
-  const locale = lang === "fa" ? "fa-IR" : undefined;
-  return (
-    <ul className="space-y-2">
-      {articles.map((article) => (
-        <li key={article.id}>
-          <NewsCard article={article} locale={locale} />
-        </li>
-      ))}
-    </ul>
   );
 }

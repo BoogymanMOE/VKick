@@ -1,13 +1,14 @@
 import { Fragment, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import type { Comment, TimelineEvent } from "../types";
+import type { Comment, Team, TimelineEvent } from "../types";
 import { useI18n } from "../i18n/context";
 import type { StringKey } from "../i18n/strings";
 import { BallIcon, CardIcon, SwapIcon } from "./icons";
 import { cx } from "../lib/cx";
 import { toFaDigits } from "../lib/format";
+import { crestSources } from "../lib/logos";
 import { formatScore, runningScore } from "../lib/timelineScore";
-import { LiveDot, Num } from "./ui";
+import { Num } from "./ui";
 
 const typeKey: Record<TimelineEvent["type"], StringKey> = {
   goal: "timeline.goal",
@@ -152,6 +153,49 @@ function EventBody({ name, line2 }: { name: ReactNode; line2: ReactNode }) {
   ) : null;
 }
 
+/**
+ * The club on an event row, at the same 16px as the event glyph. Bundled crest
+ * first, then the real URL from the match payload; a club with neither gets no
+ * invented badge. The event glyph beside it still says what happened.
+ */
+function EventCrest({ team }: { team: Team }) {
+  const [bundledBroken, setBundledBroken] = useState(false);
+  const [remoteBroken, setRemoteBroken] = useState(false);
+  const crest = bundledBroken ? null : crestSources(team.id);
+  const remote = crest || remoteBroken ? null : team.logoUrl;
+  if (!crest && !remote) return null;
+  return (
+    <span aria-hidden="true" className="inline-flex h-4 w-4 flex-none items-center justify-center">
+      {crest ? (
+        <picture className="contents">
+          <source type="image/webp" srcSet={crest.webp} />
+          <img
+            src={crest.png}
+            alt=""
+            width={16}
+            height={16}
+            onError={() => setBundledBroken(true)}
+            loading="lazy"
+            decoding="async"
+            className="h-4 w-4 object-contain"
+          />
+        </picture>
+      ) : (
+        <img
+          src={remote ?? ""}
+          alt=""
+          width={16}
+          height={16}
+          onError={() => setRemoteBroken(true)}
+          loading="lazy"
+          decoding="async"
+          className="h-4 w-4 object-contain"
+        />
+      )}
+    </span>
+  );
+}
+
 function HomeSpineCell({
   parts,
   goal,
@@ -212,20 +256,18 @@ function AwaySpineCell({
 export function TimelineList({
   events,
   comments = [],
-  liveMinute,
   onOpenClip,
-  homeTeamId,
-  awayTeamId,
+  homeTeam,
+  awayTeam,
 }: {
   events: TimelineEvent[];
   /** Pinned crowd comments, opened from the event row that owns them. */
   comments?: Comment[];
-  liveMinute?: number;
   /** Handler for opening a comment's clip link (validated https by the server). */
   onOpenClip?: (comment: Comment) => void;
-  /** The match's two sides: the event's teamId picks ITS column. */
-  homeTeamId?: string;
-  awayTeamId?: string;
+  /** The match's real sides: each event's teamId picks its column and crest. */
+  homeTeam: Team;
+  awayTeam: Team;
 }) {
   const { t, localize, dir } = useI18n();
   // Which event's comment thread is expanded — only rows with comments carry
@@ -241,8 +283,8 @@ export function TimelineList({
   // scroll up to the scoreboard. Displayed UNDER the event's minute, so the
   // center spine shows when AND what the score became.
   const { byGoal } = useMemo(
-    () => runningScore(events, homeTeamId ?? "", awayTeamId ?? ""),
-    [events, homeTeamId, awayTeamId],
+    () => runningScore(events, homeTeam.id, awayTeam.id),
+    [events, homeTeam.id, awayTeam.id],
   );
 
   // --- pre-pass: find the halftime event + the score at half time ---
@@ -293,7 +335,7 @@ export function TimelineList({
       (assist / swap partner / card kind). No English feed sentence in the FA
       page — the event kind is localized here, names come through the person
       map with the English fallback, and neither ever truncates. */
-  function eventParts(event: TimelineEvent): {
+  function eventParts(event: TimelineEvent, team: Team): {
     icon: { glyph: ReactNode; className: string };
     name: ReactNode;
     line2: ReactNode;
@@ -301,7 +343,7 @@ export function TimelineList({
     const icon = eventIcon(event.type, event.description);
     const names = event.participants.map(localize);
     const [first, second] = names;
-    let name: ReactNode = first ?? "";
+    let nameText: ReactNode = first ?? "";
 
     // Second line: what the FIRST name did with the second one. Own goal
     // wins over the assist branch — with two participants (keeper whose
@@ -325,7 +367,7 @@ export function TimelineList({
       // by findSubMinute): participants[0] came ON, [1] went OFF. Render the
       // direction explicitly instead of the ambiguous swap glyph: a volt ▲
       // beside the on-player's name, a danger ▼ with the off-player below.
-      name = (
+      nameText = (
         <span className="inline-flex items-center gap-1">
           <span aria-hidden="true" className="font-bold text-volt">▲</span>
           {first}
@@ -340,6 +382,13 @@ export function TimelineList({
     } else if (!first) {
       line2 = t(typeKey[event.type]);
     }
+    const crest = <EventCrest team={team} />;
+    const name: ReactNode = first || crest ? (
+      <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 align-middle">
+        {crest}
+        <span className="min-w-0">{nameText}</span>
+      </span>
+    ) : "";
     return { icon, name, line2 };
   }
 
@@ -349,21 +398,6 @@ export function TimelineList({
 
   return (
     <ol className="relative">
-      {/* Live-minute indicator: a slim status row at the top, replaced by real
-          events as they land. The dot is the shared --live pulse. */}
-      {liveMinute !== undefined ? (
-        <li
-          role="status"
-          className="flex items-center gap-2 px-1 py-1 text-xs font-bold text-live"
-        >
-          <LiveDot />
-          <span>{t("status.live")}</span>
-          <span dir="ltr">
-            <Num>{digits(String(liveMinute))}′</Num>
-          </span>
-        </li>
-      ) : null}
-
       {events.map((event, index) => {
         const isGoal = event.type === "goal";
         const isSeparator = event.type === "halftime" || event.type === "fulltime";
@@ -371,9 +405,11 @@ export function TimelineList({
         const side: "home" | "away" | null =
           event.teamId == null
             ? null
-            : event.teamId === homeTeamId
+            : event.teamId === homeTeam.id
               ? "home"
-              : "away";
+              : event.teamId === awayTeam.id
+                ? "away"
+                : null;
         const next = events[index + 1];
         // Comments pinned to this event, plus minute-pins falling in this
         // event's window [event.start, next.start).
@@ -385,6 +421,7 @@ export function TimelineList({
         );
         const count = event.commentCount + (event.commentCount > 0 ? 0 : pinned.length);
         const commentsOpen = openCommentsId === event.id;
+        const parts = eventParts(event, side === "home" ? homeTeam : awayTeam);
 
         // Half-time and full-time are not rows: a centred divider with the
         // score as it stood at that moment.
@@ -453,7 +490,7 @@ export function TimelineList({
               {/* HOME — first column, content hugging the spine (its END edge
                   in both directions): trigger, text, icon-at-spine. */}
               {side === "home" ? (
-                <HomeSpineCell parts={eventParts(event)} goal={isGoal}>
+                <HomeSpineCell parts={parts} goal={isGoal}>
                   {count > 0 ? commentTrigger(event.id, count) : null}
                 </HomeSpineCell>
               ) : (
@@ -463,7 +500,7 @@ export function TimelineList({
               {/* AWAY — third column, content hugging the spine: icon-at-spine,
                   text, trigger. */}
               {side === "away" ? (
-                <AwaySpineCell parts={eventParts(event)} goal={isGoal}>
+                <AwaySpineCell parts={parts} goal={isGoal}>
                   {count > 0 ? commentTrigger(event.id, count) : null}
                 </AwaySpineCell>
               ) : (
