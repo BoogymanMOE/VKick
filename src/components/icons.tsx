@@ -34,6 +34,14 @@ export const StarIcon = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/** Cups tab — knockout silverware. */
+export const TrophyIcon = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M8 4h8v4a4 4 0 01-8 0z" />
+    <path d="M8 5H5.5a2.5 2.5 0 002.5 5M16 5h2.5a2.5 2.5 0 01-2.5 5M12 12v5M8.5 21h7M9.5 17h5" />
+  </svg>
+);
+
 export const TableIcon = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <path d="M4 5h16v5H4zM4 14h16v5H4zM9.5 5v5M15 14v5" />

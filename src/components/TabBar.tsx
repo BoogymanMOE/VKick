@@ -2,15 +2,17 @@ import { NavLink, useLocation } from "react-router-dom";
 import { forwardRef } from "react";
 import { useI18n } from "../i18n/context";
 import { haptic } from "../lib/telegram";
-import { BallIcon, ListIcon, UserIcon } from "./icons";
+import { BallIcon, ListIcon, TrophyIcon, UserIcon } from "./icons";
 import { cx } from "../lib/cx";
 import type { StringKey } from "../i18n/strings";
 
 /**
- * Three tabs: Matches, Tables, Profile. Browse is now inside Tables.
+ * Four tabs: Matches, Cups, Tables, Profile. Cups is the knockout feed — the
+ * Champions League and Europa League — which has no league table of its own.
  */
 const tabs: Array<{ to: string; key: StringKey; Icon: typeof BallIcon }> = [
   { to: "/matches", key: "nav.matches", Icon: BallIcon },
+  { to: "/cups", key: "nav.cups", Icon: TrophyIcon },
   { to: "/table", key: "nav.table", Icon: ListIcon },
   { to: "/profile", key: "nav.profile", Icon: UserIcon },
 ];

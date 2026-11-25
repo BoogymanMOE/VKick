@@ -35,9 +35,11 @@ export function slugForLeague(idOrSlug: string): string {
   return SLUG_BY_LEAGUE[idOrSlug as LeagueId] ?? idOrSlug;
 }
 
-/** Cups are removed — top-5 leagues only. */
-export function isCup(_slug: string): boolean {
-  return false;
+/** European club cups — knockout competitions with no league table. */
+export const CUP_SLUGS = new Set(["uefa.champions", "uefa.europa"]);
+
+export function isCup(slug: string): boolean {
+  return CUP_SLUGS.has(slug);
 }
 
 /** Human-readable competition name for any slug, in either language. */
@@ -58,7 +60,6 @@ export const COMPETITION_NAMES: Record<string, { en: string; fa: string; de: str
   "sco.1": { en: "Scottish Premiership", fa: "لیگ برتر اسکاتلند", de: "Schottischer Premier League" },
   "bel.1": { en: "Belgian Pro League", fa: "لیگ برتر بلژیک", de: "Pro League Belgien" },
 };
-
 
 /** Last resort for unknown slugs: never show the raw code. */
 export function humanizeSlug(slug: string): string {

@@ -1,8 +1,12 @@
 /**
- * The Browse/Cups catalog as the API serves it: the synced big five PLUS any
- * cup or tournament that actually has a match in the database. The DB is the
+ * The Browse/Cups catalog as the API serves it: the synced catalog PLUS any
+ * allowed competition that actually has a match in the database. The DB is the
  * source of truth for what exists — a competition with no fixture is noise on
  * the Cups strip, while one with fixtures and no catalog entry is invisible.
+ *
+ * Rows outside the allowlist are skipped: they may be leftovers from an older,
+ * wider sync, and `/api/matches` refuses to serve them, so advertising them
+ * would open an empty competition.
  *
  * Names are the English keys `src/i18n/names.ts` maps to Persian, so a cup the
  * client localizes never shows a raw slug. An unknown slug is humanized (never
@@ -10,7 +14,7 @@
  * on the Cups page is a worse mistake than hiding an unrecognised knockout.
  */
 import { all, type DB } from "../db/index.js";
-import { competitionCatalog, type CatalogEntry, type CompetitionKind } from "./catalog.js";
+import { competitionCatalog, isAllowedLeague, type CatalogEntry, type CompetitionKind } from "./catalog.js";
 
 /** slug -> the English name `toFa` knows. */
 const COMPETITION_NAMES: Record<string, string> = {
@@ -97,7 +101,7 @@ export function competitionCatalogWithMatches(db: DB): CatalogEntry[] {
   const seen = new Set(entries.map((e) => e.slug));
   const extra = all<{ league: string }>(db, "SELECT DISTINCT league FROM matches ORDER BY league ASC");
   for (const row of extra) {
-    if (seen.has(row.league)) continue;
+    if (seen.has(row.league) || !isAllowedLeague(row.league)) continue;
     entries.push({
       slug: row.league,
       name: competitionNameFor(row.league),

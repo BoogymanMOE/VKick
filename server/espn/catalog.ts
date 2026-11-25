@@ -1,8 +1,9 @@
 /**
- * The Browse catalog: the 5 big-five leagues, each with its display name.
- * No cups, no internationals, no extra competitions.
+ * The Browse catalog: the big-five leagues plus the two UEFA club cups (the
+ * Champions League and Europa League), each with its display name. No
+ * internationals, no browse-only extras.
  */
-import { COMPETITIONS, isCup } from "./types.js";
+import { COMPETITIONS, CUPS, LEAGUES, isCup } from "./types.js";
 
 export type CompetitionKind = "league" | "cup" | "tournament";
 
@@ -18,11 +19,11 @@ export interface CatalogEntry {
 }
 
 /**
- * The only leagues the API serves. The catalog was trimmed to these five, so
- * anything else still sitting in the DB (older, wider syncs) is treated as
- * unsupported: routes filter it out or 404 instead of serving it.
+ * The only competitions the API serves: the big five and the two UEFA club
+ * cups. Anything else still sitting in the DB (older, wider syncs) is treated
+ * as unsupported: routes filter it out or 404 instead of serving it.
  */
-export const LEAGUE_ALLOWLIST: ReadonlySet<string> = new Set(["eng.1", "esp.1", "ger.1", "ita.1", "fra.1"]);
+export const LEAGUE_ALLOWLIST: ReadonlySet<string> = new Set<string>([...LEAGUES, ...CUPS]);
 
 export function isAllowedLeague(slug: string): boolean {
   return LEAGUE_ALLOWLIST.has(slug);

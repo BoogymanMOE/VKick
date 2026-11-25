@@ -1,46 +1,65 @@
-export type LeagueSlug = "eng.1" | "esp.1" | "ita.1" | "ger.1" | "fra.1";
+export type DomesticLeagueSlug = "eng.1" | "esp.1" | "ita.1" | "ger.1" | "fra.1";
+
+/** European club cups — knockout competitions with no league table. */
+export type EuropeanCupSlug = "uefa.champions" | "uefa.europa";
+
+export type LeagueSlug = DomesticLeagueSlug | EuropeanCupSlug;
 
 /** The big five domestic leagues — the ones the favorites rule is built on. */
-export const LEAGUES: LeagueSlug[] = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
+export const LEAGUES: DomesticLeagueSlug[] = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
 
-/** Every competition that owns a league table (big five only now). */
-export const ALL_DOMESTIC: LeagueSlug[] = [...LEAGUES];
+/** Every competition that owns a league table (big five only). */
+export const ALL_DOMESTIC: DomesticLeagueSlug[] = [...LEAGUES];
 
-/** Seeded competition labels — the 5 big-five leagues with display names. */
+/**
+ * European club cups, synced alongside the big five. They share ESPN's team-id
+ * space with the domestic leagues, so a cup sync never overwrites a club's
+ * domestic `league` (see `isCup` and the team upsert).
+ */
+export const CUPS: EuropeanCupSlug[] = ["uefa.champions", "uefa.europa"];
+
+/** Every competition the scoreboard/fixture sync polls: big five + cups. */
+export const ALL_COMPETITIONS: LeagueSlug[] = [...LEAGUES, ...CUPS];
+
+/** Seeded competition labels — the big five leagues plus the two UEFA cups. */
 export const COMPETITIONS: Array<{
   slug: LeagueSlug;
   name: string;
-  kind: "league";
+  kind: "league" | "cup";
 }> = [
   { slug: "eng.1", name: "Premier League", kind: "league" },
   { slug: "esp.1", name: "La Liga", kind: "league" },
   { slug: "ita.1", name: "Serie A", kind: "league" },
   { slug: "ger.1", name: "Bundesliga", kind: "league" },
   { slug: "fra.1", name: "Ligue 1", kind: "league" },
+  { slug: "uefa.champions", name: "UEFA Champions League", kind: "cup" },
+  { slug: "uefa.europa", name: "UEFA Europa League", kind: "cup" },
 ];
 
-/** Cups removed — top-5 leagues only. Empty for consumers that still import it. */
-export const CUPS: LeagueSlug[] = [];
-
-/** Internationals removed — top-5 leagues only. Empty for consumers that still import it. */
+/** Internationals remain out of scope — no national-team competitions synced. */
 export const INTERNATIONALS: string[] = [];
 
 /**
- * Cups and internationals removed — top-5 leagues only.
- * isCup always returns false for the big five.
+ * True for every competition WITHOUT a league table. It also carries the "this
+ * competition does not own a club's domestic league" meaning used by the team
+ * upsert, which is what stops a Real Madrid synced from a Champions League
+ * scoreboard from claiming uefa.champions as its own league.
  */
-export function isCup(_league: string): boolean {
-  return false;
+export function isCup(league: string): boolean {
+  return (CUPS as string[]).includes(league);
 }
 
 /**
- * Sweep window: 21 days forward for all big-five leagues.
+ * Sweep window: 21 days forward for every synced competition.
  *
  * `back` is a CEILING, not the window the sweeps actually use (callers pass
  * their own budget), so widening it only widens sweeps that ASK for more: the
  * daily results lookback runs a week back so a short outage — a box down for
  * a weekend — self-heals on the next morning tick instead of waiting for the
  * boot backfill to notice a whole-gameweek gap.
+ *
+ * Cups use the same window: their league phase is one matchday every week or
+ * two, so a three-week lookahead is what keeps the next round on the feed.
  */
 export function pollWindow(_league: string): { back: number; forward: number } {
   return { back: 7, forward: 21 };

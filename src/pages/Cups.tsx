@@ -50,6 +50,9 @@ export default function Cups() {
   // rows open onto International instead of an empty club-cup strip.
   const tab = (kind ?? comps.find((c) => c.slug === active)?.kind ?? "cup") as "cup" | "tournament";
   const visible = comps.filter((c) => c.kind === tab);
+  // With no international tournaments in the catalog the Cups/International
+  // toggle is a dead end — render the competition strip alone instead.
+  const hasTournaments = comps.some((c) => c.kind === "tournament");
   const matchesQuery = useMatches({ league: active });
   // Memoized so the identity stays stable across renders: the derived `byRound`
   // map below depends on it, and a fresh `[]` every render would rebuild it.
@@ -92,19 +95,21 @@ export default function Cups() {
         <RowPlaceholder />
       ) : (
         <div className="mt-3 space-y-2">
-          <Segmented
-            value={tab}
-            onChange={(next) => {
-              haptic("light");
-              setKind(next);
-              const first = comps.find((c) => c.kind === next);
-              if (first) setPicked(first.slug);
-            }}
-            options={[
-              { value: "cup", label: t("browse.cups") },
-              { value: "tournament", label: t("browse.tournaments") },
-            ]}
-          />
+          {hasTournaments ? (
+            <Segmented
+              value={tab}
+              onChange={(next) => {
+                haptic("light");
+                setKind(next);
+                const first = comps.find((c) => c.kind === next);
+                if (first) setPicked(first.slug);
+              }}
+              options={[
+                { value: "cup", label: t("browse.cups") },
+                { value: "tournament", label: t("browse.tournaments") },
+              ]}
+            />
+          ) : null}
           <Segmented
             value={active}
             onChange={(next) => {

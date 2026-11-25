@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { fetchLeagueNews, fetchScoreboard, fetchStandings, fetchSummary, fetchTeamRoster } from "../espn/client.js";
-import { LEAGUES, pollWindow, type LeagueSlug } from "../espn/types.js";
+import { ALL_COMPETITIONS, LEAGUES, pollWindow, type LeagueSlug } from "../espn/types.js";
 import { getDb, all, get } from "../db/index.js";
 import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
 import { onMatchFinished } from "../predictions/resolver.js";
@@ -74,7 +74,7 @@ export async function syncScoreboards(days = 0): Promise<GoalAlert[]> {
  */
 export async function syncScoreboardWindow(backDays: number, forwardDays: number): Promise<GoalAlert[]> {
   const goals: GoalAlert[] = [];
-  for (const league of LEAGUES) {
+  for (const league of ALL_COMPETITIONS) {
     const win = pollWindow(league);
     const offsets: number[] = [];
     for (let d = -Math.min(backDays, win.back); d <= Math.min(forwardDays, win.forward); d++) {
@@ -119,7 +119,7 @@ export const FIXTURE_HORIZON_DAYS = 95;
  * of a fixed day window.
  */
 export async function syncSeasonFull(): Promise<void> {
-  for (const league of LEAGUES) {
+  for (const league of ALL_COMPETITIONS) {
     const seasonKey = getSeasonKey(db, league);
     const startYear = Number(seasonKey.split("-")[0]);
     const endYear = startYear + 1;
@@ -151,7 +151,7 @@ export async function syncSeasonFull(): Promise<void> {
  */
 export async function syncFixtureHorizon(): Promise<GoalAlert[]> {
   const goals: GoalAlert[] = [];
-  for (const league of LEAGUES) {
+  for (const league of ALL_COMPETITIONS) {
     const win = pollWindow(league);
     const from = Math.max(1, win.forward) + 1;
     for (let off = from; off <= FIXTURE_HORIZON_DAYS; off++) {
@@ -446,9 +446,11 @@ export async function reconcileStuckLive(): Promise<number> {
  * Predictor had no squad to show for exactly the clubs fans bet on in Europe.
  */
 export async function syncRosters(): Promise<void> {
-  // Only roster big-five clubs: outside leagues are not polled, so no roster
-  // endpoint is called for them. Non-big-five teams keep whatever squad data
-  // they got from a cup/European fixture summary (if any).
+  // Roster every club in a synced competition: the big five plus clubs whose
+  // only stored fixture is European (Ajax, PSV, …), which have no domestic
+  // league in this app. Their competition is inferred from their most recent
+  // match, and the roster endpoint accepts the cup slug. Clubs outside every
+  // synced competition keep whatever squad they got from a summary (if any).
   // SQLite can't reference a SELECT alias (inferred_league) inside WHERE, so
   // the query wraps the rows in a derived table to filter on that alias.
   const teams = all<{ id: string; league: string; inferred_league: string; name: string }>(
@@ -461,10 +463,10 @@ export async function syncRosters(): Promise<void> {
                         ORDER BY m.kickoff_at DESC LIMIT 1), '') AS inferred_league
        FROM teams t
      ) s
-     WHERE s.league IN (${LEAGUES.map(() => "?").join(",")})
-        OR s.inferred_league IN (${LEAGUES.map(() => "?").join(",")})
+     WHERE s.league IN (${ALL_COMPETITIONS.map(() => "?").join(",")})
+        OR s.inferred_league IN (${ALL_COMPETITIONS.map(() => "?").join(",")})
      ORDER BY s.name ASC`,
-    [...LEAGUES, ...LEAGUES],
+    [...ALL_COMPETITIONS, ...ALL_COMPETITIONS],
   );
   let ok = 0;
   let skipped = 0;
@@ -515,9 +517,9 @@ export async function backfillMissingDataOnBoot(): Promise<void> {
       db,
       `SELECT m.id, m.league FROM matches m
        WHERE m.status = 'finished'
-         AND m.league IN (${LEAGUES.map(() => "?").join(",")})
+         AND m.league IN (${ALL_COMPETITIONS.map(() => "?").join(",")})
          AND NOT EXISTS (SELECT 1 FROM match_player_stats s WHERE s.match_id = m.id)`,
-      [...LEAGUES],
+      [...ALL_COMPETITIONS],
     );
     if (missingMatches.length > 0) {
       log(`boot backfill: ${missingMatches.length} finished match(es) missing summaries`);

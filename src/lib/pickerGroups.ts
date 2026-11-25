@@ -114,10 +114,10 @@ export function buildLeagueTabs(
   const extras = followed.filter((row) => row.kind === "league" && !aliasBySlug.has(row.league));
   const seen = new Set<string>();
 
-  // Cups get no tab, followed or not: the server's catalog is the big five, so
-  // /api/standings answers LEAGUE_NOT_SUPPORTED for every cup and each such tab
-  // rendered "Couldn't load this" (ten of them, permanently). Knockout
-  // competitions live on the Cups screen, which reads fixtures, not tables.
+  // Cups get no tab, followed or not: a knockout competition owns no league
+  // table, so /api/standings answers empty and each such tab rendered
+  // "Couldn't load this" (ten of them, permanently). Knockout competitions
+  // live on the Cups screen, which reads fixtures, not tables.
   return [
     ...bigFive.map((g) => ({ value: g.key, label: t(g.label) })),
     ...extras

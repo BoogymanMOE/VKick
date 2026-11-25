@@ -13,7 +13,7 @@
  */
 import { getDb } from "./db/index.js";
 import { fetchScoreboard, fetchStandings, fetchSummary } from "./espn/client.js";
-import { LEAGUES, type LeagueSlug } from "./espn/types.js";
+import { ALL_COMPETITIONS, LEAGUES, type LeagueSlug } from "./espn/types.js";
 import {
   normalizeScoreboard,
   normalizeSummaryMatch,
@@ -36,7 +36,7 @@ function log(...parts: unknown[]): void {
 async function main(): Promise<void> {
   switch (cmd) {
     case "sync-all": {
-      for (const league of LEAGUES) {
+      for (const league of ALL_COMPETITIONS) {
         const json = await fetchScoreboard(league);
         if (dryRun) {
           const { matches } = normalizeScoreboard(json, league);
