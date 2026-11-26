@@ -2,14 +2,16 @@
 
 A Telegram Mini App football companion: follow a favorite club plus up to four more and up to five leagues from anywhere ESPN covers, predict lineups/subs/shots/standout players/head-to-heads before and during each match, climb season-long prediction leaderboards, and rate the players who mattered most with the crowd's "eye test". Full concept: `concept.md`.
 
-Competitions synced today: **32** — the big five (`eng.1`, `esp.1`, `ita.1`, `ger.1`, `fra.1`), six more domestic leagues with real tables (`ned.1`, `por.1`, `tur.1`, `sco.1`, `gre.1`, `bel.1`), eleven club cups (the UEFA competitions plus the big five's domestic cups) and ten international tournaments. The sync layer treats league slugs as config (`server/espn/types.ts`) so any other ESPN-covered competition can be added without code changes. Cups share ESPN's team-id space with domestic leagues, and a cup sync never overwrites a club's domestic `league`.
+Competitions synced today: **7** — the big five (`eng.1`, `esp.1`, `ita.1`, `ger.1`, `fra.1`) and the two UEFA club cups (`uefa.champions`, `uefa.europa`). The sync layer treats competition slugs as config (`server/espn/types.ts`), so another ESPN-covered competition can be added without client changes, but the allow-list is the set the API serves. Cups share ESPN's team-id space with domestic leagues, and a cup sync never overwrites a club's domestic `league`.
+
+**Feature flags:** predictions and player ratings are built but currently shipped **off** — `PREDICTIONS_ENABLED` and `RATINGS_ENABLED` are `false` in `src/lib/features.ts`, with matching server flags in `.env`. The sections below describe the full codebase; the live build exposes Matches, Cups, Tables, search, team/player stats, leaderboards and Profile.
 
 ## Architecture
 
 ```
 ESPN public API (unofficial, free)
         |
-  [sync service]  normalizes →  SQLite (server/data/matchday.db)
+  [sync service]  normalizes →  SQLite (data/matchday.db by default)
         |                            |
   [Express API :8787]  ← vite dev proxy (/api)
         |
@@ -147,7 +149,7 @@ fixtures and live scores from ESPN scoreboards, lineups/timelines/player stats f
 - Localized bot pushes (`server/messages.ts`): copy is rendered per **recipient** from `users.language`, which each device reports via `POST /api/me/language`, so the bot speaks the same language as the app
 - Pinned timeline comments: composer on the match Timeline tab (pin to an event or minute, 500 chars, optional https clip link), pins rendered under their event, comment counts surfaced, your own cards highlighted
 - Referral/invite mechanic: one reusable invite code per account, redeemable once per account, paying the referrer on the GLOBAL board only (capped per invite count) — `server/scoring/referral.ts`, surfaced in Profile with copy in both languages
-- League tables for **every** followed domestic league, not just the big five: `buildLeagueTabs` derives the Table tabs from `followed_leagues`, and `syncStandings()` sweeps `ALL_DOMESTIC` (11 leagues). Understat xPts remain big-five only, so the Expected view hides itself where there is no data rather than showing dashes
+- League tables for the five domestic leagues in the catalog: `buildLeagueTabs` derives the Table tabs from `followed_leagues`, and `syncStandings()` sweeps the big five. Understat xPts remain big-five only, so the Expected view hides itself where there is no data rather than showing dashes
 - Inline Adsgram Task card (Telegram-only; needs `ADGRAM_ENABLED=true` **and** `VITE_ADSGRAM_TASK_BLOCK_ID`) below the Matchday Upcoming feed and at the foot of Match detail — see the note below
 - Guest/device accounts with full merge-on-upgrade, username-only login, Telegram initData auth, admin sync/notify endpoints
 
@@ -164,18 +166,19 @@ Removed: the curated `versus_pairs` admin path (endpoints + table, dropped by mi
 
 - (nothing outstanding from the original feature list — referral, ads, cup bracket trees and tables for followed leagues all shipped; see the notes below)
 
-**Knockout brackets ship too.** `src/lib/bracket.ts` builds a connected tree from ESPN's round labels — rounds ordered first-leg → final, ties folded onto their second legs, winners inferred from the scoreline, and each round's entrants linked back to the feeder matches that produced them. The Cups screen renders it whenever a competition carries round data, and falls back to the flat live/upcoming/results sections when it doesn't.
+**Knockout brackets ship too.** `src/lib/bracket.ts` builds a connected tree from ESPN's round labels — rounds ordered first-leg → final, ties folded onto their second legs, winners inferred from the scoreline, and each round's entrants linked back to the feeder matches that produced them. `src/components/CupBracket.tsx` draws it as a horizontally scrollable board: one column per knockout round, fixed-size tie cards with crests and aggregates, and curved SVG connectors from every feeder tie to the tie it produced. The Cups screen also keeps a round-by-round list view (the bracket is the shape of the tournament; kickoffs and legs live in the list). Cup pages query the whole competition season rather than the feed's 17-day window.
 
-(Ads: the inline **Adsgram Task card is live** on Matchday — below the Upcoming feed, above Previous results — and as the last block on Match detail. Telegram-only, and off entirely unless `ADGRAM_ENABLED=true` **and** `VITE_ADSGRAM_TASK_BLOCK_ID` is set (`src/lib/ads.ts`); both are inlined at build time, so changing either means a rebuild. Adsgram ships no banner format, so Task is the only unit and the rewarded/interstitial formats are deliberately unused. A completed task is reported to `GET /api/adsgram/reward`, which answers `200 { status: "ok" }` and logs the userId — granting the reward itself is not implemented yet.)
+(Ads: the feed's inline A-ADS unit (`InlineAd`, a lazy iframe below the first league group) is the only ad surface. Build with `VITE_ADS_ENABLED=false` to remove it entirely. The standalone A-ADS block and the Tapsell loader that used to sit in `index.html` are gone — both loaded third-party scripts on every boot, above the app, with no off switch. `GET /api/adsgram/reward` remains a compatibility stub from the retired Adsgram experiment; it answers `200 { status: "ok" }` and logs the userId.)
 
 ## Screens
 
-- **Matches** (`#/matches`) — matchday list, live/upcoming/finished, your clubs first, "my teams only" filter
+- **Matches** (`#/matches`) — matchday list, live/upcoming/finished, your clubs first, "my teams only" filter, and a header search sheet over clubs, players and competitions
+- **Cups** (`#/cups`) — UCL/Europa fixtures, a visual knockout bracket (round columns and feeder connectors) with a round-by-round list view, live scores
 - **Match detail** (`#/match/:id`) — timeline, stats, lineups, ratings tabs
 - **Onboarding** (`#/onboarding`) — the club & league picker: one anchored favorite, up to four more clubs, up to five national teams on their own shelf, and up to five leagues. A single-screen intro (the three ideas as one list) precedes it on first run. Old `/my-teams` deep links redirect here; Profile re-opens it for edits.
 - **Ratings** (`#/ratings`) — crowd ratings beside the stat score, the "eye test" view
 - **Tables** (`#/table`) — league standings with your clubs highlighted
-- **Cups / Browse / Player Stats / Team pages** — knockout fixtures grouped by round (first round → final) when ESPN labels them, league browsing, season stat leaderboards
+- **Player Stats / Team pages** — season stat leaderboards and club pages (squad, fixtures, form)
 - **Predictions** (`#/predictions`) — your pick history, each with the resolver's own scoring breakdown ("why did I get X")
 - **Profile** (`#/profile`) — account, language (EN/FA with full RTL), notification and haptics settings
 

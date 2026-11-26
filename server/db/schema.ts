@@ -720,6 +720,16 @@ export function migrate(db: DatabaseSync): void {
     }
   }
 
+  // `interval_seconds` joined sync_job_status after the job ledger shipped.
+  // Without this backfill an older database makes /api/health/data throw
+  // "no such column" — the health screen then reads as a broken server.
+  const jobCols = db.prepare("SELECT name FROM pragma_table_info('sync_job_status')").all() as Array<{
+    name: string;
+  }>;
+  if (!jobCols.some((c) => c.name === "interval_seconds")) {
+    db.exec("ALTER TABLE sync_job_status ADD COLUMN interval_seconds INTEGER NOT NULL DEFAULT 3600;");
+  }
+
   // Cup round labels arrived with the Cups round-grouping view; fresh DBs get
   // the column via CREATE TABLE, older ones here. Nullable: league matches
   // have no round, and the client falls back to status sections when empty.

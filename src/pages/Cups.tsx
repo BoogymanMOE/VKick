@@ -12,7 +12,8 @@ import {
   SectionHeading,
   Segmented,
 } from "../components/ui";
-import { buildBracket, type BracketTie } from "../lib/bracket";
+import { buildBracket, isBracketRound, type BracketRound, type BracketTie } from "../lib/bracket";
+import { CupBracket } from "../components/CupBracket";
 import { useKnockoutCompetitions, useMatches } from "../hooks/useApi";
 import { useI18n } from "../i18n/context";
 import { competitionName } from "../lib/leagues";
@@ -21,17 +22,16 @@ import { haptic } from "../lib/telegram";
 import type { Match } from "../types";
 
 /**
- * Knockout competitions: live scores and fixtures for the club cups — the three
- * UEFA competitions, UCL qualifying and the Super Cup, plus the big five's six
- * domestic cups — and the international tournaments (national teams). Sourced
- * from the same sync as the leagues and selected on the server's `kind`
- * (anything that is not a league), so promoting a competition into the catalog
- * adds it here with no client change. No table here — knockout only.
+ * Knockout competitions: live scores and fixtures for the club cups and the
+ * international tournaments (national teams). Sourced from the same sync as the
+ * leagues and selected on the server's `kind` (anything that is not a league),
+ * so promoting a competition into the catalog adds it here with no client
+ * change. No table here — knockout only.
  *
- * A small Cups / International toggle swaps the competition strip, because one
- * fifteen-item scroller mixing club cups with World Cup qualifying is hard to
- * find things in. The toggle follows a deep link, so Browse's tournament rows
- * open straight onto the International tab.
+ * Two views over the same season: a visual bracket (round columns, tie cards,
+ * feeder connectors) and the round-by-round list with each tie's legs. The
+ * list stays because a bracket is the shape of the tournament, not a fixture
+ * detail view — kickoff times, legs and venue still live on the cards below.
  */
 export default function Cups() {
   const { t, lang, localize } = useI18n();
@@ -53,7 +53,15 @@ export default function Cups() {
   // With no international tournaments in the catalog the Cups/International
   // toggle is a dead end — render the competition strip alone instead.
   const hasTournaments = comps.some((c) => c.kind === "tournament");
-  const matchesQuery = useMatches({ league: active });
+  // A cup is a SEASON, not a fortnight: the feed's default relevance window
+  // would cut the bracket down to the last three weeks, so the page asks for
+  // the whole competition year explicitly (July → June, the UEFA calendar).
+  const seasonRange = useMemo(() => {
+    const now = new Date();
+    const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+    return { from: `${startYear}-07-01`, to: `${startYear + 1}-06-30` };
+  }, []);
+  const matchesQuery = useMatches({ league: active, ...seasonRange, limit: 600 });
   // Memoized so the identity stays stable across renders: the derived `byRound`
   // map below depends on it, and a fresh `[]` every render would rebuild it.
   const matches = useMemo(() => matchesQuery.data ?? [], [matchesQuery.data]);
@@ -86,6 +94,24 @@ export default function Cups() {
     if (matchesQuery.isLoading || matchesQuery.isError) return { rounds: [], connected: false };
     return buildBracket(matches);
   }, [matches, matchesQuery.isLoading, matchesQuery.isError]);
+
+  // Knockout rounds get the visual board; the league/group phase stays a list
+  // (it is a table of fixtures, not a branch of the tree). A board with more
+  // than 12 first-round ties would be taller than a phone screen four times
+  // over, so those fall back to the list too.
+  const knockoutRounds = useMemo(
+    () => bracket.rounds.filter((round) => isBracketRound(round.label)),
+    [bracket.rounds],
+  );
+  const phaseRounds = useMemo(
+    () => bracket.rounds.filter((round) => !isBracketRound(round.label)),
+    [bracket.rounds],
+  );
+  const canBracket =
+    knockoutRounds.length >= 2 &&
+    knockoutRounds.every((round) => round.ties.length <= 12);
+  const [view, setView] = useState<"bracket" | "list">("bracket");
+  const effectiveView = canBracket ? view : "list";
 
   return (
     <>
@@ -156,47 +182,58 @@ export default function Cups() {
               <CupMatchList matches={live} />
             </section>
           ) : null}
-          {bracket.rounds.length > 1 ? (
-            // Bulk control for the bracket: folds or unfolds every round at
-            // once. The label names the action ahead — "Expand all" once the
-            // rounds are collapsed, "Collapse all" otherwise.
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
+          {canBracket ? (
+            <div className="mt-4">
+              <Segmented
+                value={effectiveView}
+                onChange={(next) => {
                   haptic("light");
-                  setRoundsOverride((prev) => (prev === null ? false : !prev));
+                  setView(next);
                 }}
-                className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-xs font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
-              >
-                {roundsOverride === false ? t("common.expandAll") : t("common.collapseAll")}
-              </button>
+                options={[
+                  { value: "bracket", label: t("cups.viewBracket") },
+                  { value: "list", label: t("cups.viewList") },
+                ]}
+              />
             </div>
           ) : null}
-          {bracket.rounds.map((round) => {
-            const legCount = round.ties.reduce((n, tie) => n + tie.legs.length, 0);
-            return (
-              // Collapsible like the status sections; the fold state keys off
-              // the round label, so collapsing "Qualifying" once keeps it
-              // folded in every cup. Toggling one round releases the bulk
-              // override so the per-round choice is the ongoing truth.
-              <CollapsibleSection
-                key={round.label}
-                id={`cups-round-${roundId(round.label)}`}
-                level={2}
-                title={localize(round.label)}
-                count={legCount}
-                openOverride={roundsOverride === null ? undefined : { open: roundsOverride }}
-                onUserToggle={roundsOverride === null ? undefined : () => setRoundsOverride(null)}
-              >
-                <div className="space-y-2">
-                  {round.ties.map((tie) => (
-                    <TieCard key={tie.key} tie={tie} />
-                  ))}
+          {effectiveView === "bracket" && canBracket ? (
+            <>
+              <CupBracket rounds={knockoutRounds} />
+              {phaseRounds.length > 0 ? (
+                <div className="mt-6">
+                  <SectionHeading title={t("cups.phaseFixtures")} />
+                  <RoundList rounds={phaseRounds} roundsOverride={null} setRoundsOverride={setRoundsOverride} />
                 </div>
-              </CollapsibleSection>
-            );
-          })}
+              ) : null}
+            </>
+          ) : (
+            <>
+              {bracket.rounds.length > 1 ? (
+                // Bulk control for the list: folds or unfolds every round at
+                // once. The label names the action ahead — "Expand all" once
+                // the rounds are collapsed, "Collapse all" otherwise.
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      haptic("light");
+                      setRoundsOverride((prev) => (prev === null ? false : !prev));
+                    }}
+                    className="inline-flex min-h-11 items-center rounded-lg border border-line px-3 text-xs font-bold text-ink-2 transition-[color,background-color,transform] duration-[var(--t-fast)] hover:bg-elevated hover:text-ink active:scale-[0.97]"
+                  >
+                    {roundsOverride === false ? t("common.expandAll") : t("common.collapseAll")}
+                  </button>
+                </div>
+              ) : null}
+              <RoundList rounds={bracket.rounds} roundsOverride={roundsOverride} setRoundsOverride={setRoundsOverride} />
+              {knockoutRounds.length === 0 && phaseRounds.length > 0 ? (
+                <p className="mt-4 rounded-card border border-dashed border-line px-3 py-2 text-center text-xs text-ink-3">
+                  {t("cups.bracketPending")}
+                </p>
+              ) : null}
+            </>
+          )}
         </>
       ) : (
         /* No round labels in the window: the original status sections. */
@@ -253,6 +290,51 @@ export default function Cups() {
       )}
 
       <p className="mt-6 text-center text-xs text-ink-3">{t("cups.noTable")}</p>
+    </>
+  );
+}
+
+/**
+ * The round-by-round fixture list — each round a disclosure holding its ties.
+ * Shared by the list view and by the phase/qualifying block under the board,
+ * so both keep the same fold behaviour and tie cards.
+ */
+function RoundList({
+  rounds,
+  roundsOverride,
+  setRoundsOverride,
+}: {
+  rounds: BracketRound[];
+  roundsOverride: boolean | null;
+  setRoundsOverride: (next: boolean | null) => void;
+}) {
+  const { localize } = useI18n();
+  return (
+    <>
+      {rounds.map((round) => {
+        const legCount = round.ties.reduce((n, tie) => n + tie.legs.length, 0);
+        return (
+          // Collapsible like the status sections; the fold state keys off the
+          // round label, so collapsing "Qualifying" once keeps it folded in
+          // every cup. Toggling one round releases the bulk override so the
+          // per-round choice is the ongoing truth.
+          <CollapsibleSection
+            key={round.label}
+            id={`cups-round-${roundId(round.label)}`}
+            level={2}
+            title={localize(round.label)}
+            count={legCount}
+            openOverride={roundsOverride === null ? undefined : { open: roundsOverride }}
+            onUserToggle={roundsOverride === null ? undefined : () => setRoundsOverride(null)}
+          >
+            <div className="space-y-2">
+              {round.ties.map((tie) => (
+                <TieCard key={tie.key} tie={tie} />
+              ))}
+            </div>
+          </CollapsibleSection>
+        );
+      })}
     </>
   );
 }

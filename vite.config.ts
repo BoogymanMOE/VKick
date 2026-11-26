@@ -47,9 +47,17 @@ export default defineConfig(() => {
       // code change doesn't invalidate the vendor bytes in the browser cache.
       rollupOptions: {
         output: {
-          manualChunks: {
-            react: ["react", "react-dom", "react-router-dom"],
-            query: ["@tanstack/react-query"],
+          // Split the big stable pieces out of the entry chunk. The i18n copy
+          // is the largest single source file and changes far less often than
+          // the shell; giving it its own chunk keeps the entry under the 60KB
+          // per-chunk budget and lets the browser cache it across app edits.
+          manualChunks(id) {
+            const path = id;
+            if (path.includes("/src/i18n/strings")) return "strings";
+            if (path.includes("/node_modules/@tanstack/")) return "query";
+            if (/(^|\/)node_modules\/(react|react-dom|react-router|react-router-dom|scheduler)\//.test(path))
+              return "react";
+            return undefined;
           },
         },
       },

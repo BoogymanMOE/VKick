@@ -235,6 +235,41 @@ export interface ApiCompetition {
   comingSoon?: boolean;
 }
 
+/* ------------------------------------------------------------ search */
+
+/** A club hit from `GET /api/search`; same shape the teams list returns. */
+export interface ApiSearchTeam {
+  id: string;
+  name: string;
+  short_name: string | null;
+  abbreviation: string | null;
+  color: string | null;
+  logo_url: string | null;
+  league: string;
+  /** The nickname the query matched through ("barca" → Barcelona), if any. */
+  matched?: string | null;
+}
+
+export interface ApiSearchPlayer {
+  id: string;
+  name: string;
+  short_name: string | null;
+  position: string | null;
+  headshot_url: string | null;
+  team_id: string;
+  team_name: string;
+  team_short: string | null;
+  team_color: string | null;
+  league: string;
+}
+
+export interface ApiSearchResult {
+  query: string;
+  teams: ApiSearchTeam[];
+  players: ApiSearchPlayer[];
+  competitions: Array<Pick<ApiCompetition, "slug" | "name" | "kind">>;
+}
+
 /**
  * Row behind GET /api/leagues/:league/players. Fields the client maps through
  * a `??` default are optional — the server only sends a stat the competition
@@ -828,6 +863,10 @@ export const api = {
     ),
 
   getCompetitions: () => request<{ competitions: ApiCompetition[] }>("/competitions"),
+
+  /** Clubs, players and competitions in one round trip. */
+  search: (query: string) =>
+    request<ApiSearchResult>(`/search?q=${encodeURIComponent(query)}`),
 
   /**
    * Sync freshness from the server's sentinel (/api/health/sync): the feed's

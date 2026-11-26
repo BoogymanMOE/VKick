@@ -1,6 +1,12 @@
 import { LEAGUES, type LeagueSlug } from "./types.js";
 
-const BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
+/**
+ * ESPN's host is configurable: some networks (and this project's Windows dev
+ * box) reset `site.api.espn.com` from Node's fetch while its CDN alias
+ * `site.web.api.espn.com` answers normally. Deployments keep the default.
+ */
+const HOST = process.env.ESPN_API_HOST?.trim() || "site.api.espn.com";
+const BASE = `https://${HOST}/apis/site/v2/sports/soccer`;
 
 /**
  * The standings feed lives on a DIFFERENT API version than the rest of the app
@@ -10,7 +16,7 @@ const BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer";
  * table built from it shows a goal-difference column of zeros. The v2 endpoint
  * carries the full set (pointsFor/pointsAgainst/pointDifferential).
  */
-const BASE_V2 = "https://site.api.espn.com/apis/v2/sports/soccer";
+const BASE_V2 = `https://${HOST}/apis/v2/sports/soccer`;
 
 export class EspnError extends Error {
   constructor(

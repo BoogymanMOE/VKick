@@ -80,6 +80,19 @@ export function orderRounds(labels: Iterable<string>): string[] {
   return [...labels].sort((a, b) => roundRank(b) - roundRank(a) || a.localeCompare(b));
 }
 
+/**
+ * True for rounds that belong on the knockout board. The single group/league
+ * phase of a cup is a table of fixtures, not a round in the tree, so it stays
+ * in a list below the bracket; qualifying and third-place games are excluded
+ * for the same reason (they do not feed the final the way a tree implies).
+ */
+export function isBracketRound(label: string): boolean {
+  const l = label.toLowerCase();
+  if (/league phase|group|qualif|third place|3rd place/.test(l)) return false;
+  if (l.includes("final")) return true; // final, semi-final, quarter-final
+  return /round of|\bround\b|knockout|play-?off/.test(l);
+}
+
 function pairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
 }

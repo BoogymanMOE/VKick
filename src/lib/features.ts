@@ -13,6 +13,14 @@ export const PREDICTIONS_ENABLED = false;
 export const RATINGS_ENABLED = false;
 
 /**
+ * Ads (the in-feed A-ADS unit). Build-time switch: set VITE_ADS_ENABLED=false
+ * to ship a build with no ad iframe at all. The standalone A-ADS/Tapsell tags
+ * that used to sit in index.html are gone — both loaded third-party scripts
+ * on every boot, above the app, whether or not the feed ad rendered.
+ */
+export const ADS_ENABLED = import.meta.env.VITE_ADS_ENABLED !== "false";
+
+/**
  * Algorithmic per-player ratings derived from ESPN event data.
  * Default off until enabled on Render.
  */

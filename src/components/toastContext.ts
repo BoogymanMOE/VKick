@@ -9,11 +9,21 @@ import type { ReactNode } from "react";
  */
 export type ToastTone = "volt" | "gold" | "danger" | "muted";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface ToastItem {
   id: string;
   text: string;
   tone: ToastTone;
   icon?: ReactNode;
+  /**
+   * Optional one-tap reversal ("Undo"). Toasts carrying an action stay up
+   * longer than a plain confirmation, because the user has to decide.
+   */
+  action?: ToastAction;
   /** Set when the dwell time is up: the toast plays its leave, then unmounts. */
   leaving?: boolean;
 }

@@ -128,6 +128,24 @@ export function useTeams(league?: string) {
   });
 }
 
+/**
+ * Global search over clubs, players and competitions. One character is enough
+ * for clubs (the server ranks them by relevance, so "b" leads with Barcelona
+ * and Bayern); players and competitions wait for two server-side.
+ */
+export function useSearch(query: string) {
+  const q = query.trim();
+  return useQuery({
+    queryKey: ["search", q],
+    queryFn: () => api.search(q),
+    enabled: q.length >= 1,
+    staleTime: 30_000,
+    // Keep the previous hits on screen while the next keystroke is in flight,
+    // so results don't flash empty between letters.
+    placeholderData: (previous) => previous,
+  });
+}
+
 export interface StandingRow {
   team: Team;
   rank: number | null;
@@ -217,7 +235,7 @@ export function useStandingsScorers(league: string): ApiScorer[] {
  */
 export function useFavorites() {
   const qc = useQueryClient();
-  const { t } = useI18n();
+  const { t, localize } = useI18n();
   const { push } = useToast();
 
   // Server failures roll the optimistic row back AND tell the user — a silent
@@ -274,6 +292,19 @@ export function useFavorites() {
       if (ctx?.prev) qc.setQueryData(["favorites"], ctx.prev);
       notifyError(err);
     },
+    onSuccess: (_data, teamId) => {
+      // Removing a club is one tap and previously had no way back. The undo
+      // re-follows the same id; the server answer (ALREADY_FOLLOWING) is
+      // harmless if the tap races a second remove.
+      const cached = currentTeamFromCache(teamId);
+      const name = cached ? localize(cached.name) : "";
+      push({
+        text: t("myTeams.removed", { team: name }),
+        tone: "muted",
+        icon: "✕",
+        action: { label: t("common.undo"), onClick: () => add.mutate(teamId) },
+      });
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: ["favorites"] }),
   });
 
@@ -309,6 +340,8 @@ export function useFavorites() {
  */
 export function useFollowedLeagues() {
   const qc = useQueryClient();
+  const { t, lang } = useI18n();
+  const { push } = useToast();
 
   const query = useQuery({
     queryKey: ["followed-leagues"],
@@ -325,6 +358,16 @@ export function useFollowedLeagues() {
   });
   const unfollow = useMutation({
     mutationFn: (league: string) => api.unfollowLeague(league),
+    onSuccess: (_data, slug) => {
+      // Same one-tap removal problem as unfavouriting a club: offer the way
+      // back while the user still remembers tapping it.
+      push({
+        text: t("leagues.removed", { league: competitionName(slug, lang) }),
+        tone: "muted",
+        icon: "✕",
+        action: { label: t("common.undo"), onClick: () => follow.mutate(slug) },
+      });
+    },
     onSettled: () => qc.invalidateQueries({ queryKey: ["followed-leagues"] }),
   });
 

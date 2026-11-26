@@ -13,6 +13,7 @@ import { PROJECT_ROOT } from "../env.js";
 import { filterOutBlockedTeams, isBlockedTeamId } from "../db/blockedTeams.js";
 
 import { isAllowedLeague } from "../espn/catalog.js";
+import { COMPETITIONS, CUPS, LEAGUES, isCup } from "../espn/types.js";
 
 import { competitionCatalogWithMatches } from "../espn/competitions.js";
 import { TEAM_GROUP_SQL, TEAM_GROUP_PARAMS } from "../db/teamGroups.js";
@@ -28,6 +29,7 @@ import { bad, requireUser } from "./shared.js";
 // Sync freshness for the ops surface: the client shows "data as of <time>"
 // rather than silently serving yesterday's football.
 import { syncHealthSnapshot } from "../sync/sentinel.js";
+import { matchedAlias, rankCompetitions, rankTeams } from "../search/aliases.js";
 
 
 const db = getDb();
@@ -138,6 +140,116 @@ matchesRouter.get("/api/health/sync", (_req, res) => {
   res.json(syncHealthSnapshot(db));
 });
 
+/**
+ * Global search: clubs, players and competitions in one round trip. The app
+ * had no search at all — with seven competitions and hundreds of clubs the
+ * only way to a team was league → table → club. Reads are public like the
+ * feed, capped per group, and restricted to the same allow-list so a stale
+ * row from a retired competition can never resurface here.
+ */
+matchesRouter.get("/api/search", (req, res) => {
+  const query = String(req.query.q ?? "").trim().slice(0, 80);
+  if (query.length < 1) {
+    res.json({ query, teams: [], players: [], competitions: [] });
+    return;
+  }
+  // Read-only search: a `%` in the query only widens the match set, so a
+  // plain LIKE pattern is enough — no ESCAPE clause to get wrong.
+  const like = `%${query}%`;
+
+  // Club search ranks nicknames and short forms ("barca", "man utd", "بارسا")
+  // against ESPN's official names. The alias table is small and the teams list
+  // is a few hundred rows, so the matching happens in JS where accents,
+  // punctuation and ranking can be handled honestly instead of through LIKE.
+  const teamRows = all<{
+    id: string;
+    name: string;
+    short_name: string | null;
+    abbreviation: string | null;
+    color: string | null;
+    logo_url: string | null;
+    league: string | null;
+  }>(
+    db,
+    `SELECT id, name, short_name, abbreviation, color, logo_url, league
+       FROM teams
+      ORDER BY name`,
+    [],
+  );
+  const teams = rankTeams(
+    teamRows.filter((team) => !team.league || isAllowedLeague(team.league)),
+    query,
+    8,
+  ).map((team) => ({
+      id: team.id,
+      name: team.name,
+      short_name: team.short_name,
+      abbreviation: team.abbreviation,
+      color: team.color,
+      logo_url: team.logo_url,
+      league: team.league ?? "",
+      // The nickname the hit came through, so the client can show why
+      // "barca" returned Barcelona. Null for direct name matches.
+      matched: matchedAlias(team, query),
+    }));
+
+  // Players wait for a second character: one letter matches thousands of
+  // full names, and the club the person is looking for would be buried under
+  // them. Clubs are ranked, so a single letter is useful there.
+  const playerRows =
+    query.length < 2
+      ? []
+      : all<{
+          id: string;
+          full_name: string;
+          short_name: string | null;
+          position: string | null;
+          headshot_url: string | null;
+          team_id: string;
+          team_name: string;
+          team_short: string | null;
+          team_color: string | null;
+          league: string | null;
+        }>(
+          db,
+          `SELECT p.id, p.full_name, p.short_name, p.position, p.headshot_url,
+                  t.id AS team_id, t.name AS team_name, t.short_name AS team_short,
+                  t.color AS team_color, t.league
+             FROM players p
+             JOIN teams t ON t.id = p.team_id
+            WHERE p.full_name LIKE ? OR p.short_name LIKE ?
+            ORDER BY CASE WHEN lower(p.full_name) = lower(?) THEN 0 ELSE 1 END, p.full_name
+            LIMIT 60`,
+          [like, like, query],
+        );
+  const players = playerRows
+    .filter((player) => !player.league || isAllowedLeague(player.league))
+    .slice(0, 10)
+    .map((player) => ({
+      id: player.id,
+      name: player.full_name,
+      short_name: player.short_name,
+      position: player.position,
+      headshot_url: player.headshot_url,
+      team_id: player.team_id,
+      team_name: player.team_name,
+      team_short: player.team_short,
+      team_color: player.team_color,
+      league: player.league ?? "",
+    }));
+
+  // Competitions take the same treatment: "ucl" and "epl" are how people
+  // name them, and the raw slug ("uefa.champions") is not.
+  const competitions = rankCompetitions(COMPETITIONS, query).map((comp) => ({
+    slug: comp.slug,
+    name: comp.name,
+    kind: comp.kind,
+  }));
+
+  res.set("Cache-Control", "public, max-age=30");
+  res.json({ query, teams, players, competitions });
+});
+
 /* ------------------------------------------------------------ matches */
 
 matchesRouter.get("/api/matches", (req, res) => {
@@ -163,8 +275,8 @@ matchesRouter.get("/api/matches", (req, res) => {
     [...feed.params, feed.limit],
   );
   // The allow-list is enforced HERE, not only in SQL: the catalog is trimmed to
-  // the five big leagues, and stale rows from older, wider syncs must never
-  // reach the feed even if a filter regresses.
+  // the big five plus the two UEFA cups, and stale rows from older, wider
+  // syncs must never reach the feed even if a filter regresses.
   //
   // settleStaleLiveAll is the read-time net for a row stuck live/halftime long
   // past kickoff (the sync loop repairs the row itself; this keeps the feed
@@ -1062,8 +1174,53 @@ function latestSeason(league: string): string {
 
 matchesRouter.get("/api/health/data", (_req, res) => {
   const faceFiles = new Set(fs.readdirSync(FACES_DIR).filter((f) => f.endsWith(".webp") || f.endsWith(".png")));
-  const leagues = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1"];
+  // Cups have no table and their teams keep a DOMESTIC `teams.league`, so the
+  // league-shaped counts below would all read zero for them. They report the
+  // match coverage that actually exists (summaries/lineups) and leave the
+  // squad/table columns at zero instead of inventing numbers.
+  const leagues = [...LEAGUES, ...CUPS];
   const data = leagues.map((lg) => {
+    if (isCup(lg)) {
+      const count = (sql: string) =>
+        (db.prepare(sql).get(lg) as { c: number }).c;
+      const matches = count("SELECT COUNT(*) AS c FROM matches WHERE league = ?");
+      const finished = count("SELECT COUNT(*) AS c FROM matches WHERE league = ? AND status = 'finished'");
+      const withScore = count(
+        "SELECT COUNT(*) AS c FROM matches WHERE league = ? AND status = 'finished' AND home_score IS NOT NULL",
+      );
+      const withLineup = count(
+        "SELECT COUNT(*) AS c FROM matches m WHERE m.league = ? AND m.status = 'finished' AND EXISTS (SELECT 1 FROM match_player_stats s WHERE s.match_id = m.id)",
+      );
+      const withSummary = count(
+        "SELECT COUNT(*) AS c FROM matches m WHERE m.league = ? AND m.status = 'finished' AND EXISTS (SELECT 1 FROM match_team_stats s WHERE s.match_id = m.id)",
+      );
+      const latestSeason = (
+        db.prepare("SELECT MAX(espn_season) AS s FROM matches WHERE league = ?").get(lg) as {
+          s: string | null;
+        }
+      ).s;
+      const rounds = count("SELECT COUNT(DISTINCT round) AS c FROM matches WHERE league = ? AND round IS NOT NULL");
+      return {
+        league: lg,
+        kind: "cup" as const,
+        teams: 0,
+        teamsWithSquad: 0,
+        players: 0,
+        playersWithFace: 0,
+        faceCoveragePct: 0,
+        matchesStored: matches,
+        // A cup has no fixed fixture count; the stored total is the honest
+        // denominator for its coverage percentages.
+        expectedMatches: matches,
+        finished,
+        finishedWithScore: withScore,
+        finishedWithLineup: withLineup,
+        finishedWithSummary: withSummary,
+        standings: 0,
+        rounds,
+        latestSeason,
+      };
+    }
     const teams = (db.prepare("SELECT COUNT(*) AS c FROM teams WHERE league = ?").get(lg) as { c: number }).c;
     const players = (db.prepare("SELECT COUNT(*) AS c FROM players p JOIN teams t ON t.id = p.team_id WHERE t.league = ?").get(lg) as { c: number }).c;
     const teamsWithSquad = (db.prepare("SELECT COUNT(DISTINCT p.team_id) AS c FROM players p JOIN teams t ON t.id = p.team_id WHERE t.league = ?").get(lg) as { c: number }).c;
@@ -1078,6 +1235,7 @@ matchesRouter.get("/api/health/data", (_req, res) => {
     const latestSeason = (db.prepare("SELECT MAX(season) AS s FROM standings WHERE league = ?").get(lg) as { s: string | null }).s;
     return {
       league: lg,
+      kind: "league" as const,
       teams,
       teamsWithSquad,
       players,
@@ -1090,6 +1248,7 @@ matchesRouter.get("/api/health/data", (_req, res) => {
       finishedWithLineup: withLineup,
       finishedWithSummary: withSummary,
       standings,
+      rounds: null,
       latestSeason,
     };
   });

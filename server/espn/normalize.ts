@@ -132,11 +132,19 @@ interface EspnGameInfo {
   attendance?: unknown;
 }
 
+interface EspnSeason {
+  year?: string | number;
+  /** ESPN's machine label ("league-phase", "round-of-16"). */
+  slug?: string;
+  /** Human label ("2026-27 UEFA Champions League, League Phase"). */
+  name?: string;
+}
+
 interface EspnEvent extends EspnNotes {
   id?: string | number;
   /** Fixture kickoff; passed straight into `NormMatch.kickoff_at`. */
   date: string;
-  season?: { year?: string | number };
+  season?: EspnSeason;
   status?: EspnStatus;
   competitions?: EspnCompetition[];
 }
@@ -208,7 +216,7 @@ interface EspnSummaryHeader extends EspnNotes {
   id?: string | number;
   gregorianDate?: string;
   league?: { slug?: string };
-  season?: { year?: string | number };
+  season?: EspnSeason;
   competitions?: EspnCompetition[];
 }
 
@@ -627,14 +635,15 @@ function teamFromCompetitor(comp: EspnCompetitor, league: string): NormTeam {
 function roundFromEvent(
   ev: EspnNotes | undefined | null,
   competition: EspnNotes | undefined | null,
+  season?: EspnSeason | null,
 ): string | null {
   const note = competition?.notes?.[0]?.headline ?? ev?.notes?.[0]?.headline ?? null;
   const source = note ?? ev?.name ?? null;
-  if (!source) return null;
+  if (!source) return roundFromSeason(season);
   const m = source.match(
     /\b(final|semi-?final|quarter-?final|round of \d+|\d+(?:st|nd|rd|th) round|round \d+|play-?off|qualifying round)\b/i,
   );
-  if (!m) return null;
+  if (!m) return roundFromSeason(season);
   const raw = m[1]!.toLowerCase();
   // Canonical display forms; "1st round" style ordinals stay as-is.
   if (raw.startsWith("final")) return "Final";
@@ -643,6 +652,37 @@ function roundFromEvent(
   if (raw.startsWith("play")) return "Play-off";
   if (raw.startsWith("qualifying")) return "Qualifying round";
   return raw.replace(/\b\w/g, (c: string) => c.toUpperCase());
+}
+
+/**
+ * The round ESPN encodes on `season` rather than in a headline. The league
+ * phase of the new UEFA format carries no per-event notes at all, so without
+ * this every cup row landed with `round = NULL` and the Cups screen had no
+ * phase label (and no bracket to build once the knockouts start).
+ *
+ * Only known competition-stage labels are mapped: a domestic league's
+ * "regular-season" must keep returning null, because leagues never render a
+ * round.
+ */
+function roundFromSeason(season?: EspnSeason | null): string | null {
+  const slug = season?.slug?.toLowerCase() ?? "";
+  // The summary header has no slug, but its name ends in the stage after a
+  // comma: "2026-27 UEFA Champions League, League Phase".
+  const tail = season?.name?.includes(",") ? season.name.split(",").pop()!.trim() : "";
+  const source = tail || slug;
+  const l = source.toLowerCase();
+  if (!l) return null;
+  if (/league[- ]phase/.test(l)) return "League Phase";
+  if (/group[- ]stage/.test(l)) return "Group Stage";
+  const roundOf = l.match(/round[- ]of[- ](\d+)/);
+  if (roundOf) return `Round of ${roundOf[1]}`;
+  if (/\bsemi/.test(l)) return "Semi-final";
+  if (/\bquarter/.test(l)) return "Quarter-final";
+  if (/\bfinal\b/.test(l)) return "Final";
+  if (/play-?off/.test(l)) return "Play-off";
+  if (/qualif/.test(l)) return "Qualifying round";
+  if (/\bround\b/.test(l) && tail) return tail;
+  return null;
 }
 
 export function normalizeScoreboard(
@@ -678,7 +718,7 @@ export function normalizeScoreboard(
       minute_display:
         status === "live" || status === "halftime" ? (type?.displayClock ?? type?.shortDetail ?? null) : null,
       espn_season: ev.season ? `${ev.season.year}` : null,
-      round: roundFromEvent(ev, competition),
+      round: roundFromEvent(ev, competition, ev.season),
       home_formation: null,
       away_formation: null,
       home_pens: parseShootout(home),
@@ -739,7 +779,7 @@ export function normalizeSummaryMatch(raw: unknown): NormMatch {
     home_formation: homeRoster?.formation ?? null,
     away_formation: awayRoster?.formation ?? null,
     espn_season: json.header?.season?.year ? `${json.header.season.year}` : null,
-    round: roundFromEvent(json.header, h),
+    round: roundFromEvent(json.header, h, json.header?.season),
     home_pens: parseShootout(home),
     away_pens: parseShootout(away),
     decided_by: decidedByFromDetail(detail),

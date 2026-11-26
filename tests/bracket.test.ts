@@ -5,7 +5,7 @@
  * and feeder links that survive partial sync windows.
  */
 import { strict as assert } from "node:assert";
-import { buildBracket, orderRounds, roundRank } from "../src/lib/bracket.js";
+import { buildBracket, isBracketRound, orderRounds, roundRank } from "../src/lib/bracket.js";
 import type { Match, Team } from "../src/types.js";
 
 let seq = 0;
@@ -362,8 +362,24 @@ function testPostponedLegKeepsTieOpen(): void {
   assert.equal(tie?.winnerId, null, "a postponed leg leaves the tie open");
 }
 
+/** The board shows knockout ties only; a league phase is a fixture table. */
+function testBracketRoundFilter(): void {
+  for (const label of ["Round of 16", "Quarter-final", "Semi-final", "Final", "Play-off"]) {
+    assert.equal(isBracketRound(label), true, label);
+  }
+  for (const label of [
+    "League Phase",
+    "Group Stage",
+    "Qualifying round",
+    "Third place",
+  ]) {
+    assert.equal(isBracketRound(label), false, label);
+  }
+}
+
 export function runBracketTests(): void {
   testOrderRounds();
+  testBracketRoundFilter();
   testSingleLegWinner();
   testTwoLegAggregate();
   testOpenSecondLegKeepsTieUndecided();

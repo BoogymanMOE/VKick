@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { fetchLeagueNews, fetchScoreboard, fetchStandings, fetchSummary, fetchTeamRoster } from "../espn/client.js";
-import { ALL_COMPETITIONS, LEAGUES, pollWindow, type LeagueSlug } from "../espn/types.js";
+import { ALL_COMPETITIONS, CUPS, LEAGUES, pollWindow, type LeagueSlug } from "../espn/types.js";
 import { getDb, all, get } from "../db/index.js";
 import { applyScoreboard, applySummary, applyStandings, applyRoster, type GoalAlert } from "./upserts.js";
 import { onMatchFinished } from "../predictions/resolver.js";
@@ -518,8 +518,14 @@ export async function backfillMissingDataOnBoot(): Promise<void> {
       `SELECT m.id, m.league FROM matches m
        WHERE m.status = 'finished'
          AND m.league IN (${ALL_COMPETITIONS.map(() => "?").join(",")})
-         AND NOT EXISTS (SELECT 1 FROM match_player_stats s WHERE s.match_id = m.id)`,
-      [...ALL_COMPETITIONS],
+         AND (
+           NOT EXISTS (SELECT 1 FROM match_player_stats s WHERE s.match_id = m.id)
+           -- Cup rows summarized before the season-stage fallback landed have
+           -- stats but no round label; one re-fetch repairs the bracket. Only
+           -- cups: a domestic league legitimately has round = NULL.
+           OR (m.league IN (${CUPS.map(() => "?").join(",")}) AND m.round IS NULL)
+         )`,
+      [...ALL_COMPETITIONS, ...CUPS],
     );
     if (missingMatches.length > 0) {
       log(`boot backfill: ${missingMatches.length} finished match(es) missing summaries`);

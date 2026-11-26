@@ -432,6 +432,32 @@ function testRoundExtraction() {
   assert.equal(withRound.matches[0]!.round, "Quarter-final", "notes headline carries the round");
   assert.equal(withRound.matches[1]!.round, null, "no notes → no round (league shape)");
   assert.ok(withNotes.matches.length === 1, "fixture still normalizes");
+
+  // The new UEFA league phase publishes NO per-event notes: its stage lives on
+  // `season.slug` (scoreboard) or the tail of `season.name` (summary). Without
+  // this fallback every cup row landed round=NULL and the bracket had nothing
+  // to group.
+  const stageEvent = (slug: string, extra: Record<string, unknown> = {}) => ({
+    id: "804",
+    date: "2026-11-25T20:00:00Z",
+    season: { year: 2026, slug },
+    competitions: [
+      {
+        status: { type: { state: "pre", completed: false } },
+        competitors: [
+          { homeAway: "home", team: { id: "361", displayName: "A" } },
+          { homeAway: "away", team: { id: "362", displayName: "B" } },
+        ],
+        ...extra,
+      },
+    ],
+  });
+  const phase = normalizeScoreboard({ events: [stageEvent("league-phase")] }, "uefa.champions");
+  assert.equal(phase.matches[0]!.round, "League Phase", "season.slug names the league phase");
+  const r16 = normalizeScoreboard({ events: [stageEvent("round-of-16")] }, "uefa.champions");
+  assert.equal(r16.matches[0]!.round, "Round of 16", "season.slug names a knockout round");
+  const regular = normalizeScoreboard({ events: [stageEvent("regular-season")] }, "eng.1");
+  assert.equal(regular.matches[0]!.round, null, "a domestic regular season never becomes a round");
 }
 
 export function runNormalizeTests(): void {

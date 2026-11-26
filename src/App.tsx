@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { AuthProvider, RequireAuth } from "./hooks/useAuth";
 import { useFavorites } from "./hooks/useFavorites";
-import { RATINGS_ENABLED } from "./lib/features";
 import { LEGAL_ROUTES } from "./lib/legal";
 
 // Every screen is lazy so the first paint only ships the shell, the auth gate
@@ -20,7 +19,6 @@ const Onboarding = lazy(() => import("./pages/Onboarding"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Leaderboards = lazy(() => import("./pages/Leaderboards"));
 const Admin = lazy(() => import("./pages/Admin"));
-const Ratings = lazy(() => import("./pages/Ratings"));
 const TeamPage = lazy(() => import("./pages/TeamPage"));
 const PhotoCredits = lazy(() => import("./pages/PhotoCredits"));
 const Table = lazy(() => import("./pages/Table"));
@@ -57,10 +55,13 @@ export default function App() {
                 MatchDetail, so it silently landed on Timeline — legacy links
                 now open the match summary itself. */}
             <Route path="/match/:id/shot-plotter" element={<ShotPlotterRedirect />} />
-            {/* Ratings are off for now: the lazy import stays (it is only
-                fetched when this still-rendered route is reached), and legacy
-                deep links land on the feed instead of a missing screen. */}
-            <Route path="/ratings" element={RATINGS_ENABLED ? <Ratings /> : <Navigate to="/matches" replace />} />
+            {/* Ratings are off (RATINGS_ENABLED=false in lib/features). The
+                route is a redirect and the page is NOT imported here: a lazy
+                import still ships its chunk to everyone, and this screen is
+                unreachable while the flag is off. Restore
+                `const Ratings = lazy(() => import("./pages/Ratings"))` and the
+                conditional route when the feature comes back. */}
+            <Route path="/ratings" element={<Navigate to="/matches" replace />} />
             <Route path="/table" element={<Table />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/leaderboards" element={<Leaderboards />} />

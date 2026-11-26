@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { useI18n } from "../i18n/context";
 import { IS_EMBED } from "../lib/embed";
+import { ADS_ENABLED } from "../lib/features";
 
 /**
  * The feed's inline ad: a hosted iframe (A-ADS, adaptive size) inside a dark
@@ -13,6 +14,8 @@ export function InlineAd() {
   const { t } = useI18n();
   // Share mode (?embed=1 inside /frame.html): clean screenshots, no ad iframe.
   if (IS_EMBED) return null;
+  // VITE_ADS_ENABLED=false removes the ad slot from the build entirely.
+  if (!ADS_ENABLED) return null;
   return (
     <div
       className="my-3 flex items-center gap-2 overflow-hidden rounded-card bg-elevated p-1.5"

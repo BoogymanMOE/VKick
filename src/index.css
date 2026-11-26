@@ -706,6 +706,39 @@
     }
   }
 
+  /* Search sheet: a slim bar sweeps while the next keystroke is in flight,
+     so results that are already on screen do not just flicker opacity. */
+  .search-progress {
+    animation: search-progress 900ms var(--ease-out) infinite;
+  }
+  @keyframes search-progress {
+    from {
+      transform: translateX(-120%);
+    }
+    to {
+      transform: translateX(320%);
+    }
+  }
+
+  /* Search field: soft volt halo on focus; the clear button spins on hover. */
+  .search-field {
+    transition:
+      border-color var(--t-fast),
+      box-shadow var(--t-fast);
+  }
+  .search-field:focus {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--volt) 20%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .search-progress {
+      animation: none;
+      transform: none;
+      width: 100%;
+      opacity: 0.6;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .backdrop-fade-out,
     .sheet-out,

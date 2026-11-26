@@ -7,11 +7,13 @@
  *   npm run sync -- standings
  *   npm run sync -- horizon              # backfill fixtures out to the 3-month calendar range
  *   npm run sync -- results              # backfill finished results the fresh db never saw
+ *   npm run sync -- summaries [league]    # backfill summaries for finished matches missing one
+ *   npm run sync -- summaries [league] --force  # refresh every match (round labels, repairs)
  *   npm run sync -- understat             # league-wide xG/xPts (the expected tables)
  *   npm run sync -- dev-token 12345       # print a dev auth token (needs DEV_AUTH_SECRET set)
  *   npm run sync -- --dry-run             # fetch + normalize, print, write nothing
  */
-import { getDb } from "./db/index.js";
+import { all, get, getDb } from "./db/index.js";
 import { fetchScoreboard, fetchStandings, fetchSummary } from "./espn/client.js";
 import { ALL_COMPETITIONS, LEAGUES, type LeagueSlug } from "./espn/types.js";
 import {
@@ -100,6 +102,52 @@ async function main(): Promise<void> {
       log(`results backfill applied; ${goals.length} goal(s) detected`);
       break;
     }
+    case "summaries": {
+      // Repair the long tail rather than waiting for the boot backfill (which
+      // stops after one pass) or the live summary lane (which only looks at
+      // recent fixtures). `summaries uefa.champions` narrows it to one cup;
+      // the default walks every synced competition.
+      const maybeLeague = args[args.indexOf("summaries") + 1];
+      const only = maybeLeague && !maybeLeague.startsWith("--") ? maybeLeague : undefined;
+      const force = args.includes("--force");
+      const leagues = (only ? [only] : ALL_COMPETITIONS) as LeagueSlug[];
+      let applied = 0;
+      let empty = 0;
+      for (const league of leagues) {
+        const rows = all<{ id: string }>(
+          db,
+          force
+            ? `SELECT m.id FROM matches m
+               WHERE m.league = ?
+               ORDER BY m.kickoff_at DESC`
+            : `SELECT m.id FROM matches m
+               WHERE m.league = ? AND m.status = 'finished'
+                 AND NOT EXISTS (SELECT 1 FROM match_player_stats s WHERE s.match_id = m.id)
+               ORDER BY m.kickoff_at DESC`,
+          [league],
+        );
+        log(`${league}: ${rows.length} finished match(es) missing summaries`);
+        for (const row of rows) {
+          if (dryRun) {
+            log(`  would summarize ${row.id}`);
+            continue;
+          }
+          await syncMatchSummary(league, row.id);
+          // syncMatchSummary swallows a failed fetch by design (one dead
+          // summary must not stop the loop), so the row is the receipt.
+          const stats = get<{ c: number }>(
+            db,
+            "SELECT COUNT(*) AS c FROM match_player_stats WHERE match_id = ?",
+            [row.id],
+          );
+          if ((stats?.c ?? 0) > 0) applied += 1;
+          else empty += 1;
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }
+      log(`summaries: ${applied} applied, ${empty} still without player stats`);
+      break;
+    }
     case "rosters": {
       const { syncRosters } = await import("./sync/service.js");
       await syncRosters();
@@ -130,7 +178,7 @@ async function main(): Promise<void> {
     default:
       log(`unknown command: ${cmd}`);
       log(
-        "commands: sync-all | sync-match <league> <eventId> | standings | horizon | rosters | understat | dev-token <id> [--dry-run]",
+        "commands: sync-all | sync-match <league> <eventId> | summaries [league] | standings | horizon | rosters | understat | dev-token <id> [--dry-run]",
       );
       process.exit(1);
   }

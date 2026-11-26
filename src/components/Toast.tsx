@@ -69,19 +69,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const push = useCallback((toast: Omit<ToastItem, "id">) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    // An action is a decision, not a notification: give it time to be read and
+    // tapped. Everything else keeps the tone's normal dwell.
+    const dwell = toast.action ? 5_000 : (DWELL_MS[toast.tone] ?? 2500);
     setToasts((prev) => [...prev.slice(-2), { ...toast, id }]);
     timers.current.push(
       window.setTimeout(() => {
         // Mark leaving rather than remove: the exit animation plays first.
         setToasts((prev) => prev.map((item) => (item.id === id ? { ...item, leaving: true } : item)));
-      }, DWELL_MS[toast.tone] ?? 2500),
+      }, dwell),
       // Belt and braces: reap on a timer as well as on `animationend`. The event
       // is not guaranteed — a backgrounded webview, an element whose animation
       // never starts, or a stale class without a keyframes rule all leave the
       // toast on screen permanently, which is exactly the stuck-toast bug.
       window.setTimeout(
         () => setToasts((prev) => prev.filter((item) => item.id !== id)),
-        (DWELL_MS[toast.tone] ?? 2500) + LEAVE_MS,
+        dwell + LEAVE_MS,
       ),
     );
   }, []);
@@ -123,6 +126,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               </span>
             ) : null}
             <span className="min-w-0 flex-1 truncate">{toast.text}</span>
+            {toast.action ? (
+              <button
+                type="button"
+                onClick={() => {
+                  toast.action!.onClick();
+                  setToasts((prev) =>
+                    prev.map((item) => (item.id === toast.id ? { ...item, leaving: true } : item)),
+                  );
+                }}
+                className="flex-none rounded-md border border-current px-2 py-0.5 text-[11px] font-extrabold transition-opacity hover:opacity-80"
+              >
+                {toast.action.label}
+              </button>
+            ) : null}
             {/* Only errors get an explicit out: a dismissed failure stays in
                 the user's memory; the success/muted dwell is short enough not
                 to need one. */}

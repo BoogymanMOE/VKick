@@ -11,6 +11,7 @@ import {
   CalendarIcon,
   CloseIcon,
   PlusIcon,
+  SearchIcon,
   StarFilledIcon,
 } from "../components/icons";
 import { LeagueGroupSkeleton } from "../components/Skeletons";
@@ -26,6 +27,7 @@ import { DateStrip, dayKey as chipDayKey } from "../components/DateStrip";
 import { InlineAd } from "../components/InlineAd";
 import { LeaguePickerSheet } from "../components/panels/LeaguePickerSheet";
 import { CalendarSheet } from "../components/panels/CalendarSheet";
+import { SearchSheet } from "../components/SearchSheet";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { useLiveUpdates } from "../hooks/useLiveUpdates";
 import { LeagueGroup } from "../components/LeagueGroup";
@@ -163,6 +165,7 @@ export default function Matches() {
   const [leaguesOpen, setLeaguesOpen] = useState(false);
   // The month picker, for the days the seven-chip week cannot reach.
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [burst, setBurst] = useState(0);
@@ -393,24 +396,37 @@ export default function Matches() {
           }`
         }
         right={
-          // One header action: the calendar. Refresh's button went away — the
-          // gesture above owns the resync, and the toast after every sync is
-          // still the visible confirmation. The calendar keeps its 40px visual
-          // circle with an invisible 44px hit band (after:-inset-1) so the
-          // thumb target never drops under the 44px floor.
-          <button
-            type="button"
-            onClick={() => {
-              haptic("light");
-              setCalendarOpen(true);
-            }}
-            aria-haspopup="dialog"
-            aria-label={t("matches.pickDate")}
-            title={t("matches.pickDate")}
-            className="relative grid h-10 w-10 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated after:absolute after:-inset-1 after:content-['']"
-          >
-            <CalendarIcon className="h-[18px] w-[18px]" />
-          </button>
+          // Two header actions: search, then the calendar. Both keep their
+          // 40px visual circle with an invisible 44px hit band (after:-inset-1)
+          // so the thumb target never drops under the floor.
+          <div className="flex flex-none items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                haptic("light");
+                setSearchOpen(true);
+              }}
+              aria-haspopup="dialog"
+              aria-label={t("search.open")}
+              title={t("search.open")}
+              className="relative grid h-10 w-10 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated after:absolute after:-inset-1 after:content-['']"
+            >
+              <SearchIcon className="h-[18px] w-[18px]" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                haptic("light");
+                setCalendarOpen(true);
+              }}
+              aria-haspopup="dialog"
+              aria-label={t("matches.pickDate")}
+              title={t("matches.pickDate")}
+              className="relative grid h-10 w-10 flex-none place-items-center rounded-full border border-line text-ink transition-colors duration-[var(--t-fast)] hover:bg-elevated after:absolute after:-inset-1 after:content-['']"
+            >
+              <CalendarIcon className="h-[18px] w-[18px]" />
+            </button>
+          </div>
         }
       />
 
@@ -435,6 +451,7 @@ export default function Matches() {
           onSelect={setPicked}
           daysWithMatches={daysWithMatches}
         />
+        <SearchSheet open={searchOpen} onClose={() => setSearchOpen(false)} />
 
         {/* State filter chips: all / live (with its count) / followed clubs.
             A chip that can never show anything hides itself — the live chip

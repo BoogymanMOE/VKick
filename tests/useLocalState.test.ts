@@ -62,7 +62,19 @@ export async function runUseLocalStateTests() {
       browser = await chromium.launch(launchOptions);
     } catch {
       // Bundled browser not downloaded: fall back to the system Chrome channel.
-      browser = await chromium.launch({ ...launchOptions, channel: "chrome" });
+      try {
+        browser = await chromium.launch({ ...launchOptions, channel: "chrome" });
+      } catch {
+        // No browser at all (a fresh Windows dev box, a CI image without
+        // Chrome). Skip like the no-playwright case instead of failing the
+        // whole suite with an install instruction: the group is a browser
+        // contract test, not a prerequisite for the other 55 groups.
+        await vite.close();
+        console.log(
+          "~ useLocalState SKIPPED: no Chromium/Chrome available (run `npx playwright install chromium`)",
+        );
+        return;
+      }
     }
   }
   try {
